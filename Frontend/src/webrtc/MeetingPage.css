@@ -152,8 +152,14 @@ body {
   position: relative;
 }
 
+.main-stage .video-tile {
+  max-height: 100%;
+  /* max-width: 960px; */
+  aspect-ratio: 16 / 9;
+}
+
 .bottom-strip {
-  height: 140px;
+  height: 160px;
   display: flex;
   gap: 1rem;
   overflow-x: auto;
@@ -162,9 +168,30 @@ body {
   padding-left: 2px;
 }
 
+.bottom-strip .strip-item {
+  height: 140px;
+  min-height: 140px;
+  max-height: 140px;
+}
+
+.bottom-strip .video-tile {
+  height: 100%;
+  background: #f9fafb;
+}
+
+/* main 효과는 그림자만 남기고 레이아웃 영향 제거 */
+.bottom-strip .video-tile.main {
+  box-shadow: 0 0 0 3px #4f46e5;
+}
+
+.bottom-strip .video-content {
+  padding: 0;
+}
+
 .strip-item {
   aspect-ratio: 16/9;
   height: 100%;
+  min-height: 140px;
   flex-shrink: 0;
   cursor: pointer; /* [추가] 마우스 올리면 손가락 모양 */
   transition: transform 0.2s;
@@ -175,9 +202,15 @@ body {
   transform: translateY(-5px); /* 마우스 호버시 살짝 위로 */
 }
 
+.strip-item .video-content {
+  position: relative;
+  inset: auto;
+}
+
 /* 현재 메인에 나오고 있는 사람은 테두리로 표시 */
 .strip-item.active-strip .video-tile {
-  box-shadow: 0 0 0 3px #4f46e5 !important;
+  outline: 1px solid #4f46e5;
+  outline-offset: -1px;
 }
 
 /* Grid Mode */
@@ -215,6 +248,7 @@ body {
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   transition: all 0.3s;
+  aspect-ratio: 16 / 9;
 }
 
 .video-tile.main {
@@ -236,9 +270,9 @@ body {
   align-items: center;
   justify-content: center;
   background: #f9fafb;
-  
+ 
   /* [수정] 1rem은 작은 타일에 너무 큽니다. 0.5rem으로 줄여주세요. */
-  padding: 0.5rem; 
+  padding: 0.5rem;
   box-sizing: border-box;
 }
 
@@ -261,6 +295,17 @@ body {
   color: #9ca3af;
 }
 
+.video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-element.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .stream-label {
   margin-top: 1rem;
   font-size: 1.125rem;
@@ -269,52 +314,57 @@ body {
 }
 
 .camera-off-placeholder {
-  /* [수정] 부모 영역을 가득 채우도록 설정 */
   width: 100%;
   height: 100%;
-  
+
   display: flex;
   flex-direction: column;
   align-items: center;
-  
-  /* [수정] 수직 중앙 정렬을 여기서 담당하게 변경 */
-  justify-content: center; 
-  
+  justify-content: center;
+
   gap: 0.75rem;
+
+  transform: translateY(20px);
 }
+
 .off-label { color: #9ca3af; font-size: 1.125rem; font-weight: 500; }
 
 .video-overlay {
   position: absolute;
-  bottom: 0.75rem; left: 0.75rem; right: 0.75rem;
+  bottom: 8px;
+  left: 8px;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  gap: 6px;
+
+  background: none;
+  padding: 0;
+  pointer-events: none;
 }
 
-/* 수정된 User Badge: 텍스트 제거 및 원형 아이콘 스타일 */
-.user-badge {
+.media-status {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  padding: 0.5rem;
-  border-radius: 50%;
-  width: 2rem; height: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  color: var(--text-primary);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+
+  background: none;
+  padding: 0;
+  margin: 0;
 }
 
 .audio-dot {
-  width: 10px; height: 10px;
-  background: var(--success-color);
+  width: 10px;
+  height: 10px;
+  background: #22c55e;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
 }
 
-.icon-mic-off { color: var(--danger-color); }
+.icon-mic-off {
+  color: #ef4444;
+}
+
+.icon-camera-off {
+  color: #6b7280;
+}
 
 .hand-raised-badge {
   position: absolute;
@@ -360,9 +410,9 @@ body {
   object-fit: cover;
   border: 2px solid #fff;
   box-shadow: var(--shadow-sm);
-  
+ 
   /* [핵심 수정] 공간이 부족해도 절대 찌그러지지 않게 설정 */
-  flex-shrink: 0; 
+  flex-shrink: 0;
 }
 
 .user-avatar.placeholder {
@@ -496,7 +546,7 @@ body {
 .meet-sidebar {
   width: 0;
   background: #fff;
-  position: relative; 
+  position: relative;
   z-index: 30;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: -4px 0 25px rgba(0,0,0,0.05);
@@ -504,7 +554,7 @@ body {
   border-left: none;
 }
 
-.meet-sidebar.open { 
+.meet-sidebar.open {
   width: 360px;
   border-left: 1px solid var(--border-color);
 }

@@ -1,10 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Mic, MicOff, Video, VideoOff, Phone, 
-  MessageSquare, Users, MoreHorizontal, 
-  LayoutGrid, Monitor, Share, 
-  Smile, Send, X
+import {
+  LayoutGrid,
+  MessageSquare,
+  Mic, MicOff,
+  Monitor,
+  MoreHorizontal,
+  Phone,
+  Send,
+  Share,
+  Smile,
+  Users,
+  Video, VideoOff,
+  X
 } from 'lucide-react';
+import 'pretendard/dist/web/static/pretendard.css';
+import { useEffect, useRef, useState } from 'react';
 import './MeetingPage.css';
 
 // --- Components ---
@@ -32,51 +41,39 @@ const UserAvatar = ({ name, size = "md", src }) => {
   );
 };
 
-const VideoTile = ({ user, isMain = false, reaction }) => {
-  // 아바타 크기를 화면 비중(isMain)에 따라 동적으로 설정
-  // 메인이면 lg(크게), 아니면 md(작게)
-  const avatarSize = isMain ? "lg" : "md";
+const VideoTile = ({ user, isMain = false, reaction, stream }) => {
+  const videoEl = useRef(null);
+
+  useEffect(() => {
+    if (!videoEl.current) return;
+    if (!stream) return;
+
+    videoEl.current.srcObject = stream;
+  }, [stream]);
 
   return (
-    <div className={`video-tile ${isMain ? 'main' : ''} ${user.speaking ? 'speaking' : ''}`}>
-      {/* Reaction Overlay */}
-      {reaction && (
-        <div className="reaction-overlay">
-          {reaction}
-        </div>
-      )}
-
-      {/* Video Content */}
+    <div className={`video-tile ${isMain ? 'main' : ''}`}>
       <div className="video-content">
-        {!user.cameraOff ? (
-            // 카메라 켜짐 상태
-            <div className="video-stream-mock">
-               <UserAvatar name={user.name} size={avatarSize} />
-               <p className="stream-label">{user.name === '나' ? '내 화면' : `${user.name}님의 화면`}</p>
-            </div>
-        ) : (
-          // 카메라 꺼짐 상태 (수정됨)
+        {user.isMe && (
+          <video
+            ref={videoEl}
+            autoPlay
+            playsInline
+            muted
+            className={`video-element ${user.cameraOff ? 'hidden' : ''}`}
+          />
+        )}
+
+        {user.cameraOff && (
           <div className="camera-off-placeholder">
-             {/* 1. size를 "lg" 고정에서 avatarSize 변수로 변경하여 작은 화면에서 작게 나오도록 수정 */}
-             <UserAvatar name={user.name} size={avatarSize} />
-             
-             {/* 2. 이름이 표시되도록 추가 */}
-             <p className="stream-label" style={{ marginTop: '0.5rem', marginBottom: '0' }}>
-               {user.name}
-             </p>
-             
-             <p className="off-label" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-               카메라 꺼짐
-             </p>
+            <UserAvatar name={user.name} />
+            <p className="stream-label">{user.name}</p>
           </div>
         )}
       </div>
-
-      {/* Overlay Info (하단 상태바) */}
-      <div className="video-overlay">
-        <div className="user-badge">
-          {user.muted ? <MicOff size={14} className="icon-mic-off" /> : <div className="audio-dot" />}
-        </div>
+      <div className="camera-off-placeholder">
+        <UserAvatar name={user.name} />
+        <p className="stream-label">{user.name}</p>
       </div>
     </div>
   );
@@ -109,6 +106,8 @@ function MeetingPage() {
     { id: 3, sender: '나', text: '제 화면 공유해서 보여드릴게요.', time: '10:05 AM', isMe: true },
   ]);
   const [chatDraft, setChatDraft] = useState("");
+
+  const [localStream, setLocalStream] = useState(null);
 
   const [activeSpeakerId, setActiveSpeakerId] = useState('u2');
   const reactionEmojis = [
@@ -150,9 +149,8 @@ function MeetingPage() {
 
   const getMainUser = () => {
     if (activeSpeakerId === 'me') {
-      return { name: '나', muted: !micOn, cameraOff: !camOn, isMe: true };
+      return { id: 'me', name: '나', muted: !micOn, cameraOff: !camOn, isMe: true };
     }
-    // 해당 ID의 참가자를 찾고, 없으면 첫 번째 참가자를 보여줌
     return participants.find(p => p.id === activeSpeakerId) || participants[0];
   };
 
@@ -165,6 +163,7 @@ function MeetingPage() {
 
       // 로컬 스트림 저장
       localStreamRef.current = stream;
+      setLocalStream(stream);
 
       // video 태그에 연결 (미리보기용)
       if (localVideoRef.current) {
@@ -228,6 +227,14 @@ function MeetingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!localStreamRef.current) return;
+
+    localStreamRef.current.getVideoTracks().forEach(track => {
+      track.enabled = camOn;
+    });
+  }, [camOn, localStream]);
+
   return (
     <>
       <div className="meet-layout">
@@ -275,8 +282,11 @@ function MeetingPage() {
               // Speaker View Layout
               <div className="layout-speaker">
                 <div className="main-stage">
-                  {/* [수정 2] 계산된 getMainUser()를 메인 타일에 전달 */}
-                  <VideoTile user={getMainUser()} isMain={true} />
+                  <VideoTile
+                    user={getMainUser()}
+                    isMain
+                    stream={getMainUser().isMe ? localStream : null}
+                  />
                 </div>
                 
                 <div className="bottom-strip custom-scrollbar">
@@ -285,7 +295,11 @@ function MeetingPage() {
                     className={`strip-item ${activeSpeakerId === 'me' ? 'active-strip' : ''}`} 
                     onClick={() => setActiveSpeakerId('me')}
                   >
-                    <VideoTile user={{ name: '나', muted: !micOn, cameraOff: !camOn, isMe: true }} reaction={myReaction} />
+                    <VideoTile
+                      user={{ id:'me', name: '나', muted: !micOn, cameraOff: !camOn, isMe: true }}
+                      reaction={myReaction}
+                      stream={localStream}
+                    />
                   </div>
 
                   {/* [수정 3-2] 다른 참가자 타일 클릭 시 해당 ID로 설정 */}
@@ -457,7 +471,6 @@ function MeetingPage() {
                         </div>
                       </div>
                       <div className="p-status">
-                        {p.handRaised && <span>✋</span>}
                         {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} className="icon-hidden" />}
                         {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} className="icon-hidden" />}
                         <button className="more-btn">
