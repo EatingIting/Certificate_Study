@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, MicOff, Video, VideoOff, Phone, 
   MessageSquare, Users, MoreHorizontal, 
@@ -115,6 +115,11 @@ function MeetingPage() {
     '👍', '👏', '❤️', '🎉', '😂', '😮', '😢', '🤔', '👋', '🔥', '👀', '💯', '✨', '🙏', '🤝', '🙌'
   ];
 
+  // WebRTC refs
+  const localVideoRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const localStreamRef = useRef(null);
+
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!chatDraft.trim()) return;
@@ -150,6 +155,78 @@ function MeetingPage() {
     // 해당 ID의 참가자를 찾고, 없으면 첫 번째 참가자를 보여줌
     return participants.find(p => p.id === activeSpeakerId) || participants[0];
   };
+
+  const startLocalMedia = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+
+      // 로컬 스트림 저장
+      localStreamRef.current = stream;
+
+      // video 태그에 연결 (미리보기용)
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      // 🔥 핵심: 스트림 반환
+      return stream;
+
+    } catch (err) {
+      console.error("미디어 접근 실패:", err);
+      return null; // 실패 시 null 반환 (중요)
+    }
+  };
+
+  const createPeerConnection = () => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" }
+      ]
+    });
+
+    // ICE 후보 생성될 때
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log("ICE candidate:", event.candidate);
+        // 👉 다음 단계에서 WebSocket으로 보냄
+      }
+    };
+
+    // 상대방 스트림 수신 (지금은 안 씀)
+    pc.ontrack = (event) => {
+      console.log("상대방 스트림 수신", event.streams);
+    };
+
+    // 내 미디어 트랙 추가
+    localStreamRef.current.getTracks().forEach(track => {
+      pc.addTrack(track, localStreamRef.current);
+    });
+
+    peerConnectionRef.current = pc;
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const stream = await startLocalMedia();
+
+      if (!stream) {
+        console.error("로컬 스트림 생성 실패");
+        return;
+      }
+
+      createPeerConnection(stream);
+    };
+
+    init();
+
+    return () => {
+      peerConnectionRef.current?.close();
+      localStreamRef.current?.getTracks().forEach(track => track.stop());
+    };
+  }, []);
 
   return (
     <>
