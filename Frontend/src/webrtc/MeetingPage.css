@@ -280,9 +280,28 @@ body {
   box-shadow: 0 0 0 3px #4f46e5 !important;
 }
 
-/* 2. 작은 타일에서는 요소 간격 좁히기 */
 .video-tile:not(.main) .camera-off-placeholder {
+  transform: none;
   gap: 0.25rem;
+}
+
+.video-tile:not(.main) .stream-label {
+  font-size: 0.75rem;
+  margin-top: 0;
+}
+
+.video-tile:not(.main) .user-avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.video-tile.speaking {
+  box-shadow:
+    inset 0 0 0 3px #22c55e,
+    0 0 12px rgba(34, 197, 94, 0.25);
+}
+.video-tile.main.speaking {
+  box-shadow: 0 0 0 3px #4f46e5, 0 0 12px rgba(34,197,94,0.25);
 }
 
 .video-stream-mock {
@@ -325,6 +344,16 @@ body {
   gap: 0.75rem;
 
   transform: translateY(20px);
+}
+
+.bottom-strip .camera-off-placeholder {
+  justify-content: center;
+  padding-top: 1.5rem;
+}
+
+.bottom-strip .stream-label {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
 }
 
 .off-label { color: #9ca3af; font-size: 1.125rem; font-weight: 500; }
@@ -522,6 +551,18 @@ body {
   background: var(--danger-color);
   color: #fff;
   box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2);
+}
+
+.btn-control.disabled {
+  background: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-control.disabled:hover {
+  background: #e5e7eb;
+  transform: none;
 }
 
 .tooltip {
