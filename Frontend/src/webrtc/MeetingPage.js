@@ -296,36 +296,44 @@ function MeetingPage() {
   };
 
   const consumeProducer = async (producerId, peerId) => {
-  const device = sfuDeviceRef.current;
-  const recvTransport = recvTransportRef.current;
-  if (!device || !recvTransport) return;
+    // ❌ 자기 자신 producer는 consume 금지
+    if (peerId === userIdRef.current) return;
 
-  sfuWsRef.current.send(JSON.stringify({
-    action: "consume",
-    requestId: crypto.randomUUID(),
-    data: {
-      transportId: recvTransport.id,
-      producerId,
-      rtpCapabilities: device.rtpCapabilities,
-    },
-  }));
+    // ❌ 이미 consume한 producer면 무시
+    if (consumersRef.current.has(producerId)) return;
 
-  const handler = async (event) => {
-    const msg = JSON.parse(event.data);
-    if (msg.action !== "consume:response") return;
+    const device = sfuDeviceRef.current;
+    const recvTransport = recvTransportRef.current;
+    if (!device || !recvTransport) return;
 
-    const { consumerId, kind, rtpParameters } = msg.data;
+    sfuWsRef.current.send(JSON.stringify({
+      action: "consume",
+      requestId: crypto.randomUUID(),
+      data: {
+        transportId: recvTransport.id,
+        producerId,
+        rtpCapabilities: device.rtpCapabilities,
+      },
+    }));
 
-    const consumer = await recvTransport.consume({
-      id: consumerId,
-      producerId,
-      kind,
-      rtpParameters,
-    });
+    const handler = async (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.action !== "consume:response") return;
 
-    const stream = new MediaStream([consumer.track]);
+      const { consumerId, kind, rtpParameters } = msg.data;
 
-      // 🔥 participants에 stream 붙이기
+      const consumer = await recvTransport.consume({
+        id: consumerId,
+        producerId,
+        kind,
+        rtpParameters,
+      });
+
+      // ✅ 여기서 최초 1회만 등록
+      consumersRef.current.set(producerId, consumer);
+
+      const stream = new MediaStream([consumer.track]);
+
       setParticipants(prev =>
         prev.map(p =>
           p.id === peerId ? { ...p, stream } : p
@@ -671,34 +679,16 @@ function MeetingPage() {
             dtlsParameters,
           });
 
-          recvTransport.on("connect", ({ dtlsParameters }, cb) => {
-            const requestId = crypto.randomUUID();
-
-            const handler = (event) => {
-              const msg = JSON.parse(event.data);
-              if (
-                msg.action === "connectTransport:response" &&
-                msg.requestId === requestId
-              ) {
-                cb();
-                sfuWs.removeEventListener("message", handler);
-              }
-            };
-
-            sfuWs.addEventListener("message", handler);
-
-            sfuWs.send(JSON.stringify({
-              action: "connectTransport",
-              requestId,
-              data: { transportId, dtlsParameters },
-            }));
-          });
-
           recvTransportRef.current = recvTransport;
 
-          const producers = sfuDeviceRef.current._existingProducers || [];
-          for (const p of producers) {
-            consumeProducer(p.producerId, p.peerId);
+          // 🔥 이 가드가 핵심
+          if (!recvTransport._initialConsumed) {
+            recvTransport._initialConsumed = true;
+
+            const producers = sfuDeviceRef.current._existingProducers || [];
+            for (const p of producers) {
+              consumeProducer(p.producerId, p.peerId);
+            }
           }
         }
       }
