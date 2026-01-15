@@ -1,0 +1,197 @@
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+}
+
+.room-layout {
+    display: flex;
+    font-family: "Noto Sans KR", sans-serif;
+}
+
+/* 왼쪽 카테고리 */
+.category-sidebar {
+    width: 280px;
+    background-color: #f3f3f3;
+    padding: 20px;
+    border-right: 1px solid #ddd;
+    box-sizing: border-box;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.category-sidebar h3 {
+    font-size: 20px;
+    margin-bottom: 12px;
+}
+
+.category-search {
+    width: 200px;
+    height: 20px;
+    padding: 8px 10px;
+    margin: 12px 0px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.category-search:focus {
+    outline: none;
+    border-color: #1a4cff;
+}
+
+.category-sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.category-sidebar li {
+    padding: 7px 6px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.category-sidebar li:hover {
+    background-color: #e6e6e6;
+}
+
+.category-sidebar li.active {
+    font-weight: 700;
+    color: #1a4cff;
+}
+
+.no-category {
+    padding: 10px 6px;
+    font-size: 13px;
+    color: #888;
+}
+
+/* 오른쪽 방 목록 */
+.room-content {
+    flex: 1;
+    padding: 24px;
+}
+
+.room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.create-btn {
+    padding: 6px 12px;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+}
+
+.room-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    table-layout: fixed;
+}
+
+.room-table th,
+.room-table td {
+    border-bottom: 1px solid #e5e5e5;
+    padding: 16px 10px;
+    text-align: center;
+}
+
+.room-table .title {
+    cursor: pointer;
+}
+
+.room-table .category {
+    cursor: pointer;
+}
+
+.room-table .title:hover {
+    text-decoration: underline;
+}
+
+.room-table .category {
+    font-size: 13px;
+    color: #555;
+    white-space: nowrap;
+}
+
+/* 페이지네이션 */
+.pagination {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.pagination button {
+    margin: 0 4px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+}
+
+.pagination button.active {
+    font-weight: 700;
+    color: #1a4cff;
+    border-color: #1a4cff;
+}
+
+/* 모달 */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #fff;
+    width: 600px;
+    max-width: 90%;
+    padding: 20px;
+    border-radius: 6px;
+}
+
+.modal-text {
+    margin: 15px 0;
+    white-space: pre-wrap;
+    font-size: 14px;
+}
+
+.modal-buttons button {
+    cursor: pointer;
+    width: 200px;
+    height: 40px;
+    gap: 10px;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.close-btn {
+    padding: 8px 16px;
+    border: 1px solid #d6d6d6;
+    border-radius: 10px;
+    color: black;
+}
+
+.apply-btn {
+    padding: 8px 16px;
+    border: 1px solid white;
+    background-color: #C2F2D0;
+    border-radius: 10px;
+    color: black;
+}
+
+/*.room-layout * {*/
+/*    font-family: 'Jua', cursive !important;*/
+/*}*/
