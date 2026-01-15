@@ -1,10 +1,12 @@
 package com.example.demo.dto;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
+@NoArgsConstructor
 public class ChatOutboundMessage {
     private String type;
     private String roomId;
@@ -12,9 +14,6 @@ public class ChatOutboundMessage {
     private String userName;
     private String message;
     private long timestamp;
-
-    public ChatOutboundMessage() {
-    }
 
     public ChatOutboundMessage(String roomId, String userId, String userName, String message, long timestamp) {
         this.type = "CHAT";

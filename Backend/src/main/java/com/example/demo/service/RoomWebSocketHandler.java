@@ -1,5 +1,7 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.ChatInboundMessage;
+import com.example.demo.dto.ChatOutboundMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.catalina.User;
@@ -45,7 +47,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         roomUsers
                 .computeIfAbsent(roomId, k -> new ConcurrentHashMap<>())
-                .put(session.getId(), new RoomUser(userId, userName));
+                .put(session.getId(), new RoomUser(userId, userName, false));
 
         broadcast(roomId);
     }
@@ -113,5 +115,88 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private String extractRoomId(WebSocketSession session) {
         String path = session.getUri().getPath();
         return path.substring(path.lastIndexOf("/") + 1);
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+
+        String roomId = extractRoomId(session);
+
+        Map<String, RoomUser> users = roomUsers.get(roomId);
+        Map<String, WebSocketSession> sessions = roomSessions.get(roomId);
+
+        if (users == null || sessions == null) return;
+
+        RoomUser sender = users.get(session.getId());
+        if (sender == null) return;
+
+        // JSON 파싱
+        ChatInboundMessage inbound =
+                objectMapper.readValue(message.getPayload(), ChatInboundMessage.class);
+
+        String type = inbound.getType();
+        if (type == null) return;
+
+    /* =========================
+       1️⃣ CHAT 메시지 처리
+       ========================= */
+        if ("CHAT".equalsIgnoreCase(type)) {
+
+            String text = inbound.getMessage();
+            if (text == null || text.trim().isEmpty()) return;
+
+            text = text.trim();
+            if (text.length() > 1000) {
+                text = text.substring(0, 1000);
+            }
+
+            ChatOutboundMessage outbound = new ChatOutboundMessage(
+                    "CHAT",
+                    sender.getUserId(),
+                    sender.getUserName(),
+                    text,
+                    System.currentTimeMillis()
+            );
+
+            String payload = objectMapper.writeValueAsString(outbound);
+            TextMessage outboundMessage = new TextMessage(payload);
+
+            // 같은 방 전체 브로드캐스트
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(outboundMessage);
+                }
+            }
+
+            return;
+        }
+
+        if ("SPEAKING".equalsIgnoreCase(type)) {
+
+            Boolean speaking = inbound.getSpeaking();
+            if (speaking == null) return;
+
+            // 상태 갱신
+            sender.setSpeaking(speaking);
+
+            // USERS_UPDATE 재브로드캐스트
+            List<RoomUser> userList = new ArrayList<>(users.values());
+
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "USERS_UPDATE",
+                            "users", userList
+                    )
+            );
+
+            TextMessage updateMessage = new TextMessage(payload);
+
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(updateMessage);
+                }
+            }
+            return;
+        }
     }
 }

@@ -155,11 +155,15 @@ function MeetingPage() {
   const [participants, setParticipants] = useState([]);
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
-  const [messages, setMessages] = useState([
-    { id: 1, sender: "김민아", text: "다들 LMS에 올린 기출문제 확인하셨나요??", time: "10:02 AM", isMe: false },
-    { id: 2, sender: "박서준", text: "네, 잘 봤습니다! 4번 문제 관련해서 질문이 있어요.", time: "10:03 AM", isMe: false },
-    { id: 3, sender: "나", text: "제 화면 공유해서 보여드릴게요.", time: "10:05 AM", isMe: true },
-  ]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`chat_${roomId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [chatDraft, setChatDraft] = useState("");
 
   const [showReactions, setShowReactions] = useState(false);
@@ -179,12 +183,18 @@ function MeetingPage() {
 
   const producersRef = useRef(new Map()); // ✅추가: kind(or track.id) -> Producer
 
-  const audioElsRef = useRef(new Map()); // ✅추가: peerId/producerId -> HTMLAudioElement (GC 방지)
+  const audioElsRef = useRef(new Map());
 
   const userIdRef = useRef(null);
   const userNameRef = useRef(null);
 
   const effectAliveRef = useRef(true);
+
+  const chatEndRef = useRef(null); //채팅 자동 스크롤
+
+  const restoredRef = useRef(false); //새로고침 채팅 복원
+
+  const lastSpeakingRef = useRef(null);
 
   if (!userIdRef.current) {
     const id = crypto.randomUUID();
@@ -223,16 +233,13 @@ function MeetingPage() {
     e.preventDefault();
     if (!chatDraft.trim()) return;
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        sender: "나",
-        text: chatDraft,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        isMe: true,
-      },
-    ]);
+    wsRef.current?.send(
+      JSON.stringify({
+        type: "CHAT",
+        message: chatDraft,
+      })
+    );
+
     setChatDraft("");
   };
 
@@ -535,10 +542,10 @@ function MeetingPage() {
           const next = data.users.map((u) => {
             const old = prevMap.get(u.userId);
 
-            const existingStream = peerStreamsRef.current.get(u.userId);
-
             const stream =
-              u.userId === userId ? localStream : existingStream || old?.stream || null;
+              u.userId === userId
+                ? localStream
+                : old?.stream ?? peerStreamsRef.current.get(u.userId) ?? null;
 
             const cameraOff =
               u.userId === userId ? camMuted : stream ? !stream.getVideoTracks().length : true;
@@ -562,11 +569,28 @@ function MeetingPage() {
           return exists ? prev : data.users[0]?.userId ?? null;
         });
       }
+      if (data.type === "CHAT") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: data.timestamp,
+            userId: data.userId,
+            userName: data.userName,
+            text: data.message,
+            time: new Date(data.timestamp).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            isMe: data.userId === userId,
+          },
+        ]);
+        return;
+      }
     };
 
     wsRef.current = ws;
     return () => ws.close();
-  }, [roomId, userId, userName, localStream, camMuted, micMuted]);
+  }, [roomId, userId, userName]);
 
   useEffect(() => {
     setParticipants((prev) =>
@@ -750,6 +774,7 @@ function MeetingPage() {
       // ✅추가: 서버가 지원한다면 producerClosed/peerLeft 처리
       if (msg.action === "producerClosed") {
         const { producerId, peerId } = msg.data || {};
+
         if (producerId) {
           const c = consumersRef.current.get(producerId);
           if (c) safeClose(c);
@@ -762,28 +787,26 @@ function MeetingPage() {
           }
         }
 
-        // peerId가 내려오면 그 peer stream 재구성/정리 필요
+        // ✅ 핵심: peer stream을 완전히 제거
         if (peerId) {
-          const s = peerStreamsRef.current.get(peerId);
-          if (s) {
-            // track 제거 후 남은 트랙이 없으면 cameraOff 처리
-            const aliveTracks = s.getTracks().filter((t) => t.readyState !== "ended");
-            const newStream = new MediaStream(aliveTracks);
-            peerStreamsRef.current.set(peerId, newStream);
+          peerStreamsRef.current.delete(peerId);
 
-            setParticipants((prev) =>
-              prev.map((p) =>
-                p.id === peerId ? { ...p, stream: newStream, cameraOff: !newStream.getVideoTracks().length } : p
-              )
-            );
-          }
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.id === peerId
+                ? { ...p, stream: null, cameraOff: true }
+                : p
+            )
+          );
         }
+
         return;
       }
 
       if (msg.action === "peerLeft") {
         const { peerId } = msg.data || {};
         if (peerId) {
+          peerStreamsRef.current.delete(peerId);
           removePeerMedia(peerId);
         }
         return;
@@ -847,22 +870,36 @@ function MeetingPage() {
   }, [roomId, localStream, userId]);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      sessionStorage.removeItem("sidebarOpen");
-      sessionStorage.removeItem("sidebarView");
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, []);
-
-  useEffect(() => {
     sessionStorage.setItem("sidebarOpen", String(sidebarOpen));
   }, [sidebarOpen]);
 
   useEffect(() => {
     sessionStorage.setItem("sidebarView", sidebarView);
   }, [sidebarView]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem(`chat_${roomId}`, JSON.stringify(messages));
+  }, [messages, roomId]);
+
+  useEffect(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    // 이전 상태와 동일하면 전송하지 않음
+    if (lastSpeakingRef.current === isSpeaking) return;
+
+    lastSpeakingRef.current = isSpeaking;
+
+    wsRef.current.send(
+      JSON.stringify({
+        type: "SPEAKING",
+        speaking: isSpeaking,
+      })
+    );
+  }, [isSpeaking]);
 
   // --- Render ---
   const mainUser = getMainUser();
@@ -995,14 +1032,15 @@ function MeetingPage() {
                   {messages.map((msg) => (
                     <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
                       <div className="msg-content-wrapper">
-                        {!msg.isMe && <UserAvatar name={msg.sender} size="sm" />}
+                        {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
                         <div className="msg-bubble">{msg.text}</div>
                       </div>
                       <span className="msg-time">
-                        {msg.sender}, {msg.time}
+                        {msg.userName}, {msg.time}
                       </span>
                     </div>
                   ))}
+                  <div ref={chatEndRef} />
                 </div>
                 <div className="chat-input-area">
                   <form onSubmit={handleSendMessage} className="chat-form">
