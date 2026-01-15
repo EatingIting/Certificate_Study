@@ -51,9 +51,8 @@ const UserAvatar = ({ name, size = "md", src }) => {
 const VideoTile = ({ user, isMain = false, stream }) => {
   const videoEl = useRef(null);
 
-  // ✅ user가 없을 때 사용할 안전한 fallback
   const safeUser = user ?? {
-    name: '대기 중',
+    name: "대기 중",
     isMe: false,
     muted: true,
     cameraOff: true,
@@ -61,32 +60,47 @@ const VideoTile = ({ user, isMain = false, stream }) => {
   };
 
   const mediaAvailable = !!stream;
-
   const canShowVideo = mediaAvailable;
 
   useEffect(() => {
-    if (!videoEl.current) return;
+    const v = videoEl.current;
+    if (!v) return;
 
     if (!canShowVideo) {
-      videoEl.current.srcObject = null;
+      v.srcObject = null;
       return;
     }
 
-    videoEl.current.srcObject = stream;
-    videoEl.current.play().catch(() => {});
+    // ✅추가: srcObject 교체 시 한번 리셋(브라우저별 black frame 방지)
+    if (v.srcObject !== stream) {
+      v.srcObject = null; // ✅추가
+      v.srcObject = stream;
+
+      v.playsInline = true;
+      v.muted = true; // (오디오는 별도 Audio로 재생 중)
+
+      // ✅추가: loadedmetadata 이후 play 재시도
+      const tryPlay = () => {
+        v.play().catch((e) => {
+          // autoplay 정책/타이밍 이슈 대응
+          console.warn("Auto-play blocked or timing issue:", e);
+        });
+      };
+
+      v.onloadedmetadata = () => {
+        tryPlay();
+      };
+
+      // ✅추가: metadata 이전에도 1회 시도
+      tryPlay();
+    }
   }, [canShowVideo, stream]);
 
   return (
     <div className={`video-tile ${isMain ? "main" : ""} ${safeUser.speaking ? "speaking" : ""}`}>
       <div className="video-content">
         {canShowVideo ? (
-          <video
-            ref={videoEl}
-            autoPlay
-            playsInline
-            muted
-            className="video-element"
-          />
+          <video ref={videoEl} autoPlay playsInline muted className="video-element" />
         ) : (
           <div className="camera-off-placeholder">
             <UserAvatar name={safeUser.name} size={isMain ? "lg" : "md"} />
@@ -107,12 +121,26 @@ const VideoTile = ({ user, isMain = false, stream }) => {
 
 function MeetingPage() {
   const { roomId } = useParams();
+  const loggedRef = useRef(false);
 
-  const [layoutMode, setLayoutMode] = useState("speaker"); // 'speaker' | 'grid'
-  const [sidebarView, setSidebarView] = useState("chat"); // 'chat' | 'participants'
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  useEffect(() => {
+    if (!roomId) return;
+    if (loggedRef.current) return;
 
-  // My device state
+    console.log("[CLIENT] roomId from URL =", roomId);
+    loggedRef.current = true;
+  }, [roomId]);
+
+  const [layoutMode, setLayoutMode] = useState("speaker");
+
+  const [sidebarView, setSidebarView] = useState(() => {
+    return sessionStorage.getItem("sidebarView") || "chat";
+  });
+
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    return sessionStorage.getItem("sidebarOpen") === "true";
+  });
+
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
 
@@ -122,16 +150,11 @@ function MeetingPage() {
   const [localStream, setLocalStream] = useState(null);
   const localStreamRef = useRef(null);
 
-  // speaking 감지 (내 로컬만)
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // 참가자 목록(서버가 내려준 단일 진실)
   const [participants, setParticipants] = useState([]);
-
-  // 발표자(메인) 선택
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
-  // chat (더미 유지)
   const [messages, setMessages] = useState([
     { id: 1, sender: "김민아", text: "다들 LMS에 올린 기출문제 확인하셨나요??", time: "10:02 AM", isMe: false },
     { id: 2, sender: "박서준", text: "네, 잘 봤습니다! 4번 문제 관련해서 질문이 있어요.", time: "10:03 AM", isMe: false },
@@ -139,7 +162,6 @@ function MeetingPage() {
   ]);
   const [chatDraft, setChatDraft] = useState("");
 
-  // reactions (더미 유지)
   const [showReactions, setShowReactions] = useState(false);
   const [myReaction, setMyReaction] = useState(null);
 
@@ -150,12 +172,19 @@ function MeetingPage() {
   const sendTransportRef = useRef(null);
   const recvTransportRef = useRef(null);
 
-  // producer / consumer 관리
-  const consumersRef = useRef(new Map()); // producerId -> MediaStream
+  const pendingProducersRef = useRef([]);
 
-  // ✅ 유저 ID / 이름: 탭(시크릿 포함)마다 고유
+  const consumersRef = useRef(new Map()); // producerId -> Consumer
+  const peerStreamsRef = useRef(new Map()); // peerId -> MediaStream
+
+  const producersRef = useRef(new Map()); // ✅추가: kind(or track.id) -> Producer
+
+  const audioElsRef = useRef(new Map()); // ✅추가: peerId/producerId -> HTMLAudioElement (GC 방지)
+
   const userIdRef = useRef(null);
   const userNameRef = useRef(null);
+
+  const effectAliveRef = useRef(true);
 
   if (!userIdRef.current) {
     const id = crypto.randomUUID();
@@ -166,7 +195,6 @@ function MeetingPage() {
   const userId = userIdRef.current;
   const userName = userNameRef.current;
 
-  // --- Derived flags ---
   const hasAudioTrack = localStream?.getAudioTracks().length > 0;
   const hasVideoTrack = localStream?.getVideoTracks().length > 0;
 
@@ -188,9 +216,9 @@ function MeetingPage() {
     cameraOff: camMuted,
     speaking: isSpeaking,
     isMe: true,
+    stream: localStream,
   };
 
-  // --- UI handlers ---
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!chatDraft.trim()) return;
@@ -223,33 +251,15 @@ function MeetingPage() {
     }
   };
 
-  // ✅ 메인 유저(발표자) 선택: 항상 participants에서만 선택
   const getMainUser = () => {
-    // 1️⃣ activeSpeaker가 "나"인 경우
-    if (activeSpeakerId === me.id) {
-      return me;
-    }
-
-    // 2️⃣ activeSpeaker가 다른 참가자인 경우
-    const found = participants.find(p => p.id === activeSpeakerId);
-    if (found) {
-      return found;
-    }
-
-    // 3️⃣ activeSpeaker가 없거나 잘못된 경우 → 나 우선
-    if (me) {
-      return me;
-    }
-
-    // 4️⃣ 그래도 없다면 참가자 중 첫 번째
-    if (participants.length > 0) {
-      return participants[0];
-    }
-
-    // 5️⃣ 진짜 아무도 없을 때만
+    if (activeSpeakerId === me.id) return me;
+    const found = participants.find((p) => p.id === activeSpeakerId);
+    if (found) return found;
+    if (me) return me;
+    if (participants.length > 0) return participants[0];
     return {
-      id: 'empty',
-      name: '대기 중',
+      id: "empty",
+      name: "대기 중",
       muted: true,
       cameraOff: true,
       speaking: false,
@@ -259,122 +269,229 @@ function MeetingPage() {
 
   // --- Local media ---
   const startLocalMedia = async () => {
-    // 1) video+audio
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-      return stream;
-    } catch (avErr) {
-      console.warn("AV 요청 실패 → video-only 시도", avErr);
+    if (localStreamRef.current) {
+      console.log("[MEDIA] already acquired, skip getUserMedia");
+      return localStreamRef.current;
     }
 
-    // 2) video only
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      console.log("[MEDIA] requesting camera + mic");
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+
       localStreamRef.current = stream;
       setLocalStream(stream);
-      return stream;
-    } catch (vErr) {
-      console.warn("video-only 실패 → audio-only 시도", vErr);
-    }
 
-    // 3) audio only
+      setMicPermission("granted");
+      setCamPermission("granted");
+
+      console.log("[MEDIA] media acquired", stream.id);
+      return stream;
+    } catch (err) {
+      console.error("[MEDIA] getUserMedia failed", err);
+
+      setMicPermission("denied");
+      setCamPermission("denied");
+
+      return null;
+    }
+  };
+
+  // --- SFU Functions ---
+  const safeSfuSend = (obj) => {
+    const ws = sfuWsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn("SFU WS not open yet, skip send:", obj.action);
+      return;
+    }
+    ws.send(JSON.stringify(obj));
+  };
+
+  const ensureParticipant = (peerId) => {
+    setParticipants((prev) => {
+      const exists = prev.some((p) => p.id === peerId);
+      if (exists) return prev;
+
+      return [
+        ...prev,
+        {
+          id: peerId,
+          name: `User-${String(peerId).slice(0, 4)}`,
+          isMe: false,
+          muted: true,
+          speaking: false,
+          stream: null,
+          cameraOff: true,
+        },
+      ];
+    });
+  };
+
+  const safeClose = (obj) => {
+    if (!obj) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-      return stream;
-    } catch (aErr) {
-      console.warn("audio-only도 실패 → 미디어 없는 테스트 모드", aErr);
+      if (obj.closed) return;
+      obj.close();
+    } catch (e) {
+      console.warn("safeClose ignored:", e?.message);
     }
+  };
 
-    // 4) 완전 실패
-    localStreamRef.current = null;
-    setLocalStream(null);
-    return null;
+  const removePeerMedia = (peerId) => {
+    // ✅추가: peer 떠나거나 producer 닫힐 때 UI/stream 정리
+    peerStreamsRef.current.delete(peerId);
+
+    setParticipants((prev) =>
+      prev
+        .filter((p) => p.id !== peerId)
+        .map((p) =>
+          p.id === peerId
+            ? { ...p, stream: null, cameraOff: true, muted: true }
+            : p
+        )
+    );
   };
 
   const consumeProducer = async (producerId, peerId) => {
-    // ❌ 자기 자신 producer는 consume 금지
+    if (!producerId || !peerId) return;
     if (peerId === userIdRef.current) return;
 
-    // ❌ 이미 consume한 producer면 무시
     if (consumersRef.current.has(producerId)) return;
 
     const device = sfuDeviceRef.current;
     const recvTransport = recvTransportRef.current;
-    if (!device || !recvTransport) return;
 
-    sfuWsRef.current.send(JSON.stringify({
+    if (!device || !recvTransport) {
+      pendingProducersRef.current.push({ producerId, peerId });
+      return;
+    }
+
+    ensureParticipant(peerId);
+
+    const requestId = crypto.randomUUID();
+
+    safeSfuSend({
       action: "consume",
-      requestId: crypto.randomUUID(),
+      requestId,
       data: {
         transportId: recvTransport.id,
         producerId,
         rtpCapabilities: device.rtpCapabilities,
       },
-    }));
+    });
 
     const handler = async (event) => {
       const msg = JSON.parse(event.data);
       if (msg.action !== "consume:response") return;
+      if (msg.requestId !== requestId) return;
 
       const { consumerId, kind, rtpParameters } = msg.data;
 
-      const consumer = await recvTransport.consume({
-        id: consumerId,
-        producerId,
-        kind,
-        rtpParameters,
-      });
+      if (!recvTransportRef.current || recvTransportRef.current.closed) {
+        console.log("⛔ recvTransport closed, skip consume");
+        return;
+      }
 
-      // ✅ 여기서 최초 1회만 등록
-      consumersRef.current.set(producerId, consumer);
+      let consumer;
 
-      const stream = new MediaStream([consumer.track]);
+      try {
+        consumer = await recvTransportRef.current.consume({
+          id: consumerId,
+          producerId,
+          kind,
+          rtpParameters,
+        });
 
-      setParticipants(prev =>
-        prev.map(p =>
-          p.id === peerId ? { ...p, stream } : p
-        )
-      );
+        consumersRef.current.set(producerId, consumer);
 
-      sfuWsRef.current.send(JSON.stringify({
-        action: "resumeConsumer",
-        requestId: crypto.randomUUID(),
-        data: { consumerId },
-      }));
+        const oldStream = peerStreamsRef.current.get(peerId);
+        const newStream = new MediaStream();
 
-      sfuWsRef.current.removeEventListener("message", handler);
+        if (oldStream) {
+          oldStream.getTracks().forEach((t) => {
+            if (t.readyState !== "ended") newStream.addTrack(t); // ✅추가: ended track 제외
+          });
+        }
+        newStream.addTrack(consumer.track);
+
+        peerStreamsRef.current.set(peerId, newStream);
+
+        setParticipants((prev) =>
+          prev.map((p) =>
+            p.id === peerId
+              ? {
+                  ...p,
+                  stream: newStream,
+                  cameraOff: !newStream.getVideoTracks().length,
+                }
+              : p
+          )
+        );
+
+        safeSfuSend({
+          action: "resumeConsumer",
+          requestId: crypto.randomUUID(),
+          data: { consumerId },
+        });
+
+        // ✅수정: 오디오 엘리먼트 참조를 유지(GC로 끊기는 현상 방지)
+        if (kind === "audio") {
+          const audio = new Audio();
+          audio.srcObject = new MediaStream([consumer.track]);
+          audio.autoplay = true;
+          audio.playsInline = true;
+          audioElsRef.current.set(producerId, audio); // ✅추가
+          audio.play().catch(() => {});
+        }
+      } catch (e) {
+        console.error("Consume failed", e);
+      } finally {
+        sfuWsRef.current?.removeEventListener("message", handler);
+      }
     };
 
     sfuWsRef.current.addEventListener("message", handler);
   };
 
-  // speaking(내 로컬만)
-  const startAudioLevelMonitor = (stream) => {
-    if (!stream) return;
-    const audioTracks = stream.getAudioTracks();
-    if (audioTracks.length === 0) return;
+  // --- Hooks ---
 
+  useEffect(() => {
+    const init = async () => {
+      await startLocalMedia();
+    };
+    init();
+    return () => {
+      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!localStreamRef.current) return;
+    const vt = localStreamRef.current.getVideoTracks()[0];
+    if (vt) vt.enabled = camOn;
+
+    const at = localStreamRef.current.getAudioTracks()[0];
+    if (at) at.enabled = micOn;
+  }, [camOn, micOn]);
+
+  useEffect(() => {
+    if (!localStream) return;
     const audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(stream);
+    const source = audioContext.createMediaStreamSource(localStream);
     const analyser = audioContext.createAnalyser();
-
     analyser.fftSize = 512;
     source.connect(analyser);
-
     const data = new Uint8Array(analyser.frequencyBinCount);
-    const THRESHOLD = 20;
 
     let speaking = false;
-
     const checkVolume = () => {
       analyser.getByteFrequencyData(data);
       const avg = data.reduce((sum, v) => sum + v, 0) / data.length;
-
-      if (avg > THRESHOLD) {
+      if (avg > 20) {
         if (!speaking) {
           speaking = true;
           setIsSpeaking(true);
@@ -387,217 +504,152 @@ function MeetingPage() {
       }
       requestAnimationFrame(checkVolume);
     };
-
     checkVolume();
-  };
-
-  // start local media on mount
-  useEffect(() => {
-    const init = async () => {
-      await startLocalMedia();
-    };
-
-    init();
-
-    return () => {
-      localStreamRef.current?.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-    };
-  }, []);
-
-  // camera toggle
-  useEffect(() => {
-    if (!localStreamRef.current) return;
-    const vt = localStreamRef.current.getVideoTracks()[0];
-    if (!vt) return;
-    vt.enabled = camOn;
-  }, [camOn]);
-
-  // permissions
-  useEffect(() => {
-    const checkPermissions = async () => {
-      try {
-        const mic = await navigator.permissions.query({ name: "microphone" });
-        setMicPermission(mic.state);
-        mic.onchange = () => setMicPermission(mic.state);
-      } catch {}
-
-      try {
-        const cam = await navigator.permissions.query({ name: "camera" });
-        setCamPermission(cam.state);
-        cam.onchange = () => setCamPermission(cam.state);
-      } catch {}
-    };
-
-    checkPermissions();
-  }, []);
-
-  // start speaking monitor when stream ready
-  useEffect(() => {
-    if (!localStream) return;
-    startAudioLevelMonitor(localStream);
+    return () => audioContext.close();
   }, [localStream]);
 
-  // --- WebSocket: join room and receive participants ---
+  // 1️⃣ Signaling WebSocket (8080)
   useEffect(() => {
     if (!roomId) return;
 
-    // 기존 ws 정리
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
 
     const ws = new WebSocket(
-      `ws://localhost:8080/ws/room/${roomId}?userId=${encodeURIComponent(
-        userId
-      )}&userName=${encodeURIComponent(userName)}`
+      `wss://172.30.1.250:8080/ws/room/${roomId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(
+        userName
+      )}`
     );
 
-    ws.onopen = () => {
-      console.log("✅ WebSocket connected", { roomId, userId, userName });
-    };
+    ws.onopen = () => console.log("✅ WebSocket connected");
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
       if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-        const serverUsers = data.users.map(u => ({
-          id: u.userId,
-          name: u.userName,
-          muted: false,
-          cameraOff: true,
-          speaking: false,
-          isMe: u.userId === userId,
-        }));
+        setParticipants((prev) => {
+          const prevMap = new Map(prev.map((p) => [p.id, p]));
 
-        // 🔥 핵심: me가 없으면 강제로 합친다
-        const hasMe = serverUsers.some(u => u.id === me.id);
+          const next = data.users.map((u) => {
+            const old = prevMap.get(u.userId);
 
-        const meWithStream = {
-          ...me,
-          stream: localStream,
-        };
+            const existingStream = peerStreamsRef.current.get(u.userId);
 
-        const merged = hasMe
-          ? serverUsers.map(u => (u.id === me.id ? meWithStream : u))
-          : [meWithStream, ...serverUsers];
+            const stream =
+              u.userId === userId ? localStream : existingStream || old?.stream || null;
 
-        setParticipants(merged);
+            const cameraOff =
+              u.userId === userId ? camMuted : stream ? !stream.getVideoTracks().length : true;
 
-        setActiveSpeakerId(prev =>
-          prev && merged.some(p => p.id === prev)
-            ? prev
-            : merged[0]?.id ?? null
-        );
+            return {
+              id: u.userId,
+              name: u.userName,
+              isMe: u.userId === userId,
+              muted: old?.muted ?? false,
+              speaking: old?.speaking ?? false,
+              stream,
+              cameraOff,
+            };
+          });
+
+          return next;
+        });
+
+        setActiveSpeakerId((prev) => {
+          const exists = data.users.some((u) => u.userId === prev);
+          return exists ? prev : data.users[0]?.userId ?? null;
+        });
       }
     };
 
-    ws.onclose = () => {
-      console.log("❌ WebSocket closed");
-    };
-
-    ws.onerror = (e) => {
-      console.error("WebSocket error", e);
-    };
-
     wsRef.current = ws;
+    return () => ws.close();
+  }, [roomId, userId, userName, localStream, camMuted, micMuted]);
 
-    return () => {
-      ws.close();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, userId, userName]);
-
-  // 내 상태(말하기/카메라/마이크)가 바뀔 때 participants 내 내 항목만 갱신
   useEffect(() => {
     setParticipants((prev) =>
-      prev.map((p) =>
-        p.isMe
-          ? {
-              ...p,
-              muted: micMuted,
-              cameraOff: camMuted,
-              speaking: isSpeaking,
-            }
-          : p
-      )
+      prev.map((p) => (p.isMe ? { ...p, muted: micMuted, cameraOff: camMuted, speaking: isSpeaking } : p))
     );
   }, [micMuted, camMuted, isSpeaking]);
 
+  // 2️⃣ SFU WebSocket (4000)
   useEffect(() => {
+    effectAliveRef.current = true;
+
     if (!roomId || !localStream) return;
 
-    // 1️⃣ SFU WebSocket 연결
-    const sfuWs = new WebSocket("ws://localhost:4000");
+    const resetSfuLocalState = () => {
+      consumersRef.current.clear();
+      producersRef.current.clear(); // ✅추가
+      peerStreamsRef.current.clear();
+      pendingProducersRef.current = [];
+
+      // ✅추가: 오디오 엘리먼트 참조 정리
+      audioElsRef.current.forEach((a) => {
+        try {
+          a.srcObject = null;
+        } catch {}
+      });
+      audioElsRef.current.clear();
+
+      sendTransportRef.current = null;
+      recvTransportRef.current = null;
+      sfuDeviceRef.current = null;
+    };
+
+    resetSfuLocalState();
+
+    const sfuWs = new WebSocket("wss://172.30.1.250:4000");
     sfuWsRef.current = sfuWs;
 
-    sfuWs.onopen = () => {
-      console.log("✅ SFU WebSocket connected");
+    const drainPending = async () => {
+      if (!recvTransportRef.current || !sfuDeviceRef.current) return;
+      const pending = pendingProducersRef.current;
+      if (!pending.length) return;
 
-      // 2️⃣ SFU join (서버에 방 + 피어 등록)
-      sfuWs.send(JSON.stringify({
+      const uniq = new Map();
+      for (const p of pending) uniq.set(p.producerId, p);
+      pendingProducersRef.current = [];
+
+      for (const p of uniq.values()) {
+        await consumeProducer(p.producerId, p.peerId);
+      }
+    };
+
+    sfuWs.onopen = () => {
+      safeSfuSend({
         action: "join",
         requestId: crypto.randomUUID(),
-        data: {
-          roomId,
-          peerId: userId,   // ⭐ Spring userId 그대로 사용
-        },
-      }));
+        data: { roomId, peerId: userId },
+      });
     };
 
     sfuWs.onmessage = async (event) => {
-      const msg = JSON.parse(event.data);
-      console.log("📩 SFU message:", msg);
+      if (!effectAliveRef.current) return;
 
-      // -----------------------------
-      // join response
-      // -----------------------------
+      const msg = JSON.parse(event.data);
+
       if (msg.action === "join:response") {
         const { rtpCapabilities, existingProducers } = msg.data;
 
-        // 1️⃣ Device 생성
         const device = new mediasoupClient.Device();
         await device.load({ routerRtpCapabilities: rtpCapabilities });
         sfuDeviceRef.current = device;
 
-        // 2️⃣ send transport 생성
-        sfuWs.send(JSON.stringify({
-          action: "createTransport",
-          requestId: crypto.randomUUID(),
-          data: { direction: "send" },
-        }));
+        sfuDeviceRef.current._existingProducers = existingProducers || [];
 
-        // 3️⃣ recv transport 생성
-        sfuWs.send(JSON.stringify({
-          action: "createTransport",
-          requestId: crypto.randomUUID(),
-          data: { direction: "recv" },
-        }));
-
-        // 기존 producer들 consume 준비
-        sfuDeviceRef.current._existingProducers = existingProducers;
+        safeSfuSend({ action: "createTransport", requestId: crypto.randomUUID(), data: { direction: "send" } });
+        safeSfuSend({ action: "createTransport", requestId: crypto.randomUUID(), data: { direction: "recv" } });
         return;
       }
 
-      // -----------------------------
-      // createTransport response
-      // -----------------------------
       if (msg.action === "createTransport:response") {
-        const {
-          transportId,
-          direction,
-          iceParameters,
-          iceCandidates,
-          dtlsParameters,
-        } = msg.data;
-
+        const { transportId, direction, iceParameters, iceCandidates, dtlsParameters } = msg.data;
         const device = sfuDeviceRef.current;
         if (!device) return;
 
-        // =====================
-        // SEND TRANSPORT
-        // =====================
         if (direction === "send") {
           const sendTransport = device.createSendTransport({
             id: transportId,
@@ -607,70 +659,48 @@ function MeetingPage() {
           });
 
           sendTransport.on("connect", ({ dtlsParameters }, cb) => {
-            const requestId = crypto.randomUUID();
-
-            const handler = (event) => {
-              const msg = JSON.parse(event.data);
-              if (
-                msg.action === "connectTransport:response" &&
-                msg.requestId === requestId
-              ) {
+            const reqId = crypto.randomUUID();
+            const handler = (e) => {
+              const m = JSON.parse(e.data);
+              if (m.action === "connectTransport:response" && m.requestId === reqId) {
                 cb();
                 sfuWs.removeEventListener("message", handler);
               }
             };
-
             sfuWs.addEventListener("message", handler);
-
-            sfuWs.send(JSON.stringify({
-              action: "connectTransport",
-              requestId,
-              data: { transportId, dtlsParameters },
-            }));
+            safeSfuSend({ action: "connectTransport", requestId: reqId, data: { transportId, dtlsParameters } });
           });
 
           sendTransport.on("produce", ({ kind, rtpParameters }, cb, errback) => {
-            const requestId = crypto.randomUUID();
-
-            const handleProduceResponse = (event) => {
-              const msg = JSON.parse(event.data);
-
-              if (
-                msg.action === "produce:response" &&
-                msg.requestId === requestId
-              ) {
-                cb({ id: msg.data.producerId });
-                sfuWs.removeEventListener("message", handleProduceResponse);
+            const reqId = crypto.randomUUID();
+            const handler = (e) => {
+              const m = JSON.parse(e.data);
+              if (m.action === "produce:response" && m.requestId === reqId) {
+                cb({ id: m.data.producerId });
+                sfuWs.removeEventListener("message", handler);
               }
-
-              if (
-                msg.action === "produce:error" &&
-                msg.requestId === requestId
-              ) {
-                errback(msg.error);
-                sfuWs.removeEventListener("message", handleProduceResponse);
+              if (m.action === "produce:error" && m.requestId === reqId) {
+                errback(m.error);
+                sfuWs.removeEventListener("message", handler);
               }
             };
-
-            sfuWs.addEventListener("message", handleProduceResponse);
-
-            sfuWs.send(JSON.stringify({
-              action: "produce",
-              requestId,
-              data: { transportId, kind, rtpParameters },
-            }));
+            sfuWs.addEventListener("message", handler);
+            safeSfuSend({ action: "produce", requestId: reqId, data: { transportId, kind, rtpParameters } });
           });
 
-          localStream.getTracks().forEach(track => {
-            sendTransport.produce({ track });
-          });
+          // ✅수정: Producer 객체를 저장해서 cleanup 시 close 가능하게
+          for (const track of localStream.getTracks()) {
+            try {
+              const producer = await sendTransport.produce({ track }); // ✅수정
+              producersRef.current.set(producer.id, producer); // ✅추가
+            } catch (e) {
+              console.error("produce failed:", e);
+            }
+          }
 
           sendTransportRef.current = sendTransport;
         }
 
-        // =====================
-        // RECV TRANSPORT
-        // =====================
         if (direction === "recv") {
           const recvTransport = device.createRecvTransport({
             id: transportId,
@@ -679,35 +709,160 @@ function MeetingPage() {
             dtlsParameters,
           });
 
+          recvTransport.on("connect", ({ dtlsParameters }, cb) => {
+            const reqId = crypto.randomUUID();
+            const handler = (e) => {
+              const m = JSON.parse(e.data);
+              if (m.action === "connectTransport:response" && m.requestId === reqId) {
+                cb();
+                sfuWs.removeEventListener("message", handler);
+              }
+            };
+            sfuWs.addEventListener("message", handler);
+            safeSfuSend({ action: "connectTransport", requestId: reqId, data: { transportId, dtlsParameters } });
+          });
+
           recvTransportRef.current = recvTransport;
 
-          // 🔥 이 가드가 핵심
-          if (!recvTransport._initialConsumed) {
-            recvTransport._initialConsumed = true;
+          const producers = sfuDeviceRef.current?._existingProducers || [];
+          for (const p of producers) {
+            await consumeProducer(p.producerId, p.peerId);
+          }
 
-            const producers = sfuDeviceRef.current._existingProducers || [];
-            for (const p of producers) {
-              consumeProducer(p.producerId, p.peerId);
-            }
+          await drainPending();
+        }
+
+        return;
+      }
+
+      if (msg.action === "newProducer") {
+        const { producerId, peerId } = msg.data;
+
+        if (!recvTransportRef.current || !sfuDeviceRef.current) {
+          pendingProducersRef.current.push({ producerId, peerId });
+          return;
+        }
+
+        await consumeProducer(producerId, peerId);
+        return;
+      }
+
+      // ✅추가: 서버가 지원한다면 producerClosed/peerLeft 처리
+      if (msg.action === "producerClosed") {
+        const { producerId, peerId } = msg.data || {};
+        if (producerId) {
+          const c = consumersRef.current.get(producerId);
+          if (c) safeClose(c);
+          consumersRef.current.delete(producerId);
+
+          const a = audioElsRef.current.get(producerId);
+          if (a) {
+            try { a.srcObject = null; } catch {}
+            audioElsRef.current.delete(producerId);
           }
         }
-      }
-    }
 
-    sfuWs.onerror = (err) => {
-      console.error("❌ SFU WS error", err);
+        // peerId가 내려오면 그 peer stream 재구성/정리 필요
+        if (peerId) {
+          const s = peerStreamsRef.current.get(peerId);
+          if (s) {
+            // track 제거 후 남은 트랙이 없으면 cameraOff 처리
+            const aliveTracks = s.getTracks().filter((t) => t.readyState !== "ended");
+            const newStream = new MediaStream(aliveTracks);
+            peerStreamsRef.current.set(peerId, newStream);
+
+            setParticipants((prev) =>
+              prev.map((p) =>
+                p.id === peerId ? { ...p, stream: newStream, cameraOff: !newStream.getVideoTracks().length } : p
+              )
+            );
+          }
+        }
+        return;
+      }
+
+      if (msg.action === "peerLeft") {
+        const { peerId } = msg.data || {};
+        if (peerId) {
+          removePeerMedia(peerId);
+        }
+        return;
+      }
     };
 
+    // ✅추가: onclose에서 로컬도 정리(예상치 못한 끊김 대비)
     sfuWs.onclose = () => {
-      console.log("❌ SFU WebSocket closed");
+      // 필요 시 재접속 로직을 넣을 수 있지만, 여기서는 정리만 수행
+      consumersRef.current.forEach((c) => safeClose(c));
+      consumersRef.current.clear();
+
+      producersRef.current.forEach((p) => safeClose(p));
+      producersRef.current.clear();
+
+      peerStreamsRef.current.clear();
+      pendingProducersRef.current = [];
+
+      audioElsRef.current.forEach((a) => {
+        try { a.srcObject = null; } catch {}
+      });
+      audioElsRef.current.clear();
     };
 
     return () => {
-      sfuWs.close();
+      effectAliveRef.current = false;
+
+      // ✅추가: 서버가 leave를 지원한다면 먼저 알림
+      try {
+        safeSfuSend({ action: "leave", requestId: crypto.randomUUID(), data: { roomId, peerId: userId } }); // ✅추가
+      } catch {}
+
+      // ✅수정: Producer/Consumer/Transport/Device를 모두 안전하게 닫기
+      producersRef.current.forEach((p) => safeClose(p)); // ✅추가
+      producersRef.current.clear(); // ✅추가
+
+      consumersRef.current.forEach((c) => safeClose(c));
+      consumersRef.current.clear();
+
+      safeClose(sendTransportRef.current); // ✅추가
+      safeClose(recvTransportRef.current); // ✅추가
+      sendTransportRef.current = null;
+      recvTransportRef.current = null;
+
+      safeClose(sfuDeviceRef.current); // ✅추가
+      sfuDeviceRef.current = null; // ✅추가
+
+      audioElsRef.current.forEach((a) => {
+        try { a.srcObject = null; } catch {}
+      });
+      audioElsRef.current.clear();
+
+      try {
+        sfuWsRef.current?.close();
+      } catch {}
       sfuWsRef.current = null;
+
+      peerStreamsRef.current.clear();
+      pendingProducersRef.current = [];
     };
   }, [roomId, localStream, userId]);
 
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.removeItem("sidebarOpen");
+      sessionStorage.removeItem("sidebarView");
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem("sidebarOpen", String(sidebarOpen));
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    sessionStorage.setItem("sidebarView", sidebarView);
+  }, [sidebarView]);
 
   // --- Render ---
   const mainUser = getMainUser();
@@ -715,9 +870,7 @@ function MeetingPage() {
   return (
     <>
       <div className="meet-layout">
-        {/* --- Main Stage Area --- */}
         <main className="meet-main">
-          {/* Header (Floating) */}
           <div className="meet-header">
             <div className="header-info glass-panel">
               <div className="header-icon">
@@ -753,37 +906,28 @@ function MeetingPage() {
             </div>
           </div>
 
-          {/* Video Grid Logic */}
           <div className="meet-stage">
             {layoutMode === "speaker" ? (
               <div className="layout-speaker">
                 <div className="main-stage">
-                  <VideoTile
-                    user={mainUser}
-                    isMain
-                    stream={mainUser.stream}
-                  />
+                  <VideoTile user={mainUser} isMain stream={mainUser.stream} />
                 </div>
-
                 <div className="bottom-strip custom-scrollbar">
-                  {/* ✅ 항상 내 타일 먼저 */}
                   <div
                     className={`strip-item ${activeSpeakerId === me.id ? "active-strip" : ""}`}
                     onClick={() => setActiveSpeakerId(me.id)}
                   >
                     <VideoTile user={me} stream={localStream} />
                   </div>
-
-                  {/* ✅ 서버에서 받은 다른 참가자들 */}
                   {participants
-                    .filter(p => !p.isMe)
+                    .filter((p) => !p.isMe)
                     .map((p) => (
                       <div
                         key={p.id}
                         className={`strip-item ${activeSpeakerId === p.id ? "active-strip" : ""}`}
                         onClick={() => setActiveSpeakerId(p.id)}
                       >
-                        <VideoTile user={p} stream={p.stream}/>
+                        <VideoTile user={p} stream={p.stream} />
                       </div>
                     ))}
                 </div>
@@ -799,16 +943,11 @@ function MeetingPage() {
             )}
           </div>
 
-          {/* --- Bottom Control Bar --- */}
           <div className="meet-controls-container">
             {showReactions && (
               <div className="reaction-popup glass-panel">
                 {reactionEmojis.map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={() => handleReaction(emoji)}
-                    className="reaction-btn"
-                  >
+                  <button key={emoji} onClick={() => handleReaction(emoji)} className="reaction-btn">
                     {emoji}
                   </button>
                 ))}
@@ -830,56 +969,26 @@ function MeetingPage() {
                 disabled={camDisabled}
                 onClick={() => setCamOn(!camOn)}
               />
-
               <div className="divider"></div>
-
               <ButtonControl label="화면 공유" icon={Monitor} onClick={() => {}} />
-
-              <ButtonControl
-                label="반응"
-                icon={Smile}
-                active={showReactions}
-                onClick={() => setShowReactions(!showReactions)}
-              />
-
-              <ButtonControl
-                label="채팅"
-                active={sidebarOpen && sidebarView === "chat"}
-                icon={MessageSquare}
-                onClick={() => toggleSidebar("chat")}
-              />
-              <ButtonControl
-                label="참여자"
-                active={sidebarOpen && sidebarView === "participants"}
-                icon={Users}
-                onClick={() => toggleSidebar("participants")}
-              />
-
+              <ButtonControl label="반응" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
+              <ButtonControl label="채팅" active={sidebarOpen && sidebarView === "chat"} icon={MessageSquare} onClick={() => toggleSidebar("chat")} />
+              <ButtonControl label="참여자" active={sidebarOpen && sidebarView === "participants"} icon={Users} onClick={() => toggleSidebar("participants")} />
               <div className="divider"></div>
-
-              <ButtonControl
-                label="통화 종료"
-                danger
-                icon={Phone}
-                onClick={() => alert("통화가 종료되었습니다.")}
-              />
+              <ButtonControl label="통화 종료" danger icon={Phone} onClick={() => alert("통화가 종료되었습니다.")} />
             </div>
           </div>
         </main>
 
-        {/* --- Right Sidebar Panel --- */}
         <aside className={`meet-sidebar ${sidebarOpen ? "open" : ""}`}>
           <div className="sidebar-inner">
             <div className="sidebar-header">
-              <h2 className="sidebar-title">
-                {sidebarView === "chat" ? "회의 채팅" : "참여자 목록"}
-              </h2>
+              <h2 className="sidebar-title">{sidebarView === "chat" ? "회의 채팅" : "참여자 목록"}</h2>
               <button onClick={() => setSidebarOpen(false)} className="close-btn">
                 <X size={20} />
               </button>
             </div>
 
-            {/* Chat Content */}
             {sidebarView === "chat" && (
               <>
                 <div className="chat-area custom-scrollbar">
@@ -895,7 +1004,6 @@ function MeetingPage() {
                     </div>
                   ))}
                 </div>
-
                 <div className="chat-input-area">
                   <form onSubmit={handleSendMessage} className="chat-form">
                     <input
@@ -913,11 +1021,9 @@ function MeetingPage() {
               </>
             )}
 
-            {/* Participants Content */}
             {sidebarView === "participants" && (
               <div className="participants-area custom-scrollbar">
                 <div className="section-label">참여 중 ({participants.length})</div>
-
                 {participants.map((p) => (
                   <div key={p.id} className={`participant-card ${p.isMe ? "me" : ""}`}>
                     <div className="p-info">
@@ -940,7 +1046,6 @@ function MeetingPage() {
                     </div>
                   </div>
                 ))}
-
                 <div className="invite-section">
                   <button className="invite-btn">
                     <Share size={16} /> 초대하기
