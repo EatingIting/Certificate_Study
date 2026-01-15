@@ -196,6 +196,8 @@ function MeetingPage() {
 
   const chatEndRef = useRef(null); //채팅 자동 스크롤
 
+  const [chatConnected, setChatConnected] = useState(false);
+
   // const restoredRef = useRef(false); //새로고침 채팅 복원
 
   const lastSpeakingRef = useRef(null);
@@ -561,7 +563,23 @@ function MeetingPage() {
       )}`
     );
 
-    ws.onopen = () => console.log("✅ WebSocket connected");
+    ws.onopen = () => { 
+      console.log("✅ WebSocket connected");
+      setChatConnected(true);
+    }
+
+    ws.onclose = () => {
+      console.log("❌ CHAT WebSocket closed");
+      setChatConnected(false); // ✅ 3. 끊김 시 false
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+      }
+    };
+
+    ws.onerror = (error) => {
+        console.error("WebSocket Error:", error);
+        setChatConnected(false); // ✅ 4. 에러 시 false
+    };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
