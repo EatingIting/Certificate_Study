@@ -61,6 +61,9 @@ const RoomPage = () => {
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+    const [applyMessage, setApplyMessage] = useState("");
+
     /* 카테고리 필터 */
     const filteredRooms =
         selectedCategory === "전체(가나다순)"
@@ -93,8 +96,14 @@ const RoomPage = () => {
     };
 
     const handleApply = () => {
-        alert(`신청페이지로 이동예정`);
-        closeModal();
+        setIsApplyModalOpen(true);
+    };
+
+    const submitApply = () => {
+        alert("스터디에 신청되었습니다.");
+        setApplyMessage("");
+        setIsApplyModalOpen(false);
+        closeModal(); // 상세 모달까지 같이 닫기
     };
 
     const closeModal = () => {
@@ -218,24 +227,61 @@ const RoomPage = () => {
                         className="modal-content"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h3>{selectedRoom.title}</h3>
-                        <p><strong>카테고리:</strong> {selectedRoom.category}</p>
-                        <p><strong>스터디장:</strong> {selectedRoom.author}</p>
-                        <pre className="modal-text">
-              {selectedRoom.content}
-            </pre>
+                        {!isApplyModalOpen ? (
+                            <>
+                                {/* ===== 상세 화면 ===== */}
+                                <h3>{selectedRoom.title}</h3>
+                                <p><strong>카테고리:</strong> {selectedRoom.category}</p>
+                                <p><strong>스터디장:</strong> {selectedRoom.author}</p>
+                                <pre className="modal-text">
+                        {selectedRoom.content}
+                    </pre>
 
-                        <div className="modal-buttons">
-                            <button className="apply-btn" onClick={handleApply}>
-                                신청하기
-                            </button>
-                            <button className="close-btn" onClick={closeModal}>
-                                닫기
-                            </button>
-                        </div>
+                                <div className="modal-buttons">
+                                    <button
+                                        className="apply-btn"
+                                        onClick={() => setIsApplyModalOpen(true)}
+                                    >
+                                        신청하기
+                                    </button>
+                                    <button className="close-btn" onClick={closeModal}>
+                                        닫기
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* ===== 신청 화면 (덮어쓰기) ===== */}
+                                <h3>스터디 신청</h3>
+                                <h3>신청하는 스터디: {selectedRoom.title}</h3>
+
+                                <textarea className="applytext"
+                                    placeholder="간단한 자기소개 및 신청 메시지를 입력해주세요."
+                                    value={applyMessage}
+                                    onChange={(e) => setApplyMessage(e.target.value)}
+                                />
+
+                                <div className="modal-buttons">
+                                    <button
+                                        className="apply-btn"
+                                        onClick={submitApply}
+                                        disabled={!applyMessage.trim()}
+                                    >
+                                        신청하기
+                                    </button>
+                                    <button
+                                        className="close-btn"
+                                        onClick={() => setIsApplyModalOpen(false)}
+                                    >
+                                        취소
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
+
         </div>
     );
 };

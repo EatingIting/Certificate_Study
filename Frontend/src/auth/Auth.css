@@ -5,6 +5,12 @@
     text-align: center;
 }
 
+.login-title {
+    margin-top: 40px;
+    margin-bottom: 100px;
+}
+
+
 .logo {
     font-size: 30px;
     font-weight: 800;
@@ -26,43 +32,10 @@
     gap: 12px;
 }
 
-.login-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-
-    height: 48px;
-    border-radius: 12px;
-    font-size: 15px;
-    font-weight: 500;
-    border: 1px solid #e5e5e5;
-    background-color: #fff;
-    cursor: pointer;
-}
-
-.login-button:hover {
-    background-color: #f7f7f7;
-}
-
-.login-button .icon {
-    font-weight: 700;
-}
-
-.kakao {
-    background-color: #fee500;
-    border: none;
-}
-
 .naver {
-    background-color: #03c75a;
-    color: #fff;
-    border: none;
+    border-radius: 5px;
 }
 
-.google {
-    border: 1px solid #ddd;
-}
 
 .email-login {
     margin-top: 24px;
