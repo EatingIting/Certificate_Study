@@ -18,7 +18,7 @@
     "webrtc": "^1.14.1"
   },
   "scripts": {
-    "start": "cross-env HTTPS=true react-scripts start",
+    "start": "cross-env HTTPS=true HOST=0.0.0.0 react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

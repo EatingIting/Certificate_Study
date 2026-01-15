@@ -41,13 +41,29 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         String userId = params.get("userId");
         String userName = params.get("userName");
 
-        roomSessions
-                .computeIfAbsent(roomId, k -> new ConcurrentHashMap<>())
-                .put(session.getId(), session);
+        Map<String, RoomUser> users = roomUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+        Map<String, WebSocketSession> sessions = roomSessions.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
 
-        roomUsers
-                .computeIfAbsent(roomId, k -> new ConcurrentHashMap<>())
-                .put(session.getId(), new RoomUser(userId, userName, false));
+        String existingSessionId = null;
+        for (Map.Entry<String, RoomUser> e : users.entrySet()) {
+            if (e.getValue() != null && userId != null && userId.equals(e.getValue().getUserId())) {
+                existingSessionId = e.getKey();
+                break;
+            }
+        }
+
+        if (existingSessionId != null) {
+            WebSocketSession old = sessions.get(existingSessionId);
+            if (old != null && old.isOpen()) {
+                try { old.close(); } catch (Exception ignore) {}
+            }
+            sessions.remove(existingSessionId);
+            users.remove(existingSessionId);
+        }
+
+        // 기존 로직
+        sessions.put(session.getId(), session);
+        users.put(session.getId(), new RoomUser(userId, userName, false));
 
         broadcast(roomId);
     }

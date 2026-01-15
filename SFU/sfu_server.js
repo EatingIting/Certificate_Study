@@ -195,11 +195,20 @@ wss.on("connection", (ws) => {
         if (direction !== "send" && direction !== "recv") throw new Error("direction must be 'send' or 'recv'");
 
         const transport = await room.router.createWebRtcTransport({
-          listenIps: [{ ip: "0.0.0.0", announcedIp: ANNOUNCED_IP }],
+          listenIps: [
+            {
+              ip: "0.0.0.0",
+              announcedIp: "172.30.1.250"
+            }
+          ],
           enableUdp: true,
           enableTcp: true,
           preferUdp: true,
-          initialAvailableOutgoingBitrate: 800000,
+
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" }
+          ]
         });
 
         peer.transports.set(transport.id, { transport, direction });

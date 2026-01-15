@@ -155,6 +155,8 @@ function MeetingPage() {
   const [participants, setParticipants] = useState([]);
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
+  const [streamVersion, setStreamVersion] = useState(0);
+
   const [messages, setMessages] = useState(() => {
     try {
       const saved = localStorage.getItem(`chat_${roomId}`);
@@ -192,14 +194,22 @@ function MeetingPage() {
 
   const chatEndRef = useRef(null); //채팅 자동 스크롤
 
-  const restoredRef = useRef(false); //새로고침 채팅 복원
+  // const restoredRef = useRef(false); //새로고침 채팅 복원
 
   const lastSpeakingRef = useRef(null);
 
   if (!userIdRef.current) {
-    const id = crypto.randomUUID();
+    const savedId = localStorage.getItem("stableUserId");
+    const savedName = localStorage.getItem("stableUserName");
+
+    const id = savedId || crypto.randomUUID();
+    const name = savedName || `User-${id.slice(0, 4)}`;
+
+    localStorage.setItem("stableUserId", id);
+    localStorage.setItem("stableUserName", name);
+
     userIdRef.current = id;
-    userNameRef.current = `User-${id.slice(0, 4)}`;
+    userNameRef.current = name;
   }
 
   const userId = userIdRef.current;
@@ -272,6 +282,10 @@ function MeetingPage() {
       speaking: false,
       isMe: false,
     };
+  };
+
+  const bumpStreamVersion = () => {
+    setStreamVersion((v) => v + 1);
   };
 
   // --- Local media ---
@@ -365,12 +379,10 @@ function MeetingPage() {
   const consumeProducer = async (producerId, peerId) => {
     if (!producerId || !peerId) return;
     if (peerId === userIdRef.current) return;
-
     if (consumersRef.current.has(producerId)) return;
 
     const device = sfuDeviceRef.current;
     const recvTransport = recvTransportRef.current;
-
     if (!device || !recvTransport) {
       pendingProducersRef.current.push({ producerId, peerId });
       return;
@@ -397,15 +409,9 @@ function MeetingPage() {
 
       const { consumerId, kind, rtpParameters } = msg.data;
 
-      if (!recvTransportRef.current || recvTransportRef.current.closed) {
-        console.log("⛔ recvTransport closed, skip consume");
-        return;
-      }
-
       let consumer;
-
       try {
-        consumer = await recvTransportRef.current.consume({
+        consumer = await recvTransport.consume({
           id: consumerId,
           producerId,
           kind,
@@ -414,18 +420,18 @@ function MeetingPage() {
 
         consumersRef.current.set(producerId, consumer);
 
-        const oldStream = peerStreamsRef.current.get(peerId);
+        // 🔥 기존 stream + 새 track 병합
+        const prev = peerStreamsRef.current.get(peerId);
         const newStream = new MediaStream();
 
-        if (oldStream) {
-          oldStream.getTracks().forEach((t) => {
-            if (t.readyState !== "ended") newStream.addTrack(t); // ✅추가: ended track 제외
+        if (prev) {
+          prev.getTracks().forEach((t) => {
+            if (t.readyState !== "ended") newStream.addTrack(t);
           });
         }
         newStream.addTrack(consumer.track);
 
         peerStreamsRef.current.set(peerId, newStream);
-
         setParticipants((prev) =>
           prev.map((p) =>
             p.id === peerId
@@ -437,24 +443,47 @@ function MeetingPage() {
               : p
           )
         );
+        bumpStreamVersion();
+
+        // 🔥 track 종료 시 stream 재구성 (흰 화면 방지)
+        consumer.track.onended = () => {
+          const cur = peerStreamsRef.current.get(peerId);
+          if (!cur) return;
+
+          const alive = cur
+            .getTracks()
+            .filter((t) => t.readyState !== "ended" && t.id !== consumer.track.id);
+
+          const rebuilt = new MediaStream(alive);
+          peerStreamsRef.current.set(peerId, rebuilt);
+          bumpStreamVersion();
+
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.id === peerId
+                ? { ...p, cameraOff: rebuilt.getVideoTracks().length === 0 }
+                : p
+            )
+          );
+        };
+
+        // 🔊 오디오 재생
+        if (kind === "audio") {
+          const audio = new Audio();
+          audio.srcObject = new MediaStream([consumer.track]);
+          audio.autoplay = true;
+          audio.playsInline = true;
+          audioElsRef.current.set(producerId, audio);
+          audio.play().catch(() => {});
+        }
 
         safeSfuSend({
           action: "resumeConsumer",
           requestId: crypto.randomUUID(),
           data: { consumerId },
         });
-
-        // ✅수정: 오디오 엘리먼트 참조를 유지(GC로 끊기는 현상 방지)
-        if (kind === "audio") {
-          const audio = new Audio();
-          audio.srcObject = new MediaStream([consumer.track]);
-          audio.autoplay = true;
-          audio.playsInline = true;
-          audioElsRef.current.set(producerId, audio); // ✅추가
-          audio.play().catch(() => {});
-        }
       } catch (e) {
-        console.error("Consume failed", e);
+        console.error("consume failed", e);
       } finally {
         sfuWsRef.current?.removeEventListener("message", handler);
       }
@@ -536,39 +565,40 @@ function MeetingPage() {
       const data = JSON.parse(event.data);
 
       if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-        setParticipants((prev) => {
-          const prevMap = new Map(prev.map((p) => [p.id, p]));
+        setParticipants(prev => {
+          const prevMap = new Map(prev.map(p => [p.id, p]));
 
-          const next = data.users.map((u) => {
+          return data.users.map(u => {
             const old = prevMap.get(u.userId);
-
-            const stream =
-              u.userId === userId
-                ? localStream
-                : old?.stream ?? peerStreamsRef.current.get(u.userId) ?? null;
-
-            const cameraOff =
-              u.userId === userId ? camMuted : stream ? !stream.getVideoTracks().length : true;
 
             return {
               id: u.userId,
               name: u.userName,
               isMe: u.userId === userId,
+
+              // ✅ 상태만 갱신
               muted: old?.muted ?? false,
               speaking: old?.speaking ?? false,
-              stream,
-              cameraOff,
+
+              // 🔥 핵심: stream은 절대 여기서 변경 ❌
+              stream: old?.stream ?? null,
+
+              cameraOff:
+                u.userId === userId
+                  ? camMuted
+                  : old?.stream
+                  ? !old.stream.getVideoTracks().length
+                  : true,
             };
           });
-
-          return next;
         });
 
-        setActiveSpeakerId((prev) => {
-          const exists = data.users.some((u) => u.userId === prev);
+        setActiveSpeakerId(prev => {
+          const exists = data.users.some(u => u.userId === prev);
           return exists ? prev : data.users[0]?.userId ?? null;
         });
       }
+
       if (data.type === "CHAT") {
         setMessages((prev) => [
           ...prev,
@@ -584,7 +614,6 @@ function MeetingPage() {
             isMe: data.userId === userId,
           },
         ]);
-        return;
       }
     };
 
@@ -773,7 +802,7 @@ function MeetingPage() {
 
       // ✅추가: 서버가 지원한다면 producerClosed/peerLeft 처리
       if (msg.action === "producerClosed") {
-        const { producerId, peerId } = msg.data || {};
+        const { producerId } = msg.data || {};
 
         if (producerId) {
           const c = consumersRef.current.get(producerId);
@@ -785,21 +814,9 @@ function MeetingPage() {
             try { a.srcObject = null; } catch {}
             audioElsRef.current.delete(producerId);
           }
+
+          bumpStreamVersion(); // ⭐️ 필수
         }
-
-        // ✅ 핵심: peer stream을 완전히 제거
-        if (peerId) {
-          peerStreamsRef.current.delete(peerId);
-
-          setParticipants((prev) =>
-            prev.map((p) =>
-              p.id === peerId
-                ? { ...p, stream: null, cameraOff: true }
-                : p
-            )
-          );
-        }
-
         return;
       }
 
@@ -807,7 +824,11 @@ function MeetingPage() {
         const { peerId } = msg.data || {};
         if (peerId) {
           peerStreamsRef.current.delete(peerId);
-          removePeerMedia(peerId);
+          bumpStreamVersion();
+
+          setParticipants((prev) =>
+            prev.filter((p) => p.id !== peerId)
+          );
         }
         return;
       }
@@ -903,7 +924,13 @@ function MeetingPage() {
 
   // --- Render ---
   const mainUser = getMainUser();
+  const mainStream =
+    mainUser?.id === userId
+      ? localStream
+      : peerStreamsRef.current.get(mainUser?.id) || null;
 
+  // 🔥 렌더 강제 트리거용 (값은 사용 안 해도 됨)
+  const _sv = streamVersion;
   return (
     <>
       <div className="meet-layout">
@@ -947,7 +974,7 @@ function MeetingPage() {
             {layoutMode === "speaker" ? (
               <div className="layout-speaker">
                 <div className="main-stage">
-                  <VideoTile user={mainUser} isMain stream={mainUser.stream} />
+                  <VideoTile user={mainUser} isMain stream={mainStream} />
                 </div>
                 <div className="bottom-strip custom-scrollbar">
                   <div
@@ -957,23 +984,25 @@ function MeetingPage() {
                     <VideoTile user={me} stream={localStream} />
                   </div>
                   {participants
-                    .filter((p) => !p.isMe)
-                    .map((p) => (
-                      <div
-                        key={p.id}
-                        className={`strip-item ${activeSpeakerId === p.id ? "active-strip" : ""}`}
-                        onClick={() => setActiveSpeakerId(p.id)}
-                      >
-                        <VideoTile user={p} stream={p.stream} />
-                      </div>
-                    ))}
+                  .filter((p) => !p.isMe)
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      className={`strip-item ${activeSpeakerId === p.id ? "active-strip" : ""}`}
+                      onClick={() => setActiveSpeakerId(p.id)}
+                    >
+                      {/* ✅ 수정: stream은 p.stream만 사용 */}
+                      <VideoTile user={p} stream={p.stream ?? null} />
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : (
               <div className="layout-grid custom-scrollbar">
                 {participants.map((p) => (
                   <div key={p.id} className="video-tile-wrapper">
-                    <VideoTile user={p} stream={p.stream} />
+                    {/* ✅ stream은 반드시 p.stream */}
+                    <VideoTile user={p} stream={p.stream ?? null} />
                   </div>
                 ))}
               </div>
