@@ -1,20 +1,24 @@
-body {
-    font-family: 'Noto Sans KR', sans-serif;
+/* ===== 기본 리셋 ===== */
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
 }
 
+/* ===== 레이아웃 ===== */
 .room-layout {
     display: flex;
-    font-family: "Noto Sans KR", sans-serif;
+    height: 100vh;
 }
 
-/* 왼쪽 카테고리 */
+/* ===== 왼쪽 카테고리 ===== */
 .category-sidebar {
     width: 280px;
+    height: 100vh;
     background-color: #f3f3f3;
     padding: 20px;
     border-right: 1px solid #ddd;
     box-sizing: border-box;
-    height: 100vh;
     overflow-y: auto;
 }
 
@@ -27,7 +31,7 @@ body {
     width: 200px;
     height: 20px;
     padding: 8px 10px;
-    margin: 12px 0px;
+    margin: 12px 0;
     font-size: 13px;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -65,12 +69,16 @@ body {
     color: #888;
 }
 
-/* 오른쪽 방 목록 */
+/* ===== 오른쪽 콘텐츠 ===== */
 .room-content {
     flex: 1;
+    height: 100vh;
     padding: 24px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
+/* ===== 헤더 ===== */
 .room-header {
     display: flex;
     justify-content: space-between;
@@ -85,6 +93,7 @@ body {
     cursor: pointer;
 }
 
+/* ===== 테이블 ===== */
 .room-table {
     width: 100%;
     border-collapse: collapse;
@@ -99,10 +108,7 @@ body {
     text-align: center;
 }
 
-.room-table .title {
-    cursor: pointer;
-}
-
+.room-table .title,
 .room-table .category {
     cursor: pointer;
 }
@@ -117,7 +123,7 @@ body {
     white-space: nowrap;
 }
 
-/* 페이지네이션 */
+/* ===== 페이지네이션 ===== */
 .pagination {
     margin-top: 20px;
     text-align: center;
@@ -137,13 +143,10 @@ body {
     border-color: #1a4cff;
 }
 
-/* 모달 */
+/* ===== 모달 ===== */
 .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background: rgba(0, 0, 0, 0.4);
     display: flex;
     align-items: center;
@@ -165,33 +168,38 @@ body {
     font-size: 14px;
 }
 
-.modal-buttons button {
-    cursor: pointer;
-    width: 200px;
-    height: 40px;
-    gap: 10px;
-}
-
 .modal-buttons {
     display: flex;
     gap: 10px;
 }
 
+.modal-buttons button {
+    cursor: pointer;
+    width: 200px;
+    height: 40px;
+}
+
+.applytext {
+    width: 580px;
+    height: 150px;
+    margin: 20px 0px;
+}
+
 .close-btn {
-    padding: 8px 16px;
     border: 1px solid #d6d6d6;
     border-radius: 10px;
-    color: black;
+    background: #fff;
 }
 
 .apply-btn {
-    padding: 8px 16px;
-    border: 1px solid white;
+    border: none;
     background-color: #C2F2D0;
     border-radius: 10px;
-    color: black;
 }
 
-/*.room-layout * {*/
-/*    font-family: 'Jua', cursive !important;*/
-/*}*/
+/* ===== 폰트 통일 ===== */
+.room-layout * {
+    font-family: 'Pretendard Variable', sans-serif;
+}
+
+
