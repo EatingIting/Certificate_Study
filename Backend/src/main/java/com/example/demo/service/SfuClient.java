@@ -7,7 +7,7 @@ import org.springframework.web.client.RestTemplate;
 public class SfuClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private static final String SFU_BASE_URL = "https://172.30.1.250:4000";
+    private static final String SFU_BASE_URL = "https://192.168.35.235:4000";
 
     public <T> T post(String path, Object body, Class<T> responseType) {
         return restTemplate.postForObject(

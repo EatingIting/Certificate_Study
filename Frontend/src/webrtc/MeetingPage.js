@@ -166,6 +166,8 @@ function MeetingPage() {
     }
   });
 
+  const [participantCount, setParticipantCount] = useState(1); //참가자 수 SFU서버에서 가져옴
+
   const [chatDraft, setChatDraft] = useState("");
 
   const [showReactions, setShowReactions] = useState(false);
@@ -554,7 +556,7 @@ function MeetingPage() {
     }
 
     const ws = new WebSocket(
-      `wss://172.30.1.250:8080/ws/room/${roomId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(
+      `wss://192.168.35.235:8080/ws/room/${roomId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(
         userName
       )}`
     );
@@ -654,7 +656,7 @@ function MeetingPage() {
 
     resetSfuLocalState();
 
-    const sfuWs = new WebSocket("wss://172.30.1.250:4000");
+    const sfuWs = new WebSocket("wss://192.168.35.235:4000");
     sfuWsRef.current = sfuWs;
 
     const drainPending = async () => {
@@ -683,6 +685,11 @@ function MeetingPage() {
       if (!effectAliveRef.current) return;
 
       const msg = JSON.parse(event.data);
+
+      if (msg.action === "peerCount") {
+        setParticipantCount(msg.data.count);
+        return;
+      }
 
       if (msg.action === "join:response") {
         const { rtpCapabilities, existingProducers } = msg.data;
@@ -944,7 +951,7 @@ function MeetingPage() {
                 <h1 className="header-title">주간 제품 회의</h1>
                 <div className="header-meta">
                   <span>
-                    <Users size={10} /> {participants.length}명 접속 중
+                    <Users size={10} /> {participantCount}명 접속 중
                   </span>
                   <span className="dot" />
                   <span>00:24:15</span>

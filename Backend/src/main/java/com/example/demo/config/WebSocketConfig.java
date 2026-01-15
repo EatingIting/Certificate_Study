@@ -19,9 +19,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(handler, "/ws/room/{roomId}")
-                .setAllowedOrigins(
-                        "http://172.30.1.250:3000",
-                        "https://172.30.1.250:3000"
-                );
+                .setAllowedOrigins("*");
     }
 }
