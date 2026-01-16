@@ -244,5 +244,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             }
             return;
         }
+        if ("PING".equalsIgnoreCase(type)) {
+            session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+            return;
+        }
     }
 }

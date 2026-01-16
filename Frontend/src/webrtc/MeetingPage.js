@@ -68,7 +68,10 @@ const VideoTile = ({ user, isMain = false, stream }) => {
     // 1. 스트림 존재
     // 2. 유저가 카메라 킴 (cameraOff === false)
     // 3. 트랙이 실제로 살아있음 (!isVideoTrackMuted)
-    const canShowVideo = !!stream && !safeUser.cameraOff && !isVideoTrackMuted;
+
+    const isCameraOff = safeUser.cameraOff === undefined ? true : safeUser.cameraOff;
+
+    const canShowVideo = !!stream && !isCameraOff && !isVideoTrackMuted;
 
     // 1. 오디오 레벨 감지 (말할 때 초록 테두리)
     useEffect(() => {
@@ -425,6 +428,7 @@ function MeetingPage() {
                     name: `User-${String(peerId).slice(0, 4)}`,
                     isMe: false,
                     muted: true,
+                    cameraOff: true,
                     speaking: false,
                     stream: null,
                 },
@@ -512,19 +516,12 @@ function MeetingPage() {
 
                 peerStreamsRef.current.set(peerId, newStream);
 
+                // 🚀 [수정 완료] 상태(cameraOff, muted) 강제 설정을 지웠습니다!
+                // 오직 stream만 넣어주면, 서버에서 온 USERS_UPDATE 데이터와 합쳐져서 올바르게 나옵니다.
                 setParticipants((prev) =>
                     prev.map((p) =>
                         p.id === peerId
-                            ? {
-                                ...p,
-                                stream: newStream,
-                                
-                                // 🚀 [최종 수정] 새로운 연결이 오면 일단 'True(꺼짐/안전모드)'로 초기화합니다.
-                                // 과거의 상태(p.cameraOff)가 'False(켜짐)'로 남아있어서 검은 화면이 뜨는 것을 막습니다.
-                                // 0.1초 뒤에 서버에서 USERS_UPDATE가 오면 즉시 올바른 상태로 바뀝니다.
-                                cameraOff: true, 
-                                muted: true 
-                            }
+                            ? { ...p, stream: newStream } // 👈 여기 cameraOff, muted 삭제함
                             : p
                     )
                 );
@@ -545,7 +542,7 @@ function MeetingPage() {
                     setParticipants((prev) =>
                         prev.map((p) =>
                             p.id === peerId
-                                ? { ...p, cameraOff: rebuilt.getVideoTracks().length === 0 }
+                                ? { ...p, stream: rebuilt } // 👈 여기도 stream만 업데이트
                                 : p
                         )
                     );
@@ -707,110 +704,117 @@ function MeetingPage() {
     useEffect(() => {
         if (!roomId) return;
 
-        if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
-        }
+        let ws = null;
+        let pingInterval = null; // 💓 핑 타이머 변수
 
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-            `${protocol}//${window.location.host}/ws/room/${roomId}` +
-                      `?userId=${encodeURIComponent(userId)}` +
-                      `&userName=${encodeURIComponent(userName)}` +
-                      `&muted=${!micOn}` +       // ✅ 추가됨
-                      `&cameraOff=${!camOn}`
-        );
-
-        ws.onopen = () => {
-            console.log("✅ SPRING WS CONNECTED");
-            setChatConnected(true);
-        }
-
-        ws.onclose = () => {
-            console.log("❌ WS CLOSED");
-            setChatConnected(false);
-            if (wsRef.current === ws) {
+        const connect = () => {
+            if (wsRef.current) {
+                wsRef.current.close();
                 wsRef.current = null;
             }
-        };
 
-        ws.onerror = (error) => {
-            console.error("❌ WS ERROR", error.data);
-            setChatConnected(false);
-        };
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${protocol}//${window.location.host}/ws/room/${roomId}` +
+                          `?userId=${encodeURIComponent(userId)}` +
+                          `&userName=${encodeURIComponent(userName)}` +
+                          `&muted=${!micOnRef.current}` +  
+                          `&cameraOff=${!camOnRef.current}`; 
 
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+            ws = new WebSocket(wsUrl);
+            wsRef.current = ws;
 
-            if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-                console.log("🔥 서버에서 받은 유저 목록:", data.users);
-                setParticipants(prev => {
-                const prevMap = new Map(prev.map(p => [p.id, p]));
+            ws.onopen = () => {
+                console.log("✅ SPRING WS CONNECTED");
+                setChatConnected(true);
 
-                return data.users.map(u => {
-                    const old = prevMap.get(u.userId);
+                // 💓 [중요] 30초마다 생존 신고(PING)를 보내 연결이 안 끊기게 합니다.
+                pingInterval = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "PING" }));
+                    }
+                }, 30000);
+            };
 
-                    return {
-                        id: u.userId,
-                        name: u.userName,
-                        isMe: u.userId === userId,
+            ws.onclose = () => {
+                console.log("❌ WS CLOSED");
+                setChatConnected(false);
+                if (pingInterval) clearInterval(pingInterval); // 타이머 정리
+            };
 
-                        // 🚀 [핵심 수정] 서버 데이터(u.muted)가 있으면 그걸 쓰고, 없으면 기존 것 사용
-                        // 서버에서 온 u 객체 안에 muted, cameraOff 값이 이미 들어있습니다.
-                        muted: u.muted ?? old?.muted ?? false,
-                        
-                        speaking: old?.speaking ?? false, // 말하는 상태는 실시간이라 저장 안 해도 됨
+            ws.onerror = (error) => {
+                console.error("❌ WS ERROR", error);
+                setChatConnected(false);
+            };
 
-                        stream: old?.stream ?? null,
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
 
-                        // 🚀 [핵심 수정] 카메라도 서버 데이터 우선
-                        cameraOff: 
-                            u.userId === userId 
-                            ? camMuted // 나는 내 버튼 상태 따름
-                            : (u.cameraOff ?? old?.cameraOff ?? true), // 남은 서버 데이터 우선 -> 없으면 기존 -> 없으면 꺼짐(true)
-                        };
+                if (data.type === "PONG") return; // 🏓 핑 응답은 무시
+
+                if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
+                    console.log("🔥 서버 유저 목록:", data.users);
+                    setParticipants(prev => {
+                        const prevMap = new Map(prev.map(p => [p.id, p]));
+                        return data.users.map(u => {
+                            const old = prevMap.get(u.userId);
+                            return {
+                                id: u.userId,
+                                name: u.userName,
+                                isMe: u.userId === userId,
+                                muted: u.muted ?? old?.muted ?? false,
+                                speaking: old?.speaking ?? false,
+                                stream: old?.stream ?? null,
+                                cameraOff: u.userId === userId 
+                                    ? !camOnRef.current 
+                                    : (u.cameraOff ?? old?.cameraOff ?? true),
+                            };
+                        });
                     });
-                });
+                    
+                    // Active Speaker 유지 로직
+                    setActiveSpeakerId(prev => {
+                        const exists = data.users.some(u => u.userId === prev);
+                        return exists ? prev : data.users[0]?.userId ?? null;
+                    });
+                }
 
-                setActiveSpeakerId(prev => {
-                    const exists = data.users.some(u => u.userId === prev);
-                    return exists ? prev : data.users[0]?.userId ?? null;
-                });
-            }
+                if (data.type === "CHAT") {
+                    setMessages((prev) => [
+                        ...prev,
+                        {
+                            id: data.timestamp,
+                            userId: data.userId,
+                            userName: data.userName,
+                            text: data.message,
+                            time: new Date(data.timestamp).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                            }),
+                            isMe: data.userId === userId,
+                        },
+                    ]);
+                }
 
-            if (data.type === "CHAT") {
-                setMessages((prev) => [
-                    ...prev,
-                    {
-                        id: data.timestamp,
-                        userId: data.userId,
-                        userName: data.userName,
-                        text: data.message,
-                        time: new Date(data.timestamp).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                        }),
-                        isMe: data.userId === userId,
-                    },
-                ]);
-            }
-
-            if (data.type === "USER_STATE_CHANGE") {
-                setParticipants((prev) =>
-                    prev.map((p) => {
-                        if (String(p.id) === String(data.userId)) {
-                            return { ...p, ...data.changes };
-                        }
-                        return p;
-                    })
-                );
-                return;
-            }
+                if (data.type === "USER_STATE_CHANGE") {
+                    setParticipants((prev) =>
+                        prev.map((p) => {
+                            if (String(p.id) === String(data.userId)) {
+                                return { ...p, ...data.changes };
+                            }
+                            return p;
+                        })
+                    );
+                }
+            };
         };
 
-        wsRef.current = ws;
-        return () => ws.close();
-    }, [roomId, userId, userName]);
+        connect();
+
+        return () => {
+            if (pingInterval) clearInterval(pingInterval);
+            if (wsRef.current) wsRef.current.close();
+        };
+    }, [roomId, userId, userName]); // 의존성 배열 유지
 
     useEffect(() => {
         setParticipants((prev) =>
