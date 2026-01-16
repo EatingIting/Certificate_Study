@@ -71,9 +71,13 @@ const RoomPage = () => {
             : rooms.filter((room) => room.category === selectedCategory);
 
     /* 왼쪽 카테고리 검색 */
-    const filteredCategories = categories.filter((cat) =>
-        cat.toLowerCase().includes(categoryKeyword.toLowerCase())
-    );
+    const filteredCategories = categories.filter((cat) => {
+        if (!categoryKeyword) return true; // 검색 안 할 때만 전체 표시
+        if (cat === "전체(가나다순)") return false;
+        return cat
+            .toLowerCase()
+            .includes(categoryKeyword.toLowerCase());
+    });
 
     const handleCategoryClick = (category) => {
         setSelectedCategory(category);
@@ -153,7 +157,7 @@ const RoomPage = () => {
                             ? "전체 모집 방"
                             : selectedCategory}
                     </h2>
-                    <button className="create-btn">방 생성</button>
+                    <button className="create-btn">스터디 만들기</button>
                 </div>
 
                 <table className="room-table">
@@ -206,6 +210,22 @@ const RoomPage = () => {
 
                 {/* 페이지네이션 */}
                 <div className="pagination">
+                    <button
+                        className="page-nav"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(1)}
+                    >
+                        «
+                    </button>
+
+                    <button
+                        className="page-nav"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((prev) => prev - 1)}
+                    >
+                        ‹
+                    </button>
+
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(
                         (page) => (
                             <button
@@ -217,6 +237,21 @@ const RoomPage = () => {
                             </button>
                         )
                     )}
+                    <button
+                        className="page-nav"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage((prev) => prev + 1)}
+                    >
+                        ›
+                    </button>
+
+                    <button
+                        className="page-nav"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(totalPages)}
+                    >
+                        »
+                    </button>
                 </div>
             </section>
 
