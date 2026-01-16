@@ -4,15 +4,13 @@ import express from "express";
 import cors from "cors";
 import WebSocket, { WebSocketServer } from "ws";
 import mediasoup from "mediasoup";
+import os from "os";
 
 const SFU_PORT = 4000;
 
-// ✅ 맥북 같은 외부에서 붙을 때는 반드시 LAN IP를 announcedIp로 고정
-const ANNOUNCED_IP = "172.30.1.250";
-
 // ✅ 인증서 경로 (예: mkcert로 만든 파일)
-const TLS_KEY_PATH = "./certs/172.30.1.250-key.pem";
-const TLS_CERT_PATH = "./certs/172.30.1.250.pem";
+const TLS_KEY_PATH = "C:/certs/server-key.pem";
+const TLS_CERT_PATH = "C:/certs/server.pem";
 
 // mediasoup codec
 const mediaCodecs = [
@@ -39,6 +37,22 @@ function broadcast(room, exceptPeerId, obj) {
 function randomId(prefix = "") {
   return prefix + Math.random().toString(36).slice(2, 10);
 }
+
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // IPv4이고, 내부(127.0.0.1)가 아닌 주소를 찾음
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return "127.0.0.1"; // 못 찾으면 기본값
+}
+
+const MY_IP = getLocalIp(); // 서버 켜질 때 자동으로 IP 감지!
+console.log(`📡 Detected Server IP: ${MY_IP}`);
 
 async function startWorker() {
   worker = await mediasoup.createWorker({ rtcMinPort: 40000, rtcMaxPort: 49999 });
@@ -125,7 +139,7 @@ const wss = new WebSocketServer({ server: httpsServer });
 // ✅ 서버 시작
 httpsServer.listen(SFU_PORT, async () => {
   await startWorker();
-  console.log(`🚀 SFU HTTPS/WSS listening on https://${ANNOUNCED_IP}:${SFU_PORT}`);
+  console.log(`🚀 SFU HTTPS/WSS listening on https://${MY_IP}:${SFU_PORT}`);
 });
 
 // -------------------------------
@@ -203,7 +217,7 @@ wss.on("connection", (ws) => {
           listenIps: [
             {
               ip: "0.0.0.0",
-              announcedIp: "172.30.1.250"
+              announcedIp: MY_IP,
             }
           ],
           enableUdp: true,

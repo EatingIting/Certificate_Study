@@ -11,4 +11,6 @@ public class RoomUser {
     private String userId;
     private String userName;
     private boolean speaking;
+    private boolean muted;
+    private boolean cameraOff;
 }

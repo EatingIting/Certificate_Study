@@ -40,6 +40,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         String userId = params.get("userId");
         String userName = params.get("userName");
+        boolean initialMuted = "true".equals(params.get("muted"));         // 문자열 "true"면 true, 아니면 false
+        boolean initialCameraOff = "true".equals(params.get("cameraOff"));
 
         Map<String, RoomUser> users = roomUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
         Map<String, WebSocketSession> sessions = roomSessions.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
@@ -63,7 +65,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         // 기존 로직
         sessions.put(session.getId(), session);
-        users.put(session.getId(), new RoomUser(userId, userName, false));
+        users.put(session.getId(), new RoomUser(userId, userName, false, initialMuted, initialCameraOff));
 
         broadcast(roomId);
     }
@@ -153,9 +155,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         String type = inbound.getType();
         if (type == null) return;
 
-    /* =========================
-       1️⃣ CHAT 메시지 처리
-       ========================= */
+        //채팅메세지
         if ("CHAT".equalsIgnoreCase(type)) {
 
             String text = inbound.getMessage();
@@ -187,6 +187,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        // 말하기
         if ("SPEAKING".equalsIgnoreCase(type)) {
 
             Boolean speaking = inbound.getSpeaking();
@@ -210,6 +211,35 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             for (WebSocketSession s : sessions.values()) {
                 if (s.isOpen()) {
                     s.sendMessage(updateMessage);
+                }
+            }
+            return;
+        }
+        if ("USER_STATE_CHANGE".equalsIgnoreCase(type)) {
+            Map<String, Object> changes = inbound.getChanges();
+
+            if (changes != null) {
+                if (changes.containsKey("muted")) {
+                    sender.setMuted((Boolean) changes.get("muted"));
+                }
+                if (changes.containsKey("cameraOff")) {
+                    sender.setCameraOff((Boolean) changes.get("cameraOff"));
+                }
+            }
+
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "USER_STATE_CHANGE",
+                            "userId", sender.getUserId(), // 보내는 사람 ID (String)
+                            "changes", changes != null ? changes : new HashMap<>()
+                    )
+            );
+
+            TextMessage broadcastMessage = new TextMessage(payload);
+
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
                 }
             }
             return;
