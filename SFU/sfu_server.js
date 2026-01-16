@@ -8,11 +8,11 @@ import mediasoup from "mediasoup";
 const SFU_PORT = 4000;
 
 // ✅ 맥북 같은 외부에서 붙을 때는 반드시 LAN IP를 announcedIp로 고정
-const ANNOUNCED_IP = "192.168.35.235";
+const ANNOUNCED_IP = "172.30.1.250";
 
 // ✅ 인증서 경로 (예: mkcert로 만든 파일)
-const TLS_KEY_PATH = "./certs/192.168.35.235-key.pem";
-const TLS_CERT_PATH = "./certs/192.168.35.235.pem";
+const TLS_KEY_PATH = "./certs/172.30.1.250-key.pem";
+const TLS_CERT_PATH = "./certs/172.30.1.250.pem";
 
 // mediasoup codec
 const mediaCodecs = [
@@ -167,6 +167,11 @@ wss.on("connection", (ws) => {
         };
 
         room.peers.set(newPeerId, peer);
+        const count = room.peers.size;
+        broadcast(room, null, { 
+            action: "peerCount", 
+            data: { count } 
+        });
 
         console.log("👤 [SFU] peer joined", { roomId, peerId: newPeerId, peerCount: room.peers.size });
 
@@ -198,7 +203,7 @@ wss.on("connection", (ws) => {
           listenIps: [
             {
               ip: "0.0.0.0",
-              announcedIp: "192.168.35.235"
+              announcedIp: "172.30.1.250"
             }
           ],
           enableUdp: true,
@@ -332,5 +337,12 @@ wss.on("connection", (ws) => {
     });
 
     cleanupPeer(room, joinedPeerId);
+    if (rooms.has(joinedRoomId)) { // 방이 아직 살아있다면
+      const currentRoom = rooms.get(joinedRoomId);
+      broadcast(currentRoom, null, { 
+          action: "peerCount", 
+          data: { count: currentRoom.peers.size } 
+      });
+    }
   });
 });

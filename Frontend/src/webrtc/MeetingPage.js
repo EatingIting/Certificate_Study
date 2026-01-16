@@ -64,37 +64,51 @@ const VideoTile = ({ user, isMain = false, stream }) => {
 
   useEffect(() => {
     const v = videoEl.current;
-    if (!v) return;
+    if (!v || !stream) return;
 
-    if (!canShowVideo) {
-      v.srcObject = null;
-      return;
-    }
+    // 1. 기본 설정 및 재생 시도
+    const startPlay = async () => {
+        if (v.srcObject !== stream) {
+            v.srcObject = stream;
+            v.playsInline = true;
+            v.muted = true;
+        }
+        try {
+            await v.play();
+            // console.log("Video playing...");
+        } catch (e) {
+            console.warn("Play failed:", e);
+        }
+    };
 
-    // ✅추가: srcObject 교체 시 한번 리셋(브라우저별 black frame 방지)
-    if (v.srcObject !== stream) {
-      v.srcObject = null; // ✅추가
-      v.srcObject = stream;
+    startPlay();
 
-      v.playsInline = true;
-      v.muted = true; // (오디오는 별도 Audio로 재생 중)
+    // 2. [핵심] 2초마다 감시해서 멈춰있으면 다시 재생 (심폐소생술)
+    const watchdog = setInterval(() => {
+        // 비디오가 멈춤(paused) 상태거나 끝난(ended) 상태면 패스
+        if (v.paused || v.ended) return;
 
-      // ✅추가: loadedmetadata 이후 play 재시도
-      const tryPlay = () => {
-        v.play().catch((e) => {
-          // autoplay 정책/타이밍 이슈 대응
-          console.warn("Auto-play blocked or timing issue:", e);
-        });
-      };
+        // "현재 시간(currentTime)"이 "직전 시간(_lastTime)"과 같다면? -> 멈춘 것!
+        if (v.currentTime === v._lastTime) {
+            console.warn("⚠️ 영상이 얼었습니다(Black Screen). 재시작합니다.");
+            
+            // 강제로 소스를 끊었다가 다시 붙임 (가장 확실한 방법)
+            const tempStream = v.srcObject;
+            v.srcObject = null;
+            setTimeout(() => {
+                v.srcObject = tempStream;
+                v.play().catch(() => {});
+            }, 100);
+        }
+        
+        // 현재 시간을 기록해둠
+        v._lastTime = v.currentTime;
+    }, 2000); // 2초마다 체크
 
-      v.onloadedmetadata = () => {
-        tryPlay();
-      };
-
-      // ✅추가: metadata 이전에도 1회 시도
-      tryPlay();
-    }
-  }, [canShowVideo, stream]);
+    return () => {
+        clearInterval(watchdog);
+    };
+  }, [stream]);
 
   return (
     <div className={`video-tile ${isMain ? "main" : ""} ${safeUser.speaking ? "speaking" : ""}`}>
@@ -116,6 +130,20 @@ const VideoTile = ({ user, isMain = false, stream }) => {
     </div>
   );
 };
+
+function safeUUID() {
+  // 브라우저가 지원하는 경우
+  if (typeof window !== "undefined" && window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  // RFC4122 v4 스타일 폴백 (충분히 안전한 수준)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 // --- Main App Component ---
 
@@ -206,7 +234,7 @@ function MeetingPage() {
     const savedId = localStorage.getItem("stableUserId");
     const savedName = localStorage.getItem("stableUserName");
 
-    const id = savedId || crypto.randomUUID();
+    const id = savedId || safeUUID();
     const name = savedName || `User-${id.slice(0, 4)}`;
 
     localStorage.setItem("stableUserId", id);
@@ -394,7 +422,7 @@ function MeetingPage() {
 
     ensureParticipant(peerId);
 
-    const requestId = crypto.randomUUID();
+    const requestId = safeUUID();
 
     safeSfuSend({
       action: "consume",
@@ -483,7 +511,7 @@ function MeetingPage() {
 
         safeSfuSend({
           action: "resumeConsumer",
-          requestId: crypto.randomUUID(),
+          requestId: safeUUID(),
           data: { consumerId },
         });
       } catch (e) {
@@ -557,19 +585,20 @@ function MeetingPage() {
       wsRef.current = null;
     }
 
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(
-      `wss://192.168.35.235:8080/ws/room/${roomId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(
+      `${protocol}//${window.location.host}/ws/room/${roomId}?userId=${encodeURIComponent(userId)}&userName=${encodeURIComponent(
         userName
       )}`
     );
 
     ws.onopen = () => { 
-      console.log("✅ WebSocket connected");
+      console.log("✅ SPRING WS CONNECTED");
       setChatConnected(true);
     }
 
     ws.onclose = () => {
-      console.log("❌ CHAT WebSocket closed");
+      console.log("❌ WS CLOSED");
       setChatConnected(false); // ✅ 3. 끊김 시 false
       if (wsRef.current === ws) {
         wsRef.current = null;
@@ -577,7 +606,7 @@ function MeetingPage() {
     };
 
     ws.onerror = (error) => {
-        console.error("WebSocket Error:", error);
+      console.error("❌ WS ERROR", error.data);
         setChatConnected(false); // ✅ 4. 에러 시 false
     };
 
@@ -651,7 +680,7 @@ function MeetingPage() {
   useEffect(() => {
     effectAliveRef.current = true;
 
-    if (!roomId || !localStream) return;
+    if (!roomId) return;
 
     const resetSfuLocalState = () => {
       consumersRef.current.clear();
@@ -674,7 +703,8 @@ function MeetingPage() {
 
     resetSfuLocalState();
 
-    const sfuWs = new WebSocket("wss://192.168.35.235:4000");
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const sfuWs = new WebSocket(`${protocol}//${window.location.host}/sfu/`);
     sfuWsRef.current = sfuWs;
 
     const drainPending = async () => {
@@ -694,7 +724,7 @@ function MeetingPage() {
     sfuWs.onopen = () => {
       safeSfuSend({
         action: "join",
-        requestId: crypto.randomUUID(),
+        requestId: safeUUID(),
         data: { roomId, peerId: userId },
       });
     };
@@ -718,8 +748,8 @@ function MeetingPage() {
 
         sfuDeviceRef.current._existingProducers = existingProducers || [];
 
-        safeSfuSend({ action: "createTransport", requestId: crypto.randomUUID(), data: { direction: "send" } });
-        safeSfuSend({ action: "createTransport", requestId: crypto.randomUUID(), data: { direction: "recv" } });
+        safeSfuSend({ action: "createTransport", requestId: safeUUID(), data: { direction: "send" } });
+        safeSfuSend({ action: "createTransport", requestId: safeUUID(), data: { direction: "recv" } });
         return;
       }
 
@@ -737,7 +767,7 @@ function MeetingPage() {
           });
 
           sendTransport.on("connect", ({ dtlsParameters }, cb) => {
-            const reqId = crypto.randomUUID();
+            const reqId = safeUUID();
             const handler = (e) => {
               const m = JSON.parse(e.data);
               if (m.action === "connectTransport:response" && m.requestId === reqId) {
@@ -750,7 +780,7 @@ function MeetingPage() {
           });
 
           sendTransport.on("produce", ({ kind, rtpParameters }, cb, errback) => {
-            const reqId = crypto.randomUUID();
+            const reqId = safeUUID();
             const handler = (e) => {
               const m = JSON.parse(e.data);
               if (m.action === "produce:response" && m.requestId === reqId) {
@@ -766,15 +796,18 @@ function MeetingPage() {
             safeSfuSend({ action: "produce", requestId: reqId, data: { transportId, kind, rtpParameters } });
           });
 
-          // ✅수정: Producer 객체를 저장해서 cleanup 시 close 가능하게
-          for (const track of localStream.getTracks()) {
-            try {
-              const producer = await sendTransport.produce({ track }); // ✅수정
-              producersRef.current.set(producer.id, producer); // ✅추가
-            } catch (e) {
-              console.error("produce failed:", e);
+          if (localStream) {
+            for (const track of localStream.getTracks()) {
+                try {
+                    const producer = await sendTransport.produce({ track });
+                    producersRef.current.set(producer.id, producer);
+                } catch (e) {
+                    console.error("produce failed:", e);
+                }
             }
-          }
+        } else {
+            console.log("카메라가 없어서 영상 송출이 제한됩니다.");
+        }
 
           sendTransportRef.current = sendTransport;
         }
@@ -788,7 +821,7 @@ function MeetingPage() {
           });
 
           recvTransport.on("connect", ({ dtlsParameters }, cb) => {
-            const reqId = crypto.randomUUID();
+            const reqId = safeUUID();
             const handler = (e) => {
               const m = JSON.parse(e.data);
               if (m.action === "connectTransport:response" && m.requestId === reqId) {
@@ -882,7 +915,7 @@ function MeetingPage() {
 
       // ✅추가: 서버가 leave를 지원한다면 먼저 알림
       try {
-        safeSfuSend({ action: "leave", requestId: crypto.randomUUID(), data: { roomId, peerId: userId } }); // ✅추가
+        safeSfuSend({ action: "leave", requestId: safeUUID(), data: { roomId, peerId: userId } });
       } catch {}
 
       // ✅수정: Producer/Consumer/Transport/Device를 모두 안전하게 닫기
@@ -969,7 +1002,7 @@ function MeetingPage() {
                 <h1 className="header-title">주간 제품 회의</h1>
                 <div className="header-meta">
                   <span>
-                    <Users size={10} /> {participantCount}명 접속 중
+                    <Users size={10} /> {participants.length}명 접속 중
                   </span>
                   <span className="dot" />
                   <span>00:24:15</span>
