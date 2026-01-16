@@ -1,0 +1,179 @@
+/* 공통 */
+.page {
+    font-family: Arial, sans-serif;
+    color: #111;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    border-bottom: 1px solid #eee;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 800;
+    color: #7FE0A3;
+}
+
+.nav span {
+    margin: 0 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+.login-btn {
+    border-radius: 8px;
+    border: 1px;
+    cursor: pointer;
+}
+
+.create-btn {
+    background: #7FE0A3;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* Hero */
+.hero {
+    text-align: center;
+    padding: 100px 20px;
+    background: #7FE0A3;
+}
+
+.hero h1 {
+    font-size: 36px;
+    margin-bottom: 16px;
+}
+
+.hero p {
+    color: #666;
+    margin-bottom: 32px;
+}
+
+.search-box {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.search-box input {
+    width: 420px;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+
+}
+
+.search-box button {
+    padding: 14px 20px;
+    background: #f3f4f6;
+    color: black;
+    border: none;
+    border-radius: 10px;
+}
+
+/* Category */
+.category {
+    padding: 80px 0;
+    text-align: center;
+}
+
+.category-list {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+}
+
+.category-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #eef2ff;
+    color: #7FE0A3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+/* Study */
+.study {
+    padding: 80px 60px;
+    background: #f9fafb;
+}
+
+.study-list {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.study-card {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 16px;
+    padding: 20px;
+    cursor: pointer;
+}
+
+.thumbnail {
+    height: 120px;
+    background: #eee;
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.tag {
+    font-size: 12px;
+    color: #7FE0A3;
+}
+
+.study-card button {
+    margin-top: 12px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #7FE0A3;
+    background: white;
+    color: black;
+    border-radius: 8px;
+}
+
+/* CTA */
+.cta {
+    background: #7FE0A3;
+    color: white;
+    text-align: center;
+    padding: 80px 20px;
+
+}
+
+.cta button {
+    margin-top: 20px;
+    background: white;
+    color: black;
+    padding: 14px 28px;
+    border-radius: 12px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
