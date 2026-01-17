@@ -40,20 +40,34 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         String userId = params.get("userId");
         String userName = params.get("userName");
-        boolean initialMuted = "true".equals(params.get("muted"));         // 문자열 "true"면 true, 아니면 false
-        boolean initialCameraOff = "true".equals(params.get("cameraOff"));
 
-        Map<String, RoomUser> users = roomUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
-        Map<String, WebSocketSession> sessions = roomSessions.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+        Boolean paramMuted = params.containsKey("muted")
+                ? "true".equals(params.get("muted"))
+                : null;
 
+        Boolean paramCameraOff = params.containsKey("cameraOff")
+                ? "true".equals(params.get("cameraOff"))
+                : null;
+
+        Map<String, RoomUser> users =
+                roomUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+        Map<String, WebSocketSession> sessions =
+                roomSessions.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+
+        RoomUser restoredUser = null;
         String existingSessionId = null;
+
+        // ✅ 기존 유저 상태 탐색 (재접속)
         for (Map.Entry<String, RoomUser> e : users.entrySet()) {
-            if (e.getValue() != null && userId != null && userId.equals(e.getValue().getUserId())) {
+            RoomUser u = e.getValue();
+            if (u != null && u.getUserId().equals(userId)) {
+                restoredUser = u;
                 existingSessionId = e.getKey();
                 break;
             }
         }
 
+        // 기존 세션 정리
         if (existingSessionId != null) {
             WebSocketSession old = sessions.get(existingSessionId);
             if (old != null && old.isOpen()) {
@@ -63,9 +77,30 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             users.remove(existingSessionId);
         }
 
-        // 기존 로직
+        // ✅ 상태 결정 로직
+        boolean muted;
+        boolean cameraOff;
+
+        if (restoredUser != null) {
+            // 👉 재접속이면 무조건 기존 상태 복구
+            muted = restoredUser.isMuted();
+            cameraOff = restoredUser.isCameraOff();
+        } else {
+            // 👉 최초 입장일 때만 URL 파라미터 사용
+            muted = paramMuted != null ? paramMuted : true;
+            cameraOff = paramCameraOff != null ? paramCameraOff : true;
+        }
+
+        RoomUser newUser = new RoomUser(
+                userId,
+                userName,
+                false,
+                muted,
+                cameraOff
+        );
+
         sessions.put(session.getId(), session);
-        users.put(session.getId(), new RoomUser(userId, userName, false, initialMuted, initialCameraOff));
+        users.put(session.getId(), newUser);
 
         broadcast(roomId);
     }

@@ -1,5 +1,6 @@
 import {
     LayoutGrid,
+    Loader2,
     MessageSquare,
     Mic,
     MicOff,
@@ -62,16 +63,18 @@ const VideoTile = ({ user, isMain = false, stream }) => {
         muted: false,
         cameraOff: true,
         speaking: false,
+        isLoading: false,
     };
+    
+    const hasLiveVideoTrack = useMemo(() => {
+        return (
+            stream?.getVideoTracks().some(
+                (t) => t.readyState === "live" && t.enabled !== false
+            ) ?? false
+        );
+    }, [stream]);
 
-    // [핵심] 3가지 조건이 다 맞아야만 비디오를 보여줌 (하나라도 틀리면 아바타)
-    // 1. 스트림 존재
-    // 2. 유저가 카메라 킴 (cameraOff === false)
-    // 3. 트랙이 실제로 살아있음 (!isVideoTrackMuted)
-
-    const isCameraOff = safeUser.cameraOff === undefined ? true : safeUser.cameraOff;
-
-    const canShowVideo = !!stream && !isCameraOff && !isVideoTrackMuted;
+    const canShowVideo = !!stream && hasLiveVideoTrack && !safeUser.cameraOff;
 
     // 1. 오디오 레벨 감지 (말할 때 초록 테두리)
     useEffect(() => {
@@ -84,22 +87,32 @@ const VideoTile = ({ user, isMain = false, stream }) => {
         let animationId;
 
         try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const AudioContext =
+                window.AudioContext || window.webkitAudioContext;
             audioContext = new AudioContext();
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
+
             const source = audioContext.createMediaStreamSource(stream);
             source.connect(analyser);
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            const dataArray = new Uint8Array(
+                analyser.frequencyBinCount
+            );
 
             const checkVolume = () => {
                 analyser.getByteFrequencyData(dataArray);
-                const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                const avg =
+                    dataArray.reduce((a, b) => a + b, 0) /
+                    dataArray.length;
                 setIsSpeakingLocally(avg > 15);
                 animationId = requestAnimationFrame(checkVolume);
             };
+
             checkVolume();
-        } catch (e) { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
 
         return () => {
             if (animationId) cancelAnimationFrame(animationId);
@@ -150,31 +163,60 @@ const VideoTile = ({ user, isMain = false, stream }) => {
         v.srcObject = stream;
         v.playsInline = true;
         v.muted = true; // 하울링 방지
-        
-        v.play().catch(e => console.warn("Video play error:", e));
 
+        v.play().catch(() => {});
     }, [stream, canShowVideo]);
 
     const isSpeaking = safeUser.speaking || isSpeakingLocally;
+    const isReconnecting = safeUser.isLoading;
 
     return (
-        <div className={`video-tile ${isMain ? "main" : ""} ${isSpeaking ? "speaking" : ""}`}>
+        <div
+            className={`video-tile ${
+                isMain ? "main" : ""
+            } ${isSpeaking ? "speaking" : ""}`}
+        >
+            {/* ✅ 재접속 오버레이 */}
+            {isReconnecting && (
+                <div className="reconnecting-overlay">
+                    <Loader2 className="spinner" />
+                    <p>재접속 중...</p>
+                </div>
+            )}
+
             <div className="video-content">
                 {canShowVideo ? (
-                    <video ref={videoEl} autoPlay playsInline muted className="video-element" />
+                    <video
+                        ref={videoEl}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="video-element"
+                    />
                 ) : (
                     <div className="camera-off-placeholder">
-                        <UserAvatar name={safeUser.name} size={isMain ? "lg" : "md"} />
-                        <p className="stream-label">{safeUser.name}</p>
+                        <UserAvatar
+                            name={safeUser.name}
+                            size={isMain ? "lg" : "md"}
+                        />
+                        <p className="stream-label">
+                            {safeUser.name}
+                        </p>
                     </div>
                 )}
             </div>
 
-            <div className="video-overlay">
-                {(safeUser.muted) && <MicOff size={16} className="icon-red" />}
-                {/* 트랙이 끊기거나(isVideoTrackMuted) 유저가 껐으면(cameraOff) 아이콘 표시 */}
-                {(safeUser.cameraOff || isVideoTrackMuted) && <VideoOff size={16} className="icon-red" />}
-            </div>
+            {/* ✅ 상태 아이콘 (무조건 트랙 기준) */}
+            {!isReconnecting && (
+                <div className="video-overlay">
+                    {safeUser.muted && (
+                        <MicOff size={16} className="icon-red" />
+                    )}
+                    {safeUser.cameraOff && (
+                        <VideoOff size={16} className="icon-red" />
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -236,6 +278,8 @@ function MeetingPage() {
     const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
     const [streamVersion, setStreamVersion] = useState(0);
+
+    const [isLoading, setIsLoading] = useState(false);
 
     const [messages, setMessages] = useState(() => {
         try {
@@ -431,6 +475,7 @@ function MeetingPage() {
                     cameraOff: true,
                     speaking: false,
                     stream: null,
+                    isLoading: true,
                 },
             ];
         });
@@ -509,22 +554,49 @@ function MeetingPage() {
 
                 if (prev) {
                     prev.getTracks().forEach((t) => {
-                        if (t.readyState !== "ended") newStream.addTrack(t);
+                        if (t.readyState !== "ended") {
+                            newStream.addTrack(t);
+                        }
                     });
                 }
-                newStream.addTrack(consumer.track);
 
+                newStream.addTrack(consumer.track);
                 peerStreamsRef.current.set(peerId, newStream);
 
-                // 🚀 [수정 완료] 상태(cameraOff, muted) 강제 설정을 지웠습니다!
-                // 오직 stream만 넣어주면, 서버에서 온 USERS_UPDATE 데이터와 합쳐져서 올바르게 나옵니다.
+                // ✅ [핵심 1] 스트림 + 로딩 해제 즉시 반영
                 setParticipants((prev) =>
                     prev.map((p) =>
                         p.id === peerId
-                            ? { ...p, stream: newStream } // 👈 여기 cameraOff, muted 삭제함
+                            ? {
+                                ...p,
+                                stream: newStream,
+                                isLoading: false,
+                            }
                             : p
                     )
                 );
+
+                // ✅ [핵심 2] consumer 생성 순간 상태 즉시 확정
+                if (kind === "audio") {
+                    setParticipants((prev) =>
+                        prev.map((p) =>
+                            p.id === peerId
+                                ? { ...p, muted: false }
+                                : p
+                        )
+                    );
+                }
+
+                if (kind === "video") {
+                    setParticipants((prev) =>
+                        prev.map((p) =>
+                            p.id === peerId
+                                ? { ...p, cameraOff: false, isLoading: false }
+                                : p
+                        )
+                    );
+                }
+
                 bumpStreamVersion();
 
                 consumer.track.onended = () => {
@@ -533,21 +605,27 @@ function MeetingPage() {
 
                     const alive = cur
                         .getTracks()
-                        .filter((t) => t.readyState !== "ended" && t.id !== consumer.track.id);
+                        .filter(
+                            (t) =>
+                                t.readyState !== "ended" &&
+                                t.id !== consumer.track.id
+                        );
 
                     const rebuilt = new MediaStream(alive);
                     peerStreamsRef.current.set(peerId, rebuilt);
-                    bumpStreamVersion();
 
                     setParticipants((prev) =>
                         prev.map((p) =>
                             p.id === peerId
-                                ? { ...p, stream: rebuilt } // 👈 여기도 stream만 업데이트
+                                ? { ...p, stream: rebuilt }
                                 : p
                         )
                     );
+
+                    bumpStreamVersion();
                 };
 
+                // 🔊 오디오 재생
                 if (kind === "audio") {
                     const audio = new Audio();
                     audio.srcObject = new MediaStream([consumer.track]);
@@ -571,6 +649,7 @@ function MeetingPage() {
 
         sfuWsRef.current.addEventListener("message", handler);
     };
+
 
     const toggleMic = () => {
         const newVal = !micOn;
@@ -727,7 +806,15 @@ function MeetingPage() {
                 console.log("✅ SPRING WS CONNECTED");
                 setChatConnected(true);
 
-                // 💓 [중요] 30초마다 생존 신고(PING)를 보내 연결이 안 끊기게 합니다.
+                ws.send(JSON.stringify({
+                    type: "USER_STATE_CHANGE",
+                    userId: userId,
+                    changes: {
+                    muted: !micOnRef.current,
+                    cameraOff: !camOnRef.current,
+                    },
+                }));
+                
                 pingInterval = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ type: "PING" }));
@@ -752,21 +839,45 @@ function MeetingPage() {
                 if (data.type === "PONG") return; // 🏓 핑 응답은 무시
 
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-                    console.log("🔥 서버 유저 목록:", data.users);
                     setParticipants(prev => {
                         const prevMap = new Map(prev.map(p => [p.id, p]));
+
                         return data.users.map(u => {
                             const old = prevMap.get(u.userId);
+                            const isMe = u.userId === userId;
+
+                            const isCameraOff = isMe
+                                ? !camOnRef.current
+                                : (u.cameraOff ?? true);
+
+                            const isMuted = isMe
+                                ? !micOnRef.current
+                                : (u.muted ?? true);
+
+                            // ✅ 핵심: OFF 상태도 "확정 신호"
+                            const hasFinalState =
+                                typeof u.cameraOff === "boolean" ||
+                                typeof u.muted === "boolean";
+
+                            let isLoading = old?.isLoading ?? true;
+
+                            if (hasFinalState) {
+                                isLoading = false;
+                            }
+
+                            if (old?.stream) {
+                                isLoading = false;
+                            }
+
                             return {
                                 id: u.userId,
                                 name: u.userName,
-                                isMe: u.userId === userId,
-                                muted: u.muted ?? old?.muted ?? false,
-                                speaking: old?.speaking ?? false,
+                                isMe,
+                                muted: isMuted,
+                                cameraOff: isCameraOff,
                                 stream: old?.stream ?? null,
-                                cameraOff: u.userId === userId 
-                                    ? !camOnRef.current 
-                                    : (u.cameraOff ?? old?.cameraOff ?? true),
+                                speaking: old?.speaking ?? false,
+                                isLoading,
                             };
                         });
                     });
@@ -818,9 +929,9 @@ function MeetingPage() {
 
     useEffect(() => {
         setParticipants((prev) =>
-            prev.map((p) => (p.isMe ? { ...p, muted: micMuted, cameraOff: camMuted, speaking: isSpeaking } : p))
+            prev.map((p) => (p.isMe ? { ...p, speaking: isSpeaking } : p))
         );
-    }, [micMuted, camMuted, isSpeaking]);
+    }, [isSpeaking]);
 
     // 2️⃣ SFU WebSocket (4000)
     useEffect(() => {
@@ -1176,15 +1287,8 @@ function MeetingPage() {
                         ) : (
                             <div className="layout-grid custom-scrollbar">
                                 {participants.map((p) => {
-                                    // 🚀 [핵심] '나(isMe)'일 경우, 서버 데이터(p)를 무시하고
-                                    // 내 로컬 버튼 상태(camOn, micOn)를 최우선으로 적용한 객체를 새로 만듦
-                                    const userForRender = p.isMe
-                                    ? { 
-                                        ...p, 
-                                        muted: !micOn,       // 내 마이크 버튼 상태 강제 적용
-                                        cameraOff: !camOn    // 내 카메라 버튼 상태 강제 적용
-                                        }
-                                    : p; // 남이면 그냥 서버 데이터 사용
+                                    
+                                    const userForRender = p;
 
                                     return (
                                     <div key={p.id} className="video-tile-wrapper">
