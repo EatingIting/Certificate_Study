@@ -4,12 +4,80 @@ html, body {
     background: #f9fafb;
 }
 
+body {
+    display: flex;
+    flex-direction: column;
+    background: #f9fafb;
+}
+
+.page-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px;
+    box-sizing: border-box;
+}
+
+.top-header {
+    max-width: 1230px;
+    height: 60px;
+    margin: 0 auto;
+    background: #eaf6e8;
+}
+
+.header-inner {
+    height: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.auth-btns {
+    font-size: 14px;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.main-category {
+    background: #f9fafb;
+    padding: 16px 0;
+}
+
+.main-category-inner {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+}
+
+.main-category button {
+    background: #e5f2e3;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.main-category button.active {
+    background: #97c793;
+    color: white;
+}
+
+
 /* ===== 전체 레이아웃 ===== */
 .room-layout {
     display: flex;
-    height: 100vh;
+    height: calc(100vh - 60px - 64px);
+    /* 60px = top-header
+       64px = main-category (padding 포함 대략값) */
     font-family: 'Pretendard Variable', sans-serif;
 }
+
 
 /* ===== 카테고리 ===== */
 .category-sidebar {
@@ -18,7 +86,9 @@ html, body {
     padding: 24px;
     border-right: 1px solid #eee;
     box-shadow: 2px 0 8px rgba(0,0,0,0.03);
-    overflow-y: auto;
+
+    height: 650px;        /* room-layout 기준 */
+    overflow-y: auto;    /* 사이드바 내부만 스크롤 */
 }
 
 .category-sidebar h3 {
@@ -59,8 +129,10 @@ html, body {
 /* ===== 콘텐츠 ===== */
 .room-content {
     flex: 1;
-    padding: 24px;
-    overflow: hidden;
+    padding: 0 24px;
+
+    height: 100%;
+    overflow-y: auto;
 }
 
 .room-header {
