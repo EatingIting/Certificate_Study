@@ -14,10 +14,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import com.example.demo.dto.RoomUser;
 
@@ -27,7 +24,12 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Map<String, WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
     private final Map<String, Map<String, RoomUser>> roomUsers = new ConcurrentHashMap<>();
 
+    private final Map<String, Map<String, TimerTask>> leaveTimers = new ConcurrentHashMap<>();
+    private final Timer timer = new Timer(true);
+
     private final ObjectMapper objectMapper;
+
+    private static final long LEAVE_GRACE_MS = 8000;
 
     public RoomWebSocketHandler(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -49,8 +51,15 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 ? "true".equals(params.get("cameraOff"))
                 : null;
 
+        Map<String, TimerTask> roomTimerMap = leaveTimers.get(roomId);
+        if (roomTimerMap != null) {
+            TimerTask t = roomTimerMap.remove(userId);
+            if (t != null) t.cancel();
+        }
+
         Map<String, RoomUser> users =
                 roomUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+
         Map<String, WebSocketSession> sessions =
                 roomSessions.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
 
@@ -77,30 +86,30 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             users.remove(existingSessionId);
         }
 
-        // ✅ 상태 결정 로직
-        boolean muted;
-        boolean cameraOff;
+        RoomUser finalUser;
 
         if (restoredUser != null) {
-            // 👉 재접속이면 무조건 기존 상태 복구
-            muted = restoredUser.isMuted();
-            cameraOff = restoredUser.isCameraOff();
+            // ✅ 재접속 or 재입장 → LEAVE 상태 해제
+            restoredUser.setExplicitlyLeft(false);
+            finalUser = restoredUser;
         } else {
-            // 👉 최초 입장일 때만 URL 파라미터 사용
-            muted = paramMuted != null ? paramMuted : true;
-            cameraOff = paramCameraOff != null ? paramCameraOff : true;
+            boolean muted = paramMuted != null ? paramMuted : true;
+            boolean cameraOff = paramCameraOff != null ? paramCameraOff : true;
+
+            finalUser = new RoomUser(
+                    userId,
+                    userName,
+                    System.currentTimeMillis(),
+                    false,
+                    muted,
+                    cameraOff,
+                    false
+            );
         }
 
-        RoomUser newUser = new RoomUser(
-                userId,
-                userName,
-                false,
-                muted,
-                cameraOff
-        );
-
+        // 세션 등록
         sessions.put(session.getId(), session);
-        users.put(session.getId(), newUser);
+        users.put(session.getId(), finalUser);
 
         broadcast(roomId);
     }
@@ -112,9 +121,52 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         Map<String, WebSocketSession> sessions = roomSessions.get(roomId);
         Map<String, RoomUser> users = roomUsers.get(roomId);
 
-        if (sessions != null) sessions.remove(session.getId());
-        if (users != null) users.remove(session.getId());
+        if (sessions == null || users == null) return;
 
+        RoomUser leavingUser = users.get(session.getId());
+
+        // 세션은 항상 제거
+        sessions.remove(session.getId());
+
+        if (leavingUser == null) {
+            broadcast(roomId);
+            return;
+        }
+
+        // ✅ LEAVE로 이미 처리된 유저면 여기서 끝
+        if (leavingUser.isExplicitlyLeft()) {
+            users.remove(session.getId());
+            broadcast(roomId);
+            return;
+        }
+
+        String userId = leavingUser.getUserId();
+
+        // ✅ 재접속 유예 타이머 설정
+        leaveTimers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+
+        TimerTask oldTask = leaveTimers.get(roomId).remove(userId);
+        if (oldTask != null) oldTask.cancel();
+
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                Map<String, RoomUser> uMap = roomUsers.get(roomId);
+                if (uMap == null) return;
+
+                // userId 기준 제거
+                uMap.entrySet().removeIf(e ->
+                        userId.equals(e.getValue().getUserId())
+                );
+
+                broadcast(roomId);
+            }
+        };
+
+        leaveTimers.get(roomId).put(userId, task);
+        timer.schedule(task, LEAVE_GRACE_MS);
+
+        // 재접속 중 표시를 위해 즉시 broadcast
         broadcast(roomId);
     }
 
@@ -124,7 +176,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         if (sessions == null || usersMap == null) return;
 
-        List<RoomUser> users = new ArrayList<>(usersMap.values());
+        List<RoomUser> users = usersMap.values().stream()
+                .sorted(Comparator.comparingLong(RoomUser::getJoinAt))
+                .toList();
 
         try {
             String payload = objectMapper.writeValueAsString(
@@ -232,7 +286,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             sender.setSpeaking(speaking);
 
             // USERS_UPDATE 재브로드캐스트
-            List<RoomUser> userList = new ArrayList<>(users.values());
+            List<RoomUser> userList = users.values().stream()
+                    .sorted(Comparator.comparingLong(RoomUser::getJoinAt))
+                    .toList();
 
             String payload = objectMapper.writeValueAsString(
                     Map.of(
@@ -281,6 +337,32 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         }
         if ("PING".equalsIgnoreCase(type)) {
             session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+            return;
+        }
+
+        if ("LEAVE".equalsIgnoreCase(type)) {
+
+            RoomUser leaver = users.get(session.getId());
+            if (leaver == null) return;
+
+            String userId = leaver.getUserId();
+
+            leaver.setExplicitlyLeft(true);
+
+            Map<String, TimerTask> timerMap = leaveTimers.get(roomId);
+            if (timerMap != null) {
+                TimerTask t = timerMap.remove(userId);
+                if (t != null) t.cancel();
+            }
+
+            // ✅ 즉시 제거 (userId 기준)
+            users.entrySet().removeIf(e ->
+                    userId.equals(e.getValue().getUserId())
+            );
+
+            sessions.remove(session.getId());
+
+            broadcast(roomId);
             return;
         }
     }

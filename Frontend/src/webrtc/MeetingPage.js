@@ -65,6 +65,8 @@ const VideoTile = ({ user, isMain = false, stream }) => {
         speaking: false,
         isLoading: false,
     };
+
+    
     
     const hasLiveVideoTrack = useMemo(() => {
         return (
@@ -168,7 +170,9 @@ const VideoTile = ({ user, isMain = false, stream }) => {
     }, [stream, canShowVideo]);
 
     const isSpeaking = safeUser.speaking || isSpeakingLocally;
-    const isReconnecting = safeUser.isLoading;
+
+    const isJoining = safeUser.isJoining;
+    const isReconnecting = safeUser.isReconnecting;
 
     return (
         <div
@@ -176,7 +180,13 @@ const VideoTile = ({ user, isMain = false, stream }) => {
                 isMain ? "main" : ""
             } ${isSpeaking ? "speaking" : ""}`}
         >
-            {/* ✅ 재접속 오버레이 */}
+            {isJoining && (
+                <div className="reconnecting-overlay">
+                    <Loader2 className="spinner" />
+                    <p>접속 중...</p>
+                </div>
+            )}
+
             {isReconnecting && (
                 <div className="reconnecting-overlay">
                     <Loader2 className="spinner" />
@@ -290,6 +300,8 @@ function MeetingPage() {
         }
     });
 
+    const [roomReconnecting, setRoomReconnecting] = useState(true);
+
     const [participantCount, setParticipantCount] = useState(1);
     const [chatDraft, setChatDraft] = useState("");
 
@@ -322,6 +334,10 @@ function MeetingPage() {
     const camOnRef = useRef(camOn);
 
     const reconnectTimeoutRef = useRef(new Map());
+
+    const reconnectHistoryRef = useRef(new Set());
+
+    const hasFinishedInitialSyncRef = useRef(false); // 초기 동기화 완료 플래그
 
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
     useEffect(() => { camOnRef.current = camOn; }, [camOn]);
@@ -397,6 +413,58 @@ function MeetingPage() {
         }
     };
 
+    const handleHangup = () => {
+        alert("채팅이 종료되었습니다.");
+
+        wsRef.current?.send(
+            JSON.stringify({
+                type: "LEAVE",
+            })
+        );
+        
+        try {
+            // 1) 로컬 미디어 정리
+            if (localStreamRef.current) {
+                localStreamRef.current.getTracks().forEach((t) => t.stop());
+                localStreamRef.current = null;
+            }
+            setLocalStream(null);
+
+            // 2) WebSocket 정리
+            try { wsRef.current?.close(); } catch {}
+            wsRef.current = null;
+
+            try { sfuWsRef.current?.close(); } catch {}
+            sfuWsRef.current = null;
+
+            // 3) mediasoup transport/device 정리
+            try { sendTransportRef.current?.close(); } catch {}
+            sendTransportRef.current = null;
+
+            try { recvTransportRef.current?.close(); } catch {}
+            recvTransportRef.current = null;
+
+            try { sfuDeviceRef.current?.close?.(); } catch {}
+            sfuDeviceRef.current = null;
+
+            // 4) 오디오 엘리먼트 정리
+            audioElsRef.current?.forEach((a) => {
+                try { a.srcObject = null; } catch {}
+            });
+            audioElsRef.current?.clear?.();
+
+            // 5) 상태 초기화(원하면)
+            setParticipants([]);
+            setMessages([]);
+            setActiveSpeakerId(null);
+            setRoomReconnecting(false);
+        } finally {
+            // 6) 페이지 이동 (브라우저 종료 대신)
+            window.location.href = "/LMS"; // 홈으로 보내기
+            // 또는: window.location.replace("/ended");
+        }
+    };
+
     const getMainUser = () => {
         if (activeSpeakerId === me.id) return me;
         const found = participants.find((p) => p.id === activeSpeakerId);
@@ -419,14 +487,12 @@ function MeetingPage() {
 
     // --- Local media ---
     const startLocalMedia = async () => {
-        // 이미 스트림이 있으면 로딩 끝내고 리턴
         if (localStreamRef.current) {
-            setIsLocalLoading(false); // [추가]
+            setIsLocalLoading(false);
             return localStreamRef.current;
         }
 
         try {
-            console.log("[MEDIA] requesting camera + mic");
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: true,
@@ -434,21 +500,18 @@ function MeetingPage() {
 
             localStreamRef.current = stream;
             setLocalStream(stream);
-            
-            // 권한 허용됨
+
             setMicPermission("granted");
             setCamPermission("granted");
 
             return stream;
         } catch (err) {
-            console.error("[MEDIA] getUserMedia failed", err);
-            // 실패해도 로딩은 끝내야 함 (아바타라도 띄우기 위해)
             setMicPermission("denied");
             setCamPermission("denied");
             return null;
         } finally {
-            // [추가] 성공하든 실패하든 시도가 끝나면 로딩 상태 해제
             setIsLocalLoading(false);
+            // ❌ 여기서 아직 roomReconnecting false 하면 안 됨
         }
     };
 
@@ -524,7 +587,7 @@ function MeetingPage() {
             return;
         }
 
-        ensureParticipant(peerId);
+        // ensureParticipant(peerId);
 
         const requestId = safeUUID();
 
@@ -707,6 +770,47 @@ function MeetingPage() {
     }, []);
 
     useEffect(() => {
+        const handleBeforeUnload = () => {
+            try {
+                wsRef.current?.send(
+                    JSON.stringify({
+                        type: "LEAVE",
+                    })
+                );
+            } catch {}
+
+            // WebSocket을 즉시 닫아 서버가 afterConnectionClosed 실행하게 함
+            try {
+                wsRef.current?.close();
+            } catch {}
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, []);
+
+    useEffect(() => {
+        // 이미 해제됐으면 아무것도 안 함
+        if (!roomReconnecting) return;
+
+        // 내 로컬 미디어 준비 + recvTransport 준비 + 초기 sync 완료
+        if (!isLocalLoading && recvTransportRef.current && hasFinishedInitialSyncRef.current) {
+            setRoomReconnecting(false);
+        }
+    }, [isLocalLoading, streamVersion, roomReconnecting]);
+
+/*     useEffect(() => {
+        if (!userId) return;
+
+        if (!joinOrderRef.current.includes(userId)) {
+            joinOrderRef.current.push(userId);
+        }
+    }, [userId]); */
+
+    /* useEffect(() => {
         // 성능 최적화: 재접속 중인 사람 없으면 실행 안 함
         if (!participants.some(p => p.isReconnecting)) return;
 
@@ -729,7 +833,7 @@ function MeetingPage() {
         }, 1000); // 1초마다 체크
 
         return () => clearInterval(interval);
-    }, [participants]);
+    }, [participants]); */
 
     useEffect(() => {
         if (!localStreamRef.current) return;
@@ -856,66 +960,115 @@ function MeetingPage() {
                         return data.users.map(u => {
                             const old = prevMap.get(u.userId);
 
-                            // 1. 타임아웃 청소 (돌아왔으므로 삭제 예정 취소)
+                            /* -------------------------------------------------
+                            1. 재접속 이력 정리
+                            ------------------------------------------------- */
+                            if (!old && reconnectHistoryRef.current.has(u.userId)) {
+                                // 서버에 새로 나타났고 기존 UI에 없으면 신규 유저
+                                reconnectHistoryRef.current.delete(u.userId);
+                            }
+
+                            const hasReconnectHistory =
+                                reconnectHistoryRef.current.has(u.userId);
+
+                            const isNewUser = !old && !hasReconnectHistory;
+                            const isReconnectingUser = !!old && hasReconnectHistory;
+
+                            /* -------------------------------------------------
+                            2. 복귀했으면 삭제 예약 취소
+                            ------------------------------------------------- */
                             if (reconnectTimeoutRef.current.has(u.userId)) {
                                 clearTimeout(reconnectTimeoutRef.current.get(u.userId));
                                 reconnectTimeoutRef.current.delete(u.userId);
                             }
 
                             const isMe = u.userId === userId;
-                            
-                            // 서버 상태 반영
-                            const isCameraOff = isMe 
-                                ? !camOnRef.current 
+
+                            /* -------------------------------------------------
+                            3. 상태 동기화 (서버 + 로컬)
+                            ------------------------------------------------- */
+                            const cameraOff = isMe
+                                ? !camOnRef.current
                                 : (u.cameraOff ?? old?.cameraOff ?? true);
-                                
-                            const isMuted = isMe 
-                                ? !micOnRef.current 
+
+                            const muted = isMe
+                                ? !micOnRef.current
                                 : (u.muted ?? old?.muted ?? true);
 
-                            // 2. [핵심 수정] 로딩 해제 조건 강화
+                            /* -------------------------------------------------
+                            4. 로딩 종료 단일 기준
+                            ------------------------------------------------- */
                             let shouldStopLoading = false;
 
                             if (isMe && localStreamRef.current) {
-                                // 나는 내 캠 준비되면 끝
+                                // 나는 내 로컬 미디어 준비되면 끝
                                 shouldStopLoading = true;
                             } else if (old?.stream && old.stream.active) {
-                                // 이미 스트림이 잘 나오고 있으면 끝
+                                // 이미 스트림이 정상 수신 중
                                 shouldStopLoading = true;
-                            } else if (isCameraOff) {
-                                // 🚨 여기가 변경됨: 카메라가 꺼져 있다고 해도,
-                                // '재접속 중'이었다면 바로 스피너를 없애지 않음 (잠깐 꺼진 걸수도 있으니까)
-                                if (old?.isReconnecting) {
-                                    shouldStopLoading = false; // 계속 기다림 (스피너 유지)
-                                } else {
-                                    shouldStopLoading = true; // 평소엔 그냥 끔 (아바타)
-                                }
-                            } else {
-                                // 카메라는 켰는데 스트림 없음 -> 당연히 로딩 중
-                                shouldStopLoading = false;
+                            } else if (cameraOff && !isReconnectingUser) {
+                                // 신규 유저 + 카메라 꺼짐 → 바로 아바타
+                                shouldStopLoading = true;
                             }
 
-                            // 3. 상태 반환
-                            return {
+                            /* -------------------------------------------------
+                            5. 로딩 종료 시 재접속 이력 제거
+                            ------------------------------------------------- */
+                            if (shouldStopLoading) {
+                                reconnectHistoryRef.current.delete(u.userId);
+                            }
+
+                            /* -------------------------------------------------
+                            6. baseUser (신규/초기화용 베이스)
+                            ------------------------------------------------- */
+                            const baseUser = {
                                 id: u.userId,
                                 name: u.userName,
+                                joinAt: u.joinAt,
                                 isMe,
-                                muted: isMuted,
-                                cameraOff: isCameraOff,
+
+                                muted,
+                                cameraOff,
+                                stream: null,
+                                speaking: false,
+
+                                isJoining: false,
+                                isReconnecting: false,
+                                isLoading: false,
+
+                                lastUpdate: Date.now(),
+                            };
+
+                            /* -------------------------------------------------
+                            7. 신규 유저
+                            ------------------------------------------------- */
+                            if (isNewUser) {
+                                return {
+                                    ...baseUser,
+                                    isJoining: true,
+                                    isReconnecting: false,
+                                    isLoading: true,
+                                };
+                            }
+
+                            /* -------------------------------------------------
+                            8. 기존 유저 (재접속 포함)
+                            ------------------------------------------------- */
+                            return {
+                                ...baseUser,
                                 stream: old?.stream ?? null,
                                 speaking: old?.speaking ?? false,
-                                
-                                // 로딩이 끝나야만 false, 아니면 계속 true
-                                isLoading: shouldStopLoading ? false : true,
-                                isReconnecting: shouldStopLoading ? false : true,
-                                
-                                // 타임스탬프 추가 (다음 단계에서 사용)
-                                lastUpdate: Date.now(),
+
+                                isJoining: false,
+                                isReconnecting: isReconnectingUser && !shouldStopLoading,
+                                isLoading: !shouldStopLoading,
                             };
                         });
                     });
-                    
-                    // Active Speaker 유지
+
+                    /* -------------------------------------------------
+                    Active Speaker 유지
+                    ------------------------------------------------- */
                     setActiveSpeakerId(prev => {
                         const exists = data.users.some(u => u.userId === prev);
                         return exists ? prev : data.users[0]?.userId ?? null;
@@ -986,8 +1139,11 @@ function MeetingPage() {
             recvTransportRef.current = null;
             sfuDeviceRef.current = null;
         };
-
+        
         resetSfuLocalState();
+
+        hasFinishedInitialSyncRef.current = false;
+        setRoomReconnecting(true);
 
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const sfuWs = new WebSocket(`${protocol}//${window.location.host}/sfu/`);
@@ -1127,6 +1283,8 @@ function MeetingPage() {
                     }
 
                     await drainPending();
+                    hasFinishedInitialSyncRef.current = true;
+                    bumpStreamVersion();
                 }
 
                 return;
@@ -1161,33 +1319,28 @@ function MeetingPage() {
 
             if (msg.action === "peerLeft") {
                 const { peerId } = msg.data || {};
-                if (peerId) {
-                    // ✅ [수정] 즉시 삭제하지 않고 '재접속 중' 상태로 변경
-                    setParticipants((prev) =>
-                        prev.map((p) => {
-                            if (p.id === peerId) {
-                                return { ...p, isReconnecting: true, isLoading: true };
-                            }
-                            return p;
-                        })
-                    );
-                    
-                    // 스트림 정리 (메모리 누수 방지)
-                    peerStreamsRef.current.delete(peerId);
-                    bumpStreamVersion(); // 화면 갱신
+                if (!peerId) return;
 
-                    // ✅ [추가] 10초 뒤에도 안 돌아오면 진짜로 삭제 (청소 예약)
-                    if (reconnectTimeoutRef.current.has(peerId)) {
-                        clearTimeout(reconnectTimeoutRef.current.get(peerId));
-                    }
+                // ✅ 1. 재접속 이력만 기록 (UI는 건드리지 않음)
+                reconnectHistoryRef.current.add(peerId);
 
-                    const timer = setTimeout(() => {
-                        setParticipants((prev) => prev.filter((p) => p.id !== peerId));
-                        reconnectTimeoutRef.current.delete(peerId);
-                    }, 10000); // 10초 대기
+                // ✅ 2. 스트림 정리 (메모리 누수 방지)
+                peerStreamsRef.current.delete(peerId);
+                bumpStreamVersion();
 
-                    reconnectTimeoutRef.current.set(peerId, timer);
+                // ✅ 3. 기존 삭제 타이머 있으면 제거
+                if (reconnectTimeoutRef.current.has(peerId)) {
+                    clearTimeout(reconnectTimeoutRef.current.get(peerId));
                 }
+
+                // ✅ 4. 10초 후에도 복귀 없으면 완전 제거
+                const timer = setTimeout(() => {
+                    setParticipants(prev => prev.filter(p => p.id !== peerId));
+                    reconnectTimeoutRef.current.delete(peerId);
+                    reconnectHistoryRef.current.delete(peerId); // 🔴 이력도 함께 제거
+                }, 10000);
+
+                reconnectTimeoutRef.current.set(peerId, timer);
                 return;
             }
         };
@@ -1268,6 +1421,12 @@ function MeetingPage() {
             ? localStream
             : peerStreamsRef.current.get(mainUser?.id) || null;
 
+    const orderedParticipants = useMemo(() => {
+        return [...participants].sort(
+            (a, b) => (a.joinAt ?? 0) - (b.joinAt ?? 0)
+        );
+    }, [participants]);
+
     const _sv = streamVersion;
 
     return (
@@ -1313,47 +1472,38 @@ function MeetingPage() {
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
                                 <div className="main-stage">
-                                    <VideoTile user={mainUser} isMain stream={mainStream} />
+                                    <VideoTile user={mainUser} isMain stream={mainStream} roomReconnecting={roomReconnecting}/>
                                 </div>
                                 <div className="bottom-strip custom-scrollbar">
-                                    <div
-                                        className={`strip-item ${activeSpeakerId === me.id ? "active-strip" : ""}`}
-                                        onClick={() => setActiveSpeakerId(me.id)}
-                                    >
-                                        <VideoTile user={me} stream={localStream} />
-                                        <span className="strip-name">{/* {me.name}  */}(나)</span>
-                                    </div>
-                                    {participants
-                                        .filter((p) => !p.isMe)
-                                        .map((p) => (
-                                            <div
-                                                key={p.id}
-                                                className={`strip-item ${activeSpeakerId === p.id ? "active-strip" : ""}`}
-                                                onClick={() => setActiveSpeakerId(p.id)}
-                                            >
-                                                <VideoTile user={p} stream={p.stream ?? null} />
-                                                <span className="strip-name">{p.name}</span>
-                                            </div>
-                                        ))}
+
+                                    {orderedParticipants.map(p => (
+                                        <div
+                                            key={p.id}
+                                            className={`strip-item ${activeSpeakerId === p.id ? "active-strip" : ""}`}
+                                            onClick={() => setActiveSpeakerId(p.id)}
+                                        >
+                                            <VideoTile
+                                                user={p}
+                                                stream={p.isMe ? localStream : p.stream}
+                                            />
+                                            <span className="strip-name">
+                                                {p.isMe ? "(나)" : p.name}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         ) : (
                             <div className="layout-grid custom-scrollbar">
-                                {participants.map((p) => {
-                                    
-                                    const userForRender = p;
-
-                                    return (
-                                    <div key={p.id} className="video-tile-wrapper">
-                                        <VideoTile 
-                                        user={userForRender} 
-                                        // 스트림도 '나'면 무조건 localStream 사용
-                                        stream={p.isMe ? localStream : p.stream} 
-                                        />
-                                    </div>
-                                    );
-                                })}
-                            </div>
+                                {orderedParticipants.map(p => (
+                                <div key={p.id} className="video-tile-wrapper">
+                                    <VideoTile
+                                        user={p}
+                                        stream={p.isMe ? localStream : p.stream}
+                                    />
+                                </div>
+                            ))}
+                        </div>
                         )}
                     </div>
 
@@ -1389,7 +1539,7 @@ function MeetingPage() {
                             <ButtonControl label="채팅" active={sidebarOpen && sidebarView === "chat"} icon={MessageSquare} onClick={() => toggleSidebar("chat")} />
                             <ButtonControl label="참여자" active={sidebarOpen && sidebarView === "participants"} icon={Users} onClick={() => toggleSidebar("participants")} />
                             <div className="divider"></div>
-                            <ButtonControl label="통화 종료" danger icon={Phone} onClick={() => alert("통화가 종료되었습니다.")} />
+                            <ButtonControl label="통화 종료" danger icon={Phone} onClick={handleHangup} />
                         </div>
                     </div>
                 </main>
