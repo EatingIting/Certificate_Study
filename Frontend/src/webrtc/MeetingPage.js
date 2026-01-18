@@ -199,9 +199,7 @@ const VideoTile = ({ user, isMain = false, stream }) => {
                             name={safeUser.name}
                             size={isMain ? "lg" : "md"}
                         />
-                        <p className="stream-label">
-                            {safeUser.name}
-                        </p>
+                        <p className="stream-label">{safeUser.name}</p>
                     </div>
                 )}
             </div>
@@ -281,6 +279,8 @@ function MeetingPage() {
 
     const [isLoading, setIsLoading] = useState(false);
 
+    const [isLocalLoading, setIsLocalLoading] = useState(true);
+
     const [messages, setMessages] = useState(() => {
         try {
             const saved = localStorage.getItem(`chat_${roomId}`);
@@ -320,6 +320,8 @@ function MeetingPage() {
 
     const micOnRef = useRef(micOn);
     const camOnRef = useRef(camOn);
+
+    const reconnectTimeoutRef = useRef(new Map());
 
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
     useEffect(() => { camOnRef.current = camOn; }, [camOn]);
@@ -363,6 +365,7 @@ function MeetingPage() {
         speaking: isSpeaking,
         isMe: true,
         stream: localStream,
+        isLoading: isLocalLoading,
     };
 
     const handleSendMessage = (e) => {
@@ -416,14 +419,14 @@ function MeetingPage() {
 
     // --- Local media ---
     const startLocalMedia = async () => {
+        // 이미 스트림이 있으면 로딩 끝내고 리턴
         if (localStreamRef.current) {
-            console.log("[MEDIA] already acquired, skip getUserMedia");
+            setIsLocalLoading(false); // [추가]
             return localStreamRef.current;
         }
 
         try {
             console.log("[MEDIA] requesting camera + mic");
-
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: true,
@@ -431,17 +434,21 @@ function MeetingPage() {
 
             localStreamRef.current = stream;
             setLocalStream(stream);
-
+            
+            // 권한 허용됨
             setMicPermission("granted");
             setCamPermission("granted");
 
-            console.log("[MEDIA] media acquired", stream.id);
             return stream;
         } catch (err) {
             console.error("[MEDIA] getUserMedia failed", err);
+            // 실패해도 로딩은 끝내야 함 (아바타라도 띄우기 위해)
             setMicPermission("denied");
             setCamPermission("denied");
             return null;
+        } finally {
+            // [추가] 성공하든 실패하든 시도가 끝나면 로딩 상태 해제
+            setIsLocalLoading(false);
         }
     };
 
@@ -576,27 +583,6 @@ function MeetingPage() {
                     )
                 );
 
-                // ✅ [핵심 2] consumer 생성 순간 상태 즉시 확정
-                if (kind === "audio") {
-                    setParticipants((prev) =>
-                        prev.map((p) =>
-                            p.id === peerId
-                                ? { ...p, muted: false }
-                                : p
-                        )
-                    );
-                }
-
-                if (kind === "video") {
-                    setParticipants((prev) =>
-                        prev.map((p) =>
-                            p.id === peerId
-                                ? { ...p, cameraOff: false, isLoading: false }
-                                : p
-                        )
-                    );
-                }
-
                 bumpStreamVersion();
 
                 consumer.track.onended = () => {
@@ -719,6 +705,31 @@ function MeetingPage() {
             localStreamRef.current = null;
         };
     }, []);
+
+    useEffect(() => {
+        // 성능 최적화: 재접속 중인 사람 없으면 실행 안 함
+        if (!participants.some(p => p.isReconnecting)) return;
+
+        const interval = setInterval(() => {
+            setParticipants(prev => 
+                prev.map(p => {
+                    // 조건: 재접속 중 + 카메라 꺼짐 상태 + 3초 지남
+                    if (p.isReconnecting && p.cameraOff) {
+                         // lastUpdate가 없으면 현재 시간으로 간주
+                         const timeDiff = Date.now() - (p.lastUpdate || Date.now());
+                         
+                         // 3000ms(3초) 대기 후에도 여전히 상태가 이렇다면 로딩 해제
+                         if (timeDiff > 3000) {
+                             return { ...p, isReconnecting: false, isLoading: false };
+                         }
+                    }
+                    return p;
+                })
+            );
+        }, 1000); // 1초마다 체크
+
+        return () => clearInterval(interval);
+    }, [participants]);
 
     useEffect(() => {
         if (!localStreamRef.current) return;
@@ -844,31 +855,47 @@ function MeetingPage() {
 
                         return data.users.map(u => {
                             const old = prevMap.get(u.userId);
+
+                            // 1. 타임아웃 청소 (돌아왔으므로 삭제 예정 취소)
+                            if (reconnectTimeoutRef.current.has(u.userId)) {
+                                clearTimeout(reconnectTimeoutRef.current.get(u.userId));
+                                reconnectTimeoutRef.current.delete(u.userId);
+                            }
+
                             const isMe = u.userId === userId;
+                            
+                            // 서버 상태 반영
+                            const isCameraOff = isMe 
+                                ? !camOnRef.current 
+                                : (u.cameraOff ?? old?.cameraOff ?? true);
+                                
+                            const isMuted = isMe 
+                                ? !micOnRef.current 
+                                : (u.muted ?? old?.muted ?? true);
 
-                            const isCameraOff = isMe
-                                ? !camOnRef.current
-                                : (u.cameraOff ?? true);
+                            // 2. [핵심 수정] 로딩 해제 조건 강화
+                            let shouldStopLoading = false;
 
-                            const isMuted = isMe
-                                ? !micOnRef.current
-                                : (u.muted ?? true);
-
-                            // ✅ 핵심: OFF 상태도 "확정 신호"
-                            const hasFinalState =
-                                typeof u.cameraOff === "boolean" ||
-                                typeof u.muted === "boolean";
-
-                            let isLoading = old?.isLoading ?? true;
-
-                            if (hasFinalState) {
-                                isLoading = false;
+                            if (isMe && localStreamRef.current) {
+                                // 나는 내 캠 준비되면 끝
+                                shouldStopLoading = true;
+                            } else if (old?.stream && old.stream.active) {
+                                // 이미 스트림이 잘 나오고 있으면 끝
+                                shouldStopLoading = true;
+                            } else if (isCameraOff) {
+                                // 🚨 여기가 변경됨: 카메라가 꺼져 있다고 해도,
+                                // '재접속 중'이었다면 바로 스피너를 없애지 않음 (잠깐 꺼진 걸수도 있으니까)
+                                if (old?.isReconnecting) {
+                                    shouldStopLoading = false; // 계속 기다림 (스피너 유지)
+                                } else {
+                                    shouldStopLoading = true; // 평소엔 그냥 끔 (아바타)
+                                }
+                            } else {
+                                // 카메라는 켰는데 스트림 없음 -> 당연히 로딩 중
+                                shouldStopLoading = false;
                             }
 
-                            if (old?.stream) {
-                                isLoading = false;
-                            }
-
+                            // 3. 상태 반환
                             return {
                                 id: u.userId,
                                 name: u.userName,
@@ -877,12 +904,18 @@ function MeetingPage() {
                                 cameraOff: isCameraOff,
                                 stream: old?.stream ?? null,
                                 speaking: old?.speaking ?? false,
-                                isLoading,
+                                
+                                // 로딩이 끝나야만 false, 아니면 계속 true
+                                isLoading: shouldStopLoading ? false : true,
+                                isReconnecting: shouldStopLoading ? false : true,
+                                
+                                // 타임스탬프 추가 (다음 단계에서 사용)
+                                lastUpdate: Date.now(),
                             };
                         });
                     });
                     
-                    // Active Speaker 유지 로직
+                    // Active Speaker 유지
                     setActiveSpeakerId(prev => {
                         const exists = data.users.some(u => u.userId === prev);
                         return exists ? prev : data.users[0]?.userId ?? null;
@@ -1129,11 +1162,31 @@ function MeetingPage() {
             if (msg.action === "peerLeft") {
                 const { peerId } = msg.data || {};
                 if (peerId) {
-                    peerStreamsRef.current.delete(peerId);
-                    bumpStreamVersion();
+                    // ✅ [수정] 즉시 삭제하지 않고 '재접속 중' 상태로 변경
                     setParticipants((prev) =>
-                        prev.filter((p) => p.id !== peerId)
+                        prev.map((p) => {
+                            if (p.id === peerId) {
+                                return { ...p, isReconnecting: true, isLoading: true };
+                            }
+                            return p;
+                        })
                     );
+                    
+                    // 스트림 정리 (메모리 누수 방지)
+                    peerStreamsRef.current.delete(peerId);
+                    bumpStreamVersion(); // 화면 갱신
+
+                    // ✅ [추가] 10초 뒤에도 안 돌아오면 진짜로 삭제 (청소 예약)
+                    if (reconnectTimeoutRef.current.has(peerId)) {
+                        clearTimeout(reconnectTimeoutRef.current.get(peerId));
+                    }
+
+                    const timer = setTimeout(() => {
+                        setParticipants((prev) => prev.filter((p) => p.id !== peerId));
+                        reconnectTimeoutRef.current.delete(peerId);
+                    }, 10000); // 10초 대기
+
+                    reconnectTimeoutRef.current.set(peerId, timer);
                 }
                 return;
             }
