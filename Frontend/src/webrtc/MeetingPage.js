@@ -337,6 +337,8 @@ function MeetingPage() {
 
     const reconnectHistoryRef = useRef(new Set());
 
+    const joiningTimeoutRef = useRef(new Map());
+
     const hasFinishedInitialSyncRef = useRef(false); // 초기 동기화 완료 플래그
 
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
@@ -561,17 +563,28 @@ function MeetingPage() {
         }
     };
 
-    const removePeerMedia = (peerId) => {
+    const clearPeerStreamOnly = (peerId) => {
+        // SFU 스트림만 제거
         peerStreamsRef.current.delete(peerId);
 
         setParticipants((prev) =>
-            prev
-                .filter((p) => p.id !== peerId)
-                .map((p) =>
-                    p.id === peerId
-                        ? { ...p, stream: null, cameraOff: true, muted: true }
-                        : p
-                )
+            prev.map((p) =>
+                p.id === peerId
+                    ? {
+                        ...p,
+                        stream: null,
+                        // ❗ cameraOff / muted는 서버 상태 유지
+                    }
+                    : p
+            )
+        );
+    };
+    
+    const removePeerCompletely = (peerId) => {
+        peerStreamsRef.current.delete(peerId);
+
+        setParticipants((prev) =>
+            prev.filter((p) => p.id !== peerId)
         );
     };
 
@@ -770,6 +783,13 @@ function MeetingPage() {
     }, []);
 
     useEffect(() => {
+        return () => {
+            joiningTimeoutRef.current.forEach((t) => clearTimeout(t));
+            joiningTimeoutRef.current.clear();
+        };
+    }, []);
+
+    useEffect(() => {
         const handleBeforeUnload = () => {
             try {
                 wsRef.current?.send(
@@ -951,38 +971,37 @@ function MeetingPage() {
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
 
-                if (data.type === "PONG") return; // 🏓 핑 응답은 무시
+                if (data.type === "PONG") return;
 
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-                    setParticipants(prev => {
-                        const prevMap = new Map(prev.map(p => [p.id, p]));
+                    // 1) participants 갱신
+                    setParticipants((prev) => {
+                        const prevMap = new Map(prev.map((p) => [String(p.id), p]));
 
-                        return data.users.map(u => {
-                            const old = prevMap.get(u.userId);
+                        return data.users.map((u) => {
+                            const peerId = String(u.userId);
+                            const old = prevMap.get(peerId);
 
                             /* -------------------------------------------------
                             1. 재접속 이력 정리
                             ------------------------------------------------- */
-                            if (!old && reconnectHistoryRef.current.has(u.userId)) {
-                                // 서버에 새로 나타났고 기존 UI에 없으면 신규 유저
-                                reconnectHistoryRef.current.delete(u.userId);
+                            if (!old && reconnectHistoryRef.current.has(peerId)) {
+                                reconnectHistoryRef.current.delete(peerId);
                             }
 
-                            const hasReconnectHistory =
-                                reconnectHistoryRef.current.has(u.userId);
-
+                            const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
                             const isNewUser = !old && !hasReconnectHistory;
                             const isReconnectingUser = !!old && hasReconnectHistory;
 
                             /* -------------------------------------------------
                             2. 복귀했으면 삭제 예약 취소
                             ------------------------------------------------- */
-                            if (reconnectTimeoutRef.current.has(u.userId)) {
-                                clearTimeout(reconnectTimeoutRef.current.get(u.userId));
-                                reconnectTimeoutRef.current.delete(u.userId);
+                            if (reconnectTimeoutRef.current.has(peerId)) {
+                                clearTimeout(reconnectTimeoutRef.current.get(peerId));
+                                reconnectTimeoutRef.current.delete(peerId);
                             }
 
-                            const isMe = u.userId === userId;
+                            const isMe = peerId === String(userId);
 
                             /* -------------------------------------------------
                             3. 상태 동기화 (서버 + 로컬)
@@ -996,83 +1015,98 @@ function MeetingPage() {
                                 : (u.muted ?? old?.muted ?? true);
 
                             /* -------------------------------------------------
-                            4. 로딩 종료 단일 기준
+                            4. 로딩 종료 기준
+                            - cameraOff=true면 기다릴 이유가 없음 → 즉시 아바타
+                            - 스트림이 있으면 당연히 로딩 종료
                             ------------------------------------------------- */
                             let shouldStopLoading = false;
 
                             if (isMe && localStreamRef.current) {
-                                // 나는 내 로컬 미디어 준비되면 끝
                                 shouldStopLoading = true;
                             } else if (old?.stream && old.stream.active) {
-                                // 이미 스트림이 정상 수신 중
                                 shouldStopLoading = true;
-                            } else if (cameraOff && !isReconnectingUser) {
-                                // 신규 유저 + 카메라 꺼짐 → 바로 아바타
+                            } else if (cameraOff === true) {
+                                // ✅ 신규/재접속 상관없이 cameraOff면 로딩 종료
                                 shouldStopLoading = true;
                             }
 
                             /* -------------------------------------------------
-                            5. 로딩 종료 시 재접속 이력 제거
-                            ------------------------------------------------- */
-                            if (shouldStopLoading) {
-                                reconnectHistoryRef.current.delete(u.userId);
-                            }
-
-                            /* -------------------------------------------------
-                            6. baseUser (신규/초기화용 베이스)
+                            5. baseUser
+                            - ❗ stream/speaking은 old를 기본값으로 유지 (초기화 금지)
                             ------------------------------------------------- */
                             const baseUser = {
-                                id: u.userId,
+                                id: peerId,
                                 name: u.userName,
                                 joinAt: u.joinAt,
                                 isMe,
 
                                 muted,
                                 cameraOff,
-                                stream: null,
-                                speaking: false,
 
-                                isJoining: false,
-                                isReconnecting: false,
-                                isLoading: false,
+                                stream: old?.stream ?? null,
+                                speaking: old?.speaking ?? false,
+
+                                isJoining: old?.isJoining ?? false,
+                                isReconnecting: old?.isReconnecting ?? false,
+                                isLoading: old?.isLoading ?? false,
 
                                 lastUpdate: Date.now(),
                             };
 
                             /* -------------------------------------------------
-                            7. 신규 유저
+                            6. 신규 유저
+                            - isJoining은 true로 켜되, 서버 추가 메시지가 없어도
+                                아래 타이머에서 자동으로 끕니다.
                             ------------------------------------------------- */
                             if (isNewUser) {
                                 return {
                                     ...baseUser,
                                     isJoining: true,
                                     isReconnecting: false,
-                                    isLoading: true,
+                                    isLoading: !shouldStopLoading, // cameraOff면 false
                                 };
                             }
 
                             /* -------------------------------------------------
-                            8. 기존 유저 (재접속 포함)
+                            7. 기존 유저(재접속 포함)
                             ------------------------------------------------- */
                             return {
                                 ...baseUser,
-                                stream: old?.stream ?? null,
-                                speaking: old?.speaking ?? false,
-
-                                isJoining: false,
+                                isJoining: false, // 기존 유저는 joining 아님
                                 isReconnecting: isReconnectingUser && !shouldStopLoading,
                                 isLoading: !shouldStopLoading,
                             };
                         });
                     });
 
-                    /* -------------------------------------------------
-                    Active Speaker 유지
-                    ------------------------------------------------- */
-                    setActiveSpeakerId(prev => {
-                        const exists = data.users.some(u => u.userId === prev);
-                        return exists ? prev : data.users[0]?.userId ?? null;
+                    // 2) ✅ 신규 유저의 isJoining을 일정 시간 후 자동 종료 (무한 스피너 방지)
+                    for (const u of data.users) {
+                        const peerId = String(u.userId);
+
+                        // 이미 타이머 있으면 중복 생성 방지
+                        if (joiningTimeoutRef.current.has(peerId)) continue;
+
+                        const t = setTimeout(() => {
+                            setParticipants((prev) =>
+                                prev.map((p) =>
+                                    String(p.id) === peerId
+                                        ? { ...p, isJoining: false }
+                                        : p
+                                )
+                            );
+                            joiningTimeoutRef.current.delete(peerId);
+                        }, 1500);
+
+                        joiningTimeoutRef.current.set(peerId, t);
+                    }
+
+                    // 3) Active Speaker 유지
+                    setActiveSpeakerId((prev) => {
+                        const exists = data.users.some((u) => String(u.userId) === String(prev));
+                        return exists ? prev : String(data.users[0]?.userId ?? "") || null;
                     });
+
+                    return;
                 }
 
                 if (data.type === "CHAT") {
@@ -1087,9 +1121,10 @@ function MeetingPage() {
                                 hour: "2-digit",
                                 minute: "2-digit",
                             }),
-                            isMe: data.userId === userId,
+                            isMe: String(data.userId) === String(userId),
                         },
                     ]);
+                    return;
                 }
 
                 if (data.type === "USER_STATE_CHANGE") {
@@ -1101,6 +1136,7 @@ function MeetingPage() {
                             return p;
                         })
                     );
+                    return;
                 }
             };
         };
@@ -1325,7 +1361,7 @@ function MeetingPage() {
                 reconnectHistoryRef.current.add(peerId);
 
                 // ✅ 2. 스트림 정리 (메모리 누수 방지)
-                peerStreamsRef.current.delete(peerId);
+                clearPeerStreamOnly(peerId);
                 bumpStreamVersion();
 
                 // ✅ 3. 기존 삭제 타이머 있으면 제거
@@ -1335,9 +1371,9 @@ function MeetingPage() {
 
                 // ✅ 4. 10초 후에도 복귀 없으면 완전 제거
                 const timer = setTimeout(() => {
-                    setParticipants(prev => prev.filter(p => p.id !== peerId));
+                    removePeerCompletely(peerId);
                     reconnectTimeoutRef.current.delete(peerId);
-                    reconnectHistoryRef.current.delete(peerId); // 🔴 이력도 함께 제거
+                    reconnectHistoryRef.current.delete(peerId);
                 }, 10000);
 
                 reconnectTimeoutRef.current.set(peerId, timer);
