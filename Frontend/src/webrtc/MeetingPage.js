@@ -595,12 +595,11 @@ function MeetingPage() {
 
         const device = sfuDeviceRef.current;
         const recvTransport = recvTransportRef.current;
+
         if (!device || !recvTransport) {
             pendingProducersRef.current.push({ producerId, peerId });
             return;
         }
-
-        // ensureParticipant(peerId);
 
         const requestId = safeUUID();
 
@@ -619,11 +618,10 @@ function MeetingPage() {
             if (msg.action !== "consume:response") return;
             if (msg.requestId !== requestId) return;
 
-            const { consumerId, kind, rtpParameters } = msg.data;
-
-            let consumer;
             try {
-                consumer = await recvTransport.consume({
+                const { consumerId, kind, rtpParameters } = msg.data;
+
+                const consumer = await recvTransport.consume({
                     id: consumerId,
                     producerId,
                     kind,
@@ -632,11 +630,12 @@ function MeetingPage() {
 
                 consumersRef.current.set(producerId, consumer);
 
-                const prev = peerStreamsRef.current.get(peerId);
+                // 🔁 스트림 병합
+                const prevStream = peerStreamsRef.current.get(peerId);
                 const newStream = new MediaStream();
 
-                if (prev) {
-                    prev.getTracks().forEach((t) => {
+                if (prevStream) {
+                    prevStream.getTracks().forEach((t) => {
                         if (t.readyState !== "ended") {
                             newStream.addTrack(t);
                         }
@@ -646,48 +645,45 @@ function MeetingPage() {
                 newStream.addTrack(consumer.track);
                 peerStreamsRef.current.set(peerId, newStream);
 
-                // ✅ [핵심 1] 스트림 + 로딩 해제 즉시 반영
-                setParticipants((prev) =>
-                    prev.map((p) =>
-                        p.id === peerId
-                            ? {
-                                ...p,
+                // ✅ 참가자 상태 반영 (단 한 번)
+                setParticipants((prev) => {
+                    const idx = prev.findIndex(p => String(p.id) === String(peerId));
+
+                    // 1️⃣ participants에 없던 경우 (iPad / 느린 재접속 케이스)
+                    if (idx === -1) {
+                        return [
+                            ...prev,
+                            {
+                                id: peerId,
+                                name: `User-${String(peerId).slice(0, 4)}`,
+                                isMe: false,
+                                muted: true,          // 서버 USER_STATE_CHANGE가 덮어씀
+                                cameraOff: false,     // 영상 producer가 있다는 의미
+                                speaking: false,
                                 stream: newStream,
+                                isJoining: false,
+                                isReconnecting: false,
                                 isLoading: false,
-                            }
-                            : p
-                    )
-                );
+                                lastUpdate: Date.now(),
+                            },
+                        ];
+                    }
+
+                    // 2️⃣ 기존 참가자
+                    const next = [...prev];
+                    next[idx] = {
+                        ...next[idx],
+                        stream: newStream,
+                        isLoading: false,
+                        isJoining: false,
+                        isReconnecting: false,
+                    };
+                    return next;
+                });
 
                 bumpStreamVersion();
 
-                consumer.track.onended = () => {
-                    const cur = peerStreamsRef.current.get(peerId);
-                    if (!cur) return;
-
-                    const alive = cur
-                        .getTracks()
-                        .filter(
-                            (t) =>
-                                t.readyState !== "ended" &&
-                                t.id !== consumer.track.id
-                        );
-
-                    const rebuilt = new MediaStream(alive);
-                    peerStreamsRef.current.set(peerId, rebuilt);
-
-                    setParticipants((prev) =>
-                        prev.map((p) =>
-                            p.id === peerId
-                                ? { ...p, stream: rebuilt }
-                                : p
-                        )
-                    );
-
-                    bumpStreamVersion();
-                };
-
-                // 🔊 오디오 재생
+                // 🔊 audio track 처리
                 if (kind === "audio") {
                     const audio = new Audio();
                     audio.srcObject = new MediaStream([consumer.track]);
@@ -702,6 +698,27 @@ function MeetingPage() {
                     requestId: safeUUID(),
                     data: { consumerId },
                 });
+
+                // track 종료 처리
+                consumer.track.onended = () => {
+                    const cur = peerStreamsRef.current.get(peerId);
+                    if (!cur) return;
+
+                    const alive = cur.getTracks().filter(
+                        t => t.readyState !== "ended" && t.id !== consumer.track.id
+                    );
+
+                    const rebuilt = new MediaStream(alive);
+                    peerStreamsRef.current.set(peerId, rebuilt);
+
+                    setParticipants(prev =>
+                        prev.map(p =>
+                            p.id === peerId ? { ...p, stream: rebuilt } : p
+                        )
+                    );
+
+                    bumpStreamVersion();
+                };
             } catch (e) {
                 console.error("consume failed", e);
             } finally {
@@ -1025,7 +1042,7 @@ function MeetingPage() {
                                 shouldStopLoading = true;
                             } else if (old?.stream && old.stream.active) {
                                 shouldStopLoading = true;
-                            } else if (cameraOff === true) {
+                            } else if (!old?.stream && !cameraOff && hasReconnectHistory) {
                                 // ✅ 신규/재접속 상관없이 cameraOff면 로딩 종료
                                 shouldStopLoading = true;
                             }
@@ -1371,9 +1388,15 @@ function MeetingPage() {
 
                 // ✅ 4. 10초 후에도 복귀 없으면 완전 제거
                 const timer = setTimeout(() => {
-                    removePeerCompletely(peerId);
-                    reconnectTimeoutRef.current.delete(peerId);
-                    reconnectHistoryRef.current.delete(peerId);
+                    // 🔑 아직 USERS_UPDATE에 존재하면 제거 금지
+                    setParticipants(prev => {
+                        const stillExists = prev.some(p => String(p.id) === String(peerId));
+                        if (stillExists) {
+                            // 아직 signaling 기준으로는 살아 있음
+                            return prev;
+                        }
+                        return prev;
+                    });
                 }, 10000);
 
                 reconnectTimeoutRef.current.set(peerId, timer);
