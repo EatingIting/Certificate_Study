@@ -811,7 +811,7 @@ function MeetingPage() {
             try {
                 wsRef.current?.send(
                     JSON.stringify({
-                        type: "LEAVE",
+                        type: "RECONNECTING",
                     })
                 );
             } catch {}
@@ -847,30 +847,34 @@ function MeetingPage() {
         }
     }, [userId]); */
 
-    /* useEffect(() => {
-        // 성능 최적화: 재접속 중인 사람 없으면 실행 안 함
-        if (!participants.some(p => p.isReconnecting)) return;
-
+    useEffect(() => {
         const interval = setInterval(() => {
-            setParticipants(prev => 
+            setParticipants(prev =>
                 prev.map(p => {
-                    // 조건: 재접속 중 + 카메라 꺼짐 상태 + 3초 지남
-                    if (p.isReconnecting && p.cameraOff) {
-                         // lastUpdate가 없으면 현재 시간으로 간주
-                         const timeDiff = Date.now() - (p.lastUpdate || Date.now());
-                         
-                         // 3000ms(3초) 대기 후에도 여전히 상태가 이렇다면 로딩 해제
-                         if (timeDiff > 3000) {
-                             return { ...p, isReconnecting: false, isLoading: false };
-                         }
+                    if (!p.isReconnecting) return p;
+
+                    const elapsed = Date.now() - (p.reconnectStartedAt ?? 0);
+
+                    // 최소 800ms는 보여주기
+                    if (elapsed < 800) return p;
+
+                    // 스트림이 생겼거나, 카메라 OFF면 종료
+                    if (p.stream || p.cameraOff) {
+                        return {
+                            ...p,
+                            isReconnecting: false,
+                            isLoading: false,
+                            reconnectStartedAt: undefined,
+                        };
                     }
+
                     return p;
                 })
             );
-        }, 1000); // 1초마다 체크
+        }, 100);
 
         return () => clearInterval(interval);
-    }, [participants]); */
+    }, []);
 
     useEffect(() => {
         if (!localStreamRef.current) return;
@@ -1042,9 +1046,6 @@ function MeetingPage() {
                                 shouldStopLoading = true;
                             } else if (old?.stream && old.stream.active) {
                                 shouldStopLoading = true;
-                            } else if (!old?.stream && !cameraOff && hasReconnectHistory) {
-                                // ✅ 신규/재접속 상관없이 cameraOff면 로딩 종료
-                                shouldStopLoading = true;
                             }
 
                             /* -------------------------------------------------
@@ -1152,6 +1153,24 @@ function MeetingPage() {
                             }
                             return p;
                         })
+                    );
+                    return;
+                }
+
+                if (data.type === "USER_RECONNECTING") {
+                    const peerId = String(data.userId);
+
+                    setParticipants(prev =>
+                        prev.map(p =>
+                            String(p.id) === peerId
+                                ? {
+                                    ...p,
+                                    isReconnecting: true,
+                                    isLoading: true,
+                                    reconnectStartedAt: Date.now(),
+                                }
+                                : p
+                        )
                     );
                     return;
                 }
