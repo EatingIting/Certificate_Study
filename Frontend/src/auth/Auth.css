@@ -77,10 +77,6 @@ html, body {
     align-items: center;
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 5118d0fb3b54311385546f9b6769b0666ae33f8d
 /* hover 공통 */
 .social-btn:hover {
     transform: translateY(-2px);
@@ -117,8 +113,6 @@ html, body {
 .email-login:hover {
     text-decoration: underline;
 }
-<<<<<<< HEAD
-=======
 
 /* ===== 모달 오버레이 ===== */
 .modal-overlay {
@@ -308,4 +302,3 @@ html, body {
     font-size: 12px;
     margin: 4px 0 8px;
 }
->>>>>>> 5118d0fb3b54311385546f9b6769b0666ae33f8d
