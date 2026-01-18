@@ -50,7 +50,7 @@ const UserAvatar = ({ name, size = "md", src }) => {
 };
 
 // VideoTile 내부에서 오디오 레벨을 직접 감지
-const VideoTile = ({ user, isMain = false, stream }) => {
+const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
     const videoEl = useRef(null);
     const [isSpeakingLocally, setIsSpeakingLocally] = useState(false);
     
@@ -201,7 +201,7 @@ const VideoTile = ({ user, isMain = false, stream }) => {
                         autoPlay
                         playsInline
                         muted
-                        className="video-element"
+                        className={`video-element ${isScreen ? "screen" : ""}`}
                     />
                 ) : (
                     <div className="camera-off-placeholder">
@@ -340,6 +340,12 @@ function MeetingPage() {
     const joiningTimeoutRef = useRef(new Map());
 
     const hasFinishedInitialSyncRef = useRef(false); // 초기 동기화 완료 플래그
+
+    const lastActiveSpeakerRef = useRef(null);
+
+    const screenStreamRef = useRef(null);
+    const screenProducerRef = useRef(null);
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
 
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
     useEffect(() => { camOnRef.current = camOn; }, [camOn]);
@@ -580,17 +586,67 @@ function MeetingPage() {
         );
     };
     
-    const removePeerCompletely = (peerId) => {
-        peerStreamsRef.current.delete(peerId);
+    const startScreenShare = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: false,
+            });
 
-        setParticipants((prev) =>
-            prev.filter((p) => p.id !== peerId)
+            const track = stream.getVideoTracks()[0];
+            if (!track) return;
+
+            // ⭐ 핵심: 새 producer 생성
+            const screenProducer = await sendTransportRef.current.produce({
+                track,
+                appData: { type: "screen" },
+            });
+
+            producersRef.current.set("screen", screenProducer);
+
+            // ⭐ 본인 screenStream 저장 (이게 없어서 흰 화면이었음)
+            setParticipants(prev =>
+                prev.map(p =>
+                    p.isMe
+                        ? {
+                            ...p,
+                            screenStream: stream,
+                            isScreenSharing: true,
+                        }
+                        : p
+                )
+            );
+
+            // 화면 공유 중단 감지
+            track.onended = stopScreenShare;
+        } catch (e) {
+            console.error("screen share failed", e);
+        }
+    };
+
+    const stopScreenShare = () => {
+        const producer = producersRef.current.get("screen");
+        if (producer) {
+            producer.close();
+            producersRef.current.delete("screen");
+        }
+
+        setParticipants(prev =>
+            prev.map(p =>
+                p.isMe
+                    ? {
+                        ...p,
+                        isScreenSharing: false,
+                        screenStream: null,
+                    }
+                    : p
+            )
         );
     };
 
     const consumeProducer = async (producerId, peerId) => {
         if (!producerId || !peerId) return;
-        if (peerId === userIdRef.current) return;
+        if (String(peerId) === String(userIdRef.current)) return;
         if (consumersRef.current.has(producerId)) return;
 
         const device = sfuDeviceRef.current;
@@ -619,7 +675,7 @@ function MeetingPage() {
             if (msg.requestId !== requestId) return;
 
             try {
-                const { consumerId, kind, rtpParameters } = msg.data;
+                const { consumerId, kind, rtpParameters, appData } = msg.data;
 
                 const consumer = await recvTransport.consume({
                     id: consumerId,
@@ -630,26 +686,37 @@ function MeetingPage() {
 
                 consumersRef.current.set(producerId, consumer);
 
-                // 🔁 스트림 병합
-                const prevStream = peerStreamsRef.current.get(peerId);
-                const newStream = new MediaStream();
+                const isScreen = consumer.appData?.type === "screen";
 
-                if (prevStream) {
-                    prevStream.getTracks().forEach((t) => {
-                        if (t.readyState !== "ended") {
-                            newStream.addTrack(t);
-                        }
-                    });
+                /* -------------------------------------------------
+                스트림 병합 (카메라 전용)
+                ------------------------------------------------- */
+                let mergedCameraStream = null;
+
+                if (!isScreen) {
+                    const prev = peerStreamsRef.current.get(peerId);
+                    const next = new MediaStream();
+
+                    if (prev) {
+                        prev.getTracks().forEach((t) => {
+                            if (t.readyState !== "ended") {
+                                next.addTrack(t);
+                            }
+                        });
+                    }
+
+                    next.addTrack(consumer.track);
+                    peerStreamsRef.current.set(peerId, next);
+                    mergedCameraStream = next;
                 }
 
-                newStream.addTrack(consumer.track);
-                peerStreamsRef.current.set(peerId, newStream);
-
-                // ✅ 참가자 상태 반영 (단 한 번)
+                /* -------------------------------------------------
+                참가자 상태 단일 업데이트 (🔥 핵심)
+                ------------------------------------------------- */
                 setParticipants((prev) => {
                     const idx = prev.findIndex(p => String(p.id) === String(peerId));
 
-                    // 1️⃣ participants에 없던 경우 (iPad / 느린 재접속 케이스)
+                    // 참가자가 아직 없는 경우 (iPad / 느린 재접속)
                     if (idx === -1) {
                         return [
                             ...prev,
@@ -657,10 +724,14 @@ function MeetingPage() {
                                 id: peerId,
                                 name: `User-${String(peerId).slice(0, 4)}`,
                                 isMe: false,
-                                muted: true,          // 서버 USER_STATE_CHANGE가 덮어씀
-                                cameraOff: false,     // 영상 producer가 있다는 의미
+                                muted: true,
+                                cameraOff: false,
                                 speaking: false,
-                                stream: newStream,
+
+                                stream: isScreen ? null : mergedCameraStream,
+                                screenStream: isScreen ? new MediaStream([consumer.track]) : null,
+                                isScreenSharing: isScreen,
+
                                 isJoining: false,
                                 isReconnecting: false,
                                 isLoading: false,
@@ -669,21 +740,38 @@ function MeetingPage() {
                         ];
                     }
 
-                    // 2️⃣ 기존 참가자
                     const next = [...prev];
+                    const p = next[idx];
+
                     next[idx] = {
-                        ...next[idx],
-                        stream: newStream,
+                        ...p,
+
+                        // 📺 화면공유
+                        screenStream: isScreen
+                            ? new MediaStream([consumer.track])
+                            : p.screenStream,
+
+                        // 🎥 카메라
+                        stream: !isScreen
+                            ? mergedCameraStream
+                            : p.stream,
+
+                        isScreenSharing: isScreen || p.isScreenSharing,
+
                         isLoading: false,
                         isJoining: false,
                         isReconnecting: false,
+                        lastUpdate: Date.now(),
                     };
+
                     return next;
                 });
 
                 bumpStreamVersion();
 
-                // 🔊 audio track 처리
+                /* -------------------------------------------------
+                오디오 자동 재생
+                ------------------------------------------------- */
                 if (kind === "audio") {
                     const audio = new Audio();
                     audio.srcObject = new MediaStream([consumer.track]);
@@ -699,22 +787,43 @@ function MeetingPage() {
                     data: { consumerId },
                 });
 
-                // track 종료 처리
+                /* -------------------------------------------------
+                트랙 종료 처리 (카메라 / 화면공유 분기)
+                ------------------------------------------------- */
                 consumer.track.onended = () => {
-                    const cur = peerStreamsRef.current.get(peerId);
-                    if (!cur) return;
+                    setParticipants((prev) =>
+                        prev.map((p) => {
+                            if (String(p.id) !== String(peerId)) return p;
 
-                    const alive = cur.getTracks().filter(
-                        t => t.readyState !== "ended" && t.id !== consumer.track.id
-                    );
+                            // 📺 화면공유 종료
+                            if (isScreen) {
+                                return {
+                                    ...p,
+                                    screenStream: null,
+                                    isScreenSharing: false,
+                                };
+                            }
 
-                    const rebuilt = new MediaStream(alive);
-                    peerStreamsRef.current.set(peerId, rebuilt);
+                            // 🎥 카메라 트랙 종료
+                            const cur = peerStreamsRef.current.get(peerId);
+                            if (!cur) {
+                                return { ...p, stream: null };
+                            }
 
-                    setParticipants(prev =>
-                        prev.map(p =>
-                            p.id === peerId ? { ...p, stream: rebuilt } : p
-                        )
+                            const alive = cur.getTracks().filter(
+                                (t) =>
+                                    t.readyState !== "ended" &&
+                                    t.id !== consumer.track.id
+                            );
+
+                            const rebuilt = new MediaStream(alive);
+                            peerStreamsRef.current.set(peerId, rebuilt);
+
+                            return {
+                                ...p,
+                                stream: rebuilt,
+                            };
+                        })
                     );
 
                     bumpStreamVersion();
@@ -728,7 +837,6 @@ function MeetingPage() {
 
         sfuWsRef.current.addEventListener("message", handler);
     };
-
 
     const toggleMic = () => {
         const newVal = !micOn;
@@ -798,6 +906,37 @@ function MeetingPage() {
             localStreamRef.current = null;
         };
     }, []);
+
+    useEffect(() => {
+        const screenSharer = participants.find(p => p.isScreenSharing);
+
+        // 📺 화면공유 시작
+        if (screenSharer) {
+            if (activeSpeakerId !== screenSharer.id) {
+                // 이전 발표자 기억
+                lastActiveSpeakerRef.current = activeSpeakerId;
+                setActiveSpeakerId(screenSharer.id);
+            }
+            return;
+        }
+
+        // 📷 화면공유 종료 → 이전 발표자로 복귀
+        if (!screenSharer && lastActiveSpeakerRef.current) {
+            setActiveSpeakerId(lastActiveSpeakerRef.current);
+            lastActiveSpeakerRef.current = null;
+        }
+    }, [participants]);
+
+    useEffect(() => {
+        // iOS Safari 레이아웃 깨짐 방지
+        const el = document.querySelector(".bottom-strip");
+        if (el) {
+            el.style.display = "none";
+            // eslint-disable-next-line no-unused-expressions
+            el.offsetHeight;
+            el.style.display = "";
+        }
+    }, [participants.some(p => p.isScreenSharing)]);
 
     useEffect(() => {
         return () => {
@@ -1363,7 +1502,7 @@ function MeetingPage() {
             }
 
             if (msg.action === "newProducer") {
-                const { producerId, peerId } = msg.data;
+                const { producerId, peerId, appData } = msg.data;
                 if (!recvTransportRef.current || !sfuDeviceRef.current) {
                     pendingProducersRef.current.push({ producerId, peerId });
                     return;
@@ -1494,10 +1633,15 @@ function MeetingPage() {
     }, [isSpeaking]);
 
     const mainUser = getMainUser();
+
     const mainStream =
-        mainUser?.id === userId
+    mainUser?.isScreenSharing && mainUser?.screenStream
+        ? mainUser.screenStream
+        : mainUser?.isMe
             ? localStream
-            : peerStreamsRef.current.get(mainUser?.id) || null;
+            : mainUser?.stream;
+
+    const isMainScreenShare = !!mainUser?.isScreenSharing;
 
     const orderedParticipants = useMemo(() => {
         return [...participants].sort(
@@ -1549,15 +1693,26 @@ function MeetingPage() {
                     <div className="meet-stage">
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
-                                <div className="main-stage">
-                                    <VideoTile user={mainUser} isMain stream={mainStream} roomReconnecting={roomReconnecting}/>
+                                <div
+                                    className={`main-stage ${
+                                        isMainScreenShare ? "screen-share" : ""
+                                    }`}
+                                >
+                                    <VideoTile
+                                        user={mainUser}
+                                        isMain
+                                        stream={mainStream}
+                                        roomReconnecting={roomReconnecting}
+                                        isScreen={isMainScreenShare}
+                                    />
                                 </div>
                                 <div className="bottom-strip custom-scrollbar">
-
-                                    {orderedParticipants.map(p => (
+                                    {orderedParticipants.map((p) => (
                                         <div
                                             key={p.id}
-                                            className={`strip-item ${activeSpeakerId === p.id ? "active-strip" : ""}`}
+                                            className={`strip-item ${
+                                                activeSpeakerId === p.id ? "active-strip" : ""
+                                            } ${p.isScreenSharing ? "screen-sharing" : ""}`}  // 🔴 테두리용
                                             onClick={() => setActiveSpeakerId(p.id)}
                                         >
                                             <VideoTile
@@ -1573,15 +1728,21 @@ function MeetingPage() {
                             </div>
                         ) : (
                             <div className="layout-grid custom-scrollbar">
-                                {orderedParticipants.map(p => (
-                                <div key={p.id} className="video-tile-wrapper">
-                                    <VideoTile
-                                        user={p}
-                                        stream={p.isMe ? localStream : p.stream}
-                                    />
-                                </div>
-                            ))}
-                        </div>
+                                {orderedParticipants.map((p) => (
+                                    <div key={p.id} className="video-tile-wrapper">
+                                        <VideoTile
+                                            user={p}
+                                            stream={
+                                                p.isScreenSharing
+                                                    ? p.screenStream
+                                                    : p.isMe
+                                                        ? localStream
+                                                        : p.stream
+                                            }
+                                        />
+                                    </div>
+                                ))}
+                            </div>
                         )}
                     </div>
 
@@ -1612,7 +1773,17 @@ function MeetingPage() {
                                 onClick={toggleCam}
                             />
                             <div className="divider"></div>
-                            <ButtonControl label="화면 공유" icon={Monitor} onClick={() => {}} />
+                            <ButtonControl 
+                            label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
+                            icon={Monitor}
+                            active={isScreenSharing}
+                            onClick={() => {
+                                if (isScreenSharing) {
+                                    stopScreenShare();
+                                } else {
+                                    startScreenShare();
+                                }
+                            }} />
                             <ButtonControl label="반응" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
                             <ButtonControl label="채팅" active={sidebarOpen && sidebarView === "chat"} icon={MessageSquare} onClick={() => toggleSidebar("chat")} />
                             <ButtonControl label="참여자" active={sidebarOpen && sidebarView === "participants"} icon={Users} onClick={() => toggleSidebar("participants")} />
