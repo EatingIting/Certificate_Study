@@ -1,0 +1,194 @@
+.dashboard-container {
+    padding: 24px;
+}
+
+/* 공통 카드 */
+.card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.more {
+    font-size: 13px;
+    color: #8a8a8a;
+    cursor: pointer;
+}
+
+/* 상단 */
+.dashboard-top {
+    margin-bottom: 20px;
+}
+
+.study-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #97c793;
+    color: #fff;
+}
+
+.study-info h3 {
+    margin: 0 0 4px;
+}
+
+.study-info p {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.study-icon {
+    font-size: 36px;
+}
+
+/* 프로그레스 바 */
+.progress-bar {
+    width: 160px;
+    height: 8px;
+    background: rgba(255,255,255,0.4);
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.progress {
+    width: 55%;
+    height: 100%;
+    background: #ffffff;
+    border-radius: 4px;
+}
+
+.rate {
+    width: 83%;
+    background: #fff;
+}
+
+/* 그리드 */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+}
+
+/* 게시판 */
+.list li {
+    font-size: 14px;
+    padding: 6px 0;
+}
+
+/* 출석 */
+.attendance-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 4px 0;
+}
+
+.ok {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+.fail {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.attendance-rate {
+    margin-top: 12px;
+    font-size: 13px;
+}
+
+/* 과제 */
+.task-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    padding: 6px 0;
+}
+
+.badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.done {
+    background: #97c793;
+    color: #fff;
+}
+
+.pending {
+    background: #e5f2e8;
+    color: #3a7d4f;
+}
+
+/* 출석 리스트 */
+.attendance-list {
+    margin-bottom: 12px;
+}
+
+.attendance-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 4px 0;
+}
+
+.ok {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+.fail {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+/* ✅ 출석률 초록 박스 */
+.attendance-rate-box {
+    background: #97c793;
+    border-radius: 10px;
+    padding: 12px;
+    color: #ffffff;
+}
+
+.rate-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.rate-label {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.rate-value {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* 진행 바 */
+.rate-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.rate-progress {
+    width: 83%;
+    height: 100%;
+    background: #ffffff;
+    border-radius: 4px;
+}
