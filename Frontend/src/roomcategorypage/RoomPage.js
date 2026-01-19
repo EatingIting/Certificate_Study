@@ -1,108 +1,114 @@
 import { useNavigate } from "react-router-dom";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import "./RoomPage.css";
 
-const mainCategories = [
-    "전체",
-    "기능장",
-    "기사",
-    "산업기사",
-    "기능사",
-    "외국어",
-    "공무원",
-    "민간자격"
-];
+const ITEMS_PER_PAGE = 8;
 
-const categories = [
-    "전체(가나다순)",
-    "기능장",
-    "기사",
-    "산업기사",
-    "기능사",
-    "컴퓨터활용능력",
-    "워드프로세서",
-    "한국사능력검정시험",
-    "PSAT",
-    "경찰공무원",
-    "계리직공무원",
-    "관세사",
-    "소방공무원",
-    "법무부",
-    "운전면허",
-    "비서",
-    "유통관리사",
-    "공인중개사",
-    "주택관리사보",
-    "사회복지사",
-    "세무 및 회계",
-    "한국정보통신자격협회",
-    "PC정비사",
-    "네트워크관리사",
-    "리눅스마스터",
-    "인터넷보안전문가",
-    "인터넷정보관리사",
-    "ERP 정보관리사",
-    "대학수학능력시험",
-    "바리스타",
-    "전자상거래",
-    "디지털영상편집",
-    "DIAT",
-    "IoT관련",
-    "RFID",
-    "기타",
-];
-
+/* 임시 방 데이터 */
 const rooms = Array.from({ length: 27 }, (_, i) => ({
     roomId: i + 1,
-    category: categories[(i % (categories.length - 1)) + 1],
-    title: `자격증스터디그룹ABCDEFGHIJKLMNOP모집글 ${i + 1}`,
+    category: `중분류${(i % 5) + 1}`,
+    title: `자격증스터디그룹 모집글 ${i + 1}`,
     author: `user${i + 1}`,
     date: "2026.01.14",
     content: `매주 2회 스터디 진행합니다.
 꾸준히 참여 가능하신 분 환영합니다.`,
 }));
 
-const ITEMS_PER_PAGE = 7;
-
 const RoomPage = () => {
     const navigate = useNavigate();
+
+    /* ===== 상태 ===== */
+    const [mainCategories, setMainCategories] = useState([]);
+    const [categoryTree, setCategoryTree] = useState([]);
+    const [expandedCategoryId, setExpandedCategoryId] = useState(null);
+
     const [selectedMainCategory, setSelectedMainCategory] = useState("전체");
-    const [selectedCategory, setSelectedCategory] =
-        useState("전체(가나다순)");
+    const [selectedCategory, setSelectedCategory] = useState("전체(가나다순)");
+    const [selectedSubCategory, setSelectedSubCategory] = useState(null);
     const [categoryKeyword, setCategoryKeyword] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
 
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-
     const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
     const [applyMessage, setApplyMessage] = useState("");
 
-    /* 카테고리 필터 */
-    const filteredRooms =
-        selectedCategory === "전체(가나다순)"
-            ? rooms
-            : rooms.filter((room) => room.category === selectedCategory);
+    const nickname = localStorage.getItem("nickname");
 
-    /* 왼쪽 카테고리 검색 */
-    const filteredCategories = categories.filter((cat) => {
-        if (!categoryKeyword) return true; // 검색 안 할 때만 전체 표시
-        if (cat === "전체(가나다순)") return false;
-        return cat
-            .toLowerCase()
-            .includes(categoryKeyword.toLowerCase());
-    });
+    /* ===== 공통 트리 생성 ===== */
+    const buildCategoryTree = (allCategories, parentId = null) => {
+        const mids = allCategories
+            .filter(c => c.level === 2 && (!parentId || c.parentId === parentId))
+            .sort((a, b) => a.name.localeCompare(b.name, "ko"));
 
-    const handleCategoryClick = (category) => {
-        setSelectedCategory(category);
-        setCurrentPage(1);
+        const subs = allCategories.filter(c => c.level === 3);
+
+        return mids.map(mid => ({
+            id: mid.id,
+            name: mid.name,
+            children: subs
+                .filter(s => s.parentId === mid.id)
+                .sort((a, b) => a.name.localeCompare(b.name, "ko"))
+        }));
     };
 
-    /* 페이지네이션 */
-    const totalPages = Math.ceil(
-        filteredRooms.length / ITEMS_PER_PAGE
+    /* ===== 대분류 로딩 ===== */
+    useEffect(() => {
+        axios.get("/api/categories/main")
+            .then(res => {
+                setMainCategories(["전체", ...res.data.map(c => c.name)]);
+            });
+    }, []);
+
+    /* ===== 초기 전체 중분류 + 소분류 ===== */
+    useEffect(() => {
+        axios.get("/api/categories")
+            .then(res => {
+                setCategoryTree(buildCategoryTree(res.data));
+            });
+    }, []);
+
+    /* ===== 대분류 클릭 ===== */
+    const handleMainCategoryClick = async (catName) => {
+        setSelectedMainCategory(catName);
+        setSelectedCategory("전체(가나다순)");
+        setExpandedCategoryId(null);
+        setCurrentPage(1);
+        setCategoryKeyword("");
+
+        const res = await axios.get("/api/categories");
+
+        if (catName === "전체") {
+            setCategoryTree(buildCategoryTree(res.data));
+            return;
+        }
+
+        const main = res.data.find(c => c.level === 1 && c.name === catName);
+        if (!main) return;
+
+        setCategoryTree(buildCategoryTree(res.data, main.id));
+    };
+
+    /* ===== 방 필터 ===== */
+    const filteredRooms = (() => {
+        if (
+            selectedMainCategory === "전체" ||
+            selectedCategory === "전체(가나다순)"
+        ) {
+            return rooms;
+        }
+        return rooms.filter(r => r.category === selectedCategory);
+    })();
+
+    /* ===== 검색 ===== */
+    const filteredCategoryTree = categoryTree.filter(cat =>
+        cat.name.toLowerCase().includes(categoryKeyword.toLowerCase())
     );
 
+    /* ===== 페이지 ===== */
+    const totalPages = Math.ceil(filteredRooms.length / ITEMS_PER_PAGE);
     const pagedRooms = filteredRooms.slice(
         (currentPage - 1) * ITEMS_PER_PAGE,
         currentPage * ITEMS_PER_PAGE
@@ -129,27 +135,42 @@ const RoomPage = () => {
         setSelectedRoom(null);
     };
 
+
     return (
         <>
-            {/* ===== 상단 헤더 ===== */}
+            {/* ===== 헤더 ===== */}
             <header className="top-header">
                 <div className="page-container header-inner">
                     <div className="logo">로고</div>
-                    <button className="auth-btns"  onClick={() => navigate("/auth")}>로그인 / 회원가입</button>
+                    {nickname ? (
+                        <button
+                            className="auth-btns"
+                            onClick={() => {
+                                localStorage.clear();
+                                window.location.reload();
+                            }}
+                        >
+                            {nickname} 님 (로그아웃)
+                        </button>
+                    ) : (
+                        <button
+                            className="auth-btns"
+                            onClick={() => navigate("/auth")}
+                        >
+                            로그인 / 회원가입
+                        </button>
+                    )}
                 </div>
             </header>
 
+            {/* ===== 대분류 ===== */}
             <nav className="main-category">
                 <div className="page-container main-category-inner">
-                    {mainCategories.map((cat) => (
+                    {mainCategories.map(cat => (
                         <button
                             key={cat}
                             className={cat === selectedMainCategory ? "active" : ""}
-                            onClick={() => {
-                                setSelectedMainCategory(cat);
-                                setSelectedCategory("전체(가나다순)");
-                                setCurrentPage(1);
-                            }}
+                            onClick={() => handleMainCategoryClick(cat)}
                         >
                             {cat}
                         </button>
@@ -159,7 +180,7 @@ const RoomPage = () => {
 
             <div className="page-container">
                 <div className="room-layout">
-                    {/* 왼쪽 카테고리 */}
+                    {/* ===== 왼쪽 카테고리 ===== */}
                     <aside className="category-sidebar">
                         <h3>자격증 카테고리</h3>
 
@@ -172,44 +193,67 @@ const RoomPage = () => {
                         />
 
                         <ul>
-                            {filteredCategories.length === 0 ? (
-                                <li className="no-category">검색 결과 없음</li>
-                            ) : (
-                                filteredCategories.map((cat) => (
-                                    <li
-                                        key={cat}
-                                        className={cat === selectedCategory ? "active" : ""}
+                            {filteredCategoryTree.map(cat => (
+                                <li key={cat.id}>
+                                    <div
+                                        className={`category-item ${
+                                            selectedCategory === cat.name ? "active" : ""
+                                        }`}
                                         onClick={() => {
-                                            setSelectedCategory(cat);
+                                            setSelectedCategory(cat.name);
+                                            setSelectedSubCategory(null);
+                                            setExpandedCategoryId(
+                                                expandedCategoryId === cat.id ? null : cat.id
+                                            );
                                             setCurrentPage(1);
                                         }}
                                     >
-                                        {cat}
-                                    </li>
-                                ))
-                            )}
+                                        {cat.name}
+                                        {cat.children.length > 0 && (
+                                            <span className="arrow">
+                                                {expandedCategoryId === cat.id ? "▲" : "▼"}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {expandedCategoryId === cat.id && cat.children.length > 0 && (
+                                        <ul className="subcategory">
+                                            {cat.children.map(sub => (
+                                                <li
+                                                    key={sub.id}
+                                                    className={
+                                                        selectedCategory === sub.name ? "active" : ""
+                                                    }
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedSubCategory(sub.name);
+                                                        setCurrentPage(1);
+                                                    }}
+                                                >
+                                                    └ {sub.name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </li>
+                            ))}
                         </ul>
                     </aside>
 
-                    {/* 오른쪽 방 목록 */}
+                    {/* ===== 방 목록 ===== */}
                     <section className="room-content">
                         <div className="room-header">
                             <h2>
                                 {selectedCategory === "전체(가나다순)"
                                     ? "전체 모집 방"
-                                    : selectedCategory}
+                                    : selectedSubCategory
+                                        ? `${selectedCategory} - ${selectedSubCategory}`
+                                        : selectedCategory}
                             </h2>
                             <button className="create-btn">스터디 만들기</button>
                         </div>
 
                         <table className="room-table">
-                            <colgroup>
-                                <col style={{ width: "60px" }} />   {/* 번호 */}
-                                <col style={{ width: "180px" }} />  {/* 카테고리 */}
-                                <col style={{ width: "300px" }} />  {/* 제목 */}
-                                <col style={{ width: "180px" }} />  {/* 작성자 */}
-                                <col style={{ width: "110px" }} />  {/* 작성일 */}
-                            </colgroup>
                             <thead>
                             <tr>
                                 <th>번호</th>
@@ -220,37 +264,22 @@ const RoomPage = () => {
                             </tr>
                             </thead>
                             <tbody>
-                            {pagedRooms.length === 0 ? (
-                                <tr>
-                                    <td colSpan="5" className="empty">
-                                        모집 중인 방이 없습니다.
+                            {pagedRooms.map(room => (
+                                <tr key={room.roomId}>
+                                    <td>{room.roomId}</td>
+                                    <td>{room.category}</td>
+                                    <td
+                                        className="title"
+                                        onClick={() => openModal(room)}
+                                    >
+                                        {room.title}
                                     </td>
+                                    <td>{room.author}</td>
+                                    <td>{room.date}</td>
                                 </tr>
-                            ) : (
-                                pagedRooms.map((room) => (
-                                    <tr key={room.roomId}>
-                                        <td>{room.roomId}</td>
-                                        <td
-                                            className="category"
-                                            onClick={() => handleCategoryClick(room.category)}
-                                        >
-                                            {room.category}
-                                        </td>
-                                        <td
-                                            className="title"
-                                            onClick={() => openModal(room)}
-                                        >
-                                            {room.title}
-                                        </td>
-                                        <td>{room.author}</td>
-                                        <td>{room.date}</td>
-                                    </tr>
-                                ))
-                            )}
+                            ))}
                             </tbody>
                         </table>
-
-                        {/* 페이지네이션 */}
                         <div className="pagination">
                             <button
                                 className="page-nav"
@@ -296,7 +325,6 @@ const RoomPage = () => {
                             </button>
                         </div>
                     </section>
-
                     {/* 모달 */}
                     {isModalOpen && selectedRoom && (
                         <div className="modal-overlay" onClick={closeModal}>
@@ -333,9 +361,9 @@ const RoomPage = () => {
                                         <h3>신청하는 스터디: {selectedRoom.title}</h3>
 
                                         <textarea className="applytext"
-                                            placeholder="간단한 자기소개 및 신청 메시지를 입력해주세요."
-                                            value={applyMessage}
-                                            onChange={(e) => setApplyMessage(e.target.value)}
+                                                  placeholder="간단한 자기소개 및 신청 메시지를 입력해주세요."
+                                                  value={applyMessage}
+                                                  onChange={(e) => setApplyMessage(e.target.value)}
                                         />
 
                                         <div className="modal-buttons">
