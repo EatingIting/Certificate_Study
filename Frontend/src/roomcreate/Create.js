@@ -1,11 +1,13 @@
-import { useState } from "react";
-import "./Creat.css";
+import { useState, useRef } from "react";
+import "./Create.css";
 
 export default function CreateRoom() {
+    const selectRef = useRef(null);
+
     const [form, setForm] = useState({
         title: "",
         category: "",
-        description: "", 
+        description: "",
         gender: "ALL",
         maxPeople: 4,
     });
@@ -34,82 +36,105 @@ export default function CreateRoom() {
                 <h2 className="title">방 만들기</h2>
 
                 <input
-                    type="text"
+                    className="input"
                     name="title"
                     placeholder="방 제목"
                     value={form.title}
                     onChange={handleChange}
-                    className="input"
                 />
-
-                <select
-                    name="category"
-                    value={form.category}
-                    onChange={handleChange}
-                    className="input"
-                >
-                    <option value="">카테고리 선택</option>
-                    <option value="certificate">자격증</option>
-                    <option value="exam">시험 대비</option>
-                    <option value="language">어학</option>
-                    <option value="etc">기타</option>
-                </select>
-
-                <textarea
-                    name="description"
-                    placeholder="방 상세설명"
-                    value={form.description}
-                    onChange={handleChange}
-                    className="textarea"
-                />
-
-                <div className="gender-section">
-                    <p>성별 여부</p>
-                    <label>
-                        <input
-                            type="radio"
-                            name="gender"
-                            value="ALL"
-                            checked={form.gender === "ALL"}
-                            onChange={handleChange}
-                        />
-                        무관
-                    </label>
-                    <label>
-                        <input
-                            type="radio"
-                            name="gender"
-                            value="MALE"
-                            checked={form.gender === "MALE"}
-                            onChange={handleChange}
-                        />
-                        남자
-                    </label>
-                    <label>
-                        <input
-                            type="radio"
-                            name="gender"
-                            value="FEMALE"
-                            checked={form.gender === "FEMALE"}
-                            onChange={handleChange}
-                        />
-                        여자
-                    </label>
-                </div>
 
                 <input
-                    type="number"
-                    name="maxPeople"
-                    min={2}
-                    max={20}
-                    value={form.maxPeople}
-                    onChange={handleChange}
                     className="input"
-                    placeholder="인원 제한"
+                    name="category"
+                    placeholder="카테고리 (예: 토익, 정보처리기사)"
+                    value={form.category}
+                    onChange={handleChange}
                 />
 
+                <textarea
+                    className="textarea"
+                    name="description"
+                    placeholder="방 설명"
+                    value={form.description}
+                    onChange={handleChange}
+                />
+
+                {/* 인원 설정 */}
+                <div className="people-section" style={{ position: "relative" }}>
+                    <p>최대 인원</p>
+
+                    <select
+                        ref={selectRef}
+                        className="select"
+                        name="maxPeople"
+                        value={form.maxPeople}
+                        onChange={handleChange}
+                    >
+                        {Array.from({ length: 10 }, (_, i) => i + 1).map(
+                            (num) => (
+                                <option key={num} value={num}>
+                                    {num}명
+                                </option>
+                            )
+                        )}
+                    </select>
+
+                    <span
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            selectRef.current?.click();
+                        }}
+                        style={{
+                            position: "absolute",
+                            right: "16px",
+                            top: "50%",
+                            transform: "translateY(6px)",
+                            cursor: "pointer",
+                        }}
+                    >
+                        ˅
+                    </span>
+                </div>
+
+                {/* 성별 */}
+                <div className="gender-section">
+                    <p>성별 제한</p>
+                    <div className="gender-options">
+                        <label>
+                            <input
+                                type="radio"
+                                name="gender"
+                                value="ALL"
+                                checked={form.gender === "ALL"}
+                                onChange={handleChange}
+                            />
+                            전체
+                        </label>
+                        <label>
+                            <input
+                                type="radio"
+                                name="gender"
+                                value="FEMALE"
+                                checked={form.gender === "FEMALE"}
+                                onChange={handleChange}
+                            />
+                            여자
+                        </label>
+                        <label>
+                            <input
+                                type="radio"
+                                name="gender"
+                                value="MALE"
+                                checked={form.gender === "MALE"}
+                                onChange={handleChange}
+                            />
+                            남자
+                        </label>
+                    </div>
+                </div>
+
                 <button className="submit-btn" onClick={handleSubmit}>
-                    등록하기 (방장에겐 수정하기)
+                    방 생성하기
                 </button>
             </div>
         </div>
