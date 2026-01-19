@@ -113,7 +113,12 @@ function listOtherProducers(room, exceptPeerId) {
     if (pid === exceptPeerId) continue;
     for (const producerId of peer.producers.keys()) {
       const producer = peer.producers.get(producerId);
-      result.push({ producerId, peerId: pid, kind: producer.kind });
+      result.push({
+        producerId,
+        peerId: pid,
+        kind: producer.kind,
+        appData: producer.appData || {},
+      });
     }
   }
   return result;
@@ -141,6 +146,14 @@ httpsServer.listen(SFU_PORT, async () => {
   await startWorker();
   console.log(`🚀 SFU HTTPS/WSS listening on https://${MY_IP}:${SFU_PORT}`);
 });
+
+function findProducerInfo(room, producerId) {
+  for (const [pid, p] of room.peers.entries()) {
+    const producer = p.producers.get(producerId);
+    if (producer) return { producer, peerId: pid };
+  }
+  return null;
+}
 
 // -------------------------------
 // WebSocket Signaling (mediasoup control)
@@ -247,6 +260,7 @@ wss.on("connection", (ws) => {
           iceParameters: transport.iceParameters,
           iceCandidates: transport.iceCandidates,
           dtlsParameters: transport.dtlsParameters,
+
         });
         return;
       }
@@ -278,7 +292,12 @@ wss.on("connection", (ws) => {
           peer.producers.delete(producer.id);
           broadcast(room, peer.peerId, {
             action: "producerClosed",
-            data: { roomId: room.roomId, peerId: peer.peerId, producerId: producer.id },
+            data: { 
+              roomId: room.roomId, 
+              peerId: peer.peerId, 
+              producerId: producer.id,
+              appData: producer.appData,
+            },
           });
         };
 
@@ -287,7 +306,7 @@ wss.on("connection", (ws) => {
 
         broadcast(room, peer.peerId, {
           action: "newProducer",
-          data: { roomId: room.roomId, peerId: peer.peerId, producerId: producer.id, kind: producer.kind },
+          data: { roomId: room.roomId, peerId: peer.peerId, producerId: producer.id, kind: producer.kind, appData: producer.appData || {}, },
         });
 
         reply({ producerId: producer.id });
@@ -296,13 +315,15 @@ wss.on("connection", (ws) => {
 
       if (action === "consume") {
         const { transportId, producerId, rtpCapabilities } = data || {};
-        if (!transportId || !producerId || !rtpCapabilities) throw new Error("transportId/producerId/rtpCapabilities required");
 
         const t = peer.transports.get(transportId);
         if (!t) throw new Error("TRANSPORT_NOT_FOUND");
         if (t.direction !== "recv") throw new Error("NOT_A_RECV_TRANSPORT");
-
         if (!room.router.canConsume({ producerId, rtpCapabilities })) throw new Error("CANNOT_CONSUME");
+
+        const info = findProducerInfo(room, producerId);
+        const appData = info?.producer?.appData || {};
+        const producerPeerId = info?.peerId || null;
 
         const consumer = await t.transport.consume({ producerId, rtpCapabilities, paused: true });
         peer.consumers.set(consumer.id, consumer);
@@ -310,7 +331,10 @@ wss.on("connection", (ws) => {
         consumer.on("transportclose", () => peer.consumers.delete(consumer.id));
         consumer.on("producerclose", () => {
           peer.consumers.delete(consumer.id);
-          safeSend(ws, { action: "producerClosed", data: { roomId: room.roomId, producerId } });
+          safeSend(ws, {
+            action: "producerClosed",
+            data: { roomId: room.roomId, peerId: producerPeerId, producerId, appData },
+          });
         });
 
         reply({
@@ -318,6 +342,8 @@ wss.on("connection", (ws) => {
           producerId,
           kind: consumer.kind,
           rtpParameters: consumer.rtpParameters,
+          appData,
+          peerId: producerPeerId,
         });
         return;
       }
@@ -331,6 +357,31 @@ wss.on("connection", (ws) => {
 
         await consumer.resume();
         reply({ resumed: true });
+        return;
+      }
+
+      if (action === "closeProducer") {
+        const { producerId } = data || {};
+        const producer = peer.producers.get(producerId);
+
+        if (producer) {
+          const appData = producer.appData || {};
+          producer.close();
+          peer.producers.delete(producerId);
+
+          // 다른 피어들에게 알림
+          broadcast(room, joinedPeerId, {
+            action: "producerClosed",
+            data: {
+              roomId: room.roomId,
+              peerId: joinedPeerId,
+              producerId,
+              appData,
+            },
+          });
+        }
+
+        reply({ closed: true });
         return;
       }
 

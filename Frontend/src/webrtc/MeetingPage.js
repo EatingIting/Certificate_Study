@@ -76,7 +76,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
         );
     }, [stream]);
 
-    const canShowVideo = !!stream && hasLiveVideoTrack && !safeUser.cameraOff;
+    const canShowVideo = !!stream && hasLiveVideoTrack && (!safeUser.cameraOff || isScreen);
 
     // 1. 오디오 레벨 감지 (말할 때 초록 테두리)
     useEffect(() => {
@@ -345,6 +345,8 @@ function MeetingPage() {
 
     const screenStreamRef = useRef(null);
     const screenProducerRef = useRef(null);
+    const cameraWasOnBeforeScreenShareRef = useRef(false); // 화면공유 시작 전 카메라 상태
+    const isStoppingScreenShareRef = useRef(false); // stopScreenShare 중복 실행 방지
     const [isScreenSharing, setIsScreenSharing] = useState(false);
 
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
@@ -389,6 +391,8 @@ function MeetingPage() {
         speaking: isSpeaking,
         isMe: true,
         stream: localStream,
+        screenStream: isScreenSharing ? screenStreamRef.current : null,
+        isScreenSharing: isScreenSharing,
         isLoading: isLocalLoading,
     };
 
@@ -474,7 +478,6 @@ function MeetingPage() {
     };
 
     const getMainUser = () => {
-        if (activeSpeakerId === me.id) return me;
         const found = participants.find((p) => p.id === activeSpeakerId);
         if (found) return found;
         if (me) return me;
@@ -587,7 +590,19 @@ function MeetingPage() {
     };
     
     const startScreenShare = async () => {
+        if (!sendTransportRef.current || sendTransportRef.current.closed) {
+            console.error("[startScreenShare] sendTransport not ready/closed");
+            return;
+        }
+
+        if (producersRef.current.has("screen")) {
+            console.warn("[startScreenShare] screen producer already exists");
+            return;
+        }
+
         try {
+            console.log("[startScreenShare] requesting display media...");
+
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: true,
                 audio: false,
@@ -596,64 +611,187 @@ function MeetingPage() {
             const track = stream.getVideoTracks()[0];
             if (!track) return;
 
-            // ⭐ 핵심: 새 producer 생성
+            // ❗ 이미 종료된 트랙 방어
+            if (track.readyState === "ended") {
+                return;
+            }
+
+            // 1️⃣ [수정] 기존 카메라가 켜져 있었다면 끄고, **서버에도 알림**
+            const cameraProducer = producersRef.current.get("camera");
+            if (cameraProducer) {
+                const id = cameraProducer.id;
+                cameraProducer.close();
+                producersRef.current.delete("camera");
+
+                // 🚀 [추가됨] 서버에 "나 카메라 껐어"라고 알려야 B가 A의 카메라 화면을 지웁니다.
+                safeSfuSend({ 
+                    action: "closeProducer", 
+                    data: { producerId: id } 
+                });
+            }
+
+            // 2️⃣ screen producer 생성
+            console.log("[startScreenShare] producing screen...");
             const screenProducer = await sendTransportRef.current.produce({
                 track,
                 appData: { type: "screen" },
             });
 
             producersRef.current.set("screen", screenProducer);
+            screenStreamRef.current = stream;
 
-            // ⭐ 본인 screenStream 저장 (이게 없어서 흰 화면이었음)
-            setParticipants(prev =>
-                prev.map(p =>
+            setIsScreenSharing(true);
+            
+            // 내 UI 즉시 반영
+            setParticipants((prev) =>
+                prev.map((p) =>
                     p.isMe
-                        ? {
-                            ...p,
-                            screenStream: stream,
-                            isScreenSharing: true,
-                        }
+                        ? { ...p, screenStream: stream, isScreenSharing: true }
                         : p
                 )
             );
 
-            // 화면 공유 중단 감지
-            track.onended = stopScreenShare;
+            track.onended = () => {
+                console.log("[startScreenShare] screen track ended by browser");
+                stopScreenShare(true);
+            };
         } catch (e) {
-            console.error("screen share failed", e);
+            console.error("[startScreenShare] failed:", e);
+
+            // 혹시 stream이 남아있으면 정리
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach((t) => {
+                    try { t.stop(); } catch {}
+                });
+                screenStreamRef.current = null;
+            }
+
+            // producer 남아있으면 정리
+            const sp = producersRef.current.get("screen");
+                if (sp) {
+                    try { sp.close(); } catch {}
+                producersRef.current.delete("screen");
+            }
+
+            setIsScreenSharing(false);
+            setParticipants((prev) =>
+                prev.map((p) =>
+                    p.isMe ? { ...p, screenStream: null, isScreenSharing: false } : p
+                )
+            );
         }
     };
 
-    const stopScreenShare = () => {
-        const producer = producersRef.current.get("screen");
-        if (producer) {
-            producer.close();
-            producersRef.current.delete("screen");
-        }
+    const stopScreenShare = async (fromTrackEnded = false) => { // async 키워드 추가 권장
+        // 중복 실행 방지
+        if (isStoppingScreenShareRef.current) return;
+        isStoppingScreenShareRef.current = true;
 
-        setParticipants(prev =>
-            prev.map(p =>
-                p.isMe
-                    ? {
-                        ...p,
+        try {
+            console.log(
+                "[stopScreenShare]",
+                fromTrackEnded ? "from track.onended" : "from button"
+            );
+
+            // 1️⃣ [수정] screen producer 닫기 및 **서버 알림**
+            const screenProducer = producersRef.current.get("screen");
+            if (screenProducer) {
+                const id = screenProducer.id; // ID 미리 저장
+                try {
+                    if (!screenProducer.closed) screenProducer.close();
+                } catch (e) {
+                    console.warn("[stopScreenShare] error closing:", e);
+                }
+                producersRef.current.delete("screen");
+
+                // 🚀 [추가됨] 서버에 "나 화면 공유 껐어"라고 알려야 B가 화면 공유 모드를 해제합니다.
+                safeSfuSend({ 
+                    action: "closeProducer", 
+                    data: { producerId: id } 
+                });
+            }
+
+            // 2) screen stream 트랙 stop (로컬 정리)
+            if (screenStreamRef.current) {
+                const tracks = screenStreamRef.current.getTracks();
+                tracks.forEach((t) => {
+                    try { t.stop(); } catch { }
+                });
+                screenStreamRef.current = null;
+            }
+
+            // 3) 로컬 UI 복구
+            setIsScreenSharing(false);
+            
+            // 4️⃣ [중요] 카메라 다시 켜기 (A의 원래 스트림 복구)
+            // 화면 공유를 끄면 자동으로 카메라를 다시 켜서 송출해야 B도 A의 얼굴을 다시 볼 수 있습니다.
+            try {
+                if (camOn && sendTransportRef.current) {
+                    console.log("[stopScreenShare] restarting camera...");
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: true, 
+                        audio: false 
+                    });
+                    const videoTrack = stream.getVideoTracks()[0];
+                    
+                    const cameraProducer = await sendTransportRef.current.produce({
+                        track: videoTrack,
+                        appData: { type: "camera" },
+                    });
+                    
+                    producersRef.current.set("camera", cameraProducer);
+                    
+                    // 내 로컬 스트림 업데이트 (그래야 내 화면에 내 얼굴이 보임)
+                    setLocalStream((prev) => {
+                         // 기존 오디오 트랙이 있다면 합치기
+                         const newStream = new MediaStream([videoTrack]);
+                         if (prev) {
+                             prev.getAudioTracks().forEach(t => newStream.addTrack(t));
+                         }
+                         localStreamRef.current = newStream;
+                         return newStream;
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to restart camera:", err);
+            }
+
+            // UI 업데이트
+            setParticipants((prev) =>
+                prev.map((p) =>
+                    p.isMe 
+                    ? { 
+                        ...p, 
+                        screenStream: null, 
                         isScreenSharing: false,
-                        screenStream: null,
-                    }
+                        // 카메라 재시작 후 stream이 업데이트 되는 것은 useEffect(localStream)이 처리하거나
+                        // 위 setLocalStream에 의해 리렌더링되며 반영됨.
+                      } 
                     : p
-            )
-        );
+                )
+            );
+
+        } finally {
+            isStoppingScreenShareRef.current = false;
+        }
     };
 
-    const consumeProducer = async (producerId, peerId) => {
-        if (!producerId || !peerId) return;
-        if (String(peerId) === String(userIdRef.current)) return;
+
+    const consumeProducer = async (producerId, fallbackPeerId, targetAppData) => {
+        if (!producerId) return;
+        if (String(fallbackPeerId) === String(userIdRef.current)) return;
         if (consumersRef.current.has(producerId)) return;
 
         const device = sfuDeviceRef.current;
         const recvTransport = recvTransportRef.current;
 
+        // 아직 준비 안 됐으면 대기열로
         if (!device || !recvTransport) {
-            pendingProducersRef.current.push({ producerId, peerId });
+            pendingProducersRef.current.push({
+                producerId,
+                peerId: fallbackPeerId,
+                appData: targetAppData,
+            });
             return;
         }
 
@@ -674,24 +812,62 @@ function MeetingPage() {
             if (msg.action !== "consume:response") return;
             if (msg.requestId !== requestId) return;
 
-            try {
-                const { consumerId, kind, rtpParameters, appData } = msg.data;
+            // ✅ 이 요청에 대한 핸들러는 여기서부터 1회성
+            sfuWsRef.current?.removeEventListener("message", handler);
 
-                const consumer = await recvTransport.consume({
+            let consumer = null;
+
+            try {
+                const {
+                    consumerId,
+                    kind,
+                    rtpParameters,
+                    appData: serverAppData,
+                    peerId: serverPeerId,
+                } = msg.data;
+
+                // 🔐 서버 peerId 최우선
+                const peerId = serverPeerId ?? fallbackPeerId;
+
+                // 🔐 appData 결정 (server > target > {})
+                const finalAppData = serverAppData ?? targetAppData ?? {};
+
+                console.log(
+                    "[consume:response]",
+                    "peerId =", peerId,
+                    "producerId =", producerId,
+                    "appData =", finalAppData
+                );
+
+                consumer = await recvTransport.consume({
                     id: consumerId,
                     producerId,
                     kind,
                     rtpParameters,
+                    appData: { ...finalAppData },
                 });
 
+                // ✅ producerId 기준으로 consumer 저장(기존 방식 유지)
                 consumersRef.current.set(producerId, consumer);
 
                 const isScreen = consumer.appData?.type === "screen";
 
+                console.log(
+                    "[SFU][consumer created]",
+                    "peerId =", peerId,
+                    "producerId =", producerId,
+                    "isScreen =", isScreen,
+                    "consumer.appData =", consumer.appData
+                );
+
                 /* -------------------------------------------------
-                스트림 병합 (카메라 전용)
+                스트림 생성/병합
+                - 카메라: 기존 스트림과 병합
+                - 화면공유: 단독 스트림 (매번 새 MediaStream 생성)
                 ------------------------------------------------- */
+
                 let mergedCameraStream = null;
+                let screenStream = null;
 
                 if (!isScreen) {
                     const prev = peerStreamsRef.current.get(peerId);
@@ -708,15 +884,18 @@ function MeetingPage() {
                     next.addTrack(consumer.track);
                     peerStreamsRef.current.set(peerId, next);
                     mergedCameraStream = next;
+                } else {
+                    // ✅ 화면공유는 "항상 새 MediaStream"으로 만들어 리렌더 강제
+                    screenStream = new MediaStream([consumer.track]);
                 }
 
                 /* -------------------------------------------------
-                참가자 상태 단일 업데이트 (🔥 핵심)
+                참가자 상태 업데이트
                 ------------------------------------------------- */
                 setParticipants((prev) => {
-                    const idx = prev.findIndex(p => String(p.id) === String(peerId));
+                    const idx = prev.findIndex((p) => String(p.id) === String(peerId));
 
-                    // 참가자가 아직 없는 경우 (iPad / 느린 재접속)
+                    // 신규 참가자
                     if (idx === -1) {
                         return [
                             ...prev,
@@ -724,13 +903,15 @@ function MeetingPage() {
                                 id: peerId,
                                 name: `User-${String(peerId).slice(0, 4)}`,
                                 isMe: false,
-                                muted: true,
+
+                                // ✅ 오디오 consumer면 muted=false가 자연스럽습니다.
+                                muted: kind === "audio" ? false : true,
                                 cameraOff: false,
                                 speaking: false,
 
                                 stream: isScreen ? null : mergedCameraStream,
-                                screenStream: isScreen ? new MediaStream([consumer.track]) : null,
-                                isScreenSharing: isScreen,
+                                screenStream: isScreen ? screenStream : null,
+                                isScreenSharing: isScreen ? true : false,
 
                                 isJoining: false,
                                 isReconnecting: false,
@@ -740,23 +921,24 @@ function MeetingPage() {
                         ];
                     }
 
+                    // 기존 참가자
                     const next = [...prev];
                     const p = next[idx];
 
                     next[idx] = {
                         ...p,
 
-                        // 📺 화면공유
-                        screenStream: isScreen
-                            ? new MediaStream([consumer.track])
-                            : p.screenStream,
+                        // ✅ screen이면 stream 건드리지 않음, camera면 stream 갱신
+                        stream: isScreen ? p.stream : mergedCameraStream,
 
-                        // 🎥 카메라
-                        stream: !isScreen
-                            ? mergedCameraStream
-                            : p.stream,
+                        // ✅ screen이면 screenStream 갱신(항상 새 객체), 아니면 유지
+                        screenStream: isScreen ? screenStream : p.screenStream,
 
-                        isScreenSharing: isScreen || p.isScreenSharing,
+                        // ✅ screen일 때만 true로 세팅 (종료는 종료 이벤트에서 false)
+                        isScreenSharing: isScreen ? true : p.isScreenSharing,
+
+                        // ✅ 오디오 consumer가 붙으면 muted 해제 (video consumer는 건드리지 않음)
+                        muted: kind === "audio" ? false : p.muted,
 
                         isLoading: false,
                         isJoining: false,
@@ -770,7 +952,7 @@ function MeetingPage() {
                 bumpStreamVersion();
 
                 /* -------------------------------------------------
-                오디오 자동 재생
+                오디오 처리
                 ------------------------------------------------- */
                 if (kind === "audio") {
                     const audio = new Audio();
@@ -781,6 +963,9 @@ function MeetingPage() {
                     audio.play().catch(() => {});
                 }
 
+                /* -------------------------------------------------
+                consumer resume
+                ------------------------------------------------- */
                 safeSfuSend({
                     action: "resumeConsumer",
                     requestId: safeUUID(),
@@ -788,50 +973,81 @@ function MeetingPage() {
                 });
 
                 /* -------------------------------------------------
-                트랙 종료 처리 (카메라 / 화면공유 분기)
+                종료 처리(가장 중요)
+                - track ended OR producerclose 시:
+                1) consumer close + map 정리
+                2) screen이면 screenStream/null + isScreenSharing false
+                3) camera이면 peerStreams 재구성
                 ------------------------------------------------- */
-                consumer.track.onended = () => {
+                const cleanupThisConsumer = () => {
+                    // ✅ 1) consumer 정리
+                    const c = consumersRef.current.get(producerId);
+                    if (c) {
+                        try { c.close(); } catch {}
+                    }
+                    consumersRef.current.delete(producerId);
+
+                    // ✅ 2) 오디오 엘리먼트 정리
+                    const a = audioElsRef.current.get(producerId);
+                    if (a) {
+                        try { a.srcObject = null; } catch {}
+                        audioElsRef.current.delete(producerId);
+                    }
+
+                    // ✅ 3) UI 정리
                     setParticipants((prev) =>
                         prev.map((p) => {
                             if (String(p.id) !== String(peerId)) return p;
 
-                            // 📺 화면공유 종료
+                            const isScreen = finalAppData?.type === "screen";
+
                             if (isScreen) {
                                 return {
                                     ...p,
                                     screenStream: null,
                                     isScreenSharing: false,
+                                    lastUpdate: Date.now(),
                                 };
                             }
 
-                            // 🎥 카메라 트랙 종료
+                            // 카메라 트랙 종료
                             const cur = peerStreamsRef.current.get(peerId);
                             if (!cur) {
-                                return { ...p, stream: null };
+                                return { ...p, stream: null, lastUpdate: Date.now() };
                             }
 
-                            const alive = cur.getTracks().filter(
-                                (t) =>
-                                    t.readyState !== "ended" &&
-                                    t.id !== consumer.track.id
-                            );
+                            const aliveTracks = cur
+                                .getTracks()
+                                .filter(
+                                    (t) =>
+                                        t.readyState !== "ended" &&
+                                        t.id !== consumer?.track?.id
+                                );
 
-                            const rebuilt = new MediaStream(alive);
-                            peerStreamsRef.current.set(peerId, rebuilt);
+                            const rebuilt = aliveTracks.length ? new MediaStream(aliveTracks) : null;
+                            if (rebuilt) peerStreamsRef.current.set(peerId, rebuilt);
+                            else peerStreamsRef.current.delete(peerId);
 
-                            return {
-                                ...p,
-                                stream: rebuilt,
-                            };
+                            return { ...p, stream: rebuilt, lastUpdate: Date.now() };
                         })
                     );
 
                     bumpStreamVersion();
                 };
+
+                // ✅ track ended
+                consumer.track.onended = cleanupThisConsumer;
+
+                // ✅ producer close (mediasoup consumer 이벤트)
+                consumer.on?.("producerclose", cleanupThisConsumer);
             } catch (e) {
                 console.error("consume failed", e);
-            } finally {
-                sfuWsRef.current?.removeEventListener("message", handler);
+
+                // 실패 시도 중간 생성된 consumer 정리
+                try {
+                    if (consumer) consumer.close();
+                } catch {}
+                consumersRef.current.delete(producerId);
             }
         };
 
@@ -910,22 +1126,21 @@ function MeetingPage() {
     useEffect(() => {
         const screenSharer = participants.find(p => p.isScreenSharing);
 
-        // 📺 화면공유 시작
+        // 1. 누군가(나 포함) 화면 공유 중일 때
         if (screenSharer) {
+            // 현재 발표자가 그 사람이 아닐 때만 변경 (무한 루프 방지)
             if (activeSpeakerId !== screenSharer.id) {
-                // 이전 발표자 기억
-                lastActiveSpeakerRef.current = activeSpeakerId;
+                lastActiveSpeakerRef.current = activeSpeakerId; 
                 setActiveSpeakerId(screenSharer.id);
+                setLayoutMode("speaker"); // 화면 공유 시작 시 스피커 모드로 자동 전환
             }
-            return;
         }
-
-        // 📷 화면공유 종료 → 이전 발표자로 복귀
-        if (!screenSharer && lastActiveSpeakerRef.current) {
+        // 2. 화면 공유가 끝났을 때 원래 발표자로 복귀
+        else if (lastActiveSpeakerRef.current) {
             setActiveSpeakerId(lastActiveSpeakerRef.current);
             lastActiveSpeakerRef.current = null;
         }
-    }, [participants]);
+    }, [participants, activeSpeakerId]);
 
     useEffect(() => {
         // iOS Safari 레이아웃 깨짐 방지
@@ -1134,62 +1349,32 @@ function MeetingPage() {
                 if (data.type === "PONG") return;
 
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-                    // 1) participants 갱신
                     setParticipants((prev) => {
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
+                        const newServerIds = new Set(data.users.map((u) => String(u.userId)));
 
-                        return data.users.map((u) => {
+                        // 1. 서버에서 온 최신 정보로 업데이트
+                        const updatedUsers = data.users.map((u) => {
                             const peerId = String(u.userId);
                             const old = prevMap.get(peerId);
 
                             /* -------------------------------------------------
-                            1. 재접속 이력 정리
+                            재접속 이력 정리
                             ------------------------------------------------- */
                             if (!old && reconnectHistoryRef.current.has(peerId)) {
                                 reconnectHistoryRef.current.delete(peerId);
                             }
 
-                            const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
-                            const isNewUser = !old && !hasReconnectHistory;
-                            const isReconnectingUser = !!old && hasReconnectHistory;
-
-                            /* -------------------------------------------------
-                            2. 복귀했으면 삭제 예약 취소
-                            ------------------------------------------------- */
                             if (reconnectTimeoutRef.current.has(peerId)) {
                                 clearTimeout(reconnectTimeoutRef.current.get(peerId));
                                 reconnectTimeoutRef.current.delete(peerId);
                             }
 
                             const isMe = peerId === String(userId);
+                            const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
 
                             /* -------------------------------------------------
-                            3. 상태 동기화 (서버 + 로컬)
-                            ------------------------------------------------- */
-                            const cameraOff = isMe
-                                ? !camOnRef.current
-                                : (u.cameraOff ?? old?.cameraOff ?? true);
-
-                            const muted = isMe
-                                ? !micOnRef.current
-                                : (u.muted ?? old?.muted ?? true);
-
-                            /* -------------------------------------------------
-                            4. 로딩 종료 기준
-                            - cameraOff=true면 기다릴 이유가 없음 → 즉시 아바타
-                            - 스트림이 있으면 당연히 로딩 종료
-                            ------------------------------------------------- */
-                            let shouldStopLoading = false;
-
-                            if (isMe && localStreamRef.current) {
-                                shouldStopLoading = true;
-                            } else if (old?.stream && old.stream.active) {
-                                shouldStopLoading = true;
-                            }
-
-                            /* -------------------------------------------------
-                            5. baseUser
-                            - ❗ stream/speaking은 old를 기본값으로 유지 (초기화 금지)
+                            [핵심] 기존 로컬 상태(스트림, 화면공유) 보존하며 병합
                             ------------------------------------------------- */
                             const baseUser = {
                                 id: peerId,
@@ -1197,72 +1382,86 @@ function MeetingPage() {
                                 joinAt: u.joinAt,
                                 isMe,
 
-                                muted,
-                                cameraOff,
+                                // 내 상태는 로컬(micOnRef) 기준, 타인은 서버 혹은 기존 상태 기준
+                                muted: isMe ? !micOnRef.current : (u.muted ?? old?.muted ?? true),
+                                cameraOff: isMe ? !camOnRef.current : (u.cameraOff ?? old?.cameraOff ?? true),
 
+                                // 🚀 [중요] 스트림 정보는 서버가 모르므로, 기존(old) 것을 유지해야 함
                                 stream: old?.stream ?? null,
                                 speaking: old?.speaking ?? false,
 
-                                isJoining: old?.isJoining ?? false,
+                                // 🚀 [중요] 화면 공유 정보도 기존(old) 것을 반드시 유지
+                                screenStream: old?.screenStream ?? null,
+                                isScreenSharing: old?.isScreenSharing ?? false,
+
+                                // 접속 상태
+                                isJoining: false,
                                 isReconnecting: old?.isReconnecting ?? false,
-                                isLoading: old?.isLoading ?? false,
+                                isLoading: false, 
 
                                 lastUpdate: Date.now(),
                             };
 
-                            /* -------------------------------------------------
-                            6. 신규 유저
-                            - isJoining은 true로 켜되, 서버 추가 메시지가 없어도
-                                아래 타이머에서 자동으로 끕니다.
-                            ------------------------------------------------- */
-                            if (isNewUser) {
-                                return {
-                                    ...baseUser,
-                                    isJoining: true,
-                                    isReconnecting: false,
-                                    isLoading: !shouldStopLoading, // cameraOff면 false
+                            // 신규 유저(재접속 아님)인 경우 로딩 표시
+                            if (!old && !hasReconnectHistory) {
+                                // 내 로컬 스트림이 있거나, 이미 로드된 경우 스킵
+                                const shouldStopLoading = isMe && localStreamRef.current;
+                                return { 
+                                    ...baseUser, 
+                                    isJoining: true, 
+                                    isLoading: !shouldStopLoading 
                                 };
                             }
 
-                            /* -------------------------------------------------
-                            7. 기존 유저(재접속 포함)
-                            ------------------------------------------------- */
+                            // 기존 유저(재접속 포함)
+                            const shouldStopLoading = isMe && localStreamRef.current;
                             return {
                                 ...baseUser,
-                                isJoining: false, // 기존 유저는 joining 아님
-                                isReconnecting: isReconnectingUser && !shouldStopLoading,
-                                isLoading: !shouldStopLoading,
+                                isReconnecting: hasReconnectHistory && !shouldStopLoading && (baseUser.isReconnecting),
+                                isLoading: !shouldStopLoading && baseUser.isLoading
                             };
                         });
+
+                        // 2. [Ghost Retention] 서버 목록엔 없지만, 스트림이 살아있는 유저 유지
+                        //    (서버가 잠시 유저를 누락해도 클라이언트에서 타일을 지우지 않음)
+                        const ghostUsers = prev.filter((p) => {
+                            const pid = String(p.id);
+                            if (p.isMe) return false; // 나는 위에서 처리됨
+                            if (newServerIds.has(pid)) return false; // 이미 업데이트됨
+
+                            // 💡 스트림이나 화면 공유가 살아있다면 강제로 유지
+                            if (p.stream || p.screenStream) {
+                                // console.warn(`[Ghost] ${p.name} maintained locally (has stream)`);
+                                return true;
+                            }
+                            return false;
+                        });
+
+                        // 3. 신규 유저 joining 타이머 설정 (무한 스피너 방지)
+                        for (const u of data.users) {
+                            const peerId = String(u.userId);
+                            if (!prevMap.has(peerId) && !joiningTimeoutRef.current.has(peerId)) {
+                                const t = setTimeout(() => {
+                                    setParticipants((curr) =>
+                                        curr.map((p) =>
+                                            String(p.id) === peerId ? { ...p, isJoining: false } : p
+                                        )
+                                    );
+                                    joiningTimeoutRef.current.delete(peerId);
+                                }, 1500);
+                                joiningTimeoutRef.current.set(peerId, t);
+                            }
+                        }
+
+                        // 4. Active Speaker 보정 (현재 발표자가 사라졌는지 확인)
+                        setActiveSpeakerId((currentSpeakerId) => {
+                            const allUsers = [...updatedUsers, ...ghostUsers];
+                            const exists = allUsers.some((u) => String(u.id) === String(currentSpeakerId));
+                            return exists ? currentSpeakerId : String(allUsers[0]?.id ?? "") || null;
+                        });
+
+                        return [...updatedUsers, ...ghostUsers];
                     });
-
-                    // 2) ✅ 신규 유저의 isJoining을 일정 시간 후 자동 종료 (무한 스피너 방지)
-                    for (const u of data.users) {
-                        const peerId = String(u.userId);
-
-                        // 이미 타이머 있으면 중복 생성 방지
-                        if (joiningTimeoutRef.current.has(peerId)) continue;
-
-                        const t = setTimeout(() => {
-                            setParticipants((prev) =>
-                                prev.map((p) =>
-                                    String(p.id) === peerId
-                                        ? { ...p, isJoining: false }
-                                        : p
-                                )
-                            );
-                            joiningTimeoutRef.current.delete(peerId);
-                        }, 1500);
-
-                        joiningTimeoutRef.current.set(peerId, t);
-                    }
-
-                    // 3) Active Speaker 유지
-                    setActiveSpeakerId((prev) => {
-                        const exists = data.users.some((u) => String(u.userId) === String(prev));
-                        return exists ? prev : String(data.users[0]?.userId ?? "") || null;
-                    });
-
                     return;
                 }
 
@@ -1370,7 +1569,7 @@ function MeetingPage() {
             pendingProducersRef.current = [];
 
             for (const p of uniq.values()) {
-                await consumeProducer(p.producerId, p.peerId);
+                await consumeProducer(p.producerId, p.peerId, p.appData);
             }
         };
 
@@ -1384,7 +1583,6 @@ function MeetingPage() {
 
         sfuWs.onmessage = async (event) => {
             if (!effectAliveRef.current) return;
-
             const msg = JSON.parse(event.data);
 
             if (msg.action === "peerCount") {
@@ -1432,7 +1630,7 @@ function MeetingPage() {
                         safeSfuSend({ action: "connectTransport", requestId: reqId, data: { transportId, dtlsParameters } });
                     });
 
-                    sendTransport.on("produce", ({ kind, rtpParameters }, cb, errback) => {
+                    sendTransport.on("produce", ({ kind, rtpParameters, appData }, cb, errback) => {
                         const reqId = safeUUID();
                         const handler = (e) => {
                             const m = JSON.parse(e.data);
@@ -1446,17 +1644,20 @@ function MeetingPage() {
                             }
                         };
                         sfuWs.addEventListener("message", handler);
-                        safeSfuSend({ action: "produce", requestId: reqId, data: { transportId, kind, rtpParameters } });
+                        safeSfuSend({ action: "produce", requestId: reqId, data: { transportId, kind, rtpParameters, appData } });
                     });
 
                     if (localStream) {
                         for (const track of localStream.getTracks()) {
-                            try {
-                                const producer = await sendTransport.produce({ track });
-                                producersRef.current.set(producer.id, producer);
-                            } catch (e) {
-                                console.error("produce failed:", e);
-                            }
+                            const type =
+                                track.kind === "video" ? "camera" : "audio";
+
+                            const producer = await sendTransport.produce({
+                                track,
+                                appData: { type },
+                            });
+
+                            producersRef.current.set(type, producer);
                         }
                     } else {
                         console.log("카메라가 없어서 영상 송출이 제한됩니다.");
@@ -1490,32 +1691,84 @@ function MeetingPage() {
 
                     const producers = sfuDeviceRef.current?._existingProducers || [];
                     for (const p of producers) {
-                        await consumeProducer(p.producerId, p.peerId);
+                        await consumeProducer(p.producerId, p.peerId, p.appData);
                     }
 
                     await drainPending();
                     hasFinishedInitialSyncRef.current = true;
                     bumpStreamVersion();
                 }
-
                 return;
             }
 
             if (msg.action === "newProducer") {
-                const { producerId, peerId, appData } = msg.data;
+                // 🚀 [핵심 수정] 새 프로듀서 알림에서 appData를 꺼내서 전달!
+                const { producerId, peerId, appData } = msg.data; 
+
+                console.log(
+                    "[SFU][newProducer]",
+                    "producerId =", producerId,
+                    "peerId =", peerId,
+                    "appData =", appData
+                );
+                
                 if (!recvTransportRef.current || !sfuDeviceRef.current) {
-                    pendingProducersRef.current.push({ producerId, peerId });
+                    // 준비 안 됐으면 appData까지 같이 저장
+                    pendingProducersRef.current.push({ producerId, peerId, appData });
                     return;
                 }
-                await consumeProducer(producerId, peerId);
+                // 준비 됐으면 appData와 함께 소비 시작
+                await consumeProducer(producerId, peerId, appData);
                 return;
             }
-
+            
+            // ... (producerClosed, peerLeft 로직 동일) ...
             if (msg.action === "producerClosed") {
-                const { producerId } = msg.data || {};
+                const { producerId, peerId, appData } = msg.data || {};
+                const isScreen = appData?.type === "screen";
+
+                console.log("[producerClosed]", {
+                    producerId,
+                    peerId,
+                    isScreen,
+                    appData
+                });
+
+                // 1. UI 상태 업데이트
+                setParticipants(prev =>
+                    prev.map(p => {
+                        // 해당 peer의 producer가 닫힌 경우
+                        if (String(p.id) === String(peerId)) {
+                            if (isScreen) {
+                                console.log(`[producerClosed] clearing screen for peer ${peerId}`);
+                                return {
+                                    ...p,
+                                    screenStream: null,
+                                    isScreenSharing: false,
+                                    lastUpdate: Date.now()
+                                };
+                            } else {
+                                console.log(`[producerClosed] clearing camera stream for peer ${peerId}`);
+                                return {
+                                    ...p,
+                                    stream: null,
+                                    lastUpdate: Date.now()
+                                };
+                            }
+                        }
+                        return p;
+                    })
+                );
+
+                // 2. 리소스 정리
                 if (producerId) {
                     const c = consumersRef.current.get(producerId);
-                    if (c) safeClose(c);
+                    if (c) {
+                        try {
+                            c.close();
+                            console.log(`[producerClosed] consumer closed: ${producerId}`);
+                        } catch {}
+                    }
                     consumersRef.current.delete(producerId);
 
                     const a = audioElsRef.current.get(producerId);
@@ -1693,11 +1946,7 @@ function MeetingPage() {
                     <div className="meet-stage">
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
-                                <div
-                                    className={`main-stage ${
-                                        isMainScreenShare ? "screen-share" : ""
-                                    }`}
-                                >
+                                <div className={`main-stage ${isMainScreenShare ? "screen-share-active" : ""}`}>
                                     <VideoTile
                                         user={mainUser}
                                         isMain
@@ -1717,7 +1966,14 @@ function MeetingPage() {
                                         >
                                             <VideoTile
                                                 user={p}
-                                                stream={p.isMe ? localStream : p.stream}
+                                                stream={
+                                                    p.isScreenSharing
+                                                    ? p.screenStream
+                                                    : p.isMe
+                                                        ? localStream
+                                                        : p.stream
+                                                }
+                                                isScreen={p.isScreenSharing}
                                             />
                                             <span className="strip-name">
                                                 {p.isMe ? "(나)" : p.name}
@@ -1739,6 +1995,7 @@ function MeetingPage() {
                                                         ? localStream
                                                         : p.stream
                                             }
+                                            isScreen={p.isScreenSharing}
                                         />
                                     </div>
                                 ))}
