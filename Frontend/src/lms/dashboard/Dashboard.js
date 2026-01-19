@@ -1,13 +1,7 @@
 import "./Dashboard.css";
 import "../chat/ChatModal"; // 채팅방 모달 추가
-import { useState } from "react";
-import ChatModal from "../chat/ChatModal";
 
 const Dashboard = ({ setActiveMenu }) => {
-
-    // 채팅방 상태 관리
-    const [isChatOpen, setIsChatOpen] = useState(false);
-    const [badgeCount, setBadgeCount] = useState(0);
 
     return (
         <div className="dashboard-container">
@@ -100,53 +94,6 @@ const Dashboard = ({ setActiveMenu }) => {
                     </ul>
                 </div>
             </div>
-
-            {/* 채팅방 플로팅버튼 모달 */}
-
-            {/* 우측 하단 플로팅 버튼 */}
-            <div style={{ position: 'fixed', bottom: '30px', right: '30px', zIndex: 999 }}>
-                <button 
-                  onClick={() => setIsChatOpen(!isChatOpen)}
-                  style={{
-                    width: '60px', height: '60px', borderRadius: '50%', 
-                    backgroundColor: '#97c793', /* 초록 테마 */
-                    border: 'none',
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.2)', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '30px', color: 'white', position: 'relative',
-                    transition: 'transform 0.2s'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                  {isChatOpen ? '✕' : '💬'}
-
-                  {/* 빨간색 알림 뱃지 */}
-                  {!isChatOpen && badgeCount > 0 && (
-                     <div style={{
-                       position: 'absolute', top: '-5px', right: '-5px',
-                       backgroundColor: '#ff3b30', color: 'white',
-                       fontSize: '12px', fontWeight: 'bold',
-                       minWidth: '20px', height: '20px', borderRadius: '10px',
-                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                       padding: '0 4px', border: '2px solid white',
-                       animation: 'popIn 0.3s'
-                     }}>
-                       {badgeCount > 99 ? '99+' : badgeCount}
-                     </div>
-                  )}
-                </button>
-            </div>
-
-            {/* 채팅 모달 (숨김 처리로 백그라운드 유지) */}
-            <div style={{ display: isChatOpen ? 'block' : 'none' }}>
-                <ChatModal 
-                    isOpen={isChatOpen}
-                    onClose={() => setIsChatOpen(false)}
-                    onNotificationChange={setBadgeCount}
-                />
-            </div>
-
         </div>
     );
 };

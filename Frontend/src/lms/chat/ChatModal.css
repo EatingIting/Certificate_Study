@@ -1,125 +1,465 @@
 /* src/lms/chat/ChatModal.css */
 
-/* 1. 모달 래퍼 */
+/* =========================================
+   1. 채팅 모달 래퍼 (전체 레이아웃)
+   ========================================= */
 .tc-wrapper {
-  position: fixed; bottom: 90px; right: 30px;
-  width: 380px; height: 600px;
-  background-color: #eef5ed; /* 배경: 아주 연한 초록 (눈 편안) */
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-  display: flex; flex-direction: column;
-  overflow: hidden; z-index: 1000;
+  /* 위치 및 크기 */
+  position: fixed;
+  bottom: 90px;
+  right: 30px;
+  width: 380px;
+  height: 600px;
+  z-index: 1000;
+
+  /* 레이아웃 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  /* 디자인 - 초록 테마 */
+  background-color: #eef5ed; /* 아주 연한 초록 (눈 편안) */
   border: 1px solid #dcdcdc;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
   font-family: 'Pretendard', sans-serif;
+
+  /* 등장 애니메이션 */
   animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-@keyframes popUp { from { transform: translateY(20px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
-/* 2. 헤더 */
+@keyframes popUp {
+  from {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+
+/* =========================================
+   2. 헤더 영역
+   ========================================= */
 .tc-header {
-  padding: 16px 20px; background: #fff;
-  display: flex; justify-content: space-between; align-items: center;
-  border-bottom: 1px solid #eee; flex-shrink: 0;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
 }
-.tc-title { font-size: 16px; font-weight: 700; color: #333; }
-.tc-count { color: #97c793; font-weight: bold; margin-left: 6px; font-size: 14px; } /* 포인트 컬러 */
-.tc-icons { display: flex; gap: 15px; font-size: 20px; color: #555; cursor: pointer; }
 
-/* 3. 바디 */
-.tc-body { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; background-color: #f6faf3; /* 메인 배경색과 통일 */ }
+.tc-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
 
-/* 메시지 - 상대방 */
-.tc-msg-row { display: flex; width: 100%; align-items: flex-start; }
-.tc-msg-row.other { justify-content: flex-start; }
+.tc-count {
+  font-size: 14px;
+  font-weight: bold;
+  color: #97c793; /* 포인트 컬러 */
+  margin-left: 6px;
+}
+
+.tc-icons {
+  display: flex;
+  gap: 15px;
+  font-size: 20px;
+  color: #555;
+  cursor: pointer;
+}
+
+
+/* =========================================
+   3. 채팅 바디 (메시지 목록)
+   ========================================= */
+.tc-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: #f6faf3; /* 메인 배경색과 통일 */
+}
+
+
+/* =========================================
+   4. 메시지 아이템 (공통 & 상대방)
+   ========================================= */
+.tc-msg-row {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+}
+
+/* 상대방 메시지 정렬 */
+.tc-msg-row.other {
+  justify-content: flex-start;
+}
+
+/* 프로필 이미지 */
 .tc-profile {
-  width: 38px; height: 38px; border-radius: 14px; margin-right: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; background: #fff; border: 1px solid #eee; flex-shrink: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-right: 10px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 14px;
+  font-size: 20px;
 }
-.tc-name { font-size: 13px; color: #666; margin-bottom: 4px; margin-left: 2px; }
-.tc-bubble {
-  padding: 10px 14px; font-size: 14px; line-height: 1.5;
-  border-radius: 4px 14px 14px 14px; 
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  max-width: 220px; word-break: break-word; position: relative;
-}
-.tc-bubble.other { background: #fff; color: #333; border: 1px solid #eee; }
 
-/* 메시지 - 나 (초록색 테마 적용!) */
-.tc-msg-row.me { justify-content: flex-end; }
-.tc-msg-row.me .tc-bubble { 
-  background: #97c793; /* 팀원분이 쓰신 초록색 */
-  color: #fff; 
-  border-radius: 14px 4px 14px 14px; 
+.tc-name {
+  margin-left: 2px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #666;
+}
+
+/* 말풍선 공통 스타일 */
+.tc-bubble {
+  position: relative;
+  max-width: 220px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* 상대방 말풍선 */
+.tc-bubble.other {
+  background: #fff;
+  color: #333;
+  border: 1px solid #eee;
+  border-radius: 4px 14px 14px 14px;
+}
+
+
+/* =========================================
+   5. 메시지 아이템 (나)
+   ========================================= */
+.tc-msg-row.me {
+  justify-content: flex-end;
+}
+
+/* 내 말풍선 (초록 테마) */
+.tc-msg-row.me .tc-bubble {
+  background: #97c793;
+  color: #fff;
+  border-radius: 14px 4px 14px 14px;
   box-shadow: 0 2px 5px rgba(151, 199, 147, 0.4);
 }
 
-/* 메타 정보 */
-.tc-msg-inner { display: flex; align-items: flex-end; gap: 6px; }
-.tc-msg-row.me .tc-msg-inner { flex-direction: row-reverse; }
-.tc-meta { display: flex; flex-direction: column; justify-content: flex-end; min-width: max-content; }
-.tc-time { font-size: 10px; color: #999; margin-bottom: 2px; }
-.tc-unread { font-size: 10px; color: #97c793; font-weight: bold; margin-bottom: 2px; } /* 읽음 숫자도 초록 */
-.tc-msg-row.me .tc-unread { text-align: right; }
+/* 메타 정보 (시간, 읽음 표시) */
+.tc-msg-inner {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
 
-/* 4. 입력 상태 바 */
+.tc-msg-row.me .tc-msg-inner {
+  flex-direction: row-reverse;
+}
+
+.tc-meta {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: max-content;
+}
+
+.tc-time {
+  margin-bottom: 2px;
+  font-size: 10px;
+  color: #999;
+}
+
+.tc-unread {
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  color: #97c793;
+}
+
+.tc-msg-row.me .tc-unread {
+  text-align: right;
+}
+
+
+/* =========================================
+   6. 입력 중 상태 표시줄
+   ========================================= */
 .tc-typing-bar {
-  background: rgba(255,255,255,0.95); padding: 6px 15px; font-size: 12px; color: #888;
-  border-top: 1px solid #eee; display: flex; align-items: center; gap: 8px; height: 30px; flex-shrink: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 6px 15px;
+  background: rgba(255, 255, 255, 0.95);
+  border-top: 1px solid #eee;
+  font-size: 12px;
+  color: #888;
 }
-.tc-dots { display: flex; gap: 3px; }
-.tc-dot { width: 4px; height: 4px; background: #97c793; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
-.tc-dot:nth-child(1) { animation-delay: -0.32s; } .tc-dot:nth-child(2) { animation-delay: -0.16s; }
-@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
-/* 5. 입력창 영역 */
+/* 점 애니메이션 */
+.tc-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.tc-dot {
+  width: 4px;
+  height: 4px;
+  background: #97c793;
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.tc-dot:nth-child(1) { animation-delay: -0.32s; }
+.tc-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+
+/* =========================================
+   7. 입력창 영역
+   ========================================= */
 .tc-input-area {
-  background: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 10px;
-  border-top: 1px solid #eee; min-height: 64px; flex-shrink: 0; position: relative;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 12px 16px;
+  background: #fff;
+  border-top: 1px solid #eee;
 }
-.tc-plus-btn { border: none; background: none; font-size: 24px; color: #ccc; cursor: pointer; padding: 0; flex-shrink: 0; transition: 0.2s; }
-.tc-plus-btn:hover, .tc-plus-btn.active { color: #97c793; transform: rotate(90deg); }
 
-/* + 메뉴 */
-.tc-plus-menu {
-  position: absolute; bottom: 75px; left: 16px;
-  background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-  padding: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
-  animation: slideUpMenu 0.2s ease-out; z-index: 20; border: 1px solid #eee;
+/* 플러스 버튼 */
+.tc-plus-btn {
+  flex-shrink: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #ccc;
+  cursor: pointer;
+  transition: 0.2s;
 }
-@keyframes slideUpMenu { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.tc-menu-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; color: #666; }
-.tc-menu-icon { width: 44px; height: 44px; background: #f4f9f4; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s; color: #555; }
-.tc-menu-item:hover .tc-menu-icon { background: #e3f0e2; color: #2e7d32; transform: translateY(-2px); }
 
-/* 입력창 */
+.tc-plus-btn:hover,
+.tc-plus-btn.active {
+  color: #97c793;
+  transform: rotate(90deg);
+}
+
+/* 입력 필드 (input) */
 .tc-input {
-  flex: 1; min-width: 0; height: 40px; padding: 0 14px;
-  border: 1px solid #eee; background-color: #f9f9f9;
-  border-radius: 20px; outline: none; font-size: 14px; transition: 0.2s;
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 14px;
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 20px;
+  outline: none;
+  font-size: 14px;
+  transition: 0.2s;
 }
-.tc-input:focus { background-color: #fff; border-color: #97c793; box-shadow: 0 0 0 2px rgba(151, 199, 147, 0.1); }
+
+.tc-input:focus {
+  background-color: #fff;
+  border-color: #97c793;
+  box-shadow: 0 0 0 2px rgba(151, 199, 147, 0.1);
+}
 
 /* 전송 버튼 */
 .tc-send-btn {
-  width: 50px; height: 40px; flex-shrink: 0;
-  background: #97c793; color: white;
-  border: none; border-radius: 12px;
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: 0.2s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 40px;
+  background: #97c793;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
 }
-.tc-send-btn:hover { background-color: #86b883; }
-.tc-send-btn:disabled { background: #eee; color: #aaa; cursor: default; }
 
-/* 6. 서랍 */
-.tc-drawer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 2000; }
-.tc-drawer-panel { position: absolute; top: 0; right: 0; width: 260px; height: 100%; background: #fff; display: flex; flexDirection: column; animation: slideIn 0.3s; box-shadow: -5px 0 20px rgba(0,0,0,0.05); }
-@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-.tc-drawer-header { padding: 20px; font-weight: bold; border-bottom: 1px solid #f0f0f0; color: #333; }
-.tc-drawer-list { padding: 10px; overflow-y: auto; }
-.tc-drawer-item { display: flex; align-items: center; padding: 10px; border-radius: 8px; justify-content: space-between; transition: 0.1s; }
-.tc-drawer-item:hover { background-color: #f6faf3; }
-.tc-drawer-info { display: flex; align-items: center; }
-.tc-drawer-name { font-size: 14px; margin-left: 12px; color: #444; }
-.tc-edit-btn { font-size: 12px; color: #999; cursor: pointer; margin-left: 8px; border: 1px solid #eee; border-radius: 4px; padding: 4px 8px; background: #fff; }
-.tc-edit-input { width: 100px; padding: 4px; font-size: 13px; border: 1px solid #97c793; border-radius: 4px; outline: none; }
+.tc-send-btn:hover {
+  background-color: #86b883;
+}
+
+.tc-send-btn:disabled {
+  background: #eee;
+  color: #aaa;
+  cursor: default;
+}
+
+
+/* =========================================
+   8. 플러스 메뉴 (팝업)
+   ========================================= */
+.tc-plus-menu {
+  position: absolute;
+  bottom: 75px;
+  left: 16px;
+  z-index: 20;
+  
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  
+  animation: slideUpMenu 0.2s ease-out;
+}
+
+@keyframes slideUpMenu {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tc-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #666;
+  cursor: pointer;
+}
+
+.tc-menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: #f4f9f4;
+  border-radius: 50%;
+  font-size: 20px;
+  color: #555;
+  transition: 0.2s;
+}
+
+.tc-menu-item:hover .tc-menu-icon {
+  background: #e3f0e2;
+  color: #2e7d32;
+  transform: translateY(-2px);
+}
+
+
+/* =========================================
+   9. 서랍 (참여자 목록)
+   ========================================= */
+.tc-drawer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 2000;
+}
+
+.tc-drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 260px;
+  height: 100%;
+  
+  display: flex;
+  flex-direction: column;
+  
+  background: #fff;
+  box-shadow: -5px 0 20px rgba(0, 0, 0, 0.05);
+  animation: slideIn 0.3s;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.tc-drawer-header {
+  padding: 20px;
+  font-weight: bold;
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.tc-drawer-list {
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.tc-drawer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-radius: 8px;
+  transition: 0.1s;
+}
+
+.tc-drawer-item:hover {
+  background-color: #f6faf3;
+}
+
+.tc-drawer-info {
+  display: flex;
+  align-items: center;
+}
+
+.tc-drawer-name {
+  margin-left: 12px;
+  font-size: 14px;
+  color: #444;
+}
+
+/* 이름 수정 버튼 & 인풋 */
+.tc-edit-btn {
+  margin-left: 8px;
+  padding: 4px 8px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+}
+
+.tc-edit-input {
+  width: 100px;
+  padding: 4px;
+  border: 1px solid #97c793;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
