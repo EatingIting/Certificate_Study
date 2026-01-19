@@ -38,7 +38,7 @@ function Main() {
             <section className="category">
                 <h2>스터디 카테고리</h2>
                 <div className="category-list">
-                    {["자격증", "취업", "개발", "어학", "자기계발"].map((c) => (
+                    {["자격증", "취업", "어학", "자기계발"].map((c) => (
                         <div key={c} className="category-item">
                             <div className="circle">{c[0]}</div>
                             <span>{c}</span>
@@ -61,12 +61,6 @@ function Main() {
                         </div>
                     ))}
                 </div>
-            </section>
-
-            {/* Footer CTA */}
-            <section className="cta">
-                <h2>지금 바로 스터디를 시작해보세요</h2>
-                <button>무료로 시작하기</button>
             </section>
         </div>
     );

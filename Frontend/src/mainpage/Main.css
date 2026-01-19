@@ -11,12 +11,13 @@
     align-items: center;
     padding: 20px 40px;
     border-bottom: 1px solid #eee;
+    margin: 0 200px;
 }
 
 .logo {
     font-size: 24px;
     font-weight: 800;
-    color: #7FE0A3;
+    color: #a5dea0;
 }
 
 .nav span {
@@ -36,7 +37,7 @@
 }
 
 .create-btn {
-    background: #7FE0A3;
+    background: #a5dea0;
     color: white;
     border: none;
     padding: 8px 14px;
@@ -48,7 +49,10 @@
 .hero {
     text-align: center;
     padding: 100px 20px;
-    background: #7FE0A3;
+    background: #a5dea0;
+    margin: 0 200px;
+    border-radius: 50px;
+
 }
 
 .hero h1 {
@@ -82,12 +86,14 @@
     color: black;
     border: none;
     border-radius: 10px;
+    cursor: pointer;
 }
 
 /* Category */
 .category {
-    padding: 80px 0;
+    padding: 30px 0px;
     text-align: center;
+    margin-bottom: 40px;
 }
 
 .category-list {
@@ -109,7 +115,7 @@
     height: 56px;
     border-radius: 50%;
     background: #eef2ff;
-    color: #7FE0A3;
+    color: #a5dea0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -120,6 +126,7 @@
 .study {
     padding: 80px 60px;
     background: #f9fafb;
+    margin: 0 200px;
 }
 
 .study-list {
@@ -145,14 +152,14 @@
 
 .tag {
     font-size: 12px;
-    color: #7FE0A3;
+    color: #a5dea0;
 }
 
 .study-card button {
     margin-top: 12px;
     width: 100%;
     padding: 10px;
-    border: 1px solid #7FE0A3;
+    border: 1px solid #a5dea0;
     background: white;
     color: black;
     border-radius: 8px;
@@ -160,7 +167,7 @@
 
 /* CTA */
 .cta {
-    background: #7FE0A3;
+    background: #a5dea0;
     color: white;
     text-align: center;
     padding: 80px 20px;
