@@ -28,6 +28,12 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                 >
                     게시판
                 </li>
+                <li
+                    className={`menu-item ${activeMenu === "calender" ? "active" : ""}`}
+                    onClick={() => setActiveMenu("calender")}
+                >
+                    일정
+                </li>
             </ul>
 
             <button className="meeting-btn">
