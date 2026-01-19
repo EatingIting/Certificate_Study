@@ -2500,137 +2500,167 @@ function MeetingPage() {
                     <div className="meet-stage">
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
-                                <div
-                                    className={`main-stage ${isMainScreenShare ? "screen-share-active" : ""}`}
-                                    ref={mainStageRef}
-                                >
-                                    <VideoTile
-                                        user={mainUser}
-                                        isMain
-                                        stream={mainStream}
-                                        roomReconnecting={roomReconnecting}
-                                        isScreen={isMainScreenShare}
-                                        reaction={mainUser?.reaction}
-                                    />
-                                    <button
-                                        className="fullscreen-btn"
-                                        onClick={handleFullscreen}
-                                        title={isFullscreen ? "전체화면 종료" : "전체화면"}
-                                    >
-                                        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-                                    </button>
-                                    {/* 전체화면 모드에서만 보이는 참가자 스트립 */}
-                                    {isFullscreen && (
-                                        <>
-                                            {/* 참가자 스트립 */}
-                                            <div
-                                                className={`fullscreen-strip-wrapper ${
-                                                    isStripVisible ? "visible" : "hidden"
-                                                }`}
-                                            >
-                                                <div className="fullscreen-strip custom-scrollbar">
-                                                    {orderedParticipants.map((p) => (
-                                                        <div
-                                                            key={p.id}
-                                                            className={`strip-item ${
-                                                                activeSpeakerId === p.id ? "active-strip" : ""
-                                                            } ${p.isScreenSharing ? "screen-sharing" : ""}`}
-                                                            onClick={() => {
-                                                                manuallySelectedRef.current = true;
-                                                                setActiveSpeakerId(p.id);
-                                                            }}
-                                                        >
-                                                            <VideoTile
-                                                                user={p}
-                                                                stream={
-                                                                    p.isScreenSharing
-                                                                        ? p.screenStream
-                                                                        : p.isMe
-                                                                            ? localStream
-                                                                            : p.stream
-                                                                }
-                                                                roomReconnecting={roomReconnecting}
-                                                                isScreen={p.isScreenSharing}
-                                                                reaction={p.reaction}
-                                                            />
-                                                            <span className="strip-name">
-                                                                {p.isMe ? "(나)" : p.name}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
+                            <div
+                                className={`main-stage ${isMainScreenShare ? "screen-share-active" : ""}`}
+                                ref={mainStageRef}
+                            >
+                                {/* 메인 비디오 */}
+                                <VideoTile
+                                user={mainUser}
+                                isMain
+                                stream={mainStream}
+                                roomReconnecting={roomReconnecting}
+                                isScreen={isMainScreenShare}
+                                reaction={mainUser?.reaction}
+                                />
 
-                                            {/* 🔥 토글 버튼 (스트립 바깥, 항상 최상단) */}
-                                            {showStripToggle && (
-                                                <button
-                                                    className={`fullscreen-strip-toggle-btn show ${
-                                                        isStripVisible ? "down" : "up"
-                                                    }`}
-                                                    onClick={() => setIsStripVisible((v) => !v)}
-                                                    title={isStripVisible ? "참가자 숨기기" : "참가자 보기"}
-                                                >
-                                                    {isStripVisible ? <ChevronDown /> : <ChevronUp />}
-                                                </button>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                                <div className="bottom-strip custom-scrollbar">
-                                    {orderedParticipants.map((p) => (
+                                {/* 전체화면 토글 버튼 */}
+                                <button
+                                className="fullscreen-btn"
+                                onClick={handleFullscreen}
+                                title={isFullscreen ? "전체화면 종료" : "전체화면"}
+                                >
+                                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                                </button>
+
+                                {/* ===============================
+                                    ✅ 전체화면 전용 UI
+                                =============================== */}
+                                {isFullscreen && (
+                                <>
+                                    {/* 🎛 마이크 / 카메라 컨트롤 (스트립과 함께 움직임) */}
+                                    <div
+                                    className={`fullscreen-media-controls ${
+                                        isStripVisible ? "visible" : "hidden"
+                                    }`}
+                                    >
+                                    <ButtonControl
+                                        label={micOn ? "마이크 끄기" : "마이크 켜기"}
+                                        icon={Mic}
+                                        active={!micOn}
+                                        disabled={micDisabled}
+                                        onClick={toggleMic}
+                                    />
+                                    <ButtonControl
+                                        label={camOn ? "카메라 끄기" : "카메라 켜기"}
+                                        icon={Video}
+                                        active={!camOn}
+                                        disabled={camDisabled}
+                                        onClick={toggleCam}
+                                    />
+                                    </div>
+
+                                    {/* 👥 참가자 스트립 */}
+                                    <div
+                                    className={`fullscreen-strip-wrapper ${
+                                        isStripVisible ? "visible" : "hidden"
+                                    }`}
+                                    >
+                                    <div className="fullscreen-strip custom-scrollbar">
+                                        {orderedParticipants.map((p) => (
                                         <div
                                             key={p.id}
                                             className={`strip-item ${
-                                                activeSpeakerId === p.id ? "active-strip" : ""
-                                            } ${p.isScreenSharing ? "screen-sharing" : ""}`}  // 🔴 테두리용
+                                            activeSpeakerId === p.id ? "active-strip" : ""
+                                            } ${p.isScreenSharing ? "screen-sharing" : ""}`}
                                             onClick={() => {
-                                                manuallySelectedRef.current = true;  // 수동 선택 표시
-                                                setActiveSpeakerId(p.id);
+                                            manuallySelectedRef.current = true;
+                                            setActiveSpeakerId(p.id);
                                             }}
                                         >
                                             <VideoTile
-                                                user={p}
-                                                stream={
-                                                    // ✅ 화면공유 중이면 screenStream, 아니면 카메라 스트림
-                                                    p.isScreenSharing
-                                                        ? p.screenStream
-                                                        : p.isMe
-                                                            ? localStream
-                                                            : p.stream
-                                                }
-                                                roomReconnecting={roomReconnecting}
-                                                isScreen={p.isScreenSharing}
-                                                reaction={p.reaction}
-                                            />
-                                            <span className="strip-name">
-                                                {p.isMe ? "(나)" : p.name}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="layout-grid custom-scrollbar">
-                                {orderedParticipants.map((p) => (
-                                    <div key={p.id} className="video-tile-wrapper">
-                                        <VideoTile
                                             user={p}
                                             stream={
                                                 p.isScreenSharing
-                                                    ? p.screenStream
-                                                    : p.isMe
-                                                        ? localStream
-                                                        : p.stream
+                                                ? p.screenStream
+                                                : p.isMe
+                                                ? localStream
+                                                : p.stream
                                             }
                                             roomReconnecting={roomReconnecting}
                                             isScreen={p.isScreenSharing}
-                                            reaction={p.isMe ? myReaction : null}
-                                        />
+                                            reaction={p.reaction}
+                                            />
+                                            <span className="strip-name">
+                                            {p.isMe ? "(나)" : p.name}
+                                            </span>
+                                        </div>
+                                        ))}
                                     </div>
+                                    </div>
+
+                                    {/* 🔼 스트립 토글 버튼 */}
+                                    {showStripToggle && (
+                                    <button
+                                        className={`fullscreen-strip-toggle-btn show ${
+                                        isStripVisible ? "down" : "up"
+                                        }`}
+                                        onClick={() => setIsStripVisible((v) => !v)}
+                                        title={isStripVisible ? "참가자 숨기기" : "참가자 보기"}
+                                    >
+                                        {isStripVisible ? <ChevronDown /> : <ChevronUp />}
+                                    </button>
+                                    )}
+                                </>
+                                )}
+                            </div>
+
+                            {/* 일반 모드 하단 스트립 (전체화면 아님) */}
+                            <div className="bottom-strip custom-scrollbar">
+                                {orderedParticipants.map((p) => (
+                                <div
+                                    key={p.id}
+                                    className={`strip-item ${
+                                    activeSpeakerId === p.id ? "active-strip" : ""
+                                    } ${p.isScreenSharing ? "screen-sharing" : ""}`}
+                                    onClick={() => {
+                                    manuallySelectedRef.current = true;
+                                    setActiveSpeakerId(p.id);
+                                    }}
+                                >
+                                    <VideoTile
+                                    user={p}
+                                    stream={
+                                        p.isScreenSharing
+                                        ? p.screenStream
+                                        : p.isMe
+                                        ? localStream
+                                        : p.stream
+                                    }
+                                    roomReconnecting={roomReconnecting}
+                                    isScreen={p.isScreenSharing}
+                                    reaction={p.reaction}
+                                    />
+                                    <span className="strip-name">
+                                    {p.isMe ? "(나)" : p.name}
+                                    </span>
+                                </div>
                                 ))}
                             </div>
+                            </div>
+                        ) : (
+                            /* Grid 모드 */
+                            <div className="layout-grid custom-scrollbar">
+                            {orderedParticipants.map((p) => (
+                                <div key={p.id} className="video-tile-wrapper">
+                                <VideoTile
+                                    user={p}
+                                    stream={
+                                    p.isScreenSharing
+                                        ? p.screenStream
+                                        : p.isMe
+                                        ? localStream
+                                        : p.stream
+                                    }
+                                    roomReconnecting={roomReconnecting}
+                                    isScreen={p.isScreenSharing}
+                                    reaction={p.isMe ? myReaction : null}
+                                />
+                                </div>
+                            ))}
+                            </div>
                         )}
-                    </div>
+                        </div>
 
                     <div className="meet-controls-container">
                         {showReactions && (
