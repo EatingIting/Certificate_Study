@@ -1,10 +1,12 @@
 import React from "react";
-import Main from "./mainpage/Main";
 // import MeetingPage from "./webrtc/MeetingPage";
+// import Main from "./mainpage/Main";
+import Create from "./roomcreate/Create";
+
 
 function App() {
   // return <MeetingPage />;
-    return <Main />;
+    return <Create/>;
 }
 
 export default App;
