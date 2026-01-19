@@ -1,0 +1,188 @@
+/* BoardPage.css */
+
+/* 페이지 컨테이너: LMSSubject의 subject-content 안에 들어간다는 가정 */
+.board {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* 상단 */
+.board-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.board-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.board-sub {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* 글쓰기 버튼 (초록 포인트) */
+.board-write-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid #97c793;
+    background: #97c793;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.board-write-btn:hover {
+    background: #86b984; /* 기존 톤과 자연스럽게 */
+    border-color: #86b984;
+}
+
+/* 공통 카드 느낌 */
+.card-like {
+    background: #ffffff;
+    border: 1px solid #e6eee1;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* 툴바 */
+.board-toolbar {
+    padding: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.board-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.board-tab {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid #e6eee1;
+    background: #e9fadc;
+    color: #2f6b3f;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.board-tab.active {
+    background: #97c793;
+    border-color: #97c793;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.board-search {
+    margin-left: auto;
+}
+
+.board-search-input {
+    height: 34px;
+    width: 220px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid #e6eee1;
+    background: #ffffff;
+    outline: none;
+}
+
+.board-search-input:focus {
+    border-color: #a5dea0;
+    box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
+}
+
+/* 리스트 */
+.board-list {
+    overflow: hidden;
+}
+
+.board-list-head {
+    display: grid;
+    grid-template-columns: 84px 1fr 120px;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #e9fadc;
+    color: #2f6b3f;
+    font-size: 12px;
+    font-weight: 700;
+    border-bottom: 1px solid #e6eee1;
+}
+
+.board-rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.board-row {
+    display: grid;
+    grid-template-columns: 84px 1fr 120px;
+    gap: 12px;
+    padding: 12px 14px;
+    text-decoration: none;
+    color: #1f2937;
+    border-bottom: 1px solid #f1f4ee;
+}
+
+.board-row:hover {
+    background: #f6faf3;
+}
+
+.board-row-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.board-row-date {
+    font-size: 12px;
+    color: #6b7280;
+    text-align: right;
+}
+
+/* 태그 */
+.board-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid transparent;
+    width: fit-content;
+}
+
+/* 고정/공지: 강한 강조 */
+.tag-pin,
+.tag-notice {
+    background: #97c793;
+    color: #ffffff;
+}
+
+/* 그 외: 부드러운 칩 */
+.tag-normal,
+.tag-doc,
+.tag-q,
+.tag-task {
+    background: #e9fadc;
+    border-color: #a5dea0;
+    color: #2f6b3f;
+}
