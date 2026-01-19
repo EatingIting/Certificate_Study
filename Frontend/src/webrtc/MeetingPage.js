@@ -50,7 +50,7 @@ const UserAvatar = ({ name, size = "md", src }) => {
 };
 
 // VideoTile 내부에서 오디오 레벨을 직접 감지
-const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
+const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false }) => {
     const videoEl = useRef(null);
     const [isSpeakingLocally, setIsSpeakingLocally] = useState(false);
     
@@ -187,6 +187,13 @@ const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
     const isJoining = safeUser.isJoining;
     const isReconnecting = safeUser.isReconnecting;
 
+    // ✅ 본인이 새로고침 중일 때 모든 타일에 스피너 표시
+    const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
+
+    if (isReconnecting || showRoomReconnecting) {
+        console.log(`🔵 [SPINNER] ${safeUser.name} - isReconnecting=${isReconnecting}, showRoomReconnecting=${showRoomReconnecting}, roomReconnecting=${roomReconnecting}`);
+    }
+
     return (
         <div
             className={`video-tile ${
@@ -200,7 +207,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
                 </div>
             )}
 
-            {isReconnecting && (
+            {(isReconnecting || showRoomReconnecting) && (
                 <div className="reconnecting-overlay">
                     <Loader2 className="spinner" />
                     <p>재접속 중...</p>
@@ -236,6 +243,13 @@ const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
                     {safeUser.cameraOff && (
                         <VideoOff size={16} className="icon-red" />
                     )}
+                </div>
+            )}
+
+            {/* 이모지 표시 */}
+            {reaction && (
+                <div className="reaction-overlay">
+                    {reaction}
                 </div>
             )}
         </div>
@@ -343,12 +357,16 @@ function MeetingPage() {
     const [chatConnected, setChatConnected] = useState(false);
     const lastSpeakingRef = useRef(null);
 
+    const reactionTimersRef = useRef({});
+
     const micOnRef = useRef(micOn);
     const camOnRef = useRef(camOn);
 
     const reconnectTimeoutRef = useRef(new Map());
 
     const reconnectHistoryRef = useRef(new Set());
+
+    const reconnectCompletedTimeRef = useRef(new Map());  // ✅ 재접속 완료 시간 기록 (1초 동안 다시 추가 방지)
 
     const joiningTimeoutRef = useRef(new Map());
 
@@ -424,9 +442,34 @@ function MeetingPage() {
     };
 
     const handleReaction = (emoji) => {
-        setMyReaction(emoji);
         setShowReactions(false);
-        setTimeout(() => setMyReaction(null), 2500);
+
+        // 1️⃣ 기존 타이머 제거
+        const oldTimer = reactionTimersRef.current.myReaction;
+        if (oldTimer) {
+            clearTimeout(oldTimer);
+        }
+
+        // 2️⃣ 이모지 즉시 표시
+        setMyReaction(emoji);
+
+        // 3️⃣ 서버에 이모지 전송 (다른 사용자들이 볼 수 있도록)
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+                JSON.stringify({
+                    type: "REACTION",
+                    emoji,
+                })
+            );
+        }
+
+        // 4️⃣ 새 타이머 등록 (2.5초 후 제거)
+        const timerId = setTimeout(() => {
+            setMyReaction(null);
+            delete reactionTimersRef.current.myReaction;
+        }, 2500);
+
+        reactionTimersRef.current.myReaction = timerId;
     };
 
     const toggleSidebar = (view) => {
@@ -1490,8 +1533,21 @@ function MeetingPage() {
                     // 최소 800ms는 보여주기
                     if (elapsed < 800) return p;
 
+                    // ✅ 800ms 이상 경과했으면 재접속 상태 종료
+                    const peerId = String(p.id);
+                    if (reconnectHistoryRef.current.has(peerId)) {
+                        console.log(`✅ [RECONNECT COMPLETED] ${p.name} (${peerId}) - elapsed=${elapsed}ms`);
+                        reconnectHistoryRef.current.delete(peerId);
+                        reconnectCompletedTimeRef.current.set(peerId, Date.now());  // ✅ 완료 시간 기록
+                    }
+
                     // 스트림이 생겼거나, 카메라 OFF면 종료
                     if (p.stream || p.cameraOff) {
+                        // 사용자가 다시 접속하고 스트림이 복구되면 reconnectHistoryRef에서도 제거
+                        if (reconnectHistoryRef.current.has(peerId)) {
+                            reconnectHistoryRef.current.delete(peerId);
+                            reconnectCompletedTimeRef.current.set(peerId, Date.now());  // ✅ 완료 시간 기록
+                        }
                         return {
                             ...p,
                             isReconnecting: false,
@@ -1644,7 +1700,47 @@ function MeetingPage() {
                     console.log(`[WS] Received message type: ${data.type}`, data);
                 }
 
+                if (data.type === "REACTION") {
+                    const { userId: fromUserId, emoji } = data;
+
+                    // 1️⃣ 다른 사용자의 reaction 즉시 반영
+                    setParticipants((prev) =>
+                        prev.map((p) =>
+                            String(p.id) === String(fromUserId)
+                                ? { ...p, reaction: emoji }
+                                : p
+                        )
+                    );
+
+                    // 2️⃣ 기존 타이머 제거 (있다면)
+                    const oldTimer = reactionTimersRef.current[fromUserId];
+                    if (oldTimer) {
+                        clearTimeout(oldTimer);
+                    }
+
+                    // 3️⃣ 새 타이머 등록 (2.5초 후 reaction 제거)
+                    const timerId = setTimeout(() => {
+                        setParticipants((prev) =>
+                            prev.map((p) =>
+                                String(p.id) === String(fromUserId)
+                                    ? { ...p, reaction: null }
+                                    : p
+                            )
+                        );
+                        delete reactionTimersRef.current[fromUserId];
+                    }, 2500);
+
+                    reactionTimersRef.current[fromUserId] = timerId;
+                    return;
+                }
+
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
+                    console.log(`📨 [USERS_UPDATE] Received users:`, data.users.map(u => ({
+                        userId: u.userId,
+                        userName: u.userName,
+                        online: u.online
+                    })));
+
                     setParticipants((prev) => {
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
                         const newServerIds = new Set(data.users.map((u) => String(u.userId)));
@@ -1672,6 +1768,25 @@ function MeetingPage() {
 
                             const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
 
+                            // ✅ 서버에서 online=false면 재접속 중 (새로고침 등)
+                            const isOffline = u.online === false;
+
+                            if (isOffline) {
+                                console.log(`🔴 [RECONNECTING] ${u.userName} (${peerId}) is offline, online=${u.online}, isMe=${isMe}`);
+                                // ✅ 재접속 시작 시간 기록 (타이머가 이 시간을 기준으로 800ms 계산)
+                                // ✅ 최근 완료 시간이 1초 이내면 다시 추가하지 않음 (무한 루프 방지)
+                                const completedTime = reconnectCompletedTimeRef.current.get(peerId);
+                                const now = Date.now();
+                                if (completedTime && (now - completedTime) < 1000) {
+                                    console.log(`⏭️ [SKIP RECONNECT] ${u.userName} (${peerId}) - recently completed, skipping re-add`);
+                                } else {
+                                    if (!reconnectHistoryRef.current.has(peerId)) {
+                                        reconnectHistoryRef.current.add(peerId);
+                                        console.log(`➕ [ADD RECONNECT] ${u.userName} (${peerId})`);
+                                    }
+                                }
+                            }
+
                             /* -------------------------------------------------
                             [핵심] 기존 로컬 상태(스트림, 화면공유) 보존하며 병합
 
@@ -1696,16 +1811,22 @@ function MeetingPage() {
                                     : (u.cameraOff ?? true),
 
                                 // 🚀 [중요] 스트림 정보는 서버가 모르므로, 기존(old) 것을 유지해야 함
-                                stream: old?.stream ?? null,
+                                // ⭐ 단, 재접속 중이면 스트림 무효화하여 스피너 표시
+                                // → isOffline OR hasReconnectHistory (재접속 복구 중까지 표시)
+                                stream: ((isOffline || hasReconnectHistory) ? null : old?.stream) ?? null,
                                 speaking: old?.speaking ?? false,
 
                                 // 🚀 [중요] 화면 공유 정보도 기존(old) 것을 반드시 유지
-                                screenStream: old?.screenStream ?? null,
-                                isScreenSharing: old?.isScreenSharing ?? false,
+                                // ⭐ 단, 재접속 중이면 화면 공유도 무효화
+                                screenStream: ((isOffline || hasReconnectHistory) ? null : old?.screenStream) ?? null,
+                                isScreenSharing: (isOffline || hasReconnectHistory) ? false : (old?.isScreenSharing ?? false),
 
-                                // 접속 상태
+                                // 이모지 반응
+                                reaction: old?.reaction ?? null,
+
+                                // ✅ 접속 상태: 서버에서 online=false이거나 재접속 이력이 있으면 재접속 중 스피너 표시
                                 isJoining: false,
-                                isReconnecting: old?.isReconnecting ?? false,
+                                isReconnecting: isOffline || hasReconnectHistory,  // 오프라인 OR 재접속 복구 중
                                 isLoading: false,
 
                                 lastUpdate: Date.now(),
@@ -1715,19 +1836,34 @@ function MeetingPage() {
                             if (!old && !hasReconnectHistory) {
                                 // 내 로컬 스트림이 있거나, 이미 로드된 경우 스킵
                                 const shouldStopLoading = isMe && localStreamRef.current;
-                                return { 
-                                    ...baseUser, 
-                                    isJoining: true, 
-                                    isLoading: !shouldStopLoading 
+                                console.log(`[NEW USER] ${u.userName} - isJoining=true, isReconnecting=${baseUser.isReconnecting}`);
+
+                                // ✅ 신규 유저도 재접속 중이면 reconnectStartedAt 설정
+                                const reconnectStartedAt = isOffline || hasReconnectHistory
+                                    ? (old?.reconnectStartedAt ?? Date.now())
+                                    : undefined;
+
+                                return {
+                                    ...baseUser,
+                                    isJoining: true,
+                                    isLoading: !shouldStopLoading,
+                                    reconnectStartedAt  // ✅ reconnectStartedAt 추가
                                 };
                             }
 
                             // 기존 유저(재접속 포함)
                             const shouldStopLoading = isMe && localStreamRef.current;
+                            console.log(`[EXISTING USER] ${u.userName} - isReconnecting=${baseUser.isReconnecting}, hasReconnectHistory=${hasReconnectHistory}`);
+
+                            // ✅ 재접속 중이면 reconnectStartedAt 설정 (없으면 지금 시간, 있으면 기존 시간 유지)
+                            const reconnectStartedAt = isOffline || hasReconnectHistory
+                                ? (old?.reconnectStartedAt ?? Date.now())
+                                : undefined;
+
                             return {
                                 ...baseUser,
-                                isReconnecting: hasReconnectHistory && !shouldStopLoading && (baseUser.isReconnecting),
-                                isLoading: !shouldStopLoading && baseUser.isLoading
+                                isLoading: !shouldStopLoading && baseUser.isLoading,
+                                reconnectStartedAt  // ✅ reconnectStartedAt 추가
                             };
                         });
 
@@ -2273,6 +2409,7 @@ function MeetingPage() {
                                         stream={mainStream}
                                         roomReconnecting={roomReconnecting}
                                         isScreen={isMainScreenShare}
+                                        reaction={mainUser?.reaction}
                                     />
                                 </div>
                                 <div className="bottom-strip custom-scrollbar">
@@ -2293,7 +2430,9 @@ function MeetingPage() {
                                                         ? localStream
                                                         : p.stream
                                                 }
+                                                roomReconnecting={roomReconnecting}
                                                 isScreen={p.isScreenSharing}
+                                                reaction={p.reaction}
                                             />
                                             <span className="strip-name">
                                                 {p.isMe ? "(나)" : p.name}
@@ -2315,7 +2454,9 @@ function MeetingPage() {
                                                         ? localStream
                                                         : p.stream
                                             }
+                                            roomReconnecting={roomReconnecting}
                                             isScreen={p.isScreenSharing}
+                                            reaction={p.isMe ? myReaction : null}
                                         />
                                     </div>
                                 ))}
@@ -2327,7 +2468,13 @@ function MeetingPage() {
                         {showReactions && (
                             <div className="reaction-popup glass-panel">
                                 {reactionEmojis.map((emoji) => (
-                                    <button key={emoji} onClick={() => handleReaction(emoji)} className="reaction-btn">
+                                    <button
+                                        key={emoji}
+                                        onClick={() => handleReaction(emoji)}
+                                        className="reaction-btn"
+                                        disabled={!!myReaction}
+                                        style={myReaction ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                    >
                                         {emoji}
                                     </button>
                                 ))}
