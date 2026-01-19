@@ -71,12 +71,25 @@ const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
     const hasLiveVideoTrack = useMemo(() => {
         return (
             stream?.getVideoTracks().some(
-                (t) => t.readyState === "live" && t.enabled !== false
+                (t) => t.readyState === "live"
             ) ?? false
         );
     }, [stream]);
 
-    const canShowVideo = !!stream && hasLiveVideoTrack && (!safeUser.cameraOff || isScreen);
+    const canShowVideo = useMemo(() => {
+        if (!stream) {
+            console.log(`[VideoTile:${safeUser.name}] canShowVideo=false (no stream)`);
+            return false;
+        }
+        if (isScreen) {
+            const result = stream.getVideoTracks().length > 0;
+            console.log(`[VideoTile:${safeUser.name}] canShowVideo=${result} (screen)`);
+            return result;
+        }
+        const result = hasLiveVideoTrack && !safeUser.cameraOff;
+        console.log(`[VideoTile:${safeUser.name}] canShowVideo=${result}, hasLiveVideoTrack=${hasLiveVideoTrack}, cameraOff=${safeUser.cameraOff}, videoTracks=${stream.getVideoTracks().length}, audioTracks=${stream.getAudioTracks().length}`);
+        return result;
+    }, [stream, isScreen, hasLiveVideoTrack, safeUser.cameraOff, safeUser.name]);
 
     // 1. 오디오 레벨 감지 (말할 때 초록 테두리)
     useEffect(() => {
@@ -195,7 +208,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen }) => {
             )}
 
             <div className="video-content">
-                {canShowVideo ? (
+                {canShowVideo && stream ? (
                     <video
                         ref={videoEl}
                         autoPlay
@@ -504,10 +517,29 @@ function MeetingPage() {
         }
 
         try {
+            // ⭐ localStorage 값 기준으로 미디어 가져오기
+            const shouldGetVideo = camOnRef.current;
+            const shouldGetAudio = true; // 오디오는 항상 가져오되, enabled로 제어
+
+            console.log(`[startLocalMedia] Getting media with video=${shouldGetVideo}, audio=${shouldGetAudio}`);
+
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true,
+                video: shouldGetVideo,
+                audio: shouldGetAudio,
             });
+
+            // ⭐ 트랙 enabled 상태를 localStorage 기준으로 설정
+            const audioTracks = stream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                audioTracks[0].enabled = micOnRef.current;
+                console.log(`[startLocalMedia] Set audio track enabled to ${micOnRef.current}`);
+            }
+
+            const videoTracks = stream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                videoTracks[0].enabled = camOnRef.current;
+                console.log(`[startLocalMedia] Set video track enabled to ${camOnRef.current}`);
+            }
 
             localStreamRef.current = stream;
             setLocalStream(stream);
@@ -517,6 +549,7 @@ function MeetingPage() {
 
             return stream;
         } catch (err) {
+            console.error("[startLocalMedia] Failed to get media:", err);
             setMicPermission("denied");
             setCamPermission("denied");
             return null;
@@ -524,6 +557,66 @@ function MeetingPage() {
             setIsLocalLoading(false);
             // ❌ 여기서 아직 roomReconnecting false 하면 안 됨
         }
+    };
+
+    const ensureLocalProducers = async () => {
+        const t = sendTransportRef.current;
+        if (!t || t.closed) return;
+
+        const stream = localStreamRef.current;
+        if (!stream) return;
+
+        // --- AUDIO ---
+        const audioTrack = stream.getAudioTracks().find((x) => x.readyState === "live");
+        if (audioTrack) {
+            const hasAudioProducer = producersRef.current.has("audio");
+            if (!hasAudioProducer) {
+                try {
+                    const p = await t.produce({
+                        track: audioTrack,
+                        appData: { type: "audio" },
+                    });
+                    producersRef.current.set("audio", p);
+                    console.log(`[ensureLocalProducers] Audio producer created`);
+                } catch (e) {
+                    console.error("[ensureLocalProducers] audio produce failed:", e);
+                }
+            }
+            // 마이크 enabled 상태를 현재 설정 기준으로 동기화
+            audioTrack.enabled = !!micOnRef.current;
+            console.log(`[ensureLocalProducers] Audio track enabled set to ${micOnRef.current}`);
+        }
+
+        // --- CAMERA ---
+        // camOn이 false면 카메라 producer는 만들지 않음 (상대가 아바타로 보는 게 맞음)
+        if (!camOnRef.current) {
+            console.log(`[ensureLocalProducers] Camera is OFF, skipping camera producer`);
+            return;
+        }
+
+        const videoTrack = stream.getVideoTracks().find((x) => x.readyState === "live");
+        if (!videoTrack) {
+            console.log(`[ensureLocalProducers] No live video track found`);
+            return;
+        }
+
+        const hasCameraProducer = producersRef.current.has("camera");
+        if (!hasCameraProducer) {
+            try {
+                const p = await t.produce({
+                    track: videoTrack,
+                    appData: { type: "camera" },
+                });
+                producersRef.current.set("camera", p);
+                console.log(`[ensureLocalProducers] Camera producer created`);
+            } catch (e) {
+                console.error("[ensureLocalProducers] camera produce failed:", e);
+            }
+        }
+
+        // camOn 상태 반영
+        videoTrack.enabled = !!camOnRef.current;
+        console.log(`[ensureLocalProducers] Video track enabled set to ${camOnRef.current}`);
     };
 
     // --- SFU Functions ---
@@ -573,16 +666,15 @@ function MeetingPage() {
     };
 
     const clearPeerStreamOnly = (peerId) => {
-        // SFU 스트림만 제거
         peerStreamsRef.current.delete(peerId);
 
         setParticipants((prev) =>
             prev.map((p) =>
-                p.id === peerId
+                String(p.id) === String(peerId)
                     ? {
                         ...p,
                         stream: null,
-                        // ❗ cameraOff / muted는 서버 상태 유지
+                        // ❗ 상태(cameraOff/muted)는 유지
                     }
                     : p
             )
@@ -590,48 +682,51 @@ function MeetingPage() {
     };
     
     const startScreenShare = async () => {
-        if (!sendTransportRef.current || sendTransportRef.current.closed) {
-            console.error("[startScreenShare] sendTransport not ready/closed");
-            return;
-        }
-
-        if (producersRef.current.has("screen")) {
-            console.warn("[startScreenShare] screen producer already exists");
-            return;
-        }
+        if (!sendTransportRef.current || sendTransportRef.current.closed) return;
+        if (producersRef.current.has("screen")) return;
 
         try {
-            console.log("[startScreenShare] requesting display media...");
-
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: true,
                 audio: false,
             });
-
             const track = stream.getVideoTracks()[0];
-            if (!track) return;
+            if (!track || track.readyState === "ended") return;
 
-            // ❗ 이미 종료된 트랙 방어
-            if (track.readyState === "ended") {
-                return;
-            }
+            // ⭐ 화면공유 시작 전 카메라 상태 저장
+            cameraWasOnBeforeScreenShareRef.current = camOnRef.current;
+            console.log(`[startScreenShare] Saving camera state: ${cameraWasOnBeforeScreenShareRef.current}`);
 
-            // 1️⃣ [수정] 기존 카메라가 켜져 있었다면 끄고, **서버에도 알림**
+            // 1) 카메라 producer 닫기 (원격에 camera producerClosed 나가게)
             const cameraProducer = producersRef.current.get("camera");
             if (cameraProducer) {
                 const id = cameraProducer.id;
-                cameraProducer.close();
+                try { cameraProducer.close(); } catch {}
                 producersRef.current.delete("camera");
-
-                // 🚀 [추가됨] 서버에 "나 카메라 껐어"라고 알려야 B가 A의 카메라 화면을 지웁니다.
-                safeSfuSend({ 
-                    action: "closeProducer", 
-                    data: { producerId: id } 
-                });
+                safeSfuSend({ action: "closeProducer", data: { producerId: id } });
             }
 
-            // 2️⃣ screen producer 생성
-            console.log("[startScreenShare] producing screen...");
+            // 2) 로컬 카메라 "비디오 트랙만" 정지 (오디오는 유지)
+            if (localStreamRef.current) {
+                localStreamRef.current.getVideoTracks().forEach((t) => {
+                    try { t.stop(); } catch {}
+                });
+
+                const audios = localStreamRef.current
+                    .getAudioTracks()
+                    .filter((t) => t.readyState === "live");
+
+                const audioOnly = new MediaStream([...audios]);
+                localStreamRef.current = audioOnly;
+                setLocalStream(audioOnly);
+            } else {
+                // 로컬 스트림이 아직 없으면, 그냥 audioOnly는 빈 스트림으로
+                const audioOnly = new MediaStream();
+                localStreamRef.current = audioOnly;
+                setLocalStream(audioOnly);
+            }
+
+            // 3) 화면공유 producer 생성
             const screenProducer = await sendTransportRef.current.produce({
                 track,
                 appData: { type: "screen" },
@@ -641,141 +736,195 @@ function MeetingPage() {
             screenStreamRef.current = stream;
 
             setIsScreenSharing(true);
-            
-            // 내 UI 즉시 반영
+
+            // UI(내 상태)
             setParticipants((prev) =>
                 prev.map((p) =>
-                    p.isMe
-                        ? { ...p, screenStream: stream, isScreenSharing: true }
-                        : p
+                    p.isMe ? { ...p, screenStream: stream, isScreenSharing: true } : p
                 )
             );
 
+            // 브라우저 UI에서 “공유 중지” 눌렀을 때
             track.onended = () => {
-                console.log("[startScreenShare] screen track ended by browser");
-                stopScreenShare(true);
+                if (isStoppingScreenShareRef.current) return;
+                console.log("[screen] track ended by browser");
+                stopScreenShare(true); // fromTrackEnded=true
             };
         } catch (e) {
             console.error("[startScreenShare] failed:", e);
+        }
+    };
 
-            // 혹시 stream이 남아있으면 정리
+    const stopScreenShare = async (fromTrackEnded = false) => {
+        if (isStoppingScreenShareRef.current) {
+            console.warn("[stopScreenShare] ignored duplicate call");
+            return;
+        }
+        isStoppingScreenShareRef.current = true;
+
+        try {
+            console.log("[stopScreenShare] fromTrackEnded =", fromTrackEnded);
+
+            // 1) screen producer 닫기
+            const screenProducer = producersRef.current.get("screen");
+            if (screenProducer) {
+                try { screenProducer.close(); } catch {}
+                producersRef.current.delete("screen");
+                safeSfuSend({
+                    action: "closeProducer",
+                    data: { producerId: screenProducer.id },
+                });
+            }
+
+            // 2) screen stream 정리
             if (screenStreamRef.current) {
                 screenStreamRef.current.getTracks().forEach((t) => {
-                    try { t.stop(); } catch {}
+                    t.onended = null; // ⭐️ 중요: onended 재진입 차단
+                    if (t.readyState !== "ended") {
+                        try { t.stop(); } catch {}
+                    }
                 });
                 screenStreamRef.current = null;
             }
 
-            // producer 남아있으면 정리
-            const sp = producersRef.current.get("screen");
-                if (sp) {
-                    try { sp.close(); } catch {}
-                producersRef.current.delete("screen");
-            }
-
             setIsScreenSharing(false);
+
+            // UI(내 상태) 먼저 화면공유 해제 반영
             setParticipants((prev) =>
                 prev.map((p) =>
                     p.isMe ? { ...p, screenStream: null, isScreenSharing: false } : p
                 )
             );
-        }
-    };
 
-    const stopScreenShare = async (fromTrackEnded = false) => { // async 키워드 추가 권장
-        // 중복 실행 방지
-        if (isStoppingScreenShareRef.current) return;
-        isStoppingScreenShareRef.current = true;
+            // 3) 카메라 복구 (현재 카메라 상태 기준으로 복구)
+            // ⭐ 중요: 화면공유 시작 전이 아니라, 지금 현재 camOn 상태를 기준으로!
+            const shouldRestoreCamera = camOnRef.current;
+            console.log(`[restore] shouldRestoreCamera = ${shouldRestoreCamera}, camOnRef.current = ${camOnRef.current}, cameraWasOnBeforeScreenShare = ${cameraWasOnBeforeScreenShareRef.current}`);
 
-        try {
-            console.log(
-                "[stopScreenShare]",
-                fromTrackEnded ? "from track.onended" : "from button"
-            );
+            if (!shouldRestoreCamera) {
+                console.log(`[restore] Camera is currently OFF, not restoring`);
+                // 카메라가 꺼져있었으면 복구하지 않음
+                // 로컬 스트림에는 오디오만 남김
+                const prevAudioTracks = localStreamRef.current
+                    ? localStreamRef.current.getAudioTracks().filter(t => t.readyState !== "ended")
+                    : [];
 
-            // 1️⃣ [수정] screen producer 닫기 및 **서버 알림**
-            const screenProducer = producersRef.current.get("screen");
-            if (screenProducer) {
-                const id = screenProducer.id; // ID 미리 저장
-                try {
-                    if (!screenProducer.closed) screenProducer.close();
-                } catch (e) {
-                    console.warn("[stopScreenShare] error closing:", e);
+                const audioOnly = new MediaStream([...prevAudioTracks]);
+                localStreamRef.current = audioOnly;
+                setLocalStream(audioOnly);
+
+                // UI 상태: 카메라 OFF 유지
+                setParticipants((prev) =>
+                    prev.map((p) =>
+                        p.isMe ? { ...p, cameraOff: true, stream: audioOnly } : p
+                    )
+                );
+
+                // 서버에도 카메라 OFF 상태 전파
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(
+                        JSON.stringify({
+                            type: "USER_STATE_CHANGE",
+                            userId,
+                            changes: { cameraOff: true },
+                        })
+                    );
                 }
-                producersRef.current.delete("screen");
-
-                // 🚀 [추가됨] 서버에 "나 화면 공유 껐어"라고 알려야 B가 화면 공유 모드를 해제합니다.
-                safeSfuSend({ 
-                    action: "closeProducer", 
-                    data: { producerId: id } 
-                });
+                return;
             }
 
-            // 2) screen stream 트랙 stop (로컬 정리)
-            if (screenStreamRef.current) {
-                const tracks = screenStreamRef.current.getTracks();
-                tracks.forEach((t) => {
-                    try { t.stop(); } catch { }
-                });
-                screenStreamRef.current = null;
+            // 카메라가 켜져있었으면 복구
+            if (!sendTransportRef.current || sendTransportRef.current.closed) {
+                console.warn("[restore] sendTransport not ready");
+                return;
             }
 
-            // 3) 로컬 UI 복구
-            setIsScreenSharing(false);
-            
-            // 4️⃣ [중요] 카메라 다시 켜기 (A의 원래 스트림 복구)
-            // 화면 공유를 끄면 자동으로 카메라를 다시 켜서 송출해야 B도 A의 얼굴을 다시 볼 수 있습니다.
-            try {
-                if (camOn && sendTransportRef.current) {
-                    console.log("[stopScreenShare] restarting camera...");
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: true, 
-                        audio: false 
-                    });
-                    const videoTrack = stream.getVideoTracks()[0];
-                    
-                    const cameraProducer = await sendTransportRef.current.produce({
-                        track: videoTrack,
-                        appData: { type: "camera" },
-                    });
-                    
-                    producersRef.current.set("camera", cameraProducer);
-                    
-                    // 내 로컬 스트림 업데이트 (그래야 내 화면에 내 얼굴이 보임)
-                    setLocalStream((prev) => {
-                         // 기존 오디오 트랙이 있다면 합치기
-                         const newStream = new MediaStream([videoTrack]);
-                         if (prev) {
-                             prev.getAudioTracks().forEach(t => newStream.addTrack(t));
-                         }
-                         localStreamRef.current = newStream;
-                         return newStream;
-                    });
-                }
-            } catch (err) {
-                console.error("Failed to restart camera:", err);
+            // (중요) 기존 로컬 오디오 트랙은 살리고, 비디오만 새로 받음
+            const prevAudioTracks = localStreamRef.current
+                ? localStreamRef.current.getAudioTracks().filter(t => t.readyState !== "ended")
+                : [];
+
+            const newStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false,
+            });
+
+            const newVideoTrack = newStream.getVideoTracks()[0];
+            if (!newVideoTrack || newVideoTrack.readyState !== "live") {
+                console.warn("[restore] camera track not live, skip produce");
+                return;
             }
 
-            // UI 업데이트
+            console.log(`[restore] Restoring camera because it was ON before screen share`);
+
+            // 4) camera producer 생성 (enabled=true 명시)
+            await produceCamera(newVideoTrack, true);
+
+            // 5) 로컬 스트림 갱신 (오디오 + 새 비디오 병합)
+            const merged = new MediaStream([...prevAudioTracks, newVideoTrack]);
+            localStreamRef.current = merged;
+            setLocalStream(merged);
+
+            console.log(`[restore] camera restored, cameraOff = false`);
+
+            // 6) 내 UI 상태: 카메라 ON으로 반영
             setParticipants((prev) =>
                 prev.map((p) =>
-                    p.isMe 
-                    ? { 
-                        ...p, 
-                        screenStream: null, 
-                        isScreenSharing: false,
-                        // 카메라 재시작 후 stream이 업데이트 되는 것은 useEffect(localStream)이 처리하거나
-                        // 위 setLocalStream에 의해 리렌더링되며 반영됨.
-                      } 
-                    : p
+                    p.isMe ? { ...p, cameraOff: false, stream: merged } : p
                 )
             );
 
+            // 7) Spring 서버에도 카메라 ON 상태 전파
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(
+                    JSON.stringify({
+                        type: "USER_STATE_CHANGE",
+                        userId,
+                        changes: { cameraOff: false },
+                    })
+                );
+            }
+        } catch (e) {
+            console.error("[stopScreenShare] failed:", e);
         } finally {
             isStoppingScreenShareRef.current = false;
         }
     };
 
+    const produceCamera = async (track, forceEnabled = null) => {
+        const t = sendTransportRef.current;
+        if (!t || t.closed) {
+            console.warn("[produceCamera] transport not ready");
+            return;
+        }
+        if (!track || track.readyState !== "live") {
+            console.warn("[produceCamera] track not live");
+            return;
+        }
+
+        // 기존 camera producer 있으면 닫고 교체하는 게 안전
+        const old = producersRef.current.get("camera");
+        if (old) {
+            console.log(`[produceCamera] closing old producer: ${old.id}`);
+            try { old.close(); } catch {}
+            producersRef.current.delete("camera");
+            safeSfuSend({ action: "closeProducer", data: { producerId: old.id } });
+        }
+
+        // 트랙 enabled 상태 설정 (forceEnabled가 있으면 우선, 없으면 camOnRef 사용)
+        const enabledState = forceEnabled !== null ? forceEnabled : camOnRef.current;
+        track.enabled = enabledState;
+        console.log(`[produceCamera] producing with track.enabled=${track.enabled}, forceEnabled=${forceEnabled}, camOnRef.current=${camOnRef.current}`);
+
+        const producer = await t.produce({
+            track,
+            appData: { type: "camera" },
+        });
+
+        console.log(`[produceCamera] new producer created: ${producer.id}`);
+        producersRef.current.set("camera", producer);
+        return producer;
+    };
 
     const consumeProducer = async (producerId, fallbackPeerId, targetAppData) => {
         if (!producerId) return;
@@ -856,8 +1005,11 @@ function MeetingPage() {
                     "[SFU][consumer created]",
                     "peerId =", peerId,
                     "producerId =", producerId,
+                    "kind =", kind,
                     "isScreen =", isScreen,
-                    "consumer.appData =", consumer.appData
+                    "consumer.appData =", consumer.appData,
+                    "track.readyState =", consumer.track?.readyState,
+                    "track.enabled =", consumer.track?.enabled
                 );
 
                 /* -------------------------------------------------
@@ -875,15 +1027,19 @@ function MeetingPage() {
 
                     if (prev) {
                         prev.getTracks().forEach((t) => {
-                            if (t.readyState !== "ended") {
+                            // ⭐ 같은 종류(kind)의 트랙은 새 consumer 트랙으로 교체
+                            if (t.readyState !== "ended" && t.kind !== consumer.track.kind) {
                                 next.addTrack(t);
                             }
                         });
                     }
 
+                    // 새 consumer 트랙 추가 (오디오 or 비디오)
                     next.addTrack(consumer.track);
                     peerStreamsRef.current.set(peerId, next);
                     mergedCameraStream = next;
+
+                    console.log(`[consumer] Merged stream for peer ${peerId}: videoTracks=${next.getVideoTracks().length}, audioTracks=${next.getAudioTracks().length}`);
                 } else {
                     // ✅ 화면공유는 "항상 새 MediaStream"으로 만들어 리렌더 강제
                     screenStream = new MediaStream([consumer.track]);
@@ -904,9 +1060,9 @@ function MeetingPage() {
                                 name: `User-${String(peerId).slice(0, 4)}`,
                                 isMe: false,
 
-                                // ✅ 오디오 consumer면 muted=false가 자연스럽습니다.
-                                muted: kind === "audio" ? false : true,
-                                cameraOff: false,
+                                // ⭐ muted/cameraOff는 서버(USERS_UPDATE)가 보내줄 것이므로 기본값만 설정
+                                muted: true,
+                                cameraOff: true,
                                 speaking: false,
 
                                 stream: isScreen ? null : mergedCameraStream,
@@ -937,8 +1093,9 @@ function MeetingPage() {
                         // ✅ screen일 때만 true로 세팅 (종료는 종료 이벤트에서 false)
                         isScreenSharing: isScreen ? true : p.isScreenSharing,
 
-                        // ✅ 오디오 consumer가 붙으면 muted 해제 (video consumer는 건드리지 않음)
-                        muted: kind === "audio" ? false : p.muted,
+                        // ⭐ muted/cameraOff는 절대 변경하지 않음! 서버 상태만 사용
+                        // muted: p.muted,  // 명시적으로 유지 (사실 spread로 이미 유지됨)
+                        // cameraOff: p.cameraOff,  // 명시적으로 유지
 
                         isLoading: false,
                         isJoining: false,
@@ -1054,15 +1211,51 @@ function MeetingPage() {
         sfuWsRef.current.addEventListener("message", handler);
     };
 
-    const toggleMic = () => {
+    const hasCameraConsumer = (peerId) => {
+        for (const c of consumersRef.current.values()) {
+            if (
+                c.appData?.type === "camera" &&
+                String(c.appData?.peerId) === String(peerId)
+            ) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const hasLiveRemoteVideo = (stream) => {
+        if (!stream) return false;
+        return stream.getVideoTracks().some((t) => t.readyState === "live");
+    };
+
+    const toggleMic = async () => {
         const newVal = !micOn;
         setMicOn(newVal);
-        localStorage.setItem("micOn", newVal); // ✅ 상태 저장
+        localStorage.setItem("micOn", newVal);
+
+        console.log(`[toggleMic] newVal=${newVal}, micOn=${micOn}`);
 
         // 1. 실제 오디오 트랙 제어
-        if (localStreamRef.current) {
-            const at = localStreamRef.current.getAudioTracks()[0];
-            if (at) at.enabled = newVal;
+        const audioProducer = producersRef.current.get("audio");
+        const at = localStreamRef.current?.getAudioTracks()[0];
+
+        console.log(`[toggleMic] producer exists:`, !!audioProducer, `track:`, audioProducer?.track?.readyState);
+        console.log(`[toggleMic] local audio track exists:`, !!at, `readyState:`, at?.readyState);
+
+        // 혹시 producer가 없다면 에러 (audio는 항상 있어야 함)
+        if (!audioProducer) {
+            console.error(`[toggleMic] No audio producer! This should not happen.`);
+        } else {
+            if (audioProducer.track) {
+                audioProducer.track.enabled = newVal;
+                console.log(`[toggleMic] producer track enabled set to:`, newVal);
+            }
+        }
+
+        // 로컬 스트림 트랙도 동기화
+        if (at) {
+            at.enabled = newVal;
+            console.log(`[toggleMic] local stream track enabled set to:`, newVal);
         }
 
         // 2. 내 화면 업데이트
@@ -1070,7 +1263,7 @@ function MeetingPage() {
             prev.map((p) => (p.isMe ? { ...p, muted: !newVal } : p))
         );
 
-        // 3. 서버 전송
+        // 3. 서버 전송 (이것이 다른 클라이언트에게 알림을 보냄)
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(
                 JSON.stringify({
@@ -1079,34 +1272,119 @@ function MeetingPage() {
                     changes: { muted: !newVal },
                 })
             );
+            console.log(`[toggleMic] sent USER_STATE_CHANGE to server: muted=${!newVal}`);
         }
     };
 
-    const toggleCam = () => {
+    const toggleCam = async () => {
         const newVal = !camOn;
         setCamOn(newVal);
         localStorage.setItem("camOn", newVal);
 
-        // 1. 실제 비디오 트랙 제어
-        if (localStreamRef.current) {
-            const vt = localStreamRef.current.getVideoTracks()[0];
-            if (vt) vt.enabled = newVal;
+        console.log(`[toggleCam] newVal=${newVal}, camOn=${camOn}`);
+
+        // 1️⃣ 실제 미디어 트랙 제어
+        const producer = producersRef.current.get("camera");
+        const vt = localStreamRef.current?.getVideoTracks()[0];
+
+        console.log(`[toggleCam] producer exists:`, !!producer, `track:`, producer?.track?.readyState);
+        console.log(`[toggleCam] local video track exists:`, !!vt, `readyState:`, vt?.readyState);
+
+        // 🔥 카메라를 켜는데 producer나 비디오 트랙이 없는 경우
+        if (newVal && (!vt || !producer)) {
+            console.log(`[toggleCam] No video track or producer, creating new one. vt=${!!vt}, producer=${!!producer}`);
+
+            if (!sendTransportRef.current || sendTransportRef.current.closed) {
+                console.warn("[toggleCam] sendTransport not ready");
+                return;
+            }
+
+            try {
+                let newVideoTrack;
+
+                // 비디오 트랙이 없으면 새로 가져오기
+                if (!vt) {
+                    const newStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false,
+                    });
+
+                    newVideoTrack = newStream.getVideoTracks()[0];
+                    if (!newVideoTrack || newVideoTrack.readyState !== "live") {
+                        console.warn("[toggleCam] Failed to get new video track");
+                        return;
+                    }
+
+                    console.log(`[toggleCam] Got new video track:`, {
+                        id: newVideoTrack.id,
+                        readyState: newVideoTrack.readyState,
+                        enabled: newVideoTrack.enabled,
+                        muted: newVideoTrack.muted,
+                    });
+
+                    // 로컬 스트림 병합 (오디오 + 새 비디오)
+                    const prevAudioTracks = localStreamRef.current
+                        ? localStreamRef.current.getAudioTracks().filter(t => t.readyState !== "ended")
+                        : [];
+
+                    const merged = new MediaStream([...prevAudioTracks, newVideoTrack]);
+                    localStreamRef.current = merged;
+                    setLocalStream(merged);
+                } else {
+                    // 비디오 트랙은 있는데 producer가 없는 경우 (새로고침 후 카메라 OFF 상태)
+                    newVideoTrack = vt;
+                    console.log(`[toggleCam] Using existing video track for producer`);
+                }
+
+                // 새 producer 생성
+                await produceCamera(newVideoTrack, true);
+
+                console.log(`[toggleCam] Created producer for video track`);
+            } catch (e) {
+                console.error(`[toggleCam] Failed to create producer:`, e);
+                return;
+            }
+        } else if (newVal) {
+            // 카메라를 켜는데 producer와 트랙이 모두 있는 경우 - enabled만 변경
+            if (producer?.track) {
+                producer.track.enabled = true;
+                console.log(`[toggleCam] producer track enabled set to: true`);
+            }
+
+            if (vt) {
+                vt.enabled = true;
+                console.log(`[toggleCam] local stream track enabled set to: true`);
+            }
+        } else {
+            // 카메라를 끄는 경우
+            if (producer?.track) {
+                producer.track.enabled = false;
+                console.log(`[toggleCam] producer track enabled set to: false`);
+            }
+
+            if (vt) {
+                vt.enabled = false;
+                console.log(`[toggleCam] local stream track enabled set to: false`);
+            }
         }
 
-        // 2. 내 화면 업데이트
+        // 2️⃣ UI 즉시 반영
         setParticipants((prev) =>
-            prev.map((p) => (p.isMe ? { ...p, cameraOff: !newVal } : p))
+            prev.map((p) =>
+                p.isMe ? { ...p, cameraOff: !newVal } : p
+            )
         );
 
-        // 3. 서버 전송
+        // 3️⃣ 서버에 상태 전파
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(
                 JSON.stringify({
                     type: "USER_STATE_CHANGE",
-                    userId: userId,
+                    userId,
                     changes: { cameraOff: !newVal },
                 })
             );
+            console.log(`[toggleCam] sent USER_STATE_CHANGE to server: cameraOff=${!newVal}`);
         }
     };
 
@@ -1243,6 +1521,7 @@ function MeetingPage() {
     // isSpeaking 상태를 서버로 보내는 용도로만 남겨둡니다.
     useEffect(() => {
         if (!localStream) return;
+        ensureLocalProducers();
         const audioContext = new AudioContext();
         const source = audioContext.createMediaStreamSource(localStream);
         const analyser = audioContext.createAnalyser();
@@ -1316,15 +1595,27 @@ function MeetingPage() {
                 console.log("✅ SPRING WS CONNECTED");
                 setChatConnected(true);
 
-                ws.send(JSON.stringify({
-                    type: "USER_STATE_CHANGE",
-                    userId: userId,
-                    changes: {
-                    muted: !micOnRef.current,
-                    cameraOff: !camOnRef.current,
-                    },
-                }));
-                
+                // 연결 직후 현재 상태 전송 (초기 동기화)
+                const sendInitialState = () => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        console.log(`[WS onopen] Sending initial state: muted=${!micOnRef.current}, cameraOff=${!camOnRef.current}`);
+                        ws.send(JSON.stringify({
+                            type: "USER_STATE_CHANGE",
+                            userId: userId,
+                            changes: {
+                                muted: !micOnRef.current,
+                                cameraOff: !camOnRef.current,
+                            },
+                        }));
+                    }
+                };
+
+                // 즉시 한 번 전송
+                sendInitialState();
+
+                // 100ms 후 한 번 더 전송 (USERS_UPDATE 이후 확실히 반영되도록)
+                setTimeout(sendInitialState, 100);
+
                 pingInterval = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ type: "PING" }));
@@ -1347,6 +1638,11 @@ function MeetingPage() {
                 const data = JSON.parse(event.data);
 
                 if (data.type === "PONG") return;
+
+                // 🔍 모든 메시지 로깅 (디버깅용)
+                if (data.type !== "USERS_UPDATE") {
+                    console.log(`[WS] Received message type: ${data.type}`, data);
+                }
 
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
                     setParticipants((prev) => {
@@ -1371,10 +1667,18 @@ function MeetingPage() {
                             }
 
                             const isMe = peerId === String(userId);
+
+                            const remoteHasVideo = hasLiveRemoteVideo(old?.stream);
+
                             const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
 
                             /* -------------------------------------------------
                             [핵심] 기존 로컬 상태(스트림, 화면공유) 보존하며 병합
+
+                            ⚠️ 중요:
+                            - 내 상태(isMe): 로컬 Ref 기준
+                            - 타인 상태: 서버 상태 우선 (새로고침 시 정확한 상태 반영)
+                            - 스트림/화면공유: 클라이언트만 알고 있으므로 old 유지
                             ------------------------------------------------- */
                             const baseUser = {
                                 id: peerId,
@@ -1382,9 +1686,14 @@ function MeetingPage() {
                                 joinAt: u.joinAt,
                                 isMe,
 
-                                // 내 상태는 로컬(micOnRef) 기준, 타인은 서버 혹은 기존 상태 기준
-                                muted: isMe ? !micOnRef.current : (u.muted ?? old?.muted ?? true),
-                                cameraOff: isMe ? !camOnRef.current : (u.cameraOff ?? old?.cameraOff ?? true),
+                                // ⭐ 내 상태는 로컬 기준, 타인은 서버 상태 우선
+                                muted: isMe
+                                    ? !micOnRef.current
+                                    : (u.muted ?? false),
+
+                                cameraOff: isMe
+                                    ? !camOnRef.current
+                                    : (u.cameraOff ?? true),
 
                                 // 🚀 [중요] 스트림 정보는 서버가 모르므로, 기존(old) 것을 유지해야 함
                                 stream: old?.stream ?? null,
@@ -1397,7 +1706,7 @@ function MeetingPage() {
                                 // 접속 상태
                                 isJoining: false,
                                 isReconnecting: old?.isReconnecting ?? false,
-                                isLoading: false, 
+                                isLoading: false,
 
                                 lastUpdate: Date.now(),
                             };
@@ -1484,9 +1793,11 @@ function MeetingPage() {
                 }
 
                 if (data.type === "USER_STATE_CHANGE") {
+                    console.log(`[WS] USER_STATE_CHANGE received:`, data.userId, data.changes);
                     setParticipants((prev) =>
                         prev.map((p) => {
                             if (String(p.id) === String(data.userId)) {
+                                console.log(`[WS] Updating participant ${p.name} with changes:`, data.changes);
                                 return { ...p, ...data.changes };
                             }
                             return p;
@@ -1647,23 +1958,46 @@ function MeetingPage() {
                         safeSfuSend({ action: "produce", requestId: reqId, data: { transportId, kind, rtpParameters, appData } });
                     });
 
-                    if (localStream) {
-                        for (const track of localStream.getTracks()) {
-                            const type =
-                                track.kind === "video" ? "camera" : "audio";
+                    /* const streamToProduce = localStreamRef.current;
 
-                            const producer = await sendTransport.produce({
-                                track,
-                                appData: { type },
-                            });
+                    if (streamToProduce) {
+                        for (const track of streamToProduce.getTracks()) {
+                            // ✅ ended 트랙 produce 방지
+                            if (!track || track.readyState !== "live") {
+                                console.warn("[produce-skip] track not live:", track?.kind, track?.readyState);
+                                continue;
+                            }
 
-                            producersRef.current.set(type, producer);
+                            // ✅ enabled false 트랙도 스킵(원하면)
+                            if (track.enabled === false) {
+                                console.warn("[produce-skip] track disabled:", track.kind);
+                                continue;
+                            }
+
+                            const type = track.kind === "video" ? "camera" : "audio";
+
+                            // ✅ 이미 같은 타입 producer가 있으면 중복 produce 방지
+                            if (producersRef.current.has(type)) continue;
+
+                            try {
+                                const producer = await sendTransport.produce({
+                                    track,
+                                    appData: { type },
+                                });
+                                producersRef.current.set(type, producer);
+                                console.log("[produce-ok]", type, producer.id);
+                            } catch (e) {
+                                console.error("[produce-failed]", type, e);
+                            }
                         }
                     } else {
-                        console.log("카메라가 없어서 영상 송출이 제한됩니다.");
-                    }
+                        console.log("[produce] no local stream yet");
+                    } */
 
                     sendTransportRef.current = sendTransport;
+                    setTimeout(() => {
+                        ensureLocalProducers();
+                    }, 0);
                 }
 
                 if (direction === "recv") {
@@ -1727,57 +2061,43 @@ function MeetingPage() {
                 const { producerId, peerId, appData } = msg.data || {};
                 const isScreen = appData?.type === "screen";
 
-                console.log("[producerClosed]", {
-                    producerId,
-                    peerId,
-                    isScreen,
-                    appData
-                });
+                setParticipants((prev) =>
+                    prev.map((p) => {
+                        if (String(p.id) !== String(peerId)) return p;
 
-                // 1. UI 상태 업데이트
-                setParticipants(prev =>
-                    prev.map(p => {
-                        // 해당 peer의 producer가 닫힌 경우
-                        if (String(p.id) === String(peerId)) {
-                            if (isScreen) {
-                                console.log(`[producerClosed] clearing screen for peer ${peerId}`);
-                                return {
-                                    ...p,
-                                    screenStream: null,
-                                    isScreenSharing: false,
-                                    lastUpdate: Date.now()
-                                };
-                            } else {
-                                console.log(`[producerClosed] clearing camera stream for peer ${peerId}`);
-                                return {
-                                    ...p,
-                                    stream: null,
-                                    lastUpdate: Date.now()
-                                };
-                            }
+                        if (isScreen) {
+                            return {
+                                ...p,
+                                screenStream: null,
+                                isScreenSharing: false,
+                                lastUpdate: Date.now(),
+                            };
                         }
-                        return p;
+
+                        // ✅ camera producer 종료 = cameraOff 상태
+                        return {
+                            ...p,
+                            stream: null,
+                            cameraOff: true,
+                            lastUpdate: Date.now(),
+                        };
                     })
                 );
 
-                // 2. 리소스 정리
-                if (producerId) {
-                    const c = consumersRef.current.get(producerId);
-                    if (c) {
-                        try {
-                            c.close();
-                            console.log(`[producerClosed] consumer closed: ${producerId}`);
-                        } catch {}
-                    }
-                    consumersRef.current.delete(producerId);
-
-                    const a = audioElsRef.current.get(producerId);
-                    if (a) {
-                        try { a.srcObject = null; } catch {}
-                        audioElsRef.current.delete(producerId);
-                    }
-                    bumpStreamVersion();
+                // consumer 정리
+                const c = consumersRef.current.get(producerId);
+                if (c) {
+                    try { c.close(); } catch {}
                 }
+                consumersRef.current.delete(producerId);
+
+                const a = audioElsRef.current.get(producerId);
+                if (a) {
+                    try { a.srcObject = null; } catch {}
+                    audioElsRef.current.delete(producerId);
+                }
+
+                bumpStreamVersion();
                 return;
             }
 
@@ -1855,7 +2175,7 @@ function MeetingPage() {
             peerStreamsRef.current.clear();
             pendingProducersRef.current = [];
         };
-    }, [roomId, localStream, userId]);
+    }, [roomId, userId]);
 
     useEffect(() => {
         sessionStorage.setItem("sidebarOpen", String(sidebarOpen));

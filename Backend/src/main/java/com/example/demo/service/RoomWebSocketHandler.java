@@ -91,6 +91,15 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         if (restoredUser != null) {
             // ✅ 재접속 or 재입장 → LEAVE 상태 해제
             restoredUser.setExplicitlyLeft(false);
+
+            // ⭐ 쿼리 파라미터로 상태 업데이트 (재접속 시에도 적용)
+            if (paramMuted != null) {
+                restoredUser.setMuted(paramMuted);
+            }
+            if (paramCameraOff != null) {
+                restoredUser.setCameraOff(paramCameraOff);
+            }
+
             finalUser = restoredUser;
         } else {
             boolean muted = paramMuted != null ? paramMuted : true;
