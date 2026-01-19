@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.category.CategoryMapper">
+
+    <resultMap id="CategoryMap" type="com.example.demo.category.CategoryVO">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="level" column="level"/>
+    </resultMap>
+
+    <!-- 전체 카테고리 -->
+    <select id="selectAllCategories" resultMap="CategoryMap">
+        SELECT id, name, parent_id, level
+        FROM category
+    </select>
+
+    <!-- 레벨별 조회 (대분류 등) -->
+    <select id="selectByLevel" parameterType="int" resultMap="CategoryMap">
+        SELECT id, name, parent_id, level
+        FROM category
+        WHERE level = #{level}
+    </select>
+
+    <!-- 부모 ID 기준 하위 카테고리 -->
+    <select id="selectByParentId" parameterType="long" resultMap="CategoryMap">
+        SELECT id, name, parent_id, level
+        FROM category
+        WHERE parent_id = #{parentId}
+    </select>
+
+</mapper>

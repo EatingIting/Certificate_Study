@@ -32,7 +32,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public String login(String email, String password) {
+    public AuthVO login(String email, String password) {
 
         AuthVO user = authMapper.findByEmail(email);
 
@@ -41,7 +41,7 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        // ✅ 지금은 JWT 안 쓰고 로그인 성공만 반환
-        return "LOGIN_SUCCESS";
+        // ✅ 로그인 성공 → 사용자 정보 반환
+        return user;
     }
 }

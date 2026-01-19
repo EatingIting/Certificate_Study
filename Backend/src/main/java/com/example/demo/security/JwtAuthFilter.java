@@ -23,28 +23,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String uri = request.getRequestURI();
+        String header = request.getHeader("Authorization");
 
-        // 🔥 인증 없이 허용할 경로
-        if (uri.startsWith("/api/users")) {
+        // 토큰이 없으면 그냥 통과
+        if (header == null || !header.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String header = request.getHeader("Authorization");
-
-        if (header != null && header.startsWith("Bearer ")) {
-            try {
-                String token = header.substring(7);
-                jwtTokenProvider.getClaims(token);
-            } catch (Exception e) {
-                // ❗ 토큰 에러 → 그냥 통과 or 401 처리
-                filterChain.doFilter(request, response);
-                return;
-            }
+        // 토큰이 있을 때만 검증
+        try {
+            String token = header.substring(7);
+            jwtTokenProvider.getClaims(token);
+        } catch (Exception e) {
         }
 
         filterChain.doFilter(request, response);
     }
-
 }

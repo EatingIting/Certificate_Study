@@ -12,34 +12,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 public class SecurityConfig {
 
-    private final JwtTokenProvider jwtTokenProvider;
-
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
-        this.jwtTokenProvider = jwtTokenProvider;
-    }
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-                // ✅ REST API니까 다 끈다
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
-
-                // 🔥 이 두 줄이 핵심
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
-
-                // 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/users/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-
-                // JWT 필터 등록
-                .addFilterBefore(
-                        new JwtAuthFilter(jwtTokenProvider),
-                        UsernamePasswordAuthenticationFilter.class
+                        .anyRequest().permitAll()
                 );
 
         return http.build();
@@ -50,3 +32,4 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
+
