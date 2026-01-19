@@ -64,8 +64,8 @@ body {
 .glass-panel {
   pointer-events: auto;
   background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/*   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px); */
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: var(--shadow-sm);
 }
@@ -201,6 +201,206 @@ body {
 
   background: #000;
   overflow: hidden;
+  position: relative;
+}
+
+/* 전체화면 버튼 */
+.fullscreen-btn {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+  z-index: 10;
+}
+
+.main-stage:hover .fullscreen-btn {
+  opacity: 1;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* 전체화면 모드에서 버튼 항상 표시 */
+.main-stage:fullscreen .fullscreen-btn {
+  opacity: 1;
+}
+
+/* 전체화면 모드에서 비디오 타일이 전체를 채우도록 */
+.main-stage:fullscreen {
+  background: #000;
+}
+
+.main-stage:fullscreen .video-tile {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+}
+
+/* 전체화면 모드의 참가자 스트립 */
+.fullscreen-strip {
+  display: none;
+}
+
+.main-stage:fullscreen .fullscreen-strip {
+  display: flex;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 24px;
+  gap: 12px;
+  /* background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent); */
+  background: transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+  z-index: 20;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.main-stage:fullscreen:hover .fullscreen-strip {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.main-stage:fullscreen .fullscreen-strip .strip-item {
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.main-stage:fullscreen .fullscreen-strip .strip-item:hover {
+  transform: scale(1.05);
+}
+
+.main-stage:fullscreen .fullscreen-strip .video-tile {
+  width: 160px;
+  height: 90px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.main-stage:fullscreen .fullscreen-strip .strip-item.active-strip .video-tile {
+  border-color: var(--brand-color);
+  box-shadow: 0 0 0 2px var(--brand-color);
+}
+
+.main-stage:fullscreen .fullscreen-strip .strip-name {
+  color: #fff;
+  font-size: 0.75rem;
+  text-align: center;
+  margin-top: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* 전체화면 모드에서 전체화면 버튼 위치 조정 */
+.main-stage:fullscreen .fullscreen-btn {
+  bottom: auto;
+  top: 16px;
+  right: 16px;
+}
+
+/* 전체화면 스트립 래퍼 */
+.fullscreen-strip-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  z-index: 1000;
+
+  transition: transform 0.35s ease, opacity 0.25s ease;
+}
+
+/* 보임 */
+.fullscreen-strip-wrapper.visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* 숨김 */
+.fullscreen-strip-wrapper.hidden {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 참가자 스트립 */
+.fullscreen-strip {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.45);
+    /* backdrop-filter: blur(12px); */
+}
+
+/* 토글 버튼 */
+.fullscreen-strip-toggle-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  z-index: 9999;
+
+  background: rgba(0, 0, 0, 0.65);
+  border: none;
+  border-radius: 999px;
+  padding: 10px;
+
+  color: white;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* 마우스 아래로 내려갔을 때 */
+.fullscreen-strip-toggle-btn.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 살짝 위치 차이 */
+.fullscreen-strip-toggle-btn.up {
+  transform: translateX(-50%) translateY(0);
+}
+
+.fullscreen-strip-toggle-btn.down {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 전체화면 모드에서 텍스트 선택 방지 */
+.main-stage:fullscreen,
+.main-stage:fullscreen * {
+  user-select: none;
+  -webkit-user-select: none; /* Safari */
+  -ms-user-select: none;     /* 구형 Edge */
+}
+
+/* 모바일에서 길게 눌러 선택 메뉴 뜨는거 삭제 */
+.main-stage:fullscreen {
+  -webkit-touch-callout: none; /* iOS Safari */
 }
 
 .main-stage.screen-share {
@@ -287,7 +487,7 @@ body {
   color: #374151; /* 진한 회색 */
   text-align: center;
   font-weight: 600;
-  
+
   /* 이름이 길면 ... 처리 */
   white-space: nowrap;
   overflow: hidden;

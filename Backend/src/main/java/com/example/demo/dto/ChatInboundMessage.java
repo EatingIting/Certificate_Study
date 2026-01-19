@@ -15,5 +15,6 @@ public class ChatInboundMessage {
     private String type;
     private String message;
     private Boolean speaking;
+    private String emoji;
     private Map<String, Object> changes;
 }

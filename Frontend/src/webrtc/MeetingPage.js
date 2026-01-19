@@ -1,6 +1,10 @@
 import {
+    ChevronDown,
+    ChevronUp,
     LayoutGrid,
     Loader2,
+    Maximize,
+    Minimize,
     MessageSquare,
     Mic,
     MicOff,
@@ -373,12 +377,19 @@ function MeetingPage() {
     const hasFinishedInitialSyncRef = useRef(false); // 초기 동기화 완료 플래그
 
     const lastActiveSpeakerRef = useRef(null);
+    const manuallySelectedRef = useRef(false);  // 사용자가 수동으로 타일을 선택했는지 여부
 
     const screenStreamRef = useRef(null);
     const screenProducerRef = useRef(null);
     const cameraWasOnBeforeScreenShareRef = useRef(false); // 화면공유 시작 전 카메라 상태
     const isStoppingScreenShareRef = useRef(false); // stopScreenShare 중복 실행 방지
     const [isScreenSharing, setIsScreenSharing] = useState(false);
+
+    // 전체화면 관련
+    const mainStageRef = useRef(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isStripVisible, setIsStripVisible] = useState(true);
+    const [showStripToggle, setShowStripToggle] = useState(false);
 
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
     useEffect(() => { camOnRef.current = camOn; }, [camOn]);
@@ -426,6 +437,31 @@ function MeetingPage() {
         isScreenSharing: isScreenSharing,
         isLoading: isLocalLoading,
     };
+
+    // 전체화면 핸들러
+    const handleFullscreen = () => {
+        if (!mainStageRef.current) return;
+
+        if (!document.fullscreenElement) {
+            mainStageRef.current.requestFullscreen().catch((err) => {
+                console.error("전체화면 전환 실패:", err);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    };
+
+    // 전체화면 상태 변경 감지
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        return () => {
+            document.removeEventListener("fullscreenchange", handleFullscreenChange);
+        };
+    }, []);
 
     const handleSendMessage = (e) => {
         e.preventDefault();
@@ -1444,23 +1480,50 @@ function MeetingPage() {
         };
     }, []);
 
+    // 이전에 화면공유 중이었던 사람 추적 (화면공유 종료 감지용)
+    const prevScreenSharersRef = useRef(new Set());
+
     useEffect(() => {
-        const screenSharer = participants.find(p => p.isScreenSharing);
+        const screenSharers = participants.filter(p => p.isScreenSharing);
+        const screenSharerIds = new Set(screenSharers.map(p => p.id));
+        const hasScreenSharer = screenSharers.length > 0;
+
+        // 현재 선택된 사람이 "이전에 화면공유 중이었는데 지금은 아님" = 화면공유 종료함
+        const wasScreenSharing = prevScreenSharersRef.current.has(activeSpeakerId);
+        const isNowScreenSharing = screenSharerIds.has(activeSpeakerId);
+        const selectedPersonStoppedSharing = wasScreenSharing && !isNowScreenSharing;
 
         // 1. 누군가(나 포함) 화면 공유 중일 때
-        if (screenSharer) {
-            // 현재 발표자가 그 사람이 아닐 때만 변경 (무한 루프 방지)
-            if (activeSpeakerId !== screenSharer.id) {
-                lastActiveSpeakerRef.current = activeSpeakerId; 
-                setActiveSpeakerId(screenSharer.id);
-                setLayoutMode("speaker"); // 화면 공유 시작 시 스피커 모드로 자동 전환
+        if (hasScreenSharer) {
+            // ✅ 사용자가 수동 선택하지 않은 경우에만 자동 전환
+            if (!manuallySelectedRef.current) {
+                const firstScreenSharer = screenSharers[0];
+
+                // 현재 선택된 사람이 화면공유자가 아닐 때 → 화면공유자로 전환
+                if (!isNowScreenSharing) {
+                    // 최초 저장 (아직 저장 안 됐을 때만)
+                    if (!lastActiveSpeakerRef.current) {
+                        lastActiveSpeakerRef.current = activeSpeakerId;
+                    }
+                    setActiveSpeakerId(firstScreenSharer.id);
+                    setLayoutMode("speaker");
+                }
             }
+            // ✅ 수동 선택한 사람이 "화면공유를 종료"한 경우에만 다른 화면공유자로 전환
+            else if (selectedPersonStoppedSharing) {
+                const firstScreenSharer = screenSharers[0];
+                setActiveSpeakerId(firstScreenSharer.id);
+            }
+            // ✅ 그 외 (B처럼 원래 화면공유 안 하던 사람 선택) → 그대로 유지
         }
-        // 2. 화면 공유가 끝났을 때 원래 발표자로 복귀
-        else if (lastActiveSpeakerRef.current) {
-            setActiveSpeakerId(lastActiveSpeakerRef.current);
+        // 2. 화면 공유가 모두 끝났을 때 → 마지막 활성 사용자 유지 + 수동 선택 리셋
+        else {
+            manuallySelectedRef.current = false;
             lastActiveSpeakerRef.current = null;
         }
+
+        // 현재 화면공유자 목록 저장 (다음 비교용)
+        prevScreenSharersRef.current = screenSharerIds;
     }, [participants, activeSpeakerId]);
 
     useEffect(() => {
@@ -1766,25 +1829,36 @@ function MeetingPage() {
 
                             const remoteHasVideo = hasLiveRemoteVideo(old?.stream);
 
-                            const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
-
                             // ✅ 서버에서 online=false면 재접속 중 (새로고침 등)
                             const isOffline = u.online === false;
 
-                            if (isOffline) {
+                            // ✅ 최근 완료 시간 체크 (1초 이내면 재접속 상태 무시)
+                            const completedTime = reconnectCompletedTimeRef.current.get(peerId);
+                            const now = Date.now();
+                            const recentlyCompleted = completedTime && (now - completedTime) < 1000;
+
+                            if (isOffline && !recentlyCompleted) {
                                 console.log(`🔴 [RECONNECTING] ${u.userName} (${peerId}) is offline, online=${u.online}, isMe=${isMe}`);
-                                // ✅ 재접속 시작 시간 기록 (타이머가 이 시간을 기준으로 800ms 계산)
-                                // ✅ 최근 완료 시간이 1초 이내면 다시 추가하지 않음 (무한 루프 방지)
-                                const completedTime = reconnectCompletedTimeRef.current.get(peerId);
-                                const now = Date.now();
-                                if (completedTime && (now - completedTime) < 1000) {
-                                    console.log(`⏭️ [SKIP RECONNECT] ${u.userName} (${peerId}) - recently completed, skipping re-add`);
-                                } else {
-                                    if (!reconnectHistoryRef.current.has(peerId)) {
-                                        reconnectHistoryRef.current.add(peerId);
-                                        console.log(`➕ [ADD RECONNECT] ${u.userName} (${peerId})`);
-                                    }
+                                // ✅ 재접속 시작 시간 기록
+                                if (!reconnectHistoryRef.current.has(peerId)) {
+                                    reconnectHistoryRef.current.add(peerId);
+                                    console.log(`➕ [ADD RECONNECT] ${u.userName} (${peerId})`);
                                 }
+                            } else if (isOffline && recentlyCompleted) {
+                                console.log(`⏭️ [SKIP RECONNECT] ${u.userName} (${peerId}) - recently completed, treating as online`);
+                            }
+
+                            // ✅ 재접속 중인지 판단: offline이고 최근에 완료되지 않았거나, reconnectHistory에 있으면
+                            const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
+
+                            // ✅ online=true면 절대로 reconnecting 상태가 아님 (서버가 확인한 상태)
+                            const isOnline = u.online === true;
+                            const shouldShowReconnecting = !isOnline && ((isOffline && !recentlyCompleted) || hasReconnectHistory);
+
+                            // ✅ online=true이고 reconnectHistory에 있으면 정리
+                            if (isOnline && hasReconnectHistory) {
+                                console.log(`✅ [CLEANUP] ${u.userName} (${peerId}) is online, removing from reconnectHistory`);
+                                reconnectHistoryRef.current.delete(peerId);
                             }
 
                             /* -------------------------------------------------
@@ -1812,21 +1886,21 @@ function MeetingPage() {
 
                                 // 🚀 [중요] 스트림 정보는 서버가 모르므로, 기존(old) 것을 유지해야 함
                                 // ⭐ 단, 재접속 중이면 스트림 무효화하여 스피너 표시
-                                // → isOffline OR hasReconnectHistory (재접속 복구 중까지 표시)
-                                stream: ((isOffline || hasReconnectHistory) ? null : old?.stream) ?? null,
+                                // → shouldShowReconnecting (online=true면 항상 false)
+                                stream: (shouldShowReconnecting ? null : old?.stream) ?? null,
                                 speaking: old?.speaking ?? false,
 
                                 // 🚀 [중요] 화면 공유 정보도 기존(old) 것을 반드시 유지
                                 // ⭐ 단, 재접속 중이면 화면 공유도 무효화
-                                screenStream: ((isOffline || hasReconnectHistory) ? null : old?.screenStream) ?? null,
-                                isScreenSharing: (isOffline || hasReconnectHistory) ? false : (old?.isScreenSharing ?? false),
+                                screenStream: (shouldShowReconnecting ? null : old?.screenStream) ?? null,
+                                isScreenSharing: shouldShowReconnecting ? false : (old?.isScreenSharing ?? false),
 
                                 // 이모지 반응
                                 reaction: old?.reaction ?? null,
 
-                                // ✅ 접속 상태: 서버에서 online=false이거나 재접속 이력이 있으면 재접속 중 스피너 표시
+                                // ✅ 접속 상태: shouldShowReconnecting이면 재접속 중 스피너 표시
                                 isJoining: false,
-                                isReconnecting: isOffline || hasReconnectHistory,  // 오프라인 OR 재접속 복구 중
+                                isReconnecting: shouldShowReconnecting,
                                 isLoading: false,
 
                                 lastUpdate: Date.now(),
@@ -1839,7 +1913,7 @@ function MeetingPage() {
                                 console.log(`[NEW USER] ${u.userName} - isJoining=true, isReconnecting=${baseUser.isReconnecting}`);
 
                                 // ✅ 신규 유저도 재접속 중이면 reconnectStartedAt 설정
-                                const reconnectStartedAt = isOffline || hasReconnectHistory
+                                const reconnectStartedAt = shouldShowReconnecting
                                     ? (old?.reconnectStartedAt ?? Date.now())
                                     : undefined;
 
@@ -1856,7 +1930,7 @@ function MeetingPage() {
                             console.log(`[EXISTING USER] ${u.userName} - isReconnecting=${baseUser.isReconnecting}, hasReconnectHistory=${hasReconnectHistory}`);
 
                             // ✅ 재접속 중이면 reconnectStartedAt 설정 (없으면 지금 시간, 있으면 기존 시간 유지)
-                            const reconnectStartedAt = isOffline || hasReconnectHistory
+                            const reconnectStartedAt = shouldShowReconnecting
                                 ? (old?.reconnectStartedAt ?? Date.now())
                                 : undefined;
 
@@ -1934,7 +2008,13 @@ function MeetingPage() {
                         prev.map((p) => {
                             if (String(p.id) === String(data.userId)) {
                                 console.log(`[WS] Updating participant ${p.name} with changes:`, data.changes);
-                                return { ...p, ...data.changes };
+                                // ✅ 스트림 관련 필드는 절대 덮어쓰지 않음 (서버가 모르는 정보)
+                                const safeChanges = { ...data.changes };
+                                delete safeChanges.stream;
+                                delete safeChanges.screenStream;
+                                delete safeChanges.isScreenSharing;
+                                delete safeChanges.reaction;
+                                return { ...p, ...safeChanges };
                             }
                             return p;
                         })
@@ -2210,11 +2290,13 @@ function MeetingPage() {
                             };
                         }
 
-                        // ✅ camera producer 종료 = cameraOff 상태
+                        // ✅ camera producer 종료 = stream만 null로 설정
+                        // ⚠️ cameraOff 상태는 변경하지 않음! (서버 USER_STATE_CHANGE로만 변경)
+                        // 화면공유 시작으로 producer가 닫혀도, 실제 카메라 상태(cameraOff)는 유지되어야 함
                         return {
                             ...p,
                             stream: null,
-                            cameraOff: true,
+                            // cameraOff는 유지 (p.cameraOff 그대로)
                             lastUpdate: Date.now(),
                         };
                     })
@@ -2341,6 +2423,22 @@ function MeetingPage() {
         );
     }, [isSpeaking]);
 
+    //전체화면 참가자 토글
+    useEffect(() => {
+        if (!isFullscreen) {
+            setShowStripToggle(false);
+            return;
+        }
+
+        const handleMouseMove = (e) => {
+            const threshold = window.innerHeight - 120;
+            setShowStripToggle(e.clientY > threshold);
+        };
+
+        window.addEventListener("mousemove", handleMouseMove);
+        return () => window.removeEventListener("mousemove", handleMouseMove);
+    }, [isFullscreen]);
+
     const mainUser = getMainUser();
 
     const mainStream =
@@ -2402,7 +2500,10 @@ function MeetingPage() {
                     <div className="meet-stage">
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
-                                <div className={`main-stage ${isMainScreenShare ? "screen-share-active" : ""}`}>
+                                <div
+                                    className={`main-stage ${isMainScreenShare ? "screen-share-active" : ""}`}
+                                    ref={mainStageRef}
+                                >
                                     <VideoTile
                                         user={mainUser}
                                         isMain
@@ -2411,6 +2512,69 @@ function MeetingPage() {
                                         isScreen={isMainScreenShare}
                                         reaction={mainUser?.reaction}
                                     />
+                                    <button
+                                        className="fullscreen-btn"
+                                        onClick={handleFullscreen}
+                                        title={isFullscreen ? "전체화면 종료" : "전체화면"}
+                                    >
+                                        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                                    </button>
+                                    {/* 전체화면 모드에서만 보이는 참가자 스트립 */}
+                                    {isFullscreen && (
+                                        <>
+                                            {/* 참가자 스트립 */}
+                                            <div
+                                                className={`fullscreen-strip-wrapper ${
+                                                    isStripVisible ? "visible" : "hidden"
+                                                }`}
+                                            >
+                                                <div className="fullscreen-strip custom-scrollbar">
+                                                    {orderedParticipants.map((p) => (
+                                                        <div
+                                                            key={p.id}
+                                                            className={`strip-item ${
+                                                                activeSpeakerId === p.id ? "active-strip" : ""
+                                                            } ${p.isScreenSharing ? "screen-sharing" : ""}`}
+                                                            onClick={() => {
+                                                                manuallySelectedRef.current = true;
+                                                                setActiveSpeakerId(p.id);
+                                                            }}
+                                                        >
+                                                            <VideoTile
+                                                                user={p}
+                                                                stream={
+                                                                    p.isScreenSharing
+                                                                        ? p.screenStream
+                                                                        : p.isMe
+                                                                            ? localStream
+                                                                            : p.stream
+                                                                }
+                                                                roomReconnecting={roomReconnecting}
+                                                                isScreen={p.isScreenSharing}
+                                                                reaction={p.reaction}
+                                                            />
+                                                            <span className="strip-name">
+                                                                {p.isMe ? "(나)" : p.name}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* 🔥 토글 버튼 (스트립 바깥, 항상 최상단) */}
+                                            {showStripToggle && (
+                                                <button
+                                                    className={`fullscreen-strip-toggle-btn show ${
+                                                        isStripVisible ? "down" : "up"
+                                                    }`}
+                                                    onClick={() => setIsStripVisible((v) => !v)}
+                                                    title={isStripVisible ? "참가자 숨기기" : "참가자 보기"}
+                                                >
+                                                    {isStripVisible ? <ChevronDown /> : <ChevronUp />}
+                                                </button>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                                 <div className="bottom-strip custom-scrollbar">
                                     {orderedParticipants.map((p) => (
@@ -2419,16 +2583,20 @@ function MeetingPage() {
                                             className={`strip-item ${
                                                 activeSpeakerId === p.id ? "active-strip" : ""
                                             } ${p.isScreenSharing ? "screen-sharing" : ""}`}  // 🔴 테두리용
-                                            onClick={() => setActiveSpeakerId(p.id)}
+                                            onClick={() => {
+                                                manuallySelectedRef.current = true;  // 수동 선택 표시
+                                                setActiveSpeakerId(p.id);
+                                            }}
                                         >
                                             <VideoTile
                                                 user={p}
                                                 stream={
+                                                    // ✅ 화면공유 중이면 screenStream, 아니면 카메라 스트림
                                                     p.isScreenSharing
-                                                    ? p.screenStream
-                                                    : p.isMe
-                                                        ? localStream
-                                                        : p.stream
+                                                        ? p.screenStream
+                                                        : p.isMe
+                                                            ? localStream
+                                                            : p.stream
                                                 }
                                                 roomReconnecting={roomReconnecting}
                                                 isScreen={p.isScreenSharing}

@@ -91,6 +91,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         if (restoredUser != null) {
             // ✅ 재접속 or 재입장 → LEAVE 상태 해제
             restoredUser.setExplicitlyLeft(false);
+            restoredUser.setOnline(true);  // ✅ 재접속 시 online=true로 설정
 
             // ⭐ 쿼리 파라미터로 상태 업데이트 (재접속 시에도 적용)
             if (paramMuted != null) {
@@ -112,7 +113,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                     false,
                     muted,
                     cameraOff,
-                    false
+                    false,
+                    true  // online = true
             );
         }
 
@@ -151,6 +153,10 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         String userId = leavingUser.getUserId();
 
+        // ✅ 새로고침/재접속 대기 중: online=false로 설정하고 즉시 broadcast
+        leavingUser.setOnline(false);
+        System.out.println("🔴 [RECONNECTING] " + userId + " set online=false");
+
         // ✅ 재접속 유예 타이머 설정
         leaveTimers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
 
@@ -188,6 +194,10 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         List<RoomUser> users = usersMap.values().stream()
                 .sorted(Comparator.comparingLong(RoomUser::getJoinAt))
                 .toList();
+
+        System.out.println("📢 [BROADCAST] Room: " + roomId + ", Users: " +
+                users.stream().map(u -> u.getUserName() + "(online=" + u.isOnline() + ")")
+                        .toList());
 
         try {
             String payload = objectMapper.writeValueAsString(
@@ -372,6 +382,30 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             sessions.remove(session.getId());
 
             broadcast(roomId);
+            return;
+        }
+
+        if ("REACTION".equalsIgnoreCase(type)) {
+
+            String emoji = inbound.getEmoji();
+            if (emoji == null || emoji.isBlank()) return;
+
+            // 그대로 room 전체에 브로드캐스트
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "REACTION",
+                            "userId", sender.getUserId(),
+                            "emoji", emoji
+                    )
+            );
+
+            TextMessage broadcastMessage = new TextMessage(payload);
+
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
             return;
         }
     }
