@@ -41,4 +41,12 @@ public class AuthController {
         );
     }
 
+    @PostMapping("/signup")
+    public ResponseEntity<?> signup(@RequestBody AuthVO vo) {
+        authService.signup(vo);
+        return ResponseEntity.ok().build();
+    }
+
+
+
 }

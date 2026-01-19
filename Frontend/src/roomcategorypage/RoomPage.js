@@ -1,7 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import api from "../api/api";
 import "./RoomPage.css";
+import onsil from "./온실.png";
 
 const ITEMS_PER_PAGE = 8;
 
@@ -35,7 +37,15 @@ const RoomPage = () => {
     const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
     const [applyMessage, setApplyMessage] = useState("");
 
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
     const nickname = localStorage.getItem("nickname");
+
+    useEffect(() => {
+        const closeMenu = () => setIsUserMenuOpen(false);
+        window.addEventListener("click", closeMenu);
+        return () => window.removeEventListener("click", closeMenu);
+    }, []);
 
     /* ===== 공통 트리 생성 ===== */
     const buildCategoryTree = (allCategories, parentId = null) => {
@@ -56,7 +66,7 @@ const RoomPage = () => {
 
     /* ===== 대분류 로딩 ===== */
     useEffect(() => {
-        axios.get("/api/categories/main")
+        api.get("/categories/main")
             .then(res => {
                 setMainCategories(["전체", ...res.data.map(c => c.name)]);
             });
@@ -64,7 +74,7 @@ const RoomPage = () => {
 
     /* ===== 초기 전체 중분류 + 소분류 ===== */
     useEffect(() => {
-        axios.get("/api/categories")
+        api.get("/categories")
             .then(res => {
                 setCategoryTree(buildCategoryTree(res.data));
             });
@@ -78,7 +88,7 @@ const RoomPage = () => {
         setCurrentPage(1);
         setCategoryKeyword("");
 
-        const res = await axios.get("/api/categories");
+        const res = await api.get("/categories");
 
         if (catName === "전체") {
             setCategoryTree(buildCategoryTree(res.data));
@@ -141,17 +151,48 @@ const RoomPage = () => {
             {/* ===== 헤더 ===== */}
             <header className="top-header">
                 <div className="page-container header-inner">
-                    <div className="logo">로고</div>
+                    <div className="header-logo">
+                        <img
+                            src={onsil}
+                            alt="온실"
+                            onClick={() => navigate("/")}
+                            style={{ cursor: "pointer" }}
+                        />
+                    </div>
+
                     {nickname ? (
-                        <button
-                            className="auth-btns"
-                            onClick={() => {
-                                localStorage.clear();
-                                window.location.reload();
-                            }}
-                        >
-                            {nickname} 님 (로그아웃)
-                        </button>
+                        <div className="user-menu-wrapper">
+                            <button
+                                className="auth-btns"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsUserMenuOpen(prev => !prev);
+                                }}
+                            >
+                                {nickname} 님 ▾
+                            </button>
+
+                            {isUserMenuOpen && (
+                                <div className="user-dropdown" onClick={(e) => e.stopPropagation()}>
+                                    <ul>
+                                        <li onClick={() => navigate("/mypage")}>마이페이지</li>
+                                        <li onClick={() => navigate("/my-classes")}>내 클래스</li>
+                                        <li onClick={() => navigate("/my-applications")}>
+                                            스터디 신청 현황
+                                        </li>
+                                        <li
+                                            className="logout"
+                                            onClick={() => {
+                                                localStorage.clear();
+                                                window.location.reload();
+                                            }}
+                                        >
+                                            로그아웃
+                                        </li>
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         <button
                             className="auth-btns"
@@ -245,12 +286,12 @@ const RoomPage = () => {
                         <div className="room-header">
                             <h2>
                                 {selectedCategory === "전체(가나다순)"
-                                    ? "전체 모집 방"
+                                    ? "전체 모집 스터디"
                                     : selectedSubCategory
                                         ? `${selectedCategory} - ${selectedSubCategory}`
                                         : selectedCategory}
                             </h2>
-                            <button className="create-btn">스터디 만들기</button>
+                            <button className="create-btn" onClick={() => navigate("/studycreate")}>스터디 만들기</button>
                         </div>
 
                         <table className="room-table">
