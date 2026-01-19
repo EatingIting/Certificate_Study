@@ -6,5 +6,5 @@ public interface AuthService {
 
     void signup(AuthVO authVO);
 
-    String login(String email, String password);
+    AuthVO login(String email, String password);
 }

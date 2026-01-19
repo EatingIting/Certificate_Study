@@ -25,24 +25,20 @@ public class AuthController {
         return Map.of("available", available);
     }
 
-    @PostMapping("/signup")
-    public ResponseEntity<Void> signup(@RequestBody AuthVO authVO) {
-        authService.signup(authVO);
-        return ResponseEntity.ok().build();
-    }
-
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(
             @RequestBody Map<String, String> request
     ) {
-        System.out.println("🔥 로그인 컨트롤러 진입");
-        String token = authService.login(
+        AuthVO user = authService.login(
                 request.get("email"),
                 request.get("password")
         );
 
         return ResponseEntity.ok(
-                Map.of("accessToken", token)
+                Map.of(
+                        "nickname", user.getNickname()
+                )
         );
     }
+
 }

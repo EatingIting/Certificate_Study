@@ -1,8 +1,10 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./Auth.css";
 import { checkEmail, signup, login } from "../api/api.js";
 
 const Auth = () => {
+    const navigate = useNavigate();
     const [showModal, setShowModal] = useState(false);
     const [isSignup, setIsSignup] = useState(false);
 
@@ -165,9 +167,15 @@ const Auth = () => {
         if (errors.email || errors.password) return;
 
         try {
-            await login(form.email, form.password);
+            const res = await login(form.email, form.password);
+
+            localStorage.setItem("nickname", res.data.nickname);
+
             alert("로그인 성공");
             closeModal();
+
+            navigate("/roompage");
+
         } catch {
             alert("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
