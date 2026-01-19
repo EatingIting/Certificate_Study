@@ -1,0 +1,99 @@
+/* src/lms/ClassRoom.css */
+
+.classroom-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #fff;
+}
+
+/* 사이드바 */
+.sidebar {
+  width: 240px;
+  background-color: #f9fbf9; /* 아주 연한 회색/초록빛 */
+  border-right: 1px solid #eee;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #888;
+  margin-bottom: 20px;
+}
+
+.sidebar-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 15px;
+  margin-bottom: 8px;
+  border: none;
+  background: none;
+  font-size: 15px;
+  color: #555;
+  cursor: pointer;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.sidebar-menu button:hover {
+  background-color: #eee;
+}
+
+.sidebar-menu button.active {
+  background-color: #fff;
+  color: #2c3e50;
+  font-weight: 700;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+
+/* 메인 컨텐츠 영역 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+}
+
+.content-header {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 30px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.content-header h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
+
+.room-badge {
+  width: 12px; height: 12px;
+  background-color: #97c793;
+  border-radius: 4px;
+  margin-right: 10px;
+}
+
+.header-actions {
+  display: flex; gap: 15px; font-size: 20px; color: #888; cursor: pointer;
+}
+
+.content-body {
+  flex: 1;
+  padding: 30px;
+  background-color: #fff; /* 배경 흰색 */
+  overflow-y: auto;
+}
+
+.page-placeholder {
+  padding: 50px;
+  text-align: center;
+  color: #999;
+  font-size: 18px;
+}
