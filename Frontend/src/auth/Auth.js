@@ -14,7 +14,7 @@ const Auth = () => {
         passwordConfirm: "",
         name: "",
         nickname: "",
-        age: "",
+        birthDate: "",
         gender: "",
         introduction: "",
     });
@@ -33,7 +33,7 @@ const Auth = () => {
         passwordConfirm: "",
         name: "",
         nickname: "",
-        age: "",
+        birthDate: "",
         gender: "",
     });
 
@@ -47,7 +47,7 @@ const Auth = () => {
             passwordConfirm: "",
             name: "",
             nickname: "",
-            age: "",
+            birthDate: "",
             gender: "",
         });
     };
@@ -64,7 +64,7 @@ const Auth = () => {
             passwordConfirm: "",
             name: "",
             nickname: "",
-            age: "",
+            birthDate: "",
             gender: "",
         });
     };
@@ -81,7 +81,7 @@ const Auth = () => {
             passwordConfirm: "",
             name: "",
             nickname: "",
-            age: "",
+            birthDate: "",
             gender: "",
         });
     };
@@ -204,7 +204,7 @@ const Auth = () => {
 
         if (!form.name) errors.name = "이름을 입력해 주세요.";
         if (!form.nickname) errors.nickname = "닉네임을 입력해 주세요.";
-        if (!form.age) errors.age = "나이를 입력해 주세요.";
+        if (!form.birthDate) errors.birthDate = "생년월일을 입력해 주세요.";
         if (!form.gender) errors.gender = "성별을 선택해 주세요.";
 
         setSignupErrors(errors);
@@ -218,7 +218,7 @@ const Auth = () => {
             !form.passwordConfirm ||
             !form.name ||
             !form.nickname ||
-            !form.age ||
+            !form.birthDate ||
             !form.gender
         ) {
             alert("필수 항목을 모두 입력해 주세요.");
@@ -232,7 +232,7 @@ const Auth = () => {
             password: form.password,
             name: form.name,
             nickname: form.nickname,
-            age: Number(form.age),
+            birthDate: form.birthDate,
             gender: form.gender,
             introduction: form.introduction || null,
         };
@@ -395,18 +395,12 @@ const Auth = () => {
                                 )}
 
                                 <input
-                                    type="number"
-                                    name="age"
-                                    placeholder="나이"
-                                    className={`modal-input ${
-                                        signupErrors.age ? "error" : ""
-                                    }`}
-                                    value={form.age}
+                                    type="date"
+                                    name="birthDate"
+                                    className="modal-input"
+                                    value={form.birthDate}
                                     onChange={handleChange}
                                 />
-                                {signupErrors.age && (
-                                    <p className="input-error">{signupErrors.age}</p>
-                                )}
 
                                 <div
                                     className={`gender-group ${

@@ -32,6 +32,7 @@ body {
 }
 
 .header-logo img {
+    margin-top: 8px;
     width: 60px;
     height: 60px;
 }

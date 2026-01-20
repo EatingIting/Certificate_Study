@@ -1,4 +1,4 @@
-package com.example.demo.auth;
+package com.example.demo.mypage;
 
 import lombok.Data;
 
@@ -6,15 +6,15 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-public class AuthVO {
+public class MyPageVO {
 
     private String userId;
-    private String email;
-    private String password;
     private String name;
     private String nickname;
+    private String email;
     private LocalDate birthDate;
-    private String gender; // MALE / FEMALE
+    private String gender;
     private String introduction;
+    private String profileImg;
     private LocalDateTime createdAt;
 }
