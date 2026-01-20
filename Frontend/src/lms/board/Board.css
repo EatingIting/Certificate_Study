@@ -251,3 +251,14 @@
     font-weight: 700;
     color: var(--text);
 }
+
+/* pinned 강조 (원하면 유지, 싫으면 삭제) */
+.bd-item.pinned {
+    border: 1px solid #a5dea0;
+    background: #e9fadc;
+}
+
+.bd-item.pinned-top {
+    border: 1px solid #a5dea0;
+    background: #e9fadc;
+}
