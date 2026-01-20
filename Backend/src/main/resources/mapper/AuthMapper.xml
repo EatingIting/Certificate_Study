@@ -18,7 +18,7 @@
             password,
             name,
             nickname,
-            age,
+            birth_date,
             gender,
             introduction
         ) VALUES (
@@ -27,7 +27,7 @@
                      #{password},
                      #{name},
                      #{nickname},
-                     #{age},
+                     #{birthDate},
                      #{gender},
                      #{introduction}
                  )
@@ -41,7 +41,7 @@
             password,
             name,
             nickname,
-            age,
+            birth_date  AS birthDate,
             gender,
             introduction,
             created_at  AS createdAt
