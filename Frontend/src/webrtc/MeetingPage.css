@@ -1104,43 +1104,27 @@ body {
   transform: scale(1.2);
 }
 
-/* 그리드 전체화면 사이드바 */
-.grid-fullscreen-sidebar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 0;
-  z-index: 3000;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.3);
-  border-left: 1px solid rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.grid-fullscreen-container.sidebar-open .grid-fullscreen-sidebar {
+  transform: translateX(0);
 }
 
-.grid-fullscreen-sidebar.open {
-  width: 360px;
-}
+/* .grid-fullscreen-container.sidebar-open .grid-fullscreen-video-area {
+  margin-right: 360px;
+} */
+
 
 .grid-fullscreen-sidebar-inner {
-  width: 360px;
-  height: 100%;
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .grid-fullscreen-sidebar-header {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border-color);
-  background: white;
   flex-shrink: 0;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .grid-fullscreen-sidebar-header .sidebar-title {
@@ -1180,11 +1164,16 @@ body {
   gap: 12px;
 }
 
+.grid-fullscreen-chat-area,
+.grid-fullscreen-participants-area {
+  flex: 1;
+  overflow-y: auto;
+}
+
 .grid-fullscreen-chat-input-area {
-  padding: 16px;
-  background: white;
-  border-top: 1px solid var(--border-color);
   flex-shrink: 0;
+  padding: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 
 /* 그리드 전체화면 참여자 영역 */
@@ -1225,7 +1214,12 @@ body {
 
 /* 그리드 전체화면 컨테이너 (단일 컨테이너, 발표자 모드와 동일한 구조) */
 .grid-fullscreen-container {
-  display: none;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  background: #000;
+  overflow: hidden;
 }
 
 .grid-fullscreen-container:fullscreen,
@@ -1242,28 +1236,27 @@ body {
 
 /* 그리드 전체화면 비디오 영역 */
 .grid-fullscreen-container:fullscreen .grid-fullscreen-video-area,
-.grid-fullscreen-container:-webkit-full-screen .grid-fullscreen-video-area {
-  position: absolute;
-  top: 0;
-  left: 0;
+.grid-fullscreen-container:-webkit-full-screen .grid-fullscreen-video-area,
+.grid-fullscreen-container.active .grid-fullscreen-video-area {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
   right: 0;
-  bottom: 0;
+  bottom: 0 !important;
   border-radius: 0;
   transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* 사이드바 열릴 때 비디오 영역이 왼쪽으로 밀림 */
-.grid-fullscreen-container.sidebar-open:fullscreen .grid-fullscreen-video-area,
-.grid-fullscreen-container.sidebar-open:-webkit-full-screen .grid-fullscreen-video-area {
-  right: 360px;
+  overflow: hidden;
 }
 
 /* 그리드 전체화면 비디오 영역 내 비디오 타일 */
 .grid-fullscreen-video-area {
+  flex: 1;
   position: relative;
-  width: 100%;
-  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #000;
+  transition: margin-right 0.3s ease;
 }
 
 .grid-fullscreen-video-area .video-tile {
@@ -1272,6 +1265,11 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 0;
+}
+
+/* 사이드바 열릴 때 비디오 영역이 왼쪽으로 밀림 - 반드시 기본 스타일 뒤에 위치 */
+.grid-fullscreen-container.active.sidebar-open .grid-fullscreen-video-area {
+  right: 360px !important;
 }
 
 .grid-video-area {
@@ -1289,12 +1287,12 @@ body {
   height: 100%;
 }
 
-/* 그리드 전체화면 사이드바 - 메인 전체화면과 동일한 방식 */
-.grid-fullscreen-sidebar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+/* 그리드 전체화면 사이드바 - active 클래스로 전체화면 상태 감지 */
+.grid-fullscreen-container.active .grid-fullscreen-sidebar {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
   width: 0;
   z-index: 3000;
 
@@ -1309,7 +1307,7 @@ body {
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.grid-fullscreen-sidebar.open {
+.grid-fullscreen-container.active .grid-fullscreen-sidebar.open {
   width: 360px;
 }
 
@@ -1708,6 +1706,11 @@ body {
 .meet-sidebar.open {
   width: 360px;
   border-left: 1px solid var(--border-color);
+}
+
+/* 전체화면일 때 페이지 레벨 사이드바 숨김 */
+body.fullscreen-active .meet-sidebar {
+  display: none !important;
 }
 
 .sidebar-inner {

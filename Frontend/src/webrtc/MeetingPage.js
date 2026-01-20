@@ -472,6 +472,13 @@ function MeetingPage() {
             const isGridFs = fullscreenEl === gridFullscreenStageRef.current;
             setIsGridFullscreen(isGridFs);
 
+            // body에 전체화면 클래스 추가/제거 (페이지 레벨 사이드바 숨김용)
+            if (fullscreenEl) {
+                document.body.classList.add("fullscreen-active");
+            } else {
+                document.body.classList.remove("fullscreen-active");
+            }
+
             // 전체화면 종료 시 그리드 전체화면 상태도 초기화
             if (!fullscreenEl) {
                 setGridFullscreenId(null);
@@ -1679,6 +1686,16 @@ function MeetingPage() {
     }, []);
 
     useEffect(() => {
+        if (isGridFullscreen && gridFullscreenStageRef.current) {
+            gridFullscreenStageRef.current
+                .requestFullscreen()
+                .catch((err) => {
+                    console.error("전체화면 전환 실패:", err);
+                });
+        }
+    }, [isGridFullscreen]);
+
+    useEffect(() => {
         if (!localStreamRef.current) return;
         const vt = localStreamRef.current.getVideoTracks()[0];
         if (vt) vt.enabled = camOn;
@@ -2882,42 +2899,43 @@ function MeetingPage() {
                         ) : (
                             /* Grid 모드 */
                             <div className={`layout-grid custom-scrollbar ${isGridFullscreen ? "fullscreen-active" : ""}`}>
-                                {/* 그리드 전체화면 컨테이너 (발표자 모드와 동일한 구조) */}
-                                <div
-                                    ref={gridFullscreenStageRef}
-                                    className={`grid-fullscreen-container ${isGridFullscreen ? "active" : ""} ${isGridScreenShare ? "screen-share-active" : ""} ${isGridFullscreen && sidebarOpen ? "sidebar-open" : ""}`}
-                                >
-                                    {/* 메인 비디오 영역 */}
-                                    <div className="grid-fullscreen-video-area">
-                                        <VideoTile
-                                            user={gridFullscreenUser}
-                                            isMain
-                                            stream={gridFullscreenStream}
-                                            roomReconnecting={roomReconnecting}
-                                            isScreen={isGridScreenShare}
-                                            reaction={gridFullscreenUser?.isMe ? myReaction : gridFullscreenUser?.reaction}
-                                        />
 
-                                        {/* 전체화면 토글 버튼 */}
-                                        <button
-                                            className="grid-fullscreen-btn"
-                                            onClick={() => {
-                                                if (document.fullscreenElement) {
-                                                    document.exitFullscreen();
-                                                } else {
-                                                    gridFullscreenStageRef.current?.requestFullscreen().catch((err) => {
-                                                        console.error("전체화면 전환 실패:", err);
-                                                    });
-                                                }
-                                            }}
-                                            title={isGridFullscreen ? "전체화면 종료" : "전체화면"}
-                                        >
-                                            {isGridFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                                        </button>
-                                    </div>
+                                {/* ✅ 그리드 전체화면 컨테이너 (전체화면일 때만 렌더링) */}
+                                {isGridFullscreen && (
+                                    <div
+                                        ref={gridFullscreenStageRef}
+                                        className={`grid-fullscreen-container active ${isGridScreenShare ? "screen-share-active" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}
+                                    >
+                                        {/* 메인 비디오 영역 */}
+                                        <div className="grid-fullscreen-video-area">
+                                            <VideoTile
+                                                user={gridFullscreenUser}
+                                                isMain
+                                                stream={gridFullscreenStream}
+                                                roomReconnecting={roomReconnecting}
+                                                isScreen={isGridScreenShare}
+                                                reaction={gridFullscreenUser?.isMe ? myReaction : gridFullscreenUser?.reaction}
+                                            />
 
-                                    {/* 전체화면 전용 UI */}
-                                    {isGridFullscreen && (
+                                            {/* 전체화면 토글 버튼 */}
+                                            <button
+                                                className="grid-fullscreen-btn"
+                                                onClick={() => {
+                                                    if (document.fullscreenElement) {
+                                                        document.exitFullscreen();
+                                                    } else {
+                                                        gridFullscreenStageRef.current?.requestFullscreen().catch((err) => {
+                                                            console.error("전체화면 전환 실패:", err);
+                                                        });
+                                                    }
+                                                }}
+                                                title="전체화면 종료"
+                                            >
+                                                <Minimize size={18} />
+                                            </button>
+                                        </div>
+
+                                        {/* 전체화면 전용 UI */}
                                         <>
                                             {/* 이모지 팝업 */}
                                             {showReactions && (
@@ -2957,11 +2975,14 @@ function MeetingPage() {
                                                                             {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
                                                                             <div className="msg-bubble">{msg.text}</div>
                                                                         </div>
-                                                                        <span className="msg-time">{msg.userName}, {msg.time}</span>
+                                                                        <span className="msg-time">
+                                                                            {msg.userName}, {msg.time}
+                                                                        </span>
                                                                     </div>
                                                                 ))}
                                                                 <div ref={chatEndRef} />
                                                             </div>
+
                                                             <div className="grid-fullscreen-chat-input-area">
                                                                 <form onSubmit={handleSendMessage} className="chat-form">
                                                                     <input
@@ -3006,53 +3027,20 @@ function MeetingPage() {
 
                                             {/* 미디어 컨트롤 */}
                                             <div className={`grid-fullscreen-media-controls ${gridStripVisible ? "visible" : "hidden"}`}>
-                                                <ButtonControl
-                                                    label={micOn ? "마이크 끄기" : "마이크 켜기"}
-                                                    icon={Mic}
-                                                    active={!micOn}
-                                                    disabled={micDisabled}
-                                                    onClick={toggleMic}
-                                                />
-                                                <ButtonControl
-                                                    label={camOn ? "카메라 끄기" : "카메라 켜기"}
-                                                    icon={Video}
-                                                    active={!camOn}
-                                                    disabled={camDisabled}
-                                                    onClick={toggleCam}
-                                                />
+                                                <ButtonControl label={micOn ? "마이크 끄기" : "마이크 켜기"} icon={Mic} active={!micOn} disabled={micDisabled} onClick={toggleMic} />
+                                                <ButtonControl label={camOn ? "카메라 끄기" : "카메라 켜기"} icon={Video} active={!camOn} disabled={camDisabled} onClick={toggleCam} />
                                                 <div className="divider" />
                                                 {!isIOS && (
                                                     <ButtonControl
                                                         label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
                                                         icon={Monitor}
                                                         active={isScreenSharing}
-                                                        onClick={() => {
-                                                            if (isScreenSharing) {
-                                                                stopScreenShare();
-                                                            } else {
-                                                                startScreenShare();
-                                                            }
-                                                        }}
+                                                        onClick={() => (isScreenSharing ? stopScreenShare() : startScreenShare())}
                                                     />
                                                 )}
-                                                <ButtonControl
-                                                    label="반응"
-                                                    icon={Smile}
-                                                    active={showReactions}
-                                                    onClick={() => setShowReactions(!showReactions)}
-                                                />
-                                                <ButtonControl
-                                                    label="채팅"
-                                                    icon={MessageSquare}
-                                                    active={sidebarOpen && sidebarView === "chat"}
-                                                    onClick={() => toggleSidebar("chat")}
-                                                />
-                                                <ButtonControl
-                                                    label="참여자"
-                                                    icon={Users}
-                                                    active={sidebarOpen && sidebarView === "participants"}
-                                                    onClick={() => toggleSidebar("participants")}
-                                                />
+                                                <ButtonControl label="반응" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
+                                                <ButtonControl label="채팅" icon={MessageSquare} active={sidebarOpen && sidebarView === "chat"} onClick={() => toggleSidebar("chat")} />
+                                                <ButtonControl label="참여자" icon={Users} active={sidebarOpen && sidebarView === "participants"} onClick={() => toggleSidebar("participants")} />
                                                 <div className="divider" />
                                                 <ButtonControl label="통화 종료" danger icon={Phone} onClick={handleHangup} />
                                             </div>
@@ -3096,46 +3084,44 @@ function MeetingPage() {
                                                 </button>
                                             )}
                                         </>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
 
                                 {/* 그리드 타일들 (전체화면이 아닐 때만 표시) */}
-                                {!isGridFullscreen && orderedParticipants.map((p) => (
-                                    <div key={p.id} className="grid-tile">
-                                        <div className="grid-video-area">
-                                            <VideoTile
-                                                user={p}
-                                                stream={
-                                                    p.isScreenSharing
-                                                        ? p.screenStream
-                                                        : p.isMe
-                                                        ? localStream
-                                                        : p.stream
-                                                }
-                                                roomReconnecting={roomReconnecting}
-                                                isScreen={p.isScreenSharing}
-                                                reaction={p.isMe ? myReaction : null}
-                                            />
+                                {!isGridFullscreen &&
+                                    orderedParticipants.map((p) => (
+                                        <div key={p.id} className="grid-tile">
+                                            <div className="grid-video-area">
+                                                <VideoTile
+                                                    user={p}
+                                                    stream={
+                                                        p.isScreenSharing
+                                                            ? p.screenStream
+                                                            : p.isMe
+                                                            ? localStream
+                                                            : p.stream
+                                                    }
+                                                    roomReconnecting={roomReconnecting}
+                                                    isScreen={p.isScreenSharing}
+                                                    reaction={p.isMe ? myReaction : null}
+                                                />
 
-                                            <button
-                                                className="grid-fullscreen-btn"
-                                                onClick={() => {
-                                                    setGridFullscreenId(p.id);
-                                                    gridFullscreenStageRef.current?.requestFullscreen().catch((err) => {
-                                                        console.error("전체화면 전환 실패:", err);
-                                                    });
-                                                }}
-                                                title="전체화면"
-                                            >
-                                                <Maximize size={18} />
-                                            </button>
+                                                <button
+                                                    className="grid-fullscreen-btn"
+                                                    onClick={() => {
+                                                        setGridFullscreenId(p.id);
+                                                        setIsGridFullscreen(true);
+                                                    }}
+                                                    title="전체화면"
+                                                >
+                                                    <Maximize size={18} />
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
                             </div>
                         )}
                     </div>
-
                     <div className="meet-controls-container">
                         {showReactions && (
                             <div className="reaction-popup glass-panel">
@@ -3191,7 +3177,7 @@ function MeetingPage() {
                     </div>
                 </main>
 
-                <aside className={`meet-sidebar ${sidebarOpen ? "open" : ""}`}>
+                <aside className={`meet-sidebar ${sidebarOpen && !isGridFullscreen && !isFullscreen ? "open" : ""}`}>
                     <div className="sidebar-inner">
                         <div className="sidebar-header">
                             <h2 className="sidebar-title">{sidebarView === "chat" ? "회의 채팅" : "참여자 목록"}</h2>
