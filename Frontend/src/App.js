@@ -1,9 +1,8 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import RoomPage from "./roomcategorypage/RoomPage";
 import MyPage from "./roomcategorypage/MyPage";
 import Auth from "./auth/Auth";
-
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import MeetingPage from "./webrtc/MeetingPage";
 
 function App() {
   return (
