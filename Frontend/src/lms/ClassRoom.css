@@ -14,6 +14,7 @@
   padding: 30px 20px;
   display: flex;
   flex-direction: column;
+  justify-content: space-between; /* [추가] 메뉴는 위, 버튼은 아래 배치 */
 }
 
 .sidebar-title {
@@ -96,4 +97,22 @@
   text-align: center;
   color: #999;
   font-size: 18px;
+}
+
+/* [추가] 화상 채팅방 입장 버튼 스타일 */
+.video-chat-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #97c793; /* 테마 컬러 */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    margin-top: 20px;
+}
+
+.video-chat-btn:hover {
+    background-color: #86b883;
 }

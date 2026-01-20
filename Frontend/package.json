@@ -20,7 +20,7 @@
     "webrtc": "^1.14.1"
   },
   "scripts": {
-    "start": "cross-env HTTPS=true react-scripts start",
+    "start": "cross-env react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -46,6 +46,7 @@
   "devDependencies": {
     "autoprefixer": "^10.4.23",
     "cross-env": "^10.1.0",
+    "http-proxy-middleware": "^3.0.5",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18"
   }
