@@ -26,6 +26,7 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/ws/**").permitAll()  // WebSocket 경로 허용
                         .anyRequest().permitAll()
                 );
 
@@ -38,7 +39,9 @@ public class SecurityConfig {
 
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:3000",
-                "http://172.30.1.61:3000"
+                "http://172.30.1.61:3000",
+                "https://192.168.35.235",
+                "https://172.30.1.250"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
