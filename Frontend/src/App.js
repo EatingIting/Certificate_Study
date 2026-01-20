@@ -12,7 +12,7 @@ function App() {
         <Route path="/" element={<Navigate to="/room/test" replace />} />
         <Route path="/room/:roomId" element={<MeetingPage />} />
         <Route path="/auth" element={<Auth />} />
-        <Route path="/roompage" element={<RoomPage />}/>
+        <Route path="/roompage" element={<RoomPage />} />
       </Routes>
     </BrowserRouter>
   );
