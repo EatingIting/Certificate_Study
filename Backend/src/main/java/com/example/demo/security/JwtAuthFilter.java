@@ -21,7 +21,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        // WebSocket 경로는 JWT 필터에서 제외
+        // WebSocket 등 JWT 적용 제외 경로
         return path.startsWith("/ws/");
     }
 
@@ -32,20 +32,26 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String auth = request.getHeader("Authorization");
+        String authHeader = request.getHeader("Authorization");
 
-        if (auth == null || !auth.startsWith("Bearer ")) {
+        // Authorization 헤더 없거나 Bearer 아니면 그냥 통과
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
         try {
-            String token = auth.substring(7);
-            Authentication authentication =
-                    tokenProvider.getAuthentication(token);
-            SecurityContextHolder.getContext()
-                    .setAuthentication(authentication);
+            String token = authHeader.substring(7); // "Bearer " 제거
+
+            if (tokenProvider.validateToken(token)) {
+                Authentication authentication =
+                        tokenProvider.getAuthentication(token);
+
+                SecurityContextHolder.getContext()
+                        .setAuthentication(authentication);
+            }
         } catch (Exception e) {
+            // 토큰 문제 있으면 인증 정보 제거
             SecurityContextHolder.clearContext();
         }
 

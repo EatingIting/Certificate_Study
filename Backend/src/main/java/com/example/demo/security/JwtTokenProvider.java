@@ -1,5 +1,6 @@
 package com.example.demo.security;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,27 +30,38 @@ public class JwtTokenProvider {
         this.expirationMs = expirationMs;
     }
 
-    // Access Token 생성
-    public String createAccessToken(String loginId) {
+    public String createAccessToken(String userId) {
         Date now = new Date();
+
         return Jwts.builder()
-                .setSubject(loginId)
+                .setSubject(userId)
                 .setIssuedAt(now)
                 .setExpiration(new Date(now.getTime() + expirationMs))
                 .signWith(key)
                 .compact();
     }
 
-    // 토큰 → Authentication 변환
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parser()
+                    .setSigningKey(key)
+                    .parseClaimsJws(token);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public Authentication getAuthentication(String token) {
-        String loginId = Jwts.parser()
+        Claims claims = Jwts.parser()
                 .setSigningKey(key)
                 .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
+                .getBody();
+
+        String userId = claims.getSubject();
 
         return new UsernamePasswordAuthenticationToken(
-                loginId,
+                userId,                          // principal
                 null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER"))
         );
