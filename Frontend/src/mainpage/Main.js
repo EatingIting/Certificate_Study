@@ -1,6 +1,9 @@
 import "./Main.css";
+import { useNavigate } from "react-router-dom";
 
 function Main() {
+    const navigate = useNavigate();
+d
     return (
         <div className="page">
             {/* Header */}
@@ -8,14 +11,14 @@ function Main() {
                 <div className="logo">ONSIL</div>
 
                 <nav className="nav">
-                    <span>스터디 찾기</span>
+                    <span onClick={() => navigate("/roompage")}>스터디 찾기</span>
                     <span>자격증</span>
                     <span>커뮤니티</span>
                     <span>내 학습</span>
                 </nav>
 
                 <div className="header-actions">
-                    <button className="login-btn">로그인</button>
+                    <button className="login-btn" onClick={() => navigate("/auth")}>로그인</button>
                     <button className="create-btn">스터디 만들기</button>
                 </div>
             </header>
