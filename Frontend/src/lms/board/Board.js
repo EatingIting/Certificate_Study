@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./Board.css";
 
 import BoardDetail from "./BoardDetail";
@@ -6,22 +6,22 @@ import BoardWrite from "./BoardWrite";
 import BoardEdit from "./BoardEdit";
 
 /**
- * 라우터 없이 Board 내부에서 화면 전환
+ * Board (라우터 없이 내부 view 전환)
  * view: list | detail | write | edit
  *
- * + 브라우저 뒤로가기(popstate) 처리:
- *   - detail/write/edit 상태에서 뒤로가기 => list로 이동
- *   - list 상태에서 뒤로가기 => 진짜 이전 페이지로 이동
+ * ✅ 네이버 카페 스타일:
+ * - pinned 글은 상단에 "한 번 더" 노출
+ * - 아래 원래 목록에도 그대로 존재(중복 표시)
+ * - 탭(일반/질문 등)과 무관하게 pinned 상단은 항상 보이게(검색은 적용)
  */
 function Board() {
     let initialPosts = useMemo(() => {
-        // 더미 데이터 (가명 사용)
         return [
             {
                 postId: 100,
                 category: "공지",
-                title: "📌 필독: 게시판 이용 규칙",
-                content: "욕설 금지, 광고 금지, 서로 존중하기.\n\n(더미 데이터)",
+                title: "필독: 게시판 이용 규칙",
+                content: "욕설/비방/광고 금지. 서로 존중하기.\n(더미 데이터)",
                 authorName: "홍길동",
                 createdAt: "2026-01-19 10:00",
                 pinned: true,
@@ -29,19 +29,19 @@ function Board() {
             {
                 postId: 101,
                 category: "공지",
-                title: "이번 주 시험/접수 일정 공지",
+                title: "이번 주 시험/접수 일정",
                 content: "접수: 1/20\n시험: 2/02\n(더미 데이터)",
                 authorName: "홍길동",
                 createdAt: "2026-01-19 10:05",
                 pinned: true,
             },
             {
-                postId: 3,
-                category: "일반",
-                title: "오늘 발표 순서 확인",
-                content: "A → B → C 순서로 진행!\n(더미 데이터)",
+                postId: 5,
+                category: "자료",
+                title: "오늘 발표 자료 공유합니다",
+                content: "링크는 나중에 추가할게요.\n(더미 데이터)",
                 authorName: "홍길동",
-                createdAt: "2026-01-18 21:20",
+                createdAt: "2026-01-18 16:10",
                 pinned: false,
             },
             {
@@ -53,10 +53,20 @@ function Board() {
                 createdAt: "2026-01-18 18:40",
                 pinned: false,
             },
+            {
+                postId: 3,
+                category: "일반",
+                title: "오늘 발표 순서 확인",
+                content: "A → B → C 순서로 진행!\n(더미 데이터)",
+                authorName: "홍길동",
+                createdAt: "2026-01-18 21:20",
+                pinned: false,
+            },
         ];
     }, []);
 
     let [posts, setPosts] = useState(initialPosts);
+
     let [view, setView] = useState("list"); // list | detail | write | edit
     let [selectedPostId, setSelectedPostId] = useState(null);
 
@@ -66,31 +76,34 @@ function Board() {
 
     let selectedPost = posts.find((p) => p.postId === selectedPostId) || null;
 
-    // ===== 브라우저 뒤로가기(popstate) 처리 =====
+    // ===== 브라우저 뒤로가기(popstate) 안정 처리 =====
+    let viewRef = useRef("list");
+
     useEffect(() => {
-        // Board가 마운트될 때 history 한 칸 쌓아둠 (뒤로가기를 잡기 위함)
+        viewRef.current = view;
+    }, [view]);
+
+    useEffect(() => {
+        // Board 마운트 시 history 1칸 쌓기
         window.history.pushState({ board: true }, "");
 
         let handlePopState = () => {
-            // detail/write/edit 화면이면: "이전 페이지로"가 아니라 "목록으로" 처리
-            if (view !== "list") {
+            // detail/write/edit 상태에서 뒤로가기 => list로만 복귀
+            if (viewRef.current !== "list") {
                 setSelectedPostId(null);
                 setView("list");
 
-                // 연속 뒤로가기도 방지하려고 다시 push
+                // 연속 뒤로가기로 Board 페이지를 훅 빠져나가는 것 방지
                 window.history.pushState({ board: true }, "");
                 return;
             }
 
-            // list 화면이면: 여기서는 개입하지 않음 (진짜 이전 페이지로 이동)
+            // list 상태면 개입하지 않음 (진짜 이전 페이지로 이동)
         };
 
         window.addEventListener("popstate", handlePopState);
-
-        return () => {
-            window.removeEventListener("popstate", handlePopState);
-        };
-    }, [view]);
+        return () => window.removeEventListener("popstate", handlePopState);
+    }, []);
 
     // ===== navigation helpers =====
     let goList = () => {
@@ -99,7 +112,6 @@ function Board() {
     };
 
     let goDetail = (postId) => {
-        // detail 들어갈 때도 history 한 칸 쌓아두면 UX가 더 자연스러움
         window.history.pushState({ board: true }, "");
         setSelectedPostId(postId);
         setView("detail");
@@ -118,7 +130,6 @@ function Board() {
 
     // ===== mutations =====
     let createPost = (draft) => {
-        // draft: {category,title,content}
         let nextId = Math.max(0, ...posts.map((p) => p.postId)) + 1;
 
         let newPost = {
@@ -128,7 +139,7 @@ function Board() {
             content: draft.content,
             authorName: "홍길동",
             createdAt: "2026-01-19 10:30",
-            pinned: draft.category === "공지",
+            pinned: false,
         };
 
         setPosts([newPost, ...posts]);
@@ -139,15 +150,11 @@ function Board() {
         let next = posts.map((p) => {
             if (p.postId !== postId) return p;
 
-            let nextCategory = patch.category;
-            let nextPinned = nextCategory === "공지";
-
             return {
                 ...p,
                 category: patch.category,
                 title: patch.title,
                 content: patch.content,
-                pinned: nextPinned,
             };
         });
 
@@ -158,10 +165,7 @@ function Board() {
         let next = posts.filter((p) => p.postId !== postId);
         setPosts(next);
 
-        // 삭제 후 안전 처리
-        if (selectedPostId === postId) {
-            goList();
-        }
+        if (selectedPostId === postId) goList();
     };
 
     // ===== view switching =====
@@ -211,31 +215,33 @@ function Board() {
     // ===== list view =====
     let normalizedKeyword = keyword.trim().toLowerCase();
 
-    let filtered = posts
+    let matchesKeyword = (p) => {
+        if (!normalizedKeyword) return true;
+        let hay = `${p.title} ${p.content}`.toLowerCase();
+        return hay.includes(normalizedKeyword);
+    };
+
+    // ✅ 상단 pinned: 탭 무시 + 검색 적용
+    let pinnedTopPosts = posts
+        .filter((p) => !!p.pinned)
+        .filter(matchesKeyword)
+        .sort((a, b) => b.postId - a.postId);
+
+    // ✅ 원래 목록: 탭 + 검색 적용 (pinned 포함 => 중복 표시)
+    let listPosts = posts
+        .filter(matchesKeyword)
         .filter((p) => {
             if (categoryFilter === "전체") return true;
             return p.category === categoryFilter;
         })
-        .filter((p) => {
-            if (!normalizedKeyword) return true;
-            let hay = `${p.title} ${p.content}`.toLowerCase();
-            return hay.includes(normalizedKeyword);
-        });
-
-    // 공지(고정/공지카테고리) 먼저
-    let sorted = [...filtered].sort((a, b) => {
-        let ap = a.pinned ? 1 : 0;
-        let bp = b.pinned ? 1 : 0;
-        if (ap !== bp) return bp - ap; // pinned 먼저
-        return b.postId - a.postId; // 최신 느낌
-    });
+        .sort((a, b) => b.postId - a.postId);
 
     return (
         <div className="bd">
             <div className="bd-head">
                 <div>
                     <h2 className="bd-title">게시판</h2>
-                    <p className="bd-sub">공지/일반/질문/자료를 확인하고 글을 작성할 수 있어요.</p>
+                    <p className="bd-sub">고정된 글은 상단에 한 번 더 표시됩니다.</p>
                 </div>
 
                 <div className="bd-actions">
@@ -280,35 +286,53 @@ function Board() {
 
             <div className="bd-card">
                 <div className="bd-list">
-                    {sorted.length === 0 ? (
+                    {/* ✅ 상단 pinned(묶음 제목 없음) */}
+                    {pinnedTopPosts.length > 0 &&
+                        pinnedTopPosts.map((p) => (
+                            <div
+                                key={`pin-${p.postId}`}
+                                className="bd-item pinned-top"
+                                onClick={() => goDetail(p.postId)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") goDetail(p.postId);
+                                }}
+                            >
+                                <span className="bd-chip">{p.category}</span>
+
+                                <div className="bd-item-title">📌 {p.title}</div>
+
+                                <div className="bd-item-meta">
+                                    {p.authorName} · {p.createdAt}
+                                </div>
+                            </div>
+                        ))}
+
+                    {/* ✅ 원래 목록(탭/검색 적용, pinned도 포함 => 중복 표시) */}
+                    {listPosts.length === 0 ? (
                         <div className="bd-sub">게시글이 없습니다.</div>
                     ) : (
-                        sorted.map((p) => {
-                            let isNotice = p.category === "공지" || p.pinned;
+                        listPosts.map((p) => (
+                            <div
+                                key={p.postId}
+                                className="bd-item"
+                                onClick={() => goDetail(p.postId)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") goDetail(p.postId);
+                                }}
+                            >
+                                <span className="bd-chip">{p.category}</span>
 
-                            return (
-                                <div
-                                    key={p.postId}
-                                    className="bd-item"
-                                    onClick={() => goDetail(p.postId)}
-                                    role="button"
-                                    tabIndex={0}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") goDetail(p.postId);
-                                    }}
-                                >
-                  <span className={`bd-chip ${isNotice ? "notice" : ""}`}>
-                    {isNotice ? "공지" : p.category}
-                  </span>
+                                <div className="bd-item-title">{p.title}</div>
 
-                                    <div className="bd-item-title">{p.title}</div>
-
-                                    <div className="bd-item-meta">
-                                        {p.authorName} · {p.createdAt}
-                                    </div>
+                                <div className="bd-item-meta">
+                                    {p.authorName} · {p.createdAt}
                                 </div>
-                            );
-                        })
+                            </div>
+                        ))
                     )}
                 </div>
             </div>

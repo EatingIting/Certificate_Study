@@ -5,7 +5,7 @@ import Dashboard from "./dashboard/Dashboard";
 import Attendance from "./attendance/Attendance";
 import Assignment from "./assignment/Assignment";
 import Board from "./board/Board";
-import Calender from "./calender/Calender"
+import Calender from "./calendar/Calendar"
 
 
 import "./LMSSubject.css";
