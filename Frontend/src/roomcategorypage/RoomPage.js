@@ -66,7 +66,7 @@ const RoomPage = () => {
 
     /* ===== 대분류 로딩 ===== */
     useEffect(() => {
-        api.get("/main")
+        api.get("/category/main")
             .then(res => {
                 setMainCategories(["전체", ...res.data.map(c => c.name)]);
             });
@@ -74,7 +74,7 @@ const RoomPage = () => {
 
     /* ===== 초기 전체 중분류 + 소분류 ===== */
     useEffect(() => {
-        api.get("/")
+        api.get("/category")
             .then(res => {
                 setCategoryTree(buildCategoryTree(res.data));
             });
@@ -88,7 +88,7 @@ const RoomPage = () => {
         setCurrentPage(1);
         setCategoryKeyword("");
 
-        const res = await api.get("/");
+        const res = await api.get("/category");
 
         if (catName === "전체") {
             setCategoryTree(buildCategoryTree(res.data));

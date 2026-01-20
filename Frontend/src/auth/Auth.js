@@ -171,6 +171,7 @@ const Auth = () => {
 
             localStorage.setItem("userId", res.data.userId);
             localStorage.setItem("nickname", res.data.nickname);
+            localStorage.setItem("token", res.data.token);
 
             alert("로그인 성공");
             closeModal();

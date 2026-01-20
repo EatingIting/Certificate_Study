@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.auth.AuthService;
 import com.example.demo.auth.AuthVO;
+import com.example.demo.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @GetMapping("/check-email")
     public Map<String, Boolean> checkEmail(@RequestParam String email) {
@@ -33,10 +35,13 @@ public class AuthController {
                 request.get("password")
         );
 
+        String token = jwtTokenProvider.createAccessToken(user.getUserId());
+
         return ResponseEntity.ok(
                 Map.of(
                         "userId", user.getUserId(),
-                        "nickname", user.getNickname()
+                        "nickname", user.getNickname(),
+                        "token", token
                 )
         );
     }
