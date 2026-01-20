@@ -324,7 +324,7 @@ function MeetingPage() {
 
     const [messages, setMessages] = useState(() => {
         try {
-            const saved = localStorage.getItem(`chat_${roomId}`);
+            const saved = sessionStorage.getItem(`chat_${roomId}`);
             return saved ? JSON.parse(saved) : [];
         } catch {
             return [];
@@ -384,6 +384,8 @@ function MeetingPage() {
     const cameraWasOnBeforeScreenShareRef = useRef(false); // 화면공유 시작 전 카메라 상태
     const isStoppingScreenShareRef = useRef(false); // stopScreenShare 중복 실행 방지
     const [isScreenSharing, setIsScreenSharing] = useState(false);
+
+    const isLeavingRef = useRef(false); // 통화종료 버튼으로 나가는 중인지 여부
 
     // 전체화면 관련
     const mainStageRef = useRef(null);
@@ -518,13 +520,17 @@ function MeetingPage() {
     };
 
     const handleHangup = () => {
-        alert("채팅이 종료되었습니다.");
+        // ✅ 통화종료 버튼으로 나가는 것임을 표시 (beforeunload에서 LEAVE 전송하도록)
+        isLeavingRef.current = true;
 
+        // ✅ LEAVE를 먼저 보내서 다른 참가자에게 즉시 퇴장 알림
         wsRef.current?.send(
             JSON.stringify({
                 type: "LEAVE",
             })
         );
+
+        alert("채팅이 종료되었습니다.");
         
         try {
             // 1) 로컬 미디어 정리
@@ -583,6 +589,19 @@ function MeetingPage() {
             isMe: false,
         };
     };
+
+    const isIOSDevice = () => {
+        // iPhone/iPad/iPod (구형 UA)
+        const ua = navigator.userAgent || "";
+        const isAppleMobileUA = /iPhone|iPad|iPod/i.test(ua);
+
+        // iPadOS 13+는 UA가 Macintosh로 나오는 경우가 있어 maxTouchPoints로 보정
+        const isIpadOS13Plus = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+
+        return isAppleMobileUA || isIpadOS13Plus;
+    };
+
+    const isIOS = useMemo(() => isIOSDevice(), []);
 
     const bumpStreamVersion = () => {
         setStreamVersion((v) => v + 1);
@@ -761,6 +780,10 @@ function MeetingPage() {
     };
     
     const startScreenShare = async () => {
+        if (isIOS) {
+            console.warn("iOS에서는 화면 공유를 지원하지 않습니다.");
+            return;
+        }
         if (!sendTransportRef.current || sendTransportRef.current.closed) return;
         if (producersRef.current.has("screen")) return;
 
@@ -1546,10 +1569,18 @@ function MeetingPage() {
 
     useEffect(() => {
         const handleBeforeUnload = () => {
+            // ✅ 통화종료 버튼으로 나가는 경우 이미 LEAVE를 보냈으므로 아무것도 하지 않음
+            if (isLeavingRef.current) {
+                return;
+            }
+
+            // ✅ 탭 닫기/브라우저 종료/새로고침 모두 LEAVE 전송
+            //    → 다른 참가자에게 즉시 타일 제거됨
+            //    → 새로고침 시에는 같은 userId로 빠르게 재접속하여 복원됨
             try {
                 wsRef.current?.send(
                     JSON.stringify({
-                        type: "RECONNECTING",
+                        type: "LEAVE",
                     })
                 );
             } catch {}
@@ -1941,20 +1972,9 @@ function MeetingPage() {
                             };
                         });
 
-                        // 2. [Ghost Retention] 서버 목록엔 없지만, 스트림이 살아있는 유저 유지
-                        //    (서버가 잠시 유저를 누락해도 클라이언트에서 타일을 지우지 않음)
-                        const ghostUsers = prev.filter((p) => {
-                            const pid = String(p.id);
-                            if (p.isMe) return false; // 나는 위에서 처리됨
-                            if (newServerIds.has(pid)) return false; // 이미 업데이트됨
-
-                            // 💡 스트림이나 화면 공유가 살아있다면 강제로 유지
-                            if (p.stream || p.screenStream) {
-                                // console.warn(`[Ghost] ${p.name} maintained locally (has stream)`);
-                                return true;
-                            }
-                            return false;
-                        });
+                        // 2. [Ghost Retention 비활성화] 서버 목록에 없는 유저는 즉시 제거
+                        //    LEAVE로 나간 유저가 스피너 없이 바로 사라지도록 함
+                        const ghostUsers = [];
 
                         // 3. 신규 유저 joining 타이머 설정 (무한 스피너 방지)
                         for (const u of data.users) {
@@ -2408,7 +2428,7 @@ function MeetingPage() {
     }, [messages]);
 
     useEffect(() => {
-        localStorage.setItem(`chat_${roomId}`, JSON.stringify(messages));
+        sessionStorage.setItem(`chat_${roomId}`, JSON.stringify(messages));
     }, [messages, roomId]);
 
     useEffect(() => {
@@ -2450,11 +2470,50 @@ function MeetingPage() {
 
     const isMainScreenShare = !!mainUser?.isScreenSharing;
 
+    // localStorage에서 참가 순서 불러오기/저장하기
+    const getStoredOrder = () => {
+        try {
+            const stored = localStorage.getItem(`participant_order_${roomId}`);
+            return stored ? JSON.parse(stored) : {};
+        } catch {
+            return {};
+        }
+    };
+
+    const saveOrder = (orderMap) => {
+        try {
+            localStorage.setItem(`participant_order_${roomId}`, JSON.stringify(orderMap));
+        } catch {}
+    };
+
     const orderedParticipants = useMemo(() => {
-        return [...participants].sort(
-            (a, b) => (a.joinAt ?? 0) - (b.joinAt ?? 0)
-        );
-    }, [participants]);
+        const storedOrder = getStoredOrder();
+        let orderChanged = false;
+        let maxOrder = Math.max(0, ...Object.values(storedOrder));
+
+        // 새 참가자에게 순서 부여
+        participants.forEach((p) => {
+            const idStr = String(p.id);
+            if (storedOrder[idStr] === undefined) {
+                maxOrder += 1;
+                storedOrder[idStr] = maxOrder;
+                orderChanged = true;
+            }
+        });
+
+        if (orderChanged) {
+            saveOrder(storedOrder);
+        }
+
+        // isMe는 항상 맨 앞, 나머지는 저장된 순서대로
+        return [...participants].sort((a, b) => {
+            if (a.isMe) return -1;
+            if (b.isMe) return 1;
+            const orderA = storedOrder[String(a.id)] ?? Infinity;
+            const orderB = storedOrder[String(b.id)] ?? Infinity;
+            return orderA - orderB;
+        });
+    }, [participants, roomId]);
 
     const _sv = streamVersion;
 
@@ -2636,18 +2695,20 @@ function MeetingPage() {
                                         onClick={toggleCam}
                                     />
                                     <div className="divider" />
-                                    <ButtonControl
-                                        label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
-                                        icon={Monitor}
-                                        active={isScreenSharing}
-                                        onClick={() => {
-                                        if (isScreenSharing) {
-                                            stopScreenShare();
-                                        } else {
-                                            startScreenShare();
-                                        }
-                                        }}
-                                    />
+                                    {!isIOS && (
+                                        <ButtonControl
+                                            label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
+                                            icon={Monitor}
+                                            active={isScreenSharing}
+                                            onClick={() => {
+                                            if (isScreenSharing) {
+                                                stopScreenShare();
+                                            } else {
+                                                startScreenShare();
+                                            }
+                                            }}
+                                        />
+                                    )}
                                     <ButtonControl
                                         label="반응"
                                         icon={Smile}
@@ -2820,17 +2881,19 @@ function MeetingPage() {
                                 onClick={toggleCam}
                             />
                             <div className="divider"></div>
-                            <ButtonControl 
-                            label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
-                            icon={Monitor}
-                            active={isScreenSharing}
-                            onClick={() => {
-                                if (isScreenSharing) {
-                                    stopScreenShare();
-                                } else {
-                                    startScreenShare();
-                                }
-                            }} />
+                            {!isIOS && (
+                                <ButtonControl 
+                                label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
+                                icon={Monitor}
+                                active={isScreenSharing}
+                                onClick={() => {
+                                    if (isScreenSharing) {
+                                        stopScreenShare();
+                                    } else {
+                                        startScreenShare();
+                                    }
+                                }} />
+                            )}
                             <ButtonControl label="반응" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
                             <ButtonControl label="채팅" active={sidebarOpen && sidebarView === "chat"} icon={MessageSquare} onClick={() => toggleSidebar("chat")} />
                             <ButtonControl label="참여자" active={sidebarOpen && sidebarView === "participants"} icon={Users} onClick={() => toggleSidebar("participants")} />

@@ -25,11 +25,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Map<String, RoomUser>> roomUsers = new ConcurrentHashMap<>();
 
     private final Map<String, Map<String, TimerTask>> leaveTimers = new ConcurrentHashMap<>();
-    private final Timer timer = new Timer(true);
 
     private final ObjectMapper objectMapper;
-
-    private static final long LEAVE_GRACE_MS = 8000;
 
     public RoomWebSocketHandler(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -144,44 +141,19 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        // ✅ LEAVE로 이미 처리된 유저면 여기서 끝
-        if (leavingUser.isExplicitlyLeft()) {
-            users.remove(session.getId());
-            broadcast(roomId);
-            return;
-        }
-
         String userId = leavingUser.getUserId();
 
-        // ✅ 새로고침/재접속 대기 중: online=false로 설정하고 즉시 broadcast
-        leavingUser.setOnline(false);
-        System.out.println("🔴 [RECONNECTING] " + userId + " set online=false");
+        // ✅ 기존 타이머가 있으면 취소
+        Map<String, TimerTask> timerMap = leaveTimers.get(roomId);
+        if (timerMap != null) {
+            TimerTask t = timerMap.remove(userId);
+            if (t != null) t.cancel();
+        }
 
-        // ✅ 재접속 유예 타이머 설정
-        leaveTimers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+        // ✅ 연결 종료 시 즉시 유저 제거 (재접속 스피너 없이 바로 퇴장)
+        users.remove(session.getId());
+        System.out.println("🚪 [LEFT] " + userId + " removed immediately");
 
-        TimerTask oldTask = leaveTimers.get(roomId).remove(userId);
-        if (oldTask != null) oldTask.cancel();
-
-        TimerTask task = new TimerTask() {
-            @Override
-            public void run() {
-                Map<String, RoomUser> uMap = roomUsers.get(roomId);
-                if (uMap == null) return;
-
-                // userId 기준 제거
-                uMap.entrySet().removeIf(e ->
-                        userId.equals(e.getValue().getUserId())
-                );
-
-                broadcast(roomId);
-            }
-        };
-
-        leaveTimers.get(roomId).put(userId, task);
-        timer.schedule(task, LEAVE_GRACE_MS);
-
-        // 재접속 중 표시를 위해 즉시 broadcast
         broadcast(roomId);
     }
 
