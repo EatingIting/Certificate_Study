@@ -388,7 +388,7 @@ function MeetingPage() {
     // 전체화면 관련
     const mainStageRef = useRef(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [isStripVisible, setIsStripVisible] = useState(true);
+    const [isStripVisible, setIsStripVisible] = useState(false);
     const [showStripToggle, setShowStripToggle] = useState(false);
 
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
@@ -2501,7 +2501,7 @@ function MeetingPage() {
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
                             <div
-                                className={`main-stage ${isMainScreenShare ? "screen-share-active" : ""}`}
+                                className={`main-stage ${isMainScreenShare ? "screen-share-active" : ""} ${isFullscreen && sidebarOpen ? "sidebar-open" : ""}`}
                                 ref={mainStageRef}
                             >
                                 {/* 메인 비디오 */}
@@ -2528,7 +2528,94 @@ function MeetingPage() {
                                 =============================== */}
                                 {isFullscreen && (
                                 <>
-                                    {/* 🎛 마이크 / 카메라 컨트롤 (스트립과 함께 움직임) */}
+                                        {/* 🎭 전체화면 이모지 팝업 */}
+                                    {showReactions && (
+                                    <div className="fullscreen-reaction-popup">
+                                        {reactionEmojis.map((emoji) => (
+                                        <button
+                                            key={emoji}
+                                            onClick={() => handleReaction(emoji)}
+                                            className="reaction-btn"
+                                            disabled={!!myReaction}
+                                            style={myReaction ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                        >
+                                            {emoji}
+                                        </button>
+                                        ))}
+                                    </div>
+                                    )}
+
+                                    {/* 💬 전체화면 사이드바 (채팅/참여자) */}
+                                    <div className={`fullscreen-sidebar ${sidebarOpen ? "open" : ""}`}>
+                                    <div className="fullscreen-sidebar-inner">
+                                        <div className="fullscreen-sidebar-header">
+                                        <h2 className="sidebar-title">
+                                            {sidebarView === "chat" ? "회의 채팅" : "참여자 목록"}
+                                        </h2>
+                                        <button onClick={() => setSidebarOpen(false)} className="close-btn">
+                                            <X size={20} />
+                                        </button>
+                                        </div>
+
+                                        {sidebarView === "chat" && (
+                                        <>
+                                            <div className="fullscreen-chat-area custom-scrollbar">
+                                            {messages.map((msg) => (
+                                                <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
+                                                <div className="msg-content-wrapper">
+                                                    {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
+                                                    <div className="msg-bubble">{msg.text}</div>
+                                                </div>
+                                                <span className="msg-time">
+                                                    {msg.userName}, {msg.time}
+                                                </span>
+                                                </div>
+                                            ))}
+                                            <div ref={chatEndRef} />
+                                            </div>
+                                            <div className="fullscreen-chat-input-area">
+                                            <form onSubmit={handleSendMessage} className="chat-form">
+                                                <input
+                                                type="text"
+                                                value={chatDraft}
+                                                onChange={(e) => setChatDraft(e.target.value)}
+                                                placeholder="메시지를 입력하세요..."
+                                                className="chat-input"
+                                                />
+                                                <button type="submit" className="send-btn" disabled={!chatDraft.trim()}>
+                                                <Send size={16} />
+                                                </button>
+                                            </form>
+                                            </div>
+                                        </>
+                                        )}
+
+                                        {sidebarView === "participants" && (
+                                        <div className="fullscreen-participants-area custom-scrollbar">
+                                            <div className="section-label">참여 중 ({participants.length})</div>
+                                            {participants.map((p) => (
+                                            <div key={p.id} className={`participant-card ${p.isMe ? "me" : ""}`}>
+                                                <div className="p-info">
+                                                <UserAvatar name={p.name} />
+                                                <div>
+                                                    <div className={`p-name ${p.isMe ? "me" : ""}`}>
+                                                    {p.name} {p.isMe ? "(나)" : ""}
+                                                    </div>
+                                                    <div className="p-role">{p.isMe ? "나" : "팀원"}</div>
+                                                </div>
+                                                </div>
+                                                <div className="p-status">
+                                                {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} />}
+                                                {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} />}
+                                                </div>
+                                            </div>
+                                            ))}
+                                        </div>
+                                        )}
+                                    </div>
+                                    </div>
+
+                                    {/* 🎛 전체화면 미디어 컨트롤 (7개 버튼 - 스트립과 함께 움직임) */}
                                     <div
                                     className={`fullscreen-media-controls ${
                                         isStripVisible ? "visible" : "hidden"
@@ -2547,6 +2634,44 @@ function MeetingPage() {
                                         active={!camOn}
                                         disabled={camDisabled}
                                         onClick={toggleCam}
+                                    />
+                                    <div className="divider" />
+                                    <ButtonControl
+                                        label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
+                                        icon={Monitor}
+                                        active={isScreenSharing}
+                                        onClick={() => {
+                                        if (isScreenSharing) {
+                                            stopScreenShare();
+                                        } else {
+                                            startScreenShare();
+                                        }
+                                        }}
+                                    />
+                                    <ButtonControl
+                                        label="반응"
+                                        icon={Smile}
+                                        active={showReactions}
+                                        onClick={() => setShowReactions(!showReactions)}
+                                    />
+                                    <ButtonControl
+                                        label="채팅"
+                                        icon={MessageSquare}
+                                        active={sidebarOpen && sidebarView === "chat"}
+                                        onClick={() => toggleSidebar("chat")}
+                                    />
+                                    <ButtonControl
+                                        label="참여자"
+                                        icon={Users}
+                                        active={sidebarOpen && sidebarView === "participants"}
+                                        onClick={() => toggleSidebar("participants")}
+                                    />
+                                    <div className="divider" />
+                                    <ButtonControl
+                                        label="통화 종료"
+                                        danger
+                                        icon={Phone}
+                                        onClick={handleHangup}
                                     />
                                     </div>
 
