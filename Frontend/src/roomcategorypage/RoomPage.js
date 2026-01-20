@@ -66,7 +66,7 @@ const RoomPage = () => {
 
     /* ===== 대분류 로딩 ===== */
     useEffect(() => {
-        api.get("/categories/main")
+        api.get("/main")
             .then(res => {
                 setMainCategories(["전체", ...res.data.map(c => c.name)]);
             });
@@ -74,7 +74,7 @@ const RoomPage = () => {
 
     /* ===== 초기 전체 중분류 + 소분류 ===== */
     useEffect(() => {
-        api.get("/categories")
+        api.get("/")
             .then(res => {
                 setCategoryTree(buildCategoryTree(res.data));
             });
@@ -88,7 +88,7 @@ const RoomPage = () => {
         setCurrentPage(1);
         setCategoryKeyword("");
 
-        const res = await api.get("/categories");
+        const res = await api.get("/");
 
         if (catName === "전체") {
             setCategoryTree(buildCategoryTree(res.data));
@@ -176,7 +176,7 @@ const RoomPage = () => {
                                 <div className="user-dropdown" onClick={(e) => e.stopPropagation()}>
                                     <ul>
                                         <li onClick={() => navigate("/mypage")}>마이페이지</li>
-                                        <li onClick={() => navigate("/my-classes")}>내 클래스</li>
+                                        <li onClick={() => navigate("/lms")}>내 클래스</li>
                                         <li onClick={() => navigate("/my-applications")}>
                                             스터디 신청 현황
                                         </li>
@@ -291,7 +291,7 @@ const RoomPage = () => {
                                         ? `${selectedCategory} - ${selectedSubCategory}`
                                         : selectedCategory}
                             </h2>
-                            <button className="create-btn" onClick={() => navigate("/studycreate")}>스터디 만들기</button>
+                            <button className="create-btn" onClick={() => navigate("/create")}>스터디 만들기</button>
                         </div>
 
                         <table className="room-table">

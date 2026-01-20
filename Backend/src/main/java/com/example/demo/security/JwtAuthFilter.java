@@ -4,16 +4,18 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    private final JwtTokenProvider jwtTokenProvider;
+    private final JwtTokenProvider tokenProvider;
 
-    public JwtAuthFilter(JwtTokenProvider jwtTokenProvider) {
-        this.jwtTokenProvider = jwtTokenProvider;
+    public JwtAuthFilter(JwtTokenProvider tokenProvider) {
+        this.tokenProvider = tokenProvider;
     }
 
     @Override
@@ -30,19 +32,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String header = request.getHeader("Authorization");
+        String auth = request.getHeader("Authorization");
 
-        // 토큰이 없으면 그냥 통과
-        if (header == null || !header.startsWith("Bearer ")) {
+        if (auth == null || !auth.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 토큰이 있을 때만 검증
         try {
-            String token = header.substring(7);
-            jwtTokenProvider.getClaims(token);
+            String token = auth.substring(7);
+            Authentication authentication =
+                    tokenProvider.getAuthentication(token);
+            SecurityContextHolder.getContext()
+                    .setAuthentication(authentication);
         } catch (Exception e) {
+            SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);
