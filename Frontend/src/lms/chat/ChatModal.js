@@ -1,184 +1,174 @@
-// src/lms/chat/ChatModal.js
-import React, { useState, useEffect, useRef } from 'react';
-import './ChatModal.css'; // 새로 만든 초록색 CSS 연결
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import './ChatModal.css';
 
-const MOCK_USERS = [
-  { id: 'user1', name: '김팀장', avatar: '👨‍💼' },
-  { id: 'user2', name: '이대리', avatar: '👩‍💻' },
-  { id: 'user3', name: '박신입', avatar: '🐣' },
-  { id: 'user4', name: '멘토님', avatar: '🧙‍♂️' },
-];
+const ROOM_ID = 1;
 
-const RANDOM_RESPONSES = [
-  "오, 그거 좋은 생각이네요!", "확인했습니다~", "잠시만요, 코드 좀 볼게요.", 
-  "식사는 하셨나요?", "화이팅입니다! 🔥", "ㅋㅋㅋㅋㅋㅋ", "넵!", "서버 로그 확인해볼게요."
-];
+// ✅ 사용할 스티커 목록 (원하는 거 더 추가하셔도 됩니다)
+const STICKER_LIST = ["👌", "👍", "🎉", "😭", "🔥", "🤔"];
 
-const ChatModal = ({ onClose, isOpen, onNotificationChange }) => {
+const ChatModal = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
-  const [showDrawer, setShowDrawer] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
-  const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
-  const [myNickname, setMyNickname] = useState("나");
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState("");
-  const [localBadgeCount, setLocalBadgeCount] = useState(0);
+  const [userList, setUserList] = useState([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [customNicknames, setCustomNicknames] = useState({});
+
+  // ✅ 스티커 메뉴 열림/닫힘 상태
+  const [showStickerMenu, setShowStickerMenu] = useState(false);
+
+  const ws = useRef(null);
   const scrollRef = useRef(null);
 
-  const getCurrentTime = () => {
-    const now = new Date();
-    const ampm = now.getHours() >= 12 ? '오후' : '오전';
-    const hours = now.getHours() % 12 || 12;
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    return `${ampm} ${hours}:${minutes}`;
-  };
-
-  useEffect(() => {
-    setMessages([
-      { type: 'system', text: "2024년 1월 25일 목요일" },
-      { type: 'system', text: "채팅방에 입장했습니다." },
-      { type: 'other', id: 1, text: "안녕하세요! 정보처리기사 스터디방입니다.", sender: MOCK_USERS[0], time: getCurrentTime(), unread: 0 }
-    ]);
+  const myInfo = useMemo(() => {
+    const randomId = Math.floor(Math.random() * 1000);
+    return { userId: `user_${randomId}`, userName: `익명_${randomId}` };
   }, []);
 
   useEffect(() => {
-    if (isOpen) setLocalBadgeCount(0);
-  }, [isOpen]);
+    const socket = new WebSocket(
+        `wss://localhost:8080/ws/room/${ROOM_ID}?userId=${myInfo.userId}&userName=${myInfo.userName}`
+    );
 
-  useEffect(() => {
-    if (onNotificationChange) onNotificationChange(localBadgeCount);
-  }, [localBadgeCount, onNotificationChange]);
+    socket.onopen = () => console.log("✅ 웹소켓 연결됨");
 
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, typingUsers, isPlusMenuOpen]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMessages(prevMsgs => prevMsgs.map(msg => {
-        if (msg.unread > 0 && Math.random() > 0.7) return { ...msg, unread: msg.unread - 1 };
-        return msg;
-      }));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (inputValue.trim() !== "") {
-        setTypingUsers(prev => prev.includes(myNickname) ? prev : [myNickname, ...prev]);
-    } else {
-        setTypingUsers(prev => prev.filter(u => u !== myNickname));
-    }
-  }, [inputValue, myNickname]);
-
-  useEffect(() => {
-    const triggerBotAction = () => {
-        const availableUsers = MOCK_USERS.filter(u => !typingUsers.includes(u.name));
-        if (availableUsers.length === 0) return;
-
-        const randomUser = availableUsers[Math.floor(Math.random() * availableUsers.length)];
-        const randomText = RANDOM_RESPONSES[Math.floor(Math.random() * RANDOM_RESPONSES.length)];
-
-        setTypingUsers(prev => [...prev, randomUser.name]);
-
-        const typingDuration = Math.floor(Math.random() * 2000) + 2000;
-
-        setTimeout(() => {
-            setMessages(prev => [...prev, {
-                type: 'other', text: randomText, sender: randomUser,
-                time: getCurrentTime(), id: Date.now() + Math.random(),
-                unread: Math.floor(Math.random() * 3) + 1 
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === "CHAT") {
+            setMessages(prev => [...prev, { 
+                userId: data.userId, 
+                message: data.message,
+                // ✅ 메시지 내용이 스티커 목록에 있으면 스티커로 취급
+                isSticker: STICKER_LIST.includes(data.message) 
             }]);
-            setTypingUsers(prev => prev.filter(name => name !== randomUser.name));
-            if (!isOpen) setLocalBadgeCount(prev => prev + 1);
-        }, typingDuration);
+            if (!isOpen) setUnreadCount(prev => prev + 1);
+        } else if (data.type === "USERS_UPDATE") {
+            setUserList(data.users);
+        }
     };
-    const interval = setInterval(() => { if (Math.random() > 0.6) triggerBotAction(); }, 3000);
-    return () => clearInterval(interval);
-  }, [typingUsers, isOpen]);
+    socket.onclose = () => console.log("❌ 연결 끊김");
+    ws.current = socket;
+    return () => socket.close();
+  }, [isOpen, myInfo.userId, myInfo.userName]);
 
-  const getTypingText = () => {
-    if (typingUsers.length === 0) return null;
-    if (typingUsers.length === 1) return `${typingUsers[0]}님이 입력 중...`;
-    return `${typingUsers[0]}님 외 ${typingUsers.length - 1}명이 입력 중...`;
+  useEffect(() => {
+    if (isOpen && scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isOpen]);
+
+  const toggleChat = () => {
+    if (!isOpen) setUnreadCount(0);
+    setIsOpen(!isOpen);
+    // 창 닫을 때 메뉴들도 같이 닫기
+    if (isOpen) { setIsMenuOpen(false); setShowStickerMenu(false); }
   };
 
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
-    setMessages(prev => [...prev, { type: 'me', text: inputValue, time: getCurrentTime(), id: Date.now(), unread: 4 }]);
+  const handleSend = (text = inputValue) => {
+    if (!text.trim() || !ws.current) return;
+    const chatData = { type: "CHAT", message: text };
+    ws.current.send(JSON.stringify(chatData));
     setInputValue("");
+    setShowStickerMenu(false); // 전송 후 스티커 메뉴 닫기
   };
 
-  const startEditing = () => { setTempName(myNickname); setIsEditingName(true); };
-  const saveName = () => { if (tempName.trim()) setMyNickname(tempName); setIsEditingName(false); };
+  // ✅ 스티커 전송 함수
+  const sendSticker = (stickerText) => {
+    handleSend(stickerText);
+  };
+
+  const editNickname = (targetId) => {
+    const newName = prompt("이 사용자의 별명을 무엇으로 설정할까요?");
+    if (newName) setCustomNicknames(prev => ({ ...prev, [targetId]: newName }));
+  };
+
+  const getDisplayName = (user) => customNicknames[user.userId] || user.userName || user.userId;
+
+  // 빈 공간 클릭 시 메뉴 닫기
+  const handleBodyClick = () => {
+      setIsMenuOpen(false);
+      setShowStickerMenu(false);
+  };
 
   return (
-    <div className="tc-wrapper">
-      <div className="tc-header">
-        <div className="tc-title-row"><span className="tc-title">정보처리기사 뽀개기</span><span className="tc-count">{MOCK_USERS.length + 1}</span></div>
-        <div className="tc-icons"><span onClick={() => setShowDrawer(true)}>≡</span><span onClick={onClose}>×</span></div>
-      </div>
-      <div className="tc-body" ref={scrollRef}>
-        {messages.map((msg) => {
-          if (msg.type === 'system') return <div key={msg.id} className="tc-system">{msg.text}</div>;
-          const isMe = msg.type === 'me';
-          return (
-            <div key={msg.id} className={`tc-msg-row ${isMe ? 'me' : 'other'}`}>
-              {!isMe && <div className="tc-profile">{msg.sender.avatar}</div>}
-              <div style={{display:'flex', flexDirection:'column', alignItems: isMe?'flex-end':'flex-start'}}>
-                {!isMe && <div className="tc-name">{msg.sender.name}</div>}
-                <div className="tc-msg-inner">
-                    <div className={`tc-bubble ${isMe ? 'me' : 'other'}`}>{msg.text}</div>
-                    <div className="tc-meta">
-                        {msg.unread > 0 && <span className="tc-unread">{msg.unread}</span>}
-                        <span className="tc-time">{msg.time}</span>
-                    </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {typingUsers.length > 0 && (
-          <div className="tc-typing-bar"><div className="tc-dots"><div className="tc-dot"></div><div className="tc-dot"></div><div className="tc-dot"></div></div><span>{getTypingText()}</span></div>
-      )}
-      <div className="tc-input-area">
-        {isPlusMenuOpen && (
-            <div className="tc-plus-menu">
-                <div className="tc-menu-item"><div className="tc-menu-icon">🖼️</div>앨범</div>
-                <div className="tc-menu-item"><div className="tc-menu-icon">📷</div>카메라</div>
-                <div className="tc-menu-item"><div className="tc-menu-icon">📁</div>파일</div>
-                <div className="tc-menu-item"><div className="tc-menu-icon">📅</div>일정</div>
-                <div className="tc-menu-item"><div className="tc-menu-icon">📞</div>통화</div>
-                <div className="tc-menu-item"><div className="tc-menu-icon">📍</div>지도</div>
-            </div>
-        )}
-        <button className={`tc-plus-btn ${isPlusMenuOpen ? 'active' : ''}`} onClick={() => setIsPlusMenuOpen(!isPlusMenuOpen)}>+</button>
-        <input className="tc-input" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} placeholder="메시지 입력" onClick={() => setIsPlusMenuOpen(false)} />
-        <button className="tc-send-btn" onClick={handleSend} disabled={!inputValue.trim()}>전송</button>
-      </div>
-      {showDrawer && (
-        <div className="tc-drawer-overlay" onClick={() => setShowDrawer(false)}>
-           <div className="tc-drawer-panel" onClick={(e) => e.stopPropagation()}>
-              <div className="tc-drawer-header">대화상대</div>
-              <div className="tc-drawer-list">
-                 <div className="tc-drawer-item">
-                    <div className="tc-drawer-info">
-                        <div className="tc-profile" style={{width:'30px', height:'30px', fontSize:'18px'}}>👤</div>
-                        {isEditingName ? (<input className="tc-edit-input" value={tempName} onChange={(e) => setTempName(e.target.value)} autoFocus onKeyPress={(e) => e.key==='Enter' && saveName()}/>) : (<div className="tc-drawer-name" style={{fontWeight:'bold'}}>{myNickname} (나)</div>)}
-                    </div>
-                    {isEditingName ? (<button className="tc-edit-btn" onClick={saveName}>저장</button>) : (<button className="tc-edit-btn" onClick={startEditing}>✏️</button>)}
-                 </div>
-                 <hr style={{margin:'10px 0', border:'0', borderTop:'1px solid #eee'}}/>
-                 {MOCK_USERS.map(user => (
-                   <div key={user.id} className="tc-drawer-item"><div className="tc-drawer-info"><div className="tc-profile" style={{width:'30px', height:'30px', fontSize:'18px'}}>{user.avatar}</div><div className="tc-drawer-name">{user.name}</div></div></div>
-                 ))}
-              </div>
-           </div>
+    <>
+      {!isOpen && (
+        <div className="chat-floating-btn" onClick={toggleChat}>
+            💬 {unreadCount > 0 && <span className="chat-badge">{unreadCount}</span>}
         </div>
       )}
-    </div>
+
+      <div className="tc-wrapper" style={{ display: isOpen ? 'flex' : 'none' }}>
+        <div className="tc-header">
+          <div className="tc-title-row"><span className="tc-title">스터디룸 채팅</span></div>
+          <div className="tc-icons">
+             <span className="icon-btn" onClick={() => setIsMenuOpen(!isMenuOpen)}>☰</span>
+             <span className="icon-btn" onClick={toggleChat}>×</span>
+          </div>
+        </div>
+
+        {isMenuOpen && (
+            <div className="tc-sidebar">
+                <div className="tc-sidebar-title">접속자 목록 ({userList.length})</div>
+                {userList.map(user => (
+                    <div key={user.userId} className="tc-user-item" onClick={() => editNickname(user.userId)}>
+                        <span className="status-dot">●</span>
+                        {getDisplayName(user)} {user.userId === myInfo.userId && "(나)"}
+                        <span className="edit-hint">✎</span>
+                    </div>
+                ))}
+            </div>
+        )}
+        
+        <div className="tc-body" ref={scrollRef} onClick={handleBodyClick}>
+          {messages.map((msg, index) => {
+            const isMe = msg.userId === myInfo.userId;
+            const displayName = customNicknames[msg.userId] || msg.userId;
+            return (
+              <div key={index} className={`tc-msg-row ${isMe ? 'me' : 'other'}`}>
+                {!isMe && <div className="tc-profile">👤</div>}
+                <div style={{display:'flex', flexDirection:'column', alignItems: isMe?'flex-end':'flex-start'}}>
+                  {!isMe && <div className="tc-name">{displayName}</div>}
+                  
+                  {/* ✅ 스티커인 경우 말풍선 스타일(sticker-bubble) 적용 */}
+                  <div className={`tc-bubble ${isMe ? 'me' : 'other'} ${msg.isSticker ? 'sticker-bubble' : ''}`}>
+                      {msg.isSticker ? <div className="sticker-text">{msg.message}</div> : msg.message}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ✅ 스티커 선택 메뉴판 */}
+        {showStickerMenu && (
+            <div className="sticker-menu-container">
+                {STICKER_LIST.map((sticker, idx) => (
+                    <button key={idx} className="sticker-grid-btn" onClick={() => sendSticker(sticker)}>
+                        {sticker}
+                    </button>
+                ))}
+            </div>
+        )}
+
+        <div className="tc-input-area">
+          {/* 스티커 토글 버튼 */}
+          <button className={`tc-sticker-toggle-btn ${showStickerMenu ? 'active' : ''}`} onClick={() => setShowStickerMenu(!showStickerMenu)}>😊</button>
+          
+          <input 
+              className="tc-input" 
+              value={inputValue} 
+              onChange={(e) => setInputValue(e.target.value)} 
+              onKeyPress={(e) => e.key === 'Enter' && handleSend()} 
+              placeholder="메시지 입력"
+              onFocus={() => setShowStickerMenu(false)}
+          />
+          <button className="tc-send-btn" onClick={() => handleSend()}>전송</button>
+        </div>
+      </div>
+    </>
   );
 };
+
 export default ChatModal;

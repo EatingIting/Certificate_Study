@@ -114,4 +114,53 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         String path = session.getUri().getPath();
         return path.substring(path.lastIndexOf("/") + 1);
     }
+
+
+    // =====================================================================
+    // ▼ [HJW1] 채팅 메시지 처리 (Team Member Addition)
+    // =====================================================================
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        // 1. 들어온 메시지(JSON)를 읽음
+        String payload = message.getPayload();
+        Map<String, Object> data = objectMapper.readValue(payload, Map.class);
+
+        String roomId = extractRoomId(session);
+        String type = (String) data.get("type"); // 메시지 타입 확인 (예: "CHAT")
+
+        // 2. 채팅 메시지라면 방 전체에 뿌림
+        if ("CHAT".equals(type)) {
+            String msgText = (String) data.get("message");
+            String senderId = roomUsers.get(roomId).get(session.getId()).getUserId(); // 보낸 사람 ID 찾기
+
+            // 보낼 데이터 조립
+            Map<String, Object> chatData = new HashMap<>();
+            chatData.put("type", "CHAT");
+            chatData.put("userId", senderId);
+            chatData.put("message", msgText);
+
+            // 방에 있는 모든 사람에게 전송
+            sendMessageToRoom(roomId, chatData);
+        }
+    }
+
+    // [Helper] 채팅 메시지 전송용 (기존 broadcast는 유저 목록용이라 따로 만듬)
+    private void sendMessageToRoom(String roomId, Map<String, Object> data) {
+        Map<String, WebSocketSession> sessions = roomSessions.get(roomId);
+        if (sessions == null) return;
+
+        try {
+            String payload = objectMapper.writeValueAsString(data);
+            TextMessage message = new TextMessage(payload);
+
+            for (WebSocketSession session : sessions.values()) {
+                if (session.isOpen()) {
+                    session.sendMessage(message);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }
