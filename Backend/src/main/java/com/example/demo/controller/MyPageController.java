@@ -9,7 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/users")
+@RequestMapping("/api/mypage")
 public class MyPageController {
 
     private final MyPageService myPageService;
@@ -19,12 +19,7 @@ public class MyPageController {
     public ResponseEntity<MyPageVO> getMyPage(
             @RequestHeader("X-USER-ID") String userId
     ) {
-        System.out.println("🔥 userId = " + userId);
-
         MyPageVO myPage = myPageService.getMyPage(userId);
-
-        System.out.println("🔥 myPage = " + myPage);
-
         return ResponseEntity.ok(myPage);
     }
 
