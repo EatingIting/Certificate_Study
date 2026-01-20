@@ -14,9 +14,8 @@ import com.example.demo.category.CategoryVO;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/categories")
+@RequestMapping("/api")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:3000")
 public class CategoryController {
 
     private final CategoryService categoryService;
