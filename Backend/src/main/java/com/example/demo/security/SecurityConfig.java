@@ -26,7 +26,12 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/ws/**").permitAll()  // WebSocket 경로 허용
+                        .requestMatchers(
+                                "ws/**",  // WebSocket 경로 허용
+                                "/api/users/check-email",
+                                "/api/users/signup",
+                                "/api/users/login"
+                        ).permitAll()
                         .anyRequest().permitAll()
                 );
 
