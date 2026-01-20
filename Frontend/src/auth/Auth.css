@@ -77,7 +77,10 @@ html, body {
     align-items: center;
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 5118d0fb3b54311385546f9b6769b0666ae33f8d
 /* hover 공통 */
 .social-btn:hover {
     transform: translateY(-2px);
@@ -114,3 +117,195 @@ html, body {
 .email-login:hover {
     text-decoration: underline;
 }
+<<<<<<< HEAD
+=======
+
+/* ===== 모달 오버레이 ===== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+/* ===== 모달 카드 ===== */
+.modal {
+    width: 100%;
+    max-width: 360px;
+    background: #ffffff;
+    padding: 32px;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    text-align: center;
+}
+
+/* ===== 모달 타이틀 ===== */
+.modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 24px;
+}
+
+/* ===== 입력창 ===== */
+.modal-input {
+    width: 330px;
+    height: 44px;
+    margin-bottom: 12px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    font-size: 14px;
+}
+
+/* ===== 로그인 버튼 ===== */
+.modal-login-btn {
+    width: 360px;
+    height: 44px;
+    margin-top: 8px;
+    background: #97c793;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* ===== 닫기 버튼 ===== */
+.modal-close {
+    margin-top: 16px;
+    background: none;
+    border: none;
+    font-size: 13px;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+/* ===== 로그인 / 회원가입 전환 ===== */
+.modal-switch {
+    margin-top: 16px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.modal-switch span {
+    margin-left: 6px;
+    color: #97c793;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.modal-switch span:hover {
+    text-decoration: underline;
+}
+
+.email-check-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.email-check-btn {
+    white-space: nowrap;
+    padding: 10px 12px;
+    font-size: 12px;
+    cursor: pointer;
+
+    background: #97c793;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* ===== 성별 라디오 - 인풋 스타일 ===== */
+.gender-group {
+    display: flex;
+    align-items: center;
+    height: 44px;
+    width: 330px;
+    padding: 0 12px;
+    margin-bottom: 12px;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.gender-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    margin-right: 16px;
+    white-space: nowrap;
+}
+
+.gender-radio {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 16px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.gender-radio input[type="radio"] {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    position: relative;
+    cursor: pointer;
+}
+
+.gender-radio input[type="radio"]:checked {
+    border-color: #97c793;
+}
+
+.gender-radio input[type="radio"]:checked::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 6px;
+    height: 6px;
+    background: #97c793;
+    border-radius: 50%;
+}
+
+/* ===== 에러 상태 인풋 ===== */
+.modal-input.error {
+    border: 1.5px solid #e53935;
+}
+
+.gender-group.error {
+    border: 1.5px solid #e53935;
+}
+
+
+.modal-input.error:focus {
+    outline: none;
+    border-color: #e53935;
+}
+
+.input-error,
+.msg-error {
+    color: #e53935;
+    font-size: 12px;
+    margin: 4px 0 8px;
+}
+
+.msg-ok {
+    color: #2e7d32;
+    font-size: 12px;
+    margin: 4px 0 8px;
+}
+>>>>>>> 5118d0fb3b54311385546f9b6769b0666ae33f8d
