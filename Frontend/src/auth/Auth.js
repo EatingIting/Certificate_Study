@@ -169,13 +169,13 @@ const Auth = () => {
         try {
             const res = await login(form.email, form.password);
 
+            localStorage.setItem("userId", res.data.userId);
             localStorage.setItem("nickname", res.data.nickname);
 
             alert("로그인 성공");
             closeModal();
 
-            navigate("/roompage");
-
+            navigate("/roompage"); // 또는 /mypage
         } catch {
             alert("이메일 또는 비밀번호가 올바르지 않습니다.");
         }

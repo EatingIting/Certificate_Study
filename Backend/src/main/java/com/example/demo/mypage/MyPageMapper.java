@@ -8,7 +8,7 @@ import java.time.LocalDate;
 @Mapper
 public interface MyPageMapper {
 
-    MyPageVO findByUserId(String userId);
+    MyPageVO findByUserId(@Param("userId") String userId);
 
     void updateMyPage(
             @Param("userId") String userId,
