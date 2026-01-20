@@ -176,7 +176,7 @@ const RoomPage = () => {
                                 <div className="user-dropdown" onClick={(e) => e.stopPropagation()}>
                                     <ul>
                                         <li onClick={() => navigate("/mypage")}>마이페이지</li>
-                                        <li onClick={() => navigate("/my-classes")}>내 클래스</li>
+                                        <li onClick={() => navigate("/lms")}>내 클래스</li>
                                         <li onClick={() => navigate("/my-applications")}>
                                             스터디 신청 현황
                                         </li>
