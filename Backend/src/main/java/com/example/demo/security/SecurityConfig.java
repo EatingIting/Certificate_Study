@@ -1,6 +1,5 @@
 package com.example.demo.security;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,32 +21,22 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${jwt.secret}")
-    private String jwtSecret;
+    private final JwtTokenProvider jwtTokenProvider;
 
-    @Value("${jwt.issuer}")
-    private String jwtIssuer;
+    public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CORS
                 .cors(Customizer.withDefaults())
-
-                // CSRF 비활성화 (JWT 사용)
                 .csrf(csrf -> csrf.disable())
-
-                // 세션 미사용
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
-                // 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        // Preflight 요청 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // 정적 리소스
                         .requestMatchers(
                                 "/", "/index.html",
                                 "/static/**",
@@ -57,8 +46,6 @@ public class SecurityConfig {
                                 "/images/**",
                                 "/uploads/**"
                         ).permitAll()
-
-                        // 인증 없이 허용할 API
                         .requestMatchers(
                                 "/api/login",
                                 "/api/signup",
@@ -66,14 +53,11 @@ public class SecurityConfig {
                                 "/api/main",
                                 "/api/books/image/**"
                         ).permitAll()
-
-                        // 그 외 API는 인증 필요
                         .anyRequest().authenticated()
                 )
 
-                // JWT 필터
                 .addFilterBefore(
-                        new JwtAuthFilter(jwtSecret, jwtIssuer),
+                        new JwtAuthFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class
                 );
 

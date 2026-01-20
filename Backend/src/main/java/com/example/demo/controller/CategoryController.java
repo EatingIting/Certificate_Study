@@ -14,7 +14,7 @@ import com.example.demo.category.CategoryVO;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/category")
 @RequiredArgsConstructor
 public class CategoryController {
 
