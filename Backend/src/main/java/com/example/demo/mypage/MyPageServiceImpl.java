@@ -16,7 +16,8 @@ public class MyPageServiceImpl implements MyPageService {
 
     private final MyPageMapper myPageMapper;
 
-    private static final String UPLOAD_DIR = "uploads/profile/";
+    private static final String UPLOAD_DIR =
+            "C:/upload/profile/";
 
     @Override
     public MyPageVO getMyPage(String userId) {
@@ -37,13 +38,18 @@ public class MyPageServiceImpl implements MyPageService {
         if (profileImage != null && !profileImage.isEmpty()) {
             try {
                 File dir = new File(UPLOAD_DIR);
-                if (!dir.exists()) dir.mkdirs();
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
 
-                String fileName = UUID.randomUUID() + "_" + profileImage.getOriginalFilename();
-                File target = new File(UPLOAD_DIR + fileName);
+                String fileName =
+                        UUID.randomUUID() + "_" + profileImage.getOriginalFilename();
+
+                File target = new File(dir, fileName);
                 profileImage.transferTo(target);
 
                 profileImgPath = "/uploads/profile/" + fileName;
+
             } catch (Exception e) {
                 throw new RuntimeException("프로필 이미지 저장 실패", e);
             }
@@ -59,3 +65,4 @@ public class MyPageServiceImpl implements MyPageService {
         );
     }
 }
+

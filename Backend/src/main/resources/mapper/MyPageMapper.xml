@@ -16,12 +16,12 @@
             introduction,
             profile_img    AS profileImg,
             created_at     AS createdAt
-        FROM user
+        FROM users
         WHERE user_id = #{userId}
     </select>
 
     <update id="updateMyPage">
-        UPDATE user
+        UPDATE users
         SET
             name = #{name},
             nickname = #{nickname},
