@@ -1272,6 +1272,20 @@ body {
   right: 360px !important;
 }
 
+.grid-fullscreen-container:fullscreen .grid-fullscreen-video-area,
+.grid-fullscreen-container:fullscreen .video-tile,
+.grid-fullscreen-container:fullscreen .grid-video-area {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.grid-fullscreen-container:fullscreen {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
 .grid-video-area {
   position: absolute;
   inset: 0;
