@@ -148,18 +148,19 @@ html, body {
 
 /* ===== 입력창 ===== */
 .modal-input {
-    width: 330px;
+    width: 100%;
     height: 44px;
     margin-bottom: 12px;
     padding: 0 12px;
     border-radius: 8px;
     border: 1px solid #e5e7eb;
     font-size: 14px;
+    box-sizing: border-box;
 }
 
 /* ===== 로그인 버튼 ===== */
 .modal-login-btn {
-    width: 360px;
+    width: 100%;
     height: 44px;
     margin-top: 8px;
     background: #97c793;
@@ -169,6 +170,7 @@ html, body {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    box-sizing: border-box;
 }
 
 /* ===== 닫기 버튼 ===== */
@@ -205,6 +207,11 @@ html, body {
     align-items: center;
 }
 
+.email-check-group .modal-input {
+    flex: 1;
+    min-width: 0;
+}
+
 .email-check-btn {
     white-space: nowrap;
     padding: 10px 12px;
@@ -224,13 +231,14 @@ html, body {
     display: flex;
     align-items: center;
     height: 44px;
-    width: 330px;
+    width: 100%;
     padding: 0 12px;
     margin-bottom: 12px;
 
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     background: #ffffff;
+    box-sizing: border-box;
 }
 
 .gender-label {

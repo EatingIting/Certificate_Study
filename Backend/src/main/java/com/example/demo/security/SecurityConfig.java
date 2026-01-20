@@ -47,10 +47,10 @@ public class SecurityConfig {
                                 "/uploads/**"
                         ).permitAll()
                         .requestMatchers(
-                                "/api/login",
-                                "/api/signup",
-                                "/api/check-email",
-                                "/api/main",
+                                "/api/users/login",
+                                "/api/users/signup",
+                                "/api/users/check-email",
+                                "/api/category/**",
                                 "/api/books/image/**"
                         ).permitAll()
                         .anyRequest().authenticated()

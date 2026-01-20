@@ -5,6 +5,7 @@ import Auth from "./auth/Auth";
 import Create from "./roomcreate/Create";
 import Main from "./mainpage/Main";
 import MyApplications from "./roomcategorypage/MyApplications";
+import MeetingPage from "./webrtc/MeetingPage";
 
 function App() {
     return (
@@ -16,6 +17,7 @@ function App() {
                 <Route path="/mypage" element={<MyPage />} />
                 <Route path="/create" element={<Create />} />
                 <Route path="/my-applications" element={<MyApplications />} />
+                <Route path="/meeting/:roomId" element={<MeetingPage />} />
             </Routes>
         </BrowserRouter>
     );
