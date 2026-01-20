@@ -1,47 +1,116 @@
+/* ===== 전체 배경 ===== */
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #f9fafb;
+    font-family: 'Pretendard Variable', sans-serif;
+}
+
+.login-wrapper {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ===== 카드 컨테이너 ===== */
 .login-container {
-    max-width: 360px;
-    margin: 0 auto;
-    padding: 60px 20px;
+    width: 100%;
+    max-width: 380px;
+    background: #ffffff;
+    padding: 48px 32px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.08);
     text-align: center;
 }
 
-.login-title {
-    margin-top: 40px;
-    margin-bottom: 100px;
+/* ===== 로고 ===== */
+.logo-area {
+    margin-bottom: 32px;
 }
-
 
 .logo {
-    font-size: 30px;
+    font-size: 36px;
     font-weight: 800;
-    color: #93f4b0;
-    margin-top: 100px;
-    margin-bottom: 16px;
+    color: #a5dea0;
+    margin: 0;
 }
 
-.description {
-    font-size: 20px;
-    line-height: 1.6;
-    color: #333;
-    margin-bottom: 150px;
+/* ===== 타이틀 ===== */
+.login-title h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 8px;
 }
 
+.login-title p {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 40px;
+}
+
+/* ===== 버튼 그룹 ===== */
 .button-group {
     display: flex;
     flex-direction: column;
     gap: 12px;
 }
 
-.naver {
-    border-radius: 5px;
+/* ===== 소셜 로그인 버튼 ===== */
+.social-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 48px;
+    padding: 0 16px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 
+/* hover 공통 */
+.social-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+
+/* ===== 플랫폼별 포인트 ===== */
+.social-btn.kakao {
+    background: #fee500;
+    border: none;
+}
+
+.social-btn.naver {
+    background: #03c75a;
+    color: #ffffff;
+    border: none;
+}
+
+.social-btn.google {
+    background: #ffffff;
+}
+
+/* ===== 이메일 로그인 ===== */
 .email-login {
-    margin-top: 24px;
+    margin-top: 28px;
     background: none;
     border: none;
     font-size: 14px;
-    color: #666;
+    font-weight: 600;
+    color: #97c793;
     cursor: pointer;
+}
+
+.email-login:hover {
+    text-decoration: underline;
 }
