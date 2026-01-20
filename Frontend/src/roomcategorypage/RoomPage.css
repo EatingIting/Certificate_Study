@@ -255,3 +255,19 @@ html, body {
     outline: none;
     border-color: #97c793;
 }
+
+.category-item {
+    display: flex;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.subcategory {
+    padding-left: 16px;
+    font-size: 0.9em;
+}
+
+.arrow {
+    font-size: 0.75em;
+    opacity: 0.6;
+}
