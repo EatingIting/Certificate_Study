@@ -1,0 +1,186 @@
+/* 공통 */
+.page {
+    font-family: Arial, sans-serif;
+    color: #111;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    border-bottom: 1px solid #eee;
+    margin: 0 200px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 800;
+    color: #a5dea0;
+}
+
+.nav span {
+    margin: 0 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+.login-btn {
+    border-radius: 8px;
+    border: 1px;
+    cursor: pointer;
+}
+
+.create-btn {
+    background: #a5dea0;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* Hero */
+.hero {
+    text-align: center;
+    padding: 100px 20px;
+    background: #a5dea0;
+    margin: 0 200px;
+    border-radius: 50px;
+
+}
+
+.hero h1 {
+    font-size: 36px;
+    margin-bottom: 16px;
+}
+
+.hero p {
+    color: #666;
+    margin-bottom: 32px;
+}
+
+.search-box {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.search-box input {
+    width: 420px;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+
+}
+
+.search-box button {
+    padding: 14px 20px;
+    background: #f3f4f6;
+    color: black;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+/* Category */
+.mainpage-category {
+    padding: 30px 0px;
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.main-category-list {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+}
+
+.main-category-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #eef2ff;
+    color: #a5dea0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+/* Study */
+.study {
+    padding: 80px 60px;
+    background: #f9fafb;
+    margin: 0 200px;
+}
+
+.study-list {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.study-card {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 16px;
+    padding: 20px;
+    cursor: pointer;
+}
+
+.thumbnail {
+    height: 120px;
+    background: #eee;
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.tag {
+    font-size: 12px;
+    color: #a5dea0;
+}
+
+.study-card button {
+    margin-top: 12px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #a5dea0;
+    background: white;
+    color: black;
+    border-radius: 8px;
+}
+
+/* CTA */
+.cta {
+    background: #a5dea0;
+    color: white;
+    text-align: center;
+    padding: 80px 20px;
+
+}
+
+.cta button {
+    margin-top: 20px;
+    background: white;
+    color: black;
+    padding: 14px 28px;
+    border-radius: 12px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
