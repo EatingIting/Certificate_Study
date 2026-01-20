@@ -24,7 +24,7 @@
     transform: scale(1.1); /* 마우스 올리면 살짝 커짐 */
 }
 
-/* 🔴 안 읽은 메시지 배지 (이름 변경 완료: .chat-badge) */
+/* 🔴 안 읽은 메시지 배지 */
 .chat-badge {
     position: absolute;
     top: -2px;
