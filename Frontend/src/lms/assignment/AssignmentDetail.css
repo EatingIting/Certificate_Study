@@ -1,0 +1,235 @@
+/* 페이지 배경/여백 */
+.ad-page {
+    padding: 18px 18px 28px;
+}
+
+/* 상단 바 */
+.ad-topbar {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 12px;
+    margin-left:30px;
+    margin-right: 30px;
+}
+
+.ad-back-btn {
+    border: 1px solid #e7ebf0;
+    background: #fff;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ad-back-btn:hover {
+    background: #f6f8fb;
+}
+
+/* 카드 */
+.ad-card {
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(16, 24, 40, 0.08);
+    overflow: hidden;
+    border: 1px solid #eef1f5;
+    max-width: 980px;
+    width: 100%;
+}
+
+/* 카드 헤더(연한 그린 배경) */
+.ad-card-header {
+    background: #eaf7ee;
+    padding: 22px 22px;
+}
+
+.ad-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.ad-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: #d8f0df;
+    display: grid;
+    place-items: center;
+    color: #1f7a41;
+    border: 1px solid rgba(31, 122, 65, 0.15);
+}
+
+.ad-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: #1c2a1f;
+}
+
+.ad-subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: #58705f;
+}
+
+.ad-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+}
+
+/* 카드 바디 */
+.ad-card-body {
+    padding: 18px 22px 26px;
+}
+
+/* 테이블 랩 */
+.ad-table-wrap {
+    border: 1px solid #eef1f5;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #fff;
+}
+
+/* 테이블 */
+.ad-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.ad-table thead th {
+    text-align: left;
+    font-size: 13px;
+    color: #667085;
+    background: #f7f9fc;
+    padding: 14px 16px;
+    font-weight: 700;
+}
+
+.ad-table tbody td {
+    padding: 16px 16px;
+    border-top: 1px solid #eef1f5;
+    font-size: 14px;
+    color: #101828;
+    vertical-align: middle;
+}
+
+.ad-td-muted {
+    color: #667085;
+}
+
+/* 멤버(아바타 + 이름) */
+.ad-member {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ad-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #caa87a, #9a6b3f);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.ad-member-name {
+    font-weight: 700;
+}
+
+/* 상태 pill */
+.ad-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 86px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 13px;
+    border: 1px solid transparent;
+}
+
+.ad-status--done {
+    background: #eaf7ee;
+    color: #1f7a41;
+    border-color: rgba(31, 122, 65, 0.2);
+}
+
+.ad-status--miss {
+    background: #fff3ea;
+    color: #b54708;
+    border-color: rgba(181, 71, 8, 0.22);
+}
+
+/* 제출물 보기 버튼 */
+.ad-view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 14px;
+    border-radius: 999px;
+    border: 1px solid #e7ebf0;
+    background: #fff;
+    color: #344054;
+    font-weight: 800;
+    font-size: 13px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.ad-view-btn:hover {
+    background: #f6f8fb;
+}
+
+/* empty */
+.ad-empty {
+    text-align: center;
+    padding: 26px 16px;
+    color: #667085;
+}
+
+
+/* ===== 미리보기 모달 ===== */
+.ad-preview-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.ad-preview-modal {
+    position: relative;
+    width: 90%;
+    max-width: 900px;
+    height: 80vh;
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.ad-preview-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    border: none;
+    background: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.ad-preview-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.ad-preview-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
