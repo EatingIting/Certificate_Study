@@ -55,14 +55,11 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/ws/**",
                                 "/api/auth/**",
-                                "/api/users/login",
-                                "/api/users/signup",
-                                "/api/users/check-email",
+                                "/api/users/**",
                                 "/api/main",
-                                "/api/books/image/**"
+                                "/api/books/image/**",
+                                "/api/category/**"
                         ).permitAll()
-
-                        .requestMatchers(HttpMethod.GET, "/api/category/**").permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/rooms/**").permitAll()
 

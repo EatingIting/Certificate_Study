@@ -85,7 +85,7 @@ const MyApplications = () => {
                                 >
                                     <ul>
                                         <li onClick={() => navigate("/mypage")}>마이페이지</li>
-                                        <li onClick={() => navigate("/lms")}>내 클래스</li>
+                                        <li onClick={() => navigate("/lmsMain")}>내 클래스</li>
                                         <li onClick={() => navigate("/my-applications")}>
                                             스터디 신청 현황
                                         </li>
