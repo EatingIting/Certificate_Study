@@ -8,9 +8,6 @@ import onsil from "./온실.png";
 
 const ITEMS_PER_PAGE = 8;
 
-/* 임시 방 데이터 */
-
-
 const RoomPage = () => {
     const navigate = useNavigate();
 
@@ -21,6 +18,7 @@ const RoomPage = () => {
     const [categoryTree, setCategoryTree] = useState([]);
     const [expandedCategoryId, setExpandedCategoryId] = useState(null);
 
+    const [activeMidCategories, setActiveMidCategories] = useState([]);
     const [selectedMainCategory, setSelectedMainCategory] = useState("전체");
     const [selectedCategory, setSelectedCategory] = useState("전체(가나다순)");
     const [selectedSubCategory, setSelectedSubCategory] = useState(null);
@@ -80,6 +78,7 @@ const RoomPage = () => {
     const handleMainCategoryClick = async (catName) => {
         setSelectedMainCategory(catName);
         setSelectedCategory("전체(가나다순)");
+        setSelectedSubCategory(null);
         setExpandedCategoryId(null);
         setCurrentPage(1);
         setCategoryKeyword("");
@@ -88,24 +87,43 @@ const RoomPage = () => {
 
         if (catName === "전체") {
             setCategoryTree(buildCategoryTree(res.data));
+            setActiveMidCategories([]);
             return;
         }
 
         const main = res.data.find(c => c.level === 1 && c.name === catName);
         if (!main) return;
 
+        const mids = res.data.filter(
+            c => c.level === 2 && c.parentId === main.id
+        );
+
+        setActiveMidCategories(mids.map(m => m.name));
+
         setCategoryTree(buildCategoryTree(res.data, main.id));
     };
 
     /* ===== 방 필터 ===== */
     const filteredRooms = (() => {
-        if (
-            selectedMainCategory === "전체" ||
-            selectedCategory === "전체(가나다순)"
-        ) {
-            return rooms;
+        if (selectedSubCategory) {
+            return rooms.filter(
+                r => r.subCategoryName === selectedSubCategory
+            );
         }
-        return rooms.filter(r => r.category === selectedCategory);
+
+        if (selectedCategory !== "전체(가나다순)") {
+            return rooms.filter(
+                r => r.midCategoryName === selectedCategory
+            );
+        }
+
+        if (activeMidCategories.length > 0) {
+            return rooms.filter(
+                r => activeMidCategories.includes(r.midCategoryName)
+            );
+        }
+
+        return rooms;
     })();
 
     /* ===== 검색 ===== */
@@ -139,11 +157,16 @@ const RoomPage = () => {
         currentPage * ITEMS_PER_PAGE
     );
 
-    const openModal = (room) => {
-        setSelectedRoom(room);
-        setIsModalOpen(true);
-    };
+    const openModal = async (room) => {
+        try {
+            const res = await api.get(`/rooms/${room.roomId}`);
 
+            setSelectedRoom(res.data);
+            setIsModalOpen(true);
+        } catch (e) {
+            console.error("상세 조회 실패", e);
+        }
+    };
     const handleApply = () => {
         setIsApplyModalOpen(true);
     };

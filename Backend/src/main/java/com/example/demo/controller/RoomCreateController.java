@@ -28,15 +28,4 @@ public class RoomCreateController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping
-    public ResponseEntity<List<RoomCreateVO>> getRooms() {
-        return ResponseEntity.ok(roomService.getRooms());
-    }
-
-    @GetMapping("/{roomId}")
-    public ResponseEntity<RoomCreateVO> getRoomDetail(
-            @PathVariable String roomId
-    ) {
-        return ResponseEntity.ok(roomService.getRoomDetail(roomId));
-    }
 }
