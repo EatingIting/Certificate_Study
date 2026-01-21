@@ -21,7 +21,7 @@
 /* ===== 공통 카드 ===== */
 .card {
     background: #ffffff;
-    border-radius: 18px;
+    border-radius: 5px;
     padding: 16px 16px 14px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
 }
@@ -221,7 +221,7 @@
 /* ===== 출석률 박스 ===== */
 .attendance-rate-box {
     background: #97c793;
-    border-radius: 14px;
+    border-radius: 10px;
     padding: 20px;
     color: #ffffff;
     height: 100px
