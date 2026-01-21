@@ -9,6 +9,8 @@ import Attendance from "./attendance/Attendance";
 import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
 import Board from "./board/Board";
+import Calender from "./calendar/Calendar"
+
 import Calender from "./calender/Calender";
 
 import "./LMSSubject.css";
