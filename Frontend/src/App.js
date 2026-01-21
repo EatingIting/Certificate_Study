@@ -11,6 +11,8 @@ function App() {
           <Route path="/lmsMain" element={<LMSMain />} />
           <Route path="/lms/:id" element={<ClassRoom />} />
           <Route path="/meeting" element={<MeetingPage />} />
+          <Route path="/lmsMain" element={<LMSMain />} />
+          <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
         </Routes>
       </BrowserRouter>
   );
