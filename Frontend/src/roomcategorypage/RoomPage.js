@@ -171,11 +171,24 @@ const RoomPage = () => {
         setIsApplyModalOpen(true);
     };
 
-    const submitApply = () => {
-        alert("스터디에 신청되었습니다.");
-        setApplyMessage("");
-        setIsApplyModalOpen(false);
-        closeModal(); // 상세 모달까지 같이 닫기
+    const submitApply = async () => {
+        try {
+            await api.post("/room-join-requests", {
+                roomId: selectedRoom.roomId,
+                ownerUserId: selectedRoom.ownerUserId, // 스터디장
+                applyMessage: applyMessage
+            });
+
+            alert("스터디에 신청되었습니다.");
+            setApplyMessage("");
+            setIsApplyModalOpen(false);
+            closeModal();
+
+            navigate("/my-applications"); // 신청 후 이동
+        } catch (e) {
+            console.error(e);
+            alert("신청 실패");
+        }
     };
 
     const closeModal = () => {
