@@ -22,18 +22,18 @@ export default function CreateRoom() {
 
     const handleSubmit = () => {
         if (!form.title.trim()) {
-            alert("방 제목을 입력해주세요");
+            alert("그룹 제목을 입력해주세요");
             return;
         }
 
         console.log("방 생성 데이터:", form);
-        alert("방이 생성되었습니다!");
+        alert("그룹이 생성되었습니다!");
     };
 
     return (
         <div className="create-room-container">
             <div className="create-room-box">
-                <h2 className="title">방 만들기</h2>
+                <h2 className="title">ONSIL </h2>
 
                 <input
                     className="input"
@@ -134,7 +134,7 @@ export default function CreateRoom() {
                 </div>
 
                 <button className="submit-btn" onClick={handleSubmit}>
-                    방 생성하기
+                    스터디 그룹 만들기
                 </button>
             </div>
         </div>
