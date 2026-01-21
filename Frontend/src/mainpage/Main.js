@@ -14,9 +14,9 @@ function Main() {
                     <span>내 학습</span>
                 </nav>
 
-                <div className="header-actions">
+                <div className="main-actions">
                     <button className="login-btn">로그인</button>
-                    <button className="create-btn">스터디 만들기</button>
+                    <button className="cr-btn">스터디 만들기</button>
                 </div>
             </header>
 
@@ -45,6 +45,24 @@ function Main() {
                         </div>
                     ))}
                 </div>
+                {/*const categories = [*/}
+                {/*{ label: "자격증", value: "certificate" },*/}
+                {/*{ label: "취업", value: "job" },*/}
+                {/*{ label: "어학", value: "language" },*/}
+                {/*{ label: "자기계발", value: "self" },*/}
+                {/*];*/}
+
+                {/*{categories.map((c) => (*/}
+                {/*    <div*/}
+                {/*        key={c.value}*/}
+                {/*        className={`category-item ${c.value}`}*/}
+                {/*        onClick={() => navigate(`/category/${c.value}`)}*/}
+                {/*    >*/}
+                {/*        <div className="circle">{c.label[0]}</div>*/}
+                {/*        <span>{c.label}</span>*/}
+                {/*    </div>*/}
+                {/*))}*/}
+
             </section>
 
             {/* Study List */}

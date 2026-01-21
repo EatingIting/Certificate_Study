@@ -17,9 +17,10 @@
 }
 
 /* 제목 */
-.title {
+.create-title {
+    font-family: Arial, sans-serif;
     text-align: center;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 600;
     margin-bottom: 20px;
     color: #2e7d32;

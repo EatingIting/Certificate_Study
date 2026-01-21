@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import api from "../api/api";
 import "./RoomPage.css";
-import onsil from "./온실.png";
+import onsil from "./메인로고.png";
 
 const ITEMS_PER_PAGE = 8;
 

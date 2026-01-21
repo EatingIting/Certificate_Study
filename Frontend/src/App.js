@@ -21,9 +21,6 @@ function App() {
             </Routes>
         </BrowserRouter>
     );
-  // return <MeetingPage />;
-    return <Create/>;
-  //   return<Main/>
 }
 
 
