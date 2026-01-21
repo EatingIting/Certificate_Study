@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.auth.AuthMapper">
+
+    <select id="countByEmail" resultType="int">
+        SELECT COUNT(*)
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+    <insert id="insertUser">
+        INSERT INTO users (
+            user_id,
+            email,
+            password,
+            name,
+            nickname,
+            birth_date,
+            gender,
+            introduction
+        ) VALUES (
+                     #{userId},
+                     #{email},
+                     #{password},
+                     #{name},
+                     #{nickname},
+                     #{birthDate},
+                     #{gender},
+                     #{introduction}
+                 )
+    </insert>
+
+    <select id="findByEmail"
+            resultType="com.example.demo.auth.AuthVO">
+        SELECT
+            user_id     AS userId,
+            email,
+            password,
+            name,
+            nickname,
+            birth_date  AS birthDate,
+            gender,
+            introduction,
+            created_at  AS createdAt
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+</mapper>
