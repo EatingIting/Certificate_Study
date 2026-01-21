@@ -343,9 +343,12 @@
     outline: none;
 }
 
+
 .card.clickable:hover {
     /* 아무것도 안 함 */
-}
+} 
+
+
 
 
 /* 키보드 접근성(탭 이동) */
