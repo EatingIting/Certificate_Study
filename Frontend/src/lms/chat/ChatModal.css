@@ -1,125 +1,354 @@
-/* src/lms/chat/ChatModal.css */
+/* =================================================================
+   1. 플로팅 버튼 (우측 하단 아이콘)
+   ================================================================= */
+.chat-floating-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background-color: #97c793; /* 테마 색상 (초록) */
+    border-radius: 50%;
+    color: white;
+    font-size: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease;
+    z-index: 9999; /* 최상단 노출 */
+}
 
-/* 1. 모달 래퍼 */
+.chat-floating-btn:hover {
+    transform: scale(1.1); /* 마우스 올리면 살짝 커짐 */
+}
+
+/* 🔴 안 읽은 메시지 배지 */
+.chat-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background-color: #ff4757; /* 빨간색 */
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid white;
+    animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 톡! 튀어나오는 애니메이션 */
+@keyframes pop {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+
+
+/* =================================================================
+   2. 채팅창 메인 컨테이너 (모달)
+   ================================================================= */
 .tc-wrapper {
-  position: fixed; bottom: 90px; right: 30px;
-  width: 380px; height: 600px;
-  background-color: #eef5ed; /* 배경: 아주 연한 초록 (눈 편안) */
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-  display: flex; flex-direction: column;
-  overflow: hidden; z-index: 1000;
-  border: 1px solid #dcdcdc;
-  font-family: 'Pretendard', sans-serif;
-  animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: fixed;
+    bottom: 100px; /* 버튼 위에 위치 */
+    right: 30px;
+    width: 350px;
+    height: 500px;
+    background-color: #f5f7fb; /* 배경: 연한 회색 */
+    border-radius: 20px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 9990;
+    animation: slideUp 0.3s ease;
 }
-@keyframes popUp { from { transform: translateY(20px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
-/* 2. 헤더 */
+/* 아래에서 위로 스르륵 올라오는 효과 */
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* =================================================================
+   3. 헤더 영역
+   ================================================================= */
 .tc-header {
-  padding: 16px 20px; background: #fff;
-  display: flex; justify-content: space-between; align-items: center;
-  border-bottom: 1px solid #eee; flex-shrink: 0;
+    background-color: #97c793;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
 }
-.tc-title { font-size: 16px; font-weight: 700; color: #333; }
-.tc-count { color: #97c793; font-weight: bold; margin-left: 6px; font-size: 14px; } /* 포인트 컬러 */
-.tc-icons { display: flex; gap: 15px; font-size: 20px; color: #555; cursor: pointer; }
 
-/* 3. 바디 */
-.tc-body { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; background-color: #f6faf3; /* 메인 배경색과 통일 */ }
+.tc-title {
+    font-weight: bold;
+    font-size: 16px;
+}
 
-/* 메시지 - 상대방 */
-.tc-msg-row { display: flex; width: 100%; align-items: flex-start; }
-.tc-msg-row.other { justify-content: flex-start; }
+.tc-icons {
+    display: flex;
+    gap: 15px;
+}
+
+.icon-btn {
+    cursor: pointer;
+    font-size: 18px;
+    opacity: 0.9;
+    transition: opacity 0.2s;
+}
+
+.icon-btn:hover {
+    opacity: 1;
+}
+
+
+/* =================================================================
+   4. 사이드바 (접속자 목록)
+   ================================================================= */
+.tc-sidebar {
+    position: absolute;
+    top: 54px; /* 헤더 높이만큼 띄움 */
+    right: 0;
+    width: 200px;
+    height: calc(100% - 54px);
+    background: rgba(255, 255, 255, 0.98); /* 살짝 투명 */
+    backdrop-filter: blur(5px);
+    border-left: 1px solid #eee;
+    z-index: 100;
+    padding: 15px;
+    overflow-y: auto;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+.tc-user-item {
+    padding: 10px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.tc-user-item:hover {
+    background-color: #f0f7f4;
+}
+
+.status-dot {
+    color: #2ecc71; /* 온라인 표시 (초록) */
+    margin-right: 8px;
+    font-size: 10px;
+}
+
+.edit-hint {
+    margin-left: auto;
+    color: #ccc;
+    font-size: 12px;
+}
+
+
+/* =================================================================
+   5. 채팅 메시지 영역 (Body)
+   ================================================================= */
+.tc-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background-color: #f5f7fb;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 스크롤바 디자인 (크롬, 사파리 등) */
+.tc-body::-webkit-scrollbar {
+    width: 6px;
+}
+.tc-body::-webkit-scrollbar-thumb {
+    background-color: rgba(0,0,0,0.1);
+    border-radius: 3px;
+}
+
+/* 메시지 행 (프로필 + 말풍선) */
+.tc-msg-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: 80%;
+}
+
+.tc-msg-row.me {
+    align-self: flex-end; /* 내 메시지 오른쪽 정렬 */
+    flex-direction: row-reverse;
+}
+
 .tc-profile {
-  width: 38px; height: 38px; border-radius: 14px; margin-right: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; background: #fff; border: 1px solid #eee; flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    background-color: #ddd;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
 }
-.tc-name { font-size: 13px; color: #666; margin-bottom: 4px; margin-left: 2px; }
+
+.tc-name {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+    margin-left: 5px;
+}
+.me .tc-name {
+    margin-right: 5px;
+}
+
+/* 말풍선 공통 */
 .tc-bubble {
-  padding: 10px 14px; font-size: 14px; line-height: 1.5;
-  border-radius: 4px 14px 14px 14px; 
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  max-width: 220px; word-break: break-word; position: relative;
-}
-.tc-bubble.other { background: #fff; color: #333; border: 1px solid #eee; }
-
-/* 메시지 - 나 (초록색 테마 적용!) */
-.tc-msg-row.me { justify-content: flex-end; }
-.tc-msg-row.me .tc-bubble { 
-  background: #97c793; /* 팀원분이 쓰신 초록색 */
-  color: #fff; 
-  border-radius: 14px 4px 14px 14px; 
-  box-shadow: 0 2px 5px rgba(151, 199, 147, 0.4);
+    padding: 10px 14px;
+    border-radius: 15px;
+    font-size: 14px;
+    line-height: 1.4;
+    word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-/* 메타 정보 */
-.tc-msg-inner { display: flex; align-items: flex-end; gap: 6px; }
-.tc-msg-row.me .tc-msg-inner { flex-direction: row-reverse; }
-.tc-meta { display: flex; flex-direction: column; justify-content: flex-end; min-width: max-content; }
-.tc-time { font-size: 10px; color: #999; margin-bottom: 2px; }
-.tc-unread { font-size: 10px; color: #97c793; font-weight: bold; margin-bottom: 2px; } /* 읽음 숫자도 초록 */
-.tc-msg-row.me .tc-unread { text-align: right; }
-
-/* 4. 입력 상태 바 */
-.tc-typing-bar {
-  background: rgba(255,255,255,0.95); padding: 6px 15px; font-size: 12px; color: #888;
-  border-top: 1px solid #eee; display: flex; align-items: center; gap: 8px; height: 30px; flex-shrink: 0;
+.tc-bubble.other {
+    background-color: white;
+    color: #333;
+    border-bottom-left-radius: 2px;
 }
-.tc-dots { display: flex; gap: 3px; }
-.tc-dot { width: 4px; height: 4px; background: #97c793; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
-.tc-dot:nth-child(1) { animation-delay: -0.32s; } .tc-dot:nth-child(2) { animation-delay: -0.16s; }
-@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 
-/* 5. 입력창 영역 */
+.tc-bubble.me {
+    background-color: #97c793;
+    color: white;
+    border-bottom-right-radius: 2px;
+}
+
+
+/* =================================================================
+   6. 스티커 (이모티콘) 스타일
+   ================================================================= */
+.sticker-bubble {
+    background-color: transparent !important; /* 배경 제거 */
+    box-shadow: none !important; /* 그림자 제거 */
+    padding: 0 !important;
+}
+
+.sticker-text {
+    font-size: 40px; /* 왕따시만한 크기 */
+    color: #333 !important; /* 글씨 잘 보이게 진한 회색 */
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1); /* 입체감 */
+    animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+
+/* =================================================================
+   7. 입력창 & 스티커 메뉴
+   ================================================================= */
 .tc-input-area {
-  background: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 10px;
-  border-top: 1px solid #eee; min-height: 64px; flex-shrink: 0; position: relative;
+    padding: 15px;
+    background-color: white;
+    border-top: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
 }
-.tc-plus-btn { border: none; background: none; font-size: 24px; color: #ccc; cursor: pointer; padding: 0; flex-shrink: 0; transition: 0.2s; }
-.tc-plus-btn:hover, .tc-plus-btn.active { color: #97c793; transform: rotate(90deg); }
 
-/* + 메뉴 */
-.tc-plus-menu {
-  position: absolute; bottom: 75px; left: 16px;
-  background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-  padding: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
-  animation: slideUpMenu 0.2s ease-out; z-index: 20; border: 1px solid #eee;
+/* 스티커 메뉴 열기 버튼 */
+.tc-sticker-toggle-btn {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    padding: 5px;
+    color: #555;
+    transition: transform 0.2s;
 }
-@keyframes slideUpMenu { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.tc-menu-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; color: #666; }
-.tc-menu-icon { width: 44px; height: 44px; background: #f4f9f4; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s; color: #555; }
-.tc-menu-item:hover .tc-menu-icon { background: #e3f0e2; color: #2e7d32; transform: translateY(-2px); }
 
-/* 입력창 */
+.tc-sticker-toggle-btn:hover,
+.tc-sticker-toggle-btn.active {
+    transform: scale(1.2);
+    color: #97c793;
+}
+
+/* 텍스트 입력창 */
 .tc-input {
-  flex: 1; min-width: 0; height: 40px; padding: 0 14px;
-  border: 1px solid #eee; background-color: #f9f9f9;
-  border-radius: 20px; outline: none; font-size: 14px; transition: 0.2s;
+    flex: 1;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    padding: 10px 15px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
 }
-.tc-input:focus { background-color: #fff; border-color: #97c793; box-shadow: 0 0 0 2px rgba(151, 199, 147, 0.1); }
+
+.tc-input:focus {
+    border-color: #97c793;
+}
 
 /* 전송 버튼 */
 .tc-send-btn {
-  width: 50px; height: 40px; flex-shrink: 0;
-  background: #97c793; color: white;
-  border: none; border-radius: 12px;
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: 0.2s;
+    background-color: #97c793;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: bold;
 }
-.tc-send-btn:hover { background-color: #86b883; }
-.tc-send-btn:disabled { background: #eee; color: #aaa; cursor: default; }
 
-/* 6. 서랍 */
-.tc-drawer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 2000; }
-.tc-drawer-panel { position: absolute; top: 0; right: 0; width: 260px; height: 100%; background: #fff; display: flex; flexDirection: column; animation: slideIn 0.3s; box-shadow: -5px 0 20px rgba(0,0,0,0.05); }
-@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-.tc-drawer-header { padding: 20px; font-weight: bold; border-bottom: 1px solid #f0f0f0; color: #333; }
-.tc-drawer-list { padding: 10px; overflow-y: auto; }
-.tc-drawer-item { display: flex; align-items: center; padding: 10px; border-radius: 8px; justify-content: space-between; transition: 0.1s; }
-.tc-drawer-item:hover { background-color: #f6faf3; }
-.tc-drawer-info { display: flex; align-items: center; }
-.tc-drawer-name { font-size: 14px; margin-left: 12px; color: #444; }
-.tc-edit-btn { font-size: 12px; color: #999; cursor: pointer; margin-left: 8px; border: 1px solid #eee; border-radius: 4px; padding: 4px 8px; background: #fff; }
-.tc-edit-input { width: 100px; padding: 4px; font-size: 13px; border: 1px solid #97c793; border-radius: 4px; outline: none; }
+.tc-send-btn:hover {
+    background-color: #7ab377;
+}
+
+/* 스티커 선택 메뉴판 (Grid 레이아웃) */
+.sticker-menu-container {
+    position: absolute;
+    bottom: 70px; /* 입력창 위에 띄움 */
+    left: 15px;
+    width: calc(100% - 30px);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(5px);
+    border-radius: 15px;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+    padding: 15px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3열 배치 */
+    gap: 10px;
+    z-index: 50;
+    animation: slideUp 0.2s ease;
+}
+
+.sticker-grid-btn {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.sticker-grid-btn:hover {
+    background-color: #f0f7f4;
+    transform: scale(1.05);
+    border-color: #97c793;
+}
