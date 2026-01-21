@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import "./Board.css";
-
 import BoardDetail from "./BoardDetail";
 import BoardWrite from "./BoardWrite";
 import BoardEdit from "./BoardEdit";
@@ -78,6 +78,14 @@ function Board() {
 
     // ===== 브라우저 뒤로가기(popstate) 안정 처리 =====
     let viewRef = useRef("list");
+
+    let [sp] = useSearchParams();
+
+    useEffect(() => {
+        const c = sp.get("category"); // 공지/일반/질문/자료
+        if (c) setCategoryFilter(c);
+    }, [sp]);
+
 
     useEffect(() => {
         viewRef.current = view;

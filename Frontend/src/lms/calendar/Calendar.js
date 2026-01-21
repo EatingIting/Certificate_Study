@@ -1,4 +1,6 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -298,6 +300,12 @@ function Calendar() {
             closeAddModal();
         }
     };
+    const [sp] = useSearchParams();
+
+    useEffect(() => {
+        if (sp.get("modal") === "add") openAddModal();
+    }, [sp]);
+
 
     /* =========================
        렌더
