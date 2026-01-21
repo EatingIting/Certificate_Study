@@ -50,7 +50,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         try {
-            String token = authHeader.substring(7); // "Bearer " 제거
+            String token = authHeader.substring(7);
 
             if (tokenProvider.validateToken(token)) {
                 Authentication authentication =
