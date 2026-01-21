@@ -252,6 +252,12 @@ function MeetingPage() {
         loggedRef.current = true;
     }, [roomId]);
 
+    const {
+        startMeeting,
+        endMeeting,
+        saveMeetingState,
+    } = useMeeting();
+
     const [layoutMode, setLayoutMode] = useState("speaker");
 
     const [sidebarView, setSidebarView] = useState(() => {
@@ -645,63 +651,115 @@ function MeetingPage() {
         setStreamVersion((v) => v + 1);
     };
 
+    useEffect(() => {
+        console.log("[PERMISSION]", {
+            micPermission,
+            camPermission,
+            micDisabled,
+            camDisabled,
+        });
+    }, [micPermission, camPermission]);
+
     // --- Local media ---
     const startLocalMedia = async () => {
-        if (localStreamRef.current) {
-            setIsLocalLoading(false);
-            return localStreamRef.current;
-        }
-
+    // ✅ 1) 이미 로컬 스트림이 있으면 그대로 사용 (중복 getUserMedia 방지)
+    if (localStreamRef.current) {
         try {
-            // ⭐ localStorage 값 기준으로 미디어 가져오기
-            const shouldGetVideo = camOnRef.current;
-            const shouldGetAudio = true; // 오디오는 항상 가져오되, enabled로 제어
+        const stream = localStreamRef.current;
 
-            console.log(`[startLocalMedia] Getting media with video=${shouldGetVideo}, audio=${shouldGetAudio}`);
+        // 트랙 enabled 상태를 현재 설정값 기준으로 보정
+        const at = stream.getAudioTracks()[0];
+        if (at) at.enabled = !!micOnRef.current;
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: shouldGetVideo,
-                audio: shouldGetAudio,
-            });
+        const vt = stream.getVideoTracks()[0];
+        if (vt) vt.enabled = !!camOnRef.current;
 
-            // ⭐ 트랙 enabled 상태를 localStorage 기준으로 설정
-            const audioTracks = stream.getAudioTracks();
-            if (audioTracks.length > 0) {
-                audioTracks[0].enabled = micOnRef.current;
-                console.log(`[startLocalMedia] Set audio track enabled to ${micOnRef.current}`);
+        // 상태 동기화
+        setLocalStream(stream);
+
+        // 권한은 스트림이 있다는 전제로 granted로 취급
+        setMicPermission("granted");
+        setCamPermission("granted");
+
+        // MeetingContext 호출은 실패해도 미디어 동작에 영향 없게 격리
+        try {
+            if (typeof startMeeting === "function" && roomId) {
+            startMeeting(roomId, subjectId);
             }
-
-            const videoTracks = stream.getVideoTracks();
-            if (videoTracks.length > 0) {
-                videoTracks[0].enabled = camOnRef.current;
-                console.log(`[startLocalMedia] Set video track enabled to ${camOnRef.current}`);
+            if (typeof saveMeetingState === "function") {
+            saveMeetingState({ localStream: stream });
             }
-
-            localStreamRef.current = stream;
-            setLocalStream(stream);
-
-            setMicPermission("granted");
-            setCamPermission("granted");
-
-            // MeetingContext에 회의 시작 알림 및 상태 저장
-            if (startMeeting && roomId) {
-                const subjectId = roomId; // roomId를 subjectId로 사용
-                startMeeting(roomId, subjectId);
-            }
-            if (saveMeetingState) {
-                saveMeetingState({ localStream: localStreamRef.current });
-            }
-
-            return stream;
-        } catch (err) {
-            console.error("[startLocalMedia] Failed to get media:", err);
-            setMicPermission("denied");
-            setCamPermission("denied");
-            return null;
-        } finally {
-            setIsLocalLoading(false);
-            // ❌ 여기서 아직 roomReconnecting false 하면 안 됨
+        } catch (e) {
+            console.warn("[startLocalMedia] meeting context error:", e);
         }
+
+        return stream;
+        } finally {
+        setIsLocalLoading(false);
+        }
+    }
+
+    // ✅ 2) 로컬 스트림이 없으면 새로 획득
+    try {
+        const shouldGetVideo = !!camOnRef.current; // 카메라 OFF면 video:false로 요청
+        const shouldGetAudio = true;              // 오디오는 항상 요청 후 enabled로 제어
+
+        console.log(
+        `[startLocalMedia] getUserMedia video=${shouldGetVideo}, audio=${shouldGetAudio}`
+        );
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+        video: shouldGetVideo,
+        audio: shouldGetAudio,
+        });
+
+        // ⭐ 트랙 enabled 상태를 현재 설정값 기준으로 맞춤
+        const at = stream.getAudioTracks()[0];
+        if (at) {
+        at.enabled = !!micOnRef.current;
+        console.log(`[startLocalMedia] audio track enabled = ${at.enabled}`);
+        }
+
+        const vt = stream.getVideoTracks()[0];
+        if (vt) {
+        vt.enabled = !!camOnRef.current;
+        console.log(`[startLocalMedia] video track enabled = ${vt.enabled}`);
+        }
+
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+
+        setMicPermission("granted");
+        // 카메라를 아예 요청하지 않은 경우에도 "권한"은 granted일 수 있지만,
+        // UI 버튼 비활성화 판단은 permission 기반이므로, 여기서는 "granted"로 두는 편이 안전합니다.
+        setCamPermission("granted");
+
+        // MeetingContext 호출은 실패해도 미디어 동작에 영향 없게 격리
+        try {
+        if (typeof startMeeting === "function" && roomId) {
+            startMeeting(roomId, subjectId);
+        }
+        if (typeof saveMeetingState === "function") {
+            saveMeetingState({ localStream: stream });
+        }
+        } catch (e) {
+        console.warn("[startLocalMedia] meeting context error:", e);
+        }
+
+        return stream;
+    } catch (err) {
+        console.error("[startLocalMedia] Failed to get media:", err);
+
+        // 권한이 실제로 거부된 케이스만 disabled로 처리되도록 하는 게 이상적이지만,
+        // 우선은 실패 시 denied로 내려 버튼 비활성화가 맞습니다.
+        setMicPermission("denied");
+        setCamPermission("denied");
+
+        return null;
+    } finally {
+        setIsLocalLoading(false);
+        // ❌ 여기서 roomReconnecting false 하면 안 됨 (당신 코드 정책 유지)
+    }
     };
 
     const ensureLocalProducers = async () => {
