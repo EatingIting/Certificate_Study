@@ -23,9 +23,6 @@ public class RoomCreateController {
             @RequestBody RoomCreateRequest request,
             @AuthenticationPrincipal String userId
     ) {
-        if (userId == null || userId.equals("anonymousUser")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         roomService.createRoom(request, userId);
         return ResponseEntity.ok().build();
