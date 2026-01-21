@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation, useParams } from "react-router-do
 
 import LMSHeader from "./LMSHeader";
 import LMSSidebar from "./LMSSidebar";
+import ChatModal from "./chat/ChatModal";
 
 import Dashboard from "./dashboard/Dashboard";
 import Attendance from "./attendance/Attendance";
@@ -56,6 +57,9 @@ const LMSSubject = () => {
                     </Routes>
                 </main>
             </div>
+
+            {/* 채팅 모달 - 모든 페이지에서 표시 */}
+            <ChatModal />
         </>
     );
 };

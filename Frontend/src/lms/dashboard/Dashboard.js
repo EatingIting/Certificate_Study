@@ -1,12 +1,7 @@
 import "./Dashboard.css";
-import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import ChatModal from "../chat/ChatModal";
 
 const Dashboard = ({ setActiveMenu }) => {
-    const [isChatOpen, setIsChatOpen] = useState(false);
-    const [badgeCount, setBadgeCount] = useState(0);
-
     const navigate = useNavigate();
     const { subjectId } = useParams(); // URL이 /lms/:subjectId/dashboard 구조면 사용 가능
 
@@ -223,30 +218,6 @@ const Dashboard = ({ setActiveMenu }) => {
                 </div>
             </div>
 
-            {/* 채팅 플로팅 버튼 */}
-            <div className="chat-fab-wrap">
-                <button
-                    onClick={() => setIsChatOpen(!isChatOpen)}
-                    className="chat-fab"
-                    onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
-                    onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
-                >
-                    {isChatOpen ? "✕" : "💬"}
-
-                    {!isChatOpen && badgeCount > 0 && (
-                        <div className="chat-badge">{badgeCount > 99 ? "99+" : badgeCount}</div>
-                    )}
-                </button>
-            </div>
-
-            {/* 채팅 모달 */}
-            <div style={{ display: isChatOpen ? "block" : "none" }}>
-                <ChatModal
-                    isOpen={isChatOpen}
-                    onClose={() => setIsChatOpen(false)}
-                    onNotificationChange={setBadgeCount}
-                />
-            </div>
         </div>
     );
 };
