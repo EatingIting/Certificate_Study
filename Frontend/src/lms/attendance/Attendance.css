@@ -42,10 +42,19 @@
     border: 1px solid rgba(31, 122, 65, 0.15);
 }
 
+.at-icon img {
+    width: 24px;          /* 아이콘 크기 */
+    height: 24px;
+    object-fit: contain;  /* 비율 유지 */
+    display: block;
+    margin-left: 4px;
+}
+
+
 .at-title {
     margin: 0;
     font-size: 18px;
-    font-weight: 900;
+    font-weight: 700;
     color: #101828;
 }
 
@@ -92,7 +101,7 @@
 }
 
 .at-table thead th {
-    text-align: left;
+    text-align: center;
     font-size: 13px;
     color: #667085;
     background: #f7f9fc;
@@ -145,13 +154,21 @@
 }
 
 .at-name {
-    font-weight: 900;
+    font-weight: 700;
+    margin: 0 auto;
 }
 
 /* progress */
+
+.at-td-att{
+    text-align: center;
+}
+
 .at-progress {
+    margin: 0 auto;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
 }
 

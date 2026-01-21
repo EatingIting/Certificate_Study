@@ -19,6 +19,7 @@
     border-radius: 12px;
     font-weight: 600;
     cursor: pointer;
+    margin-left: 90px;
 }
 
 .ad-back-btn:hover {
@@ -34,11 +35,12 @@
     border: 1px solid #eef1f5;
     max-width: 980px;
     width: 100%;
+    margin: 0 auto;
 }
 
-/* 카드 헤더(연한 그린 배경) */
+/* 카드 헤더 */
 .ad-card-header {
-    background: #eaf7ee;
+    background: #f7f9fc;
     padding: 22px 22px;
 }
 
@@ -49,14 +51,22 @@
 }
 
 .ad-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-    background: #d8f0df;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
     display: grid;
     place-items: center;
-    color: #1f7a41;
-    border: 1px solid rgba(31, 122, 65, 0.15);
+    background: #d8f0de;
+    color: #3f9a66;
+    border: 1px solid #cde8d6;
+}
+
+/* 과제 아이콘 박스 안에 이미지 딱 맞추기 */
+.ad-icon img {
+    width: 24px;          /* 보기 좋은 기본 크기 */
+    height: 24px;
+    object-fit: contain;  /* 비율 유지 */
+    display: block;
 }
 
 .ad-title {
@@ -97,7 +107,7 @@
 }
 
 .ad-table thead th {
-    text-align: left;
+    text-align: center;
     font-size: 13px;
     color: #667085;
     background: #f7f9fc;
@@ -109,6 +119,7 @@
     padding: 16px 16px;
     border-top: 1px solid #eef1f5;
     font-size: 14px;
+    text-align: center;
     color: #101828;
     vertical-align: middle;
 }
@@ -123,6 +134,15 @@
     align-items: center;
     gap: 10px;
 }
+
+/* 스터디원 이름 완전 가운데 */
+.ad-member {
+    width: 100%;
+    display: flex;
+    justify-content: center;   /* 가로 가운데 */
+    align-items: center;       /* 세로 가운데 */
+}
+
 
 .ad-avatar {
     width: 28px;

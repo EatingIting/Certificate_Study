@@ -2,6 +2,7 @@
     padding: 24px;
     background-color: #f6faf3;
     min-height: calc(100vh - 56px);
+    padding-left: 150px;
 }
 
 .section-title {

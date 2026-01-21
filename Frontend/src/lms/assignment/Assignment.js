@@ -95,12 +95,7 @@ const Assignment = () => {
                 <div className="as-card-header">
                     <div className="as-header-left">
                         <div className="as-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" width="22" height="22">
-                                <path
-                                    d="M9 2h6a2 2 0 0 1 2 2v1h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2V4a2 2 0 0 1 2-2Zm6 3V4H9v1h6Zm4 2H5v13h14V7Zm-11 3h8v2H8v-2Zm0 4h8v2H8v-2Z"
-                                    fill="currentColor"
-                                />
-                            </svg>
+                            <img src="/assignment.png" alt="과제아이콘"/>
                         </div>
 
                         <div>
@@ -132,10 +127,9 @@ const Assignment = () => {
                                             {a.title}
                                         </Link>
                                     </td>
-                                    <td>{a.dueDate}</td>
+                                    <td className="as-date">{a.dueDate}</td>
                                     <td>
                                         <div className="as-author">
-                                            <span className="as-avatar" aria-hidden="true" />
                                             <span>{a.author}</span>
                                         </div>
                                     </td>
