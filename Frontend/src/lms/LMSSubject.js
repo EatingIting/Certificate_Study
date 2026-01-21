@@ -10,8 +10,10 @@ import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
 import Board from "./board/Board";
 import Calendar from "./calendar/Calendar"
+import ChatModal from "./chat/ChatModal";
 
 import "./LMSSubject.css";
+import {Cable} from "lucide-react";
 
 const LMSSubject = () => {
     const [activeMenu, setActiveMenu] = useState("dashboard");
@@ -56,6 +58,7 @@ const LMSSubject = () => {
                     </Routes>
                 </main>
             </div>
+            <ChatModal />
         </>
     );
 };
