@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.roomjoinrequest.RoomJoinRequestMapper">
+
+    <!-- 신청 -->
+    <insert id="insert">
+        INSERT INTO room_join_request (
+            join_id,
+            request_user_id,
+            owner_user_id,
+            room_id,
+            status,
+            apply_message
+        )
+        VALUES (
+                   UUID(),
+                   #{requestUserId},
+                   #{ownerUserId},
+                   #{roomId},
+                   '신청중',
+                   #{applyMessage}
+               )
+    </insert>
+
+    <!-- 내가 신청한 스터디 -->
+    <select id="selectSent" resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
+        SELECT
+            rjr.join_id        AS joinId,
+            r.title            AS studyTitle,
+            u.nickname         AS nickname,
+            rjr.status
+        FROM room_join_request rjr
+                 JOIN rooms r ON rjr.room_id = r.room_id
+                 JOIN users u ON rjr.owner_user_id = u.user_id
+        WHERE rjr.request_user_id = #{requestUserId}
+        ORDER BY rjr.requested_at DESC
+    </select>
+
+    <!-- 내가 받은 신청 -->
+    <select id="selectReceived" resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
+        SELECT
+            rjr.join_id        AS joinId,
+            r.title            AS studyTitle,
+            u.nickname         AS nickname,
+            rjr.status
+        FROM room_join_request rjr
+                 JOIN rooms r ON rjr.room_id = r.room_id
+                 JOIN users u ON rjr.request_user_id = u.user_id
+        WHERE rjr.owner_user_id = #{ownerUserId}
+        ORDER BY rjr.requested_at DESC
+    </select>
+
+    <!-- 승인 / 거절 -->
+    <update id="updateStatus">
+        UPDATE room_join_request
+        SET status = #{status}
+        WHERE join_id = #{joinId}
+    </update>
+
+</mapper>
