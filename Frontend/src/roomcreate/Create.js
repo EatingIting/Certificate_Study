@@ -33,7 +33,7 @@ export default function CreateRoom() {
     return (
         <div className="create-room-container">
             <div className="create-room-box">
-                <h2 className="title">ONSIL </h2>
+                <h2 className="create-title">ONSIL </h2>
 
                 <input
                     className="input"
