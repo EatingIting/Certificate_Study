@@ -29,7 +29,7 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
         // 하위 눌렀을 때 해당 그룹은 열린 상태 유지
         setOpenKeys((prev) => (prev.includes(parentKey) ? prev : [...prev, parentKey]));
 
-        navigate(path);
+        navigate(`/lms/${subjectId}/${path}`);
     };
 
     return (
@@ -41,11 +41,11 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                         className={`menu-item menu-single ${activeMenu === "dashboard" ? "active" : ""}`}
                         onClick={() => {
                             setActiveMenu("dashboard");
-                            navigate("dashboard");
+                            navigate(`/lms/${subjectId}/dashboard`);
                         }}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => e.key === "Enter" && navigate("dashboard")}
+                        onKeyDown={(e) => e.key === "Enter" && navigate(`/lms/${subjectId}/dashboard`)}
                     >
                         대시보드
                     </li>
