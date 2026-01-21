@@ -13,7 +13,7 @@
 .as-create-btn {
     background: #ffffff;
     border: 1px solid #e6e9ee;
-    border-radius: 10px;
+    border-radius: 5px;
     padding: 10px 14px;
     margin-right: 100px;
     font-size: 13px;
@@ -27,7 +27,7 @@
 
 /* 큰 카드 */
 .as-card {
-    border-radius: 18px;
+    border-radius: 10px;
     background: #ffffff;
     overflow: hidden;
     box-shadow: 0 10px 22px rgba(16, 24, 40, 0.12);
@@ -90,7 +90,7 @@
 .as-table-wrap {
     width: min(720px, 100%);
     margin: 0 auto;
-    border-radius: 12px;
+    border-radius: 5px;
     border: 1px solid #eef1f5;
     overflow: hidden;
     background: #ffffff;
@@ -231,7 +231,7 @@
 .as-modal {
     width: min(520px, 100%);
     background: #ffffff;
-    border-radius: 16px;
+    border-radius: 10px;
     border: 1px solid #eef1f5;
     box-shadow: 0 18px 40px rgba(16, 24, 40, 0.22);
     overflow: hidden;
@@ -348,7 +348,7 @@
     min-width: 92px;          /* 취소/제출 버튼 폭 동일 */
     height: 40px;             /* 높이 동일 */
     padding: 0 18px;          /* 좌우 여백 */
-    border-radius: 14px;      /* 사진처럼 둥글게 */
+    border-radius: 10px;      /* 사진처럼 둥글게 */
     font-weight: 900;
     font-size: 13px;
 }

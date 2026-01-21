@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+
 import "./Attendance.css";
 
 /**
@@ -146,6 +148,10 @@ const Attendance = () => {
             };
         });
     }, [members, studySchedule.totalSessions, studySchedule.requiredRatio, totalMin]);
+
+    const [sp] = useSearchParams();
+    const scope = sp.get("scope") || "all"; // my | all
+
 
     return (
         <div className="at-page">
