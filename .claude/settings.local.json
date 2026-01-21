@@ -9,7 +9,9 @@
       "Bash(findstr:*)",
       "Bash(if exist \"node_modules\\\\.cache\" rmdir /s /q \"node_modules\\\\.cache\")",
       "Bash(npm uninstall:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n321\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git reset:*)"
     ]
   }
 }
