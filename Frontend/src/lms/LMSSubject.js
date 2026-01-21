@@ -9,7 +9,7 @@ import Attendance from "./attendance/Attendance";
 import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
 import Board from "./board/Board";
-import Calender from "./calender/Calender";
+import Calendar from "./calendar/Calendar"
 
 import "./LMSSubject.css";
 
@@ -25,7 +25,7 @@ const LMSSubject = () => {
         if (p.includes("/assignment")) setActiveMenu("assignment");
         else if (p.includes("/attendance")) setActiveMenu("attendance");
         else if (p.includes("/board")) setActiveMenu("board");
-        else if (p.includes("/calender")) setActiveMenu("calender");
+        else if (p.includes("/calendar")) setActiveMenu("calendar");
         else setActiveMenu("dashboard");
     }, [location.pathname]);
 
@@ -49,7 +49,7 @@ const LMSSubject = () => {
                         <Route path="assignment/:id" element={<AssignmentDetail />} />
 
                         <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
-                        <Route path="calender" element={<Calender setActiveMenu={setActiveMenu} />} />
+                        <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 
                         {/* 없는 경로는 대시보드로 */}
                         <Route path="*" element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />} />

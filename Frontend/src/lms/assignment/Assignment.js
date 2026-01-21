@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import {useEffect, useState} from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useRef } from "react";
 import "./Assignment.css";
 
@@ -81,6 +81,16 @@ const Assignment = () => {
         closeCreateModal();
         alert("과제가 생성되었습니다! (데모)");
     };
+
+    const [sp] = useSearchParams();
+
+    useEffect(() => {
+        if (sp.get("modal") === "create") {
+            openCreateModal();
+        }
+        // eslint-disable-next-line
+    }, [sp]);
+
 
     return (
         <div className="as-page">
