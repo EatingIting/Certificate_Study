@@ -2597,7 +2597,7 @@ function MeetingPage() {
                                 <Monitor size={20} />
                             </div>
                             <div>
-                                <h1 className="header-title">주간 제품 회의</h1>
+                                <h1 className="header-title">정보처리기사 스터디</h1>
                                 <div className="header-meta">
                   <span>
                     <Users size={10} /> {participants.length}명 접속 중
