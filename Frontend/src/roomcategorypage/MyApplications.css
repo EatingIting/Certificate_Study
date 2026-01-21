@@ -40,6 +40,10 @@
     color: white;
 }
 
+.tabs button:hover {
+    opacity: 0.9;
+}
+
 /* ===== 테이블 ===== */
 .application-table {
     width: 1200px;
@@ -76,7 +80,7 @@
     font-weight: 600;
 }
 
-.status.신청중{
+.status.신청중 {
     color: #f59e0b;
 }
 
@@ -112,8 +116,69 @@
     cursor: pointer;
 }
 
-/* ===== 버튼 호버 ===== */
-.actions button:hover,
-.tabs button:hover {
+.actions button:hover {
     opacity: 0.9;
+}
+
+/* ===== 클릭 가능한 행 ===== */
+.clickable-row {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.clickable-row:hover {
+    background: #f8faf8;
+}
+
+/* ===== 드롭다운 상세 행 ===== */
+.application-detail td {
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* ===== 상세 박스 ===== */
+.detail-box {
+    background: #f8faf8;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-top: -6px;
+    text-align: left;
+    font-size: 14px;
+    color: #374151;
+}
+
+/* ===== 상세 정보 텍스트 ===== */
+.detail-box p {
+    margin: 6px 0;
+}
+
+/* ===== 신청 메시지 ===== */
+.message-box {
+    margin-top: 12px;
+}
+
+.message-box textarea {
+    width: 100%;
+    min-height: 90px;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    resize: none;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #374151;
+}
+
+/* ===== textarea 포커스 ===== */
+.message-box textarea:focus {
+    outline: none;
+    border-color: #97c793;
+}
+
+/* ===== 클릭 방지 보완 ===== */
+.actions button {
+    pointer-events: auto;
 }
