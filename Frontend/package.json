@@ -13,6 +13,7 @@
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.13.2",
+    "fullcalendar": "^6.1.20",
     "http-proxy-middleware": "^2.0.9",
     "lucide-react": "^0.562.0",
     "mediasoup-client": "^3.18.3",
