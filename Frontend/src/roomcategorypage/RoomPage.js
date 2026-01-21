@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import api from "../api/api";
 import "./RoomPage.css";
+import CreateRoom from "../roomcreate/Create";
 import onsil from "./온실.png";
 
 const ITEMS_PER_PAGE = 8;
@@ -38,6 +39,7 @@ const RoomPage = () => {
     const [applyMessage, setApplyMessage] = useState("");
 
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     const nickname = localStorage.getItem("nickname");
 
@@ -291,7 +293,12 @@ const RoomPage = () => {
                                         ? `${selectedCategory} - ${selectedSubCategory}`
                                         : selectedCategory}
                             </h2>
-                            <button className="create-btn" onClick={() => navigate("/create")}>스터디 만들기</button>
+                            <button
+                            className="create-btn"
+                            onClick={() => setIsCreateModalOpen(true)}
+                            >
+                            스터디 만들기
+                        </button>
                         </div>
 
                         <table className="room-table">
@@ -426,6 +433,10 @@ const RoomPage = () => {
                                 )}
                             </div>
                         </div>
+                    )}
+
+                    {isCreateModalOpen && (
+                        <CreateRoom onClose={() => setIsCreateModalOpen(false)} />
                     )}
 
                 </div>

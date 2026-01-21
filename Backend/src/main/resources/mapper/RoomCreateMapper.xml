@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.roomcreate.RoomCreateMapper">
+
+    <insert id="insertRoom">
+        INSERT INTO room (
+        room_id,
+        host_user_id,
+        title,
+        content,
+        capacity,
+        max_participants,
+        status,
+        cat_id
+        ) VALUES (
+        #{roomId},
+        #{hostUserId},
+        #{title},
+        #{content},
+        #{capacity},
+        #{maxParticipants},
+        #{status},
+        #{categoryId}
+        )
+    </insert>
+
+    <select id="findAllRooms" resultType="com.example.demo.roomcreate.RoomCreateVO">
+        SELECT
+            room_id           AS roomId,
+            title,
+            content,
+            capacity,
+            max_participants  AS maxParticipants,
+            status,
+            created_at        AS createdAt,
+            cat_id            AS categoryId
+        FROM room
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findRoomById" resultType="com.example.demo.roomcreate.RoomCreateVO">
+        SELECT
+            room_id           AS roomId,
+            title,
+            content,
+            capacity,
+            max_participants  AS maxParticipants,
+            status,
+            created_at        AS createdAt,
+            cat_id            AS categoryId
+        FROM room
+        WHERE room_id = #{roomId}
+    </select>
+
+</mapper>
