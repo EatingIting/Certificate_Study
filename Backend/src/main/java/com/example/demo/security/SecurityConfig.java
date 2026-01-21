@@ -35,12 +35,8 @@ public class SecurityConfig {
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
                 .authorizeHttpRequests(auth -> auth
-                        // preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // 정적 리소스
                         .requestMatchers(
                                 "/", "/index.html",
                                 "/static/**",
@@ -50,21 +46,13 @@ public class SecurityConfig {
                                 "/images/**",
                                 "/uploads/**"
                         ).permitAll()
-
-                        // 인증 관련 API
                         .requestMatchers(
-                                "/ws/**",
-                                "/api/auth/**",
-                                "/api/users/**",
-                                "/api/main",
-                                "/api/books/image/**",
-                                "/api/category/**"
+                                "/api/users/login",
+                                "/api/users/signup",
+                                "/api/users/check-email",
+                                "/api/category/**",
+                                "/api/rooms/**"
                         ).permitAll()
-
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/**").permitAll()
-
-                        .requestMatchers(HttpMethod.POST, "/api/rooms").authenticated()
-
                         .anyRequest().authenticated()
                 )
 
@@ -80,11 +68,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "https://172.30.1.250",
-                "https://192.168.35.235"
-        ));
+        config.setAllowedOrigins(List.of("http://localhost:3000"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));

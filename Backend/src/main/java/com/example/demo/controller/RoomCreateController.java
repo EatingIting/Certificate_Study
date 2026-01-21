@@ -23,23 +23,9 @@ public class RoomCreateController {
             @RequestBody RoomCreateRequest request,
             @AuthenticationPrincipal String userId
     ) {
-        if (userId == null || userId.equals("anonymousUser")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
 
         roomService.createRoom(request, userId);
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping
-    public ResponseEntity<List<RoomCreateVO>> getRooms() {
-        return ResponseEntity.ok(roomService.getRooms());
-    }
-
-    @GetMapping("/{roomId}")
-    public ResponseEntity<RoomCreateVO> getRoomDetail(
-            @PathVariable String roomId
-    ) {
-        return ResponseEntity.ok(roomService.getRoomDetail(roomId));
-    }
 }
