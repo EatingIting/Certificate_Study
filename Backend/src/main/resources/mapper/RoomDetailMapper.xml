@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.RoomList.RoomDetailMapper">
+
+    <select id="selectRoomDetail"
+            parameterType="string"
+            resultType="com.example.demo.RoomList.RoomDetailVO">
+
+        SELECT
+            r.room_id           AS roomId,
+            r.title             AS title,
+            r.content           AS description,
+            r.capacity          AS gender,
+            r.max_participants  AS maxPeople,
+            u.nickname          AS nickname,
+            mc.name             AS midCategoryName,
+            sc.name             AS subCategoryName,
+            r.created_at        AS createdAt
+        FROM room r
+                 JOIN users u ON r.host_user_id = u.user_id
+                 LEFT JOIN category sc ON r.cat_id = sc.id
+                 LEFT JOIN category mc ON sc.parent_id = mc.id
+        WHERE r.room_id = #{roomId}
+
+    </select>
+
+</mapper>
