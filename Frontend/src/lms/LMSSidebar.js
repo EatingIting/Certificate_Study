@@ -1,12 +1,13 @@
 import "./LMSSidebar.css";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
     const navigate = useNavigate();
+    const { subjectId } = useParams();
 
     const go = (menu) => {
         setActiveMenu(menu);   // active 표시용
-        navigate(menu);        // ✅ URL 이동 (상대경로)
+        navigate(`/lms/${subjectId}/${menu}`);  // ✅ URL 이동 (절대경로)
     };
 
     return (

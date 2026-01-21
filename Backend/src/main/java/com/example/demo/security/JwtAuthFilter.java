@@ -30,6 +30,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return path.contains("/api/users/login")
                 || path.contains("/api/users/signup")
                 || path.contains("/api/users/check-email")
+                || path.contains("/api/category")
                 || path.contains("/ws/");
     }
 
