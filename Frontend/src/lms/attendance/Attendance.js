@@ -153,9 +153,7 @@ const Attendance = () => {
                 <div className="at-card-header">
                     <div className="at-header-left">
                         <div className="at-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" width="22" height="22">
-
-                            </svg>
+                                <img src="/calendar.png" alt="출석" />
                         </div>
 
                         <div>
@@ -185,9 +183,9 @@ const Attendance = () => {
                             <thead>
                             <tr>
                                 <th className="at-th-name">이름</th>
-                                <th className="at-th-att">출석</th>
+                                <th className="at-th-att">출석률</th>
                                 <th className="at-th-num">결석</th>
-                                <th className="at-th-num">점수</th>
+                                <th className="at-th-num">출석</th>
                                 {Array.from({ length: studySchedule.totalSessions }).map((_, i) => (
                                     <th key={i} className="at-th-session">
                                         {i + 1}
@@ -201,7 +199,6 @@ const Attendance = () => {
                                 <tr key={r.memberId}>
                                     <td className="at-td-name">
                                         <div className="at-person">
-                                            <span className="at-avatar" aria-hidden="true" />
                                             <span className="at-name">{r.name}</span>
                                         </div>
                                     </td>

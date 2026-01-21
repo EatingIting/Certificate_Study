@@ -66,6 +66,15 @@
     color: #2f6f4a;
 }
 
+/* 과제 아이콘 박스 안에 이미지 딱 맞추기 */
+.as-icon img {
+    width: 24px;          /* 보기 좋은 기본 크기 */
+    height: 24px;
+    object-fit: contain;  /* 비율 유지 */
+    display: block;
+}
+
+
 .as-subtitle {
     margin: 0;
     font-size: 13px;
@@ -98,7 +107,7 @@
     color: #7a8391;
     font-weight: 700;
     padding: 12px 14px;
-    text-align: left;
+    text-align: center;
     border-bottom: 1px solid #eef1f5;
 }
 
@@ -106,7 +115,7 @@
     padding: 14px 14px;
     border-bottom: 1px solid #f0f2f6;
     color: #2b3340;
-    vertical-align: middle;
+    vertical-align: center;
 }
 
 .as-table tbody tr:last-child td {
@@ -115,12 +124,14 @@
 
 .as-td-title {
     width: 45%;
+    text-align: center;
 }
 
 .as-link {
     color: #3a4657;
     text-decoration: none;
     font-weight: 700;
+    text-align: center;
 }
 
 .as-link:hover {
@@ -133,6 +144,9 @@
     align-items: center;
     gap: 8px;
     color: #2b3340;
+    text-align: center;
+    justify-content: center;
+
 }
 
 .as-avatar {
@@ -143,11 +157,22 @@
     box-shadow: inset 0 0 0 2px #ffffff;
 }
 
+.as-date {
+    text-align: center;
+}
+
+/* 상태 셀 안에서 버튼/뱃지 중앙 */
+.as-table td:last-child {
+    text-align: center;
+}
+
 /* 상태 뱃지/버튼 공통 (크기 통일 + 볼드 제거) */
 .as-status {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin: 0 auto;
+    display: inline-flex;
 
     min-width: 96px;       /* 둘 다 동일 폭 */
     height: 32px;          /* 둘 다 동일 높이 */
@@ -173,6 +198,7 @@
 /* 제출 하기 (버튼 느낌: 테두리/배경 구분 + hover) */
 .as-status--todo {
     background: #fff4ea;
+
     border-color: #ffd4b0;
     color: #9a4d1a;
 
@@ -186,9 +212,6 @@
 .as-status--todo:active {
     transform: translateY(1px);
 }
-
-
-
 
 .as-submit-btn:hover {
     filter: brightness(0.95);
@@ -330,7 +353,7 @@
     font-size: 13px;
 }
 
-/* 취소 버튼 (지금 스타일 유지하되 크기는 위에서 통일됨) */
+/* 취소 버튼 */
 .as-cancel-btn {
     border: 1px solid #e5e7eb;
     background: #fff;
@@ -343,10 +366,10 @@
     background: #f9fafb;
 }
 
-/* 제출 버튼 (사진처럼) */
+/* 제출 버튼  */
 .as-primary-btn {
     border: none;
-    background: #5f8f73; /* 사진 느낌의 그린 톤 */
+    background: #5f8f73;
     color: #ffffff;
     cursor: pointer;
     box-shadow: 0 2px 6px rgba(16, 24, 40, 0.12);
@@ -362,14 +385,14 @@
     transform: translateY(1px);
 }
 
-/* ===== 과제 생성 모달 전용(사진처럼) ===== */
+/* ===== 과제 생성 모달 전용 ===== */
 .as-create-modal {
-    width: min(640px, 95vw); /* 사진처럼 더 넓게 */
+    width: min(640px, 95vw);
     border-radius: 14px;
 }
 
 .as-create-header {
-    background: #f4f8f5; /* 사진의 연한 그린/그레이 헤더 */
+    background: #f4f8f5;
     padding: 18px 18px 12px;
 }
 

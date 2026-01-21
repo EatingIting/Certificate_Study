@@ -62,7 +62,10 @@ const AssignmentDetail = () => {
             <section className="ad-card">
                 <div className="ad-card-header">
                     <div className="ad-header-left">
-                        <div className="ad-icon" aria-hidden="true">📄</div>
+                        <div className="ad-icon" aria-hidden="true">
+                            <img src="/assignment.png" alt="과제아이콘"/>
+                        </div>
+
                         <div>
                             <h2 className="ad-title">과제 상세</h2>
                             <p className="ad-subtitle">
@@ -88,7 +91,6 @@ const AssignmentDetail = () => {
                                 <tr key={idx}>
                                     <td>
                                         <div className="ad-member">
-                                            <span className="ad-avatar" />
                                             <span className="ad-member-name">{s.name}</span>
                                         </div>
                                     </td>
