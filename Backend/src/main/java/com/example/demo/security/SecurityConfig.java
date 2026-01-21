@@ -35,12 +35,8 @@ public class SecurityConfig {
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
                 .authorizeHttpRequests(auth -> auth
-                        // preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // 정적 리소스
                         .requestMatchers(
                                 "/", "/index.html",
                                 "/static/**",
@@ -50,20 +46,13 @@ public class SecurityConfig {
                                 "/images/**",
                                 "/uploads/**"
                         ).permitAll()
-
-                        // 인증 관련 API
                         .requestMatchers(
                                 "/api/users/login",
                                 "/api/users/signup",
-                                "/api/users/check-email"
+                                "/api/users/check-email",
+                                "/api/category/**",
+                                "/api/rooms/**"
                         ).permitAll()
-
-                        .requestMatchers(HttpMethod.GET, "/api/category/**").permitAll()
-
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/**").permitAll()
-
-                        .requestMatchers(HttpMethod.POST, "/api/rooms").authenticated()
-
                         .anyRequest().authenticated()
                 )
 
