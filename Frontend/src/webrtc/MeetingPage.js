@@ -11,6 +11,7 @@ import {
     Monitor,
     MoreHorizontal,
     Phone,
+    PictureInPicture2,
     Send,
     Share,
     Smile,
@@ -54,8 +55,17 @@ const UserAvatar = ({ name, size = "md", src }) => {
 };
 
 // VideoTile 내부에서 오디오 레벨을 직접 감지
-const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false }) => {
-    const videoEl = useRef(null);
+const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false, videoRef }) => {
+    const internalVideoRef = useRef(null);
+    const videoEl = internalVideoRef;
+
+    // 외부 videoRef와 내부 ref 동기화
+    const setVideoRef = (el) => {
+        internalVideoRef.current = el;
+        if (videoRef) {
+            videoRef.current = el;
+        }
+    };
     const [isSpeakingLocally, setIsSpeakingLocally] = useState(false);
     
     // 트랙 상태를 별도로 관리 (검은 화면 방지용)
@@ -221,7 +231,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             <div className="video-content">
                 {canShowVideo && stream ? (
                     <video
-                        ref={videoEl}
+                        ref={setVideoRef}
                         autoPlay
                         playsInline
                         muted
@@ -400,6 +410,10 @@ function MeetingPage() {
     const [isGridFullscreen, setIsGridFullscreen] = useState(false); // 그리드 전체화면 여부
     const gridFullscreenStageRef = useRef(null); // 그리드 전체화면 컨테이너 ref
 
+    // PiP 관련
+    const mainVideoRef = useRef(null);
+    const [isPip, setIsPip] = useState(false);
+
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
     useEffect(() => { camOnRef.current = camOn; }, [camOn]);
     useEffect(() => { micPermissionRef.current = micPermission; }, [micPermission]);
@@ -461,6 +475,40 @@ function MeetingPage() {
             document.exitFullscreen();
         }
     };
+
+    // PiP 핸들러
+    const handlePip = async () => {
+        const videoElement = mainVideoRef.current;
+        if (!videoElement) {
+            console.error("PiP: 비디오 요소를 찾을 수 없습니다.");
+            return;
+        }
+
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+            } else {
+                await videoElement.requestPictureInPicture();
+            }
+        } catch (err) {
+            console.error("PiP 전환 실패:", err);
+        }
+    };
+
+    // PiP 상태 변경 감지
+    useEffect(() => {
+        const handlePipChange = () => {
+            setIsPip(!!document.pictureInPictureElement);
+        };
+
+        document.addEventListener("enterpictureinpicture", handlePipChange);
+        document.addEventListener("leavepictureinpicture", handlePipChange);
+
+        return () => {
+            document.removeEventListener("enterpictureinpicture", handlePipChange);
+            document.removeEventListener("leavepictureinpicture", handlePipChange);
+        };
+    }, []);
 
     // 전체화면 상태 변경 감지
     useEffect(() => {
@@ -2642,7 +2690,17 @@ function MeetingPage() {
                                     roomReconnecting={roomReconnecting}
                                     isScreen={isMainScreenShare}
                                     reaction={mainUser?.reaction}
+                                    videoRef={mainVideoRef}
                                     />
+
+                                    {/* PiP 토글 버튼 */}
+                                    <button
+                                    className="pip-btn"
+                                    onClick={handlePip}
+                                    title={isPip ? "PiP 종료" : "PiP 모드"}
+                                    >
+                                    <PictureInPicture2 size={20} />
+                                    </button>
 
                                     {/* 전체화면 토글 버튼 */}
                                     <button

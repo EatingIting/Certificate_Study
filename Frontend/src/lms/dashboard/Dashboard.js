@@ -1,9 +1,7 @@
 import "./Dashboard.css";
-import { useNavigate, useParams } from "react-router-dom";
+
 
 const Dashboard = ({ setActiveMenu }) => {
-    const navigate = useNavigate();
-    const { subjectId } = useParams(); // URL이 /lms/:subjectId/dashboard 구조면 사용 가능
 
     const go = (menu) => {
         setActiveMenu(menu);
