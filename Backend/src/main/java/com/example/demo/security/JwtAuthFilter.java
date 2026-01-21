@@ -20,9 +20,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
         String path = request.getRequestURI();
+
         // WebSocket 등 JWT 적용 제외 경로
-        return path.startsWith("/ws/");
+        return path.contains("/api/users/login")
+                || path.contains("/api/users/signup")
+                || path.contains("/api/users/check-email")
+                || path.contains("/ws/");
     }
 
     @Override
