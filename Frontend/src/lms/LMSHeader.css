@@ -9,6 +9,18 @@
     justify-content: space-between;
 }
 
+.header-text {
+    display: flex;
+    flex-direction: column; /* ⭐ 핵심 */
+    gap: 2px;
+}
+
+.header-text p {
+    margin: 0;
+    font-size: 13px;
+    color: #666;
+}
+
 /* 왼쪽 */
 .header-left {
     display: flex;
