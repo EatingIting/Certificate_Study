@@ -4,15 +4,13 @@ import express from "express";
 import cors from "cors";
 import WebSocket, { WebSocketServer } from "ws";
 import mediasoup from "mediasoup";
+import os from "os";
 
 const SFU_PORT = 4000;
 
-// ✅ 맥북 같은 외부에서 붙을 때는 반드시 LAN IP를 announcedIp로 고정
-const ANNOUNCED_IP = "172.30.1.250";
-
 // ✅ 인증서 경로 (예: mkcert로 만든 파일)
-const TLS_KEY_PATH = "./certs/172.30.1.250-key.pem";
-const TLS_CERT_PATH = "./certs/172.30.1.250.pem";
+const TLS_KEY_PATH = "C:/certs/server-key.pem";
+const TLS_CERT_PATH = "C:/certs/server.pem";
 
 // mediasoup codec
 const mediaCodecs = [
@@ -39,6 +37,22 @@ function broadcast(room, exceptPeerId, obj) {
 function randomId(prefix = "") {
   return prefix + Math.random().toString(36).slice(2, 10);
 }
+
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // IPv4이고, 내부(127.0.0.1)가 아닌 주소를 찾음
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return "127.0.0.1"; // 못 찾으면 기본값
+}
+
+const MY_IP = getLocalIp(); // 서버 켜질 때 자동으로 IP 감지!
+console.log(`📡 Detected Server IP: ${MY_IP}`);
 
 async function startWorker() {
   worker = await mediasoup.createWorker({ rtcMinPort: 40000, rtcMaxPort: 49999 });
@@ -99,7 +113,12 @@ function listOtherProducers(room, exceptPeerId) {
     if (pid === exceptPeerId) continue;
     for (const producerId of peer.producers.keys()) {
       const producer = peer.producers.get(producerId);
-      result.push({ producerId, peerId: pid, kind: producer.kind });
+      result.push({
+        producerId,
+        peerId: pid,
+        kind: producer.kind,
+        appData: producer.appData || {},
+      });
     }
   }
   return result;
@@ -125,8 +144,16 @@ const wss = new WebSocketServer({ server: httpsServer });
 // ✅ 서버 시작
 httpsServer.listen(SFU_PORT, async () => {
   await startWorker();
-  console.log(`🚀 SFU HTTPS/WSS listening on https://${ANNOUNCED_IP}:${SFU_PORT}`);
+  console.log(`🚀 SFU HTTPS/WSS listening on https://${MY_IP}:${SFU_PORT}`);
 });
+
+function findProducerInfo(room, producerId) {
+  for (const [pid, p] of room.peers.entries()) {
+    const producer = p.producers.get(producerId);
+    if (producer) return { producer, peerId: pid };
+  }
+  return null;
+}
 
 // -------------------------------
 // WebSocket Signaling (mediasoup control)
@@ -167,6 +194,11 @@ wss.on("connection", (ws) => {
         };
 
         room.peers.set(newPeerId, peer);
+        const count = room.peers.size;
+        broadcast(room, null, { 
+            action: "peerCount", 
+            data: { count } 
+        });
 
         console.log("👤 [SFU] peer joined", { roomId, peerId: newPeerId, peerCount: room.peers.size });
 
@@ -195,11 +227,20 @@ wss.on("connection", (ws) => {
         if (direction !== "send" && direction !== "recv") throw new Error("direction must be 'send' or 'recv'");
 
         const transport = await room.router.createWebRtcTransport({
-          listenIps: [{ ip: "0.0.0.0", announcedIp: ANNOUNCED_IP }],
+          listenIps: [
+            {
+              ip: "0.0.0.0",
+              announcedIp: MY_IP,
+            }
+          ],
           enableUdp: true,
           enableTcp: true,
           preferUdp: true,
-          initialAvailableOutgoingBitrate: 800000,
+
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" }
+          ]
         });
 
         peer.transports.set(transport.id, { transport, direction });
@@ -219,6 +260,7 @@ wss.on("connection", (ws) => {
           iceParameters: transport.iceParameters,
           iceCandidates: transport.iceCandidates,
           dtlsParameters: transport.dtlsParameters,
+
         });
         return;
       }
@@ -250,7 +292,12 @@ wss.on("connection", (ws) => {
           peer.producers.delete(producer.id);
           broadcast(room, peer.peerId, {
             action: "producerClosed",
-            data: { roomId: room.roomId, peerId: peer.peerId, producerId: producer.id },
+            data: { 
+              roomId: room.roomId, 
+              peerId: peer.peerId, 
+              producerId: producer.id,
+              appData: producer.appData,
+            },
           });
         };
 
@@ -259,7 +306,7 @@ wss.on("connection", (ws) => {
 
         broadcast(room, peer.peerId, {
           action: "newProducer",
-          data: { roomId: room.roomId, peerId: peer.peerId, producerId: producer.id, kind: producer.kind },
+          data: { roomId: room.roomId, peerId: peer.peerId, producerId: producer.id, kind: producer.kind, appData: producer.appData || {}, },
         });
 
         reply({ producerId: producer.id });
@@ -268,13 +315,15 @@ wss.on("connection", (ws) => {
 
       if (action === "consume") {
         const { transportId, producerId, rtpCapabilities } = data || {};
-        if (!transportId || !producerId || !rtpCapabilities) throw new Error("transportId/producerId/rtpCapabilities required");
 
         const t = peer.transports.get(transportId);
         if (!t) throw new Error("TRANSPORT_NOT_FOUND");
         if (t.direction !== "recv") throw new Error("NOT_A_RECV_TRANSPORT");
-
         if (!room.router.canConsume({ producerId, rtpCapabilities })) throw new Error("CANNOT_CONSUME");
+
+        const info = findProducerInfo(room, producerId);
+        const appData = info?.producer?.appData || {};
+        const producerPeerId = info?.peerId || null;
 
         const consumer = await t.transport.consume({ producerId, rtpCapabilities, paused: true });
         peer.consumers.set(consumer.id, consumer);
@@ -282,7 +331,10 @@ wss.on("connection", (ws) => {
         consumer.on("transportclose", () => peer.consumers.delete(consumer.id));
         consumer.on("producerclose", () => {
           peer.consumers.delete(consumer.id);
-          safeSend(ws, { action: "producerClosed", data: { roomId: room.roomId, producerId } });
+          safeSend(ws, {
+            action: "producerClosed",
+            data: { roomId: room.roomId, peerId: producerPeerId, producerId, appData },
+          });
         });
 
         reply({
@@ -290,6 +342,8 @@ wss.on("connection", (ws) => {
           producerId,
           kind: consumer.kind,
           rtpParameters: consumer.rtpParameters,
+          appData,
+          peerId: producerPeerId,
         });
         return;
       }
@@ -303,6 +357,31 @@ wss.on("connection", (ws) => {
 
         await consumer.resume();
         reply({ resumed: true });
+        return;
+      }
+
+      if (action === "closeProducer") {
+        const { producerId } = data || {};
+        const producer = peer.producers.get(producerId);
+
+        if (producer) {
+          const appData = producer.appData || {};
+          producer.close();
+          peer.producers.delete(producerId);
+
+          // 다른 피어들에게 알림
+          broadcast(room, joinedPeerId, {
+            action: "producerClosed",
+            data: {
+              roomId: room.roomId,
+              peerId: joinedPeerId,
+              producerId,
+              appData,
+            },
+          });
+        }
+
+        reply({ closed: true });
         return;
       }
 
@@ -323,5 +402,12 @@ wss.on("connection", (ws) => {
     });
 
     cleanupPeer(room, joinedPeerId);
+    if (rooms.has(joinedRoomId)) { // 방이 아직 살아있다면
+      const currentRoom = rooms.get(joinedRoomId);
+      broadcast(currentRoom, null, { 
+          action: "peerCount", 
+          data: { count: currentRoom.peers.size } 
+      });
+    }
   });
 });

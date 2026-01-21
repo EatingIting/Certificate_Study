@@ -1,98 +1,251 @@
 import "./Dashboard.css";
-import "../chat/ChatModal"; // 채팅방 모달 추가
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import ChatModal from "../chat/ChatModal";
 
 const Dashboard = ({ setActiveMenu }) => {
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [badgeCount, setBadgeCount] = useState(0);
+
+    const navigate = useNavigate();
+    const { subjectId } = useParams(); // URL이 /lms/:subjectId/dashboard 구조면 사용 가능
+
+    const go = (menu) => {
+        setActiveMenu(menu);
+        // ✅ 라우트 기반으로 이동
+        navigate(`/lms/${subjectId}/${menu}`);
+    };
 
     return (
         <div className="dashboard-container">
-            {/* 상단 카드 */}
-            <div className="dashboard-top">
-                <div className="card study-card">
-                    <div className="study-info">
-                        <h3>정보처리기사</h3>
-                        <p>2026.04.27 D-23</p>
-                        <div className="progress-bar">
-                            <div className="progress" />
+            <div className="dashboard-layout">
+                {/* LEFT COLUMN */}
+                <div className="col left-col">
+                    {/* 자격증 카드 (클릭 없음) */}
+                    <div className="card study-card-back">
+                        <div className="card study-card">
+                            <div className="study-info">
+                                <h3>정보처리기사</h3>
+                                <hr />
+                                <p>
+                                    2026.04.27 <br />
+                                    D-23
+                                </p>
+
+                                <div className="progress-bar">
+                                    <div className="progress" />
+                                </div>
+                            </div>
+
+                            <div className="study-icon">🔥</div>
                         </div>
                     </div>
-                    <div className="study-icon">🔥</div>
+
+                    {/* 게시판 카드 (클릭 이동) */}
+                    <div
+                        className="card clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => go("board")}
+                        onKeyDown={(e) => e.key === "Enter" && go("board")}
+                    >
+                        <div className="card-header line">
+                            <span className="card-title">게시판</span>
+                        </div>
+
+                        <ul className="table-list">
+                            <li className="trow plain">
+                                <span className="row-text">[자료] 2024 기출 자료 공유합니다!</span>
+                            </li>
+                            <li className="trow plain">
+                                <span className="row-text">[자료] 필기 요약본입니다</span>
+                            </li>
+                            <li className="trow plain">
+                                <span className="row-text">[공지] 오늘 저녁 스터디 예정입니다</span>
+                            </li>
+                        </ul>
+
+                        {/* ✅ 버튼 유지하고 싶으면 stopPropagation */}
+                        <div className="card-footer">
+                            <button
+                                className="more-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    go("board");
+                                }}
+                            >
+                                더보기 &gt;
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* MIDDLE COLUMN : 출석 */}
+                <div className="col">
+                    <div
+                        className="card attendance-card clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => go("attendance")}
+                        onKeyDown={(e) => e.key === "Enter" && go("attendance")}
+                    >
+                        <div className="card-header line">
+                            <span className="card-title">출석 현황</span>
+                        </div>
+
+                        <ul className="table-list">
+                            <li className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[1회차]</span>
+                  <span className="row-text">2026.01.01 (월)</span>
+                </span>
+                                <span className="tright">
+                  <span className="status ok">출석</span>
+                </span>
+                            </li>
+
+                            <li className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[2회차]</span>
+                  <span className="row-text">2026.01.03 (수)</span>
+                </span>
+                                <span className="tright">
+                  <span className="status ok">출석</span>
+                </span>
+                            </li>
+
+                            <li className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[3회차]</span>
+                  <span className="row-text">2026.01.05 (금)</span>
+                </span>
+                                <span className="tright">
+                  <span className="status ok">출석</span>
+                </span>
+                            </li>
+                        </ul>
+
+                        <div className="card-footer">
+                            <button
+                                className="more-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    go("attendance");
+                                }}
+                            >
+                                더보기 &gt;
+                            </button>
+                        </div>
+
+                        <div className="attendance-rate-box">
+                            <div className="rate-top">
+                                <div className="rate-left">
+                                    <img src="/calendar.png" alt="출석률" className="rate-badge" />
+                                    <span className="rate-label">출석률</span>
+                                </div>
+                                <span className="rate-value">83.3%</span>
+                            </div>
+
+                            <div className="rate-bar">
+                                <div className="rate-progress" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* RIGHT COLUMN : 과제 */}
+                <div className="col">
+                    <div
+                        className="card clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => go("assignment")}
+                        onKeyDown={(e) => e.key === "Enter" && go("assignment")}
+                    >
+                        <div className="card-header line">
+                            <span className="card-title">과제</span>
+                        </div>
+
+                        <ul className="table-list">
+                            <li className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[1회차]</span>
+                  <span className="row-text">2024 기출 풀기</span>
+                </span>
+                                <span className="tright">
+                  <span className="pill done">제출</span>
+                </span>
+                            </li>
+
+                            <li className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[2회차]</span>
+                  <span className="row-text">2023 기출 풀기</span>
+                </span>
+                                <span className="tright">
+                  <span className="pill done">제출</span>
+                </span>
+                            </li>
+
+                            <li className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[3회차]</span>
+                  <span className="row-text">2022 기출 풀기</span>
+                </span>
+                                <span className="tright">
+                  <span className="pill done">제출</span>
+                </span>
+                            </li>
+
+                            <li className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[4회차]</span>
+                  <span className="row-text">2021 기출 풀기</span>
+                </span>
+                                <span className="tright">
+                  <span className="pill pending">제출하기</span>
+                </span>
+                            </li>
+                        </ul>
+
+                        <div className="card-footer">
+                            <button
+                                className="more-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    go("assignment");
+                                }}
+                            >
+                                더보기 &gt;
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* 하단 카드들 */}
-            <div className="dashboard-grid">
-                {/* 게시판 */}
-                <div className="card">
-                    <div className="card-header">
-                        <span>게시판</span>
-                        <span className="more" onClick={() => setActiveMenu("board")}>
-                            더보기 &gt;
-                        </span>
-                    </div>
-                    <ul className="list">
-                        <li>[자료] 2024 기출 자료 공유합니다!</li>
-                        <li>[자료] 필기 요약본입니다</li>
-                        <li>[공지] 오늘 저녁 스터디 예정입니다</li>
-                    </ul>
-                </div>
+            {/* 채팅 플로팅 버튼 */}
+            <div className="chat-fab-wrap">
+                <button
+                    onClick={() => setIsChatOpen(!isChatOpen)}
+                    className="chat-fab"
+                    onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
+                    onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+                >
+                    {isChatOpen ? "✕" : "💬"}
 
-                {/* 출석 */}
-                <div className="card grid-attendance">
-                    <div className="card-header">
-                        <span>출석 현황</span>
-                        <span className="more" onClick={() => setActiveMenu("attendance")}>
-                            더보기 &gt;
-                        </span>
-                    </div>
+                    {!isChatOpen && badgeCount > 0 && (
+                        <div className="chat-badge">{badgeCount > 99 ? "99+" : badgeCount}</div>
+                    )}
+                </button>
+            </div>
 
-                    <ul className="attendance-list">
-                        <li><span>[1회차] 2026.01.01 (월)</span><span className="ok">출석</span></li>
-                        <li><span>[2회차] 2026.01.03 (수)</span><span className="ok">출석</span></li>
-                        <li><span>[3회차] 2026.01.05 (금)</span><span className="ok">출석</span></li>
-                        <li><span>[4회차] 2026.01.08 (일)</span><span className="fail">결석</span></li>
-                        <li><span>[5회차] 2026.01.10 (수)</span><span className="ok">출석</span></li>
-                    </ul>
-
-                    {/* ✅ 초록색 출석률 박스 */}
-                    <div className="attendance-rate-box">
-                        <div className="rate-top">
-                            <span className="rate-label">출석률</span>
-                            <span className="rate-value">83.3%</span>
-                        </div>
-                        <div className="rate-bar">
-                            <div className="rate-progress" />
-                        </div>
-                    </div>
-                </div>
-
-
-                {/* 과제 */}
-                <div className="card">
-                    <div className="card-header">
-                        <span>과제</span>
-                        <span className="more" onClick={() => setActiveMenu("assignment")}>
-                            더보기 &gt;
-                        </span>
-                    </div>
-                    <ul className="task-list">
-                        <li>
-                            [1회차] 2024 기출 풀기
-                            <span className="badge done">제출</span>
-                        </li>
-                        <li>
-                            [2회차] 2023 기출 풀기
-                            <span className="badge done">제출</span>
-                        </li>
-                        <li>
-                            [3회차] 2022 기출 풀기
-                            <span className="badge done">제출</span>
-                        </li>
-                        <li>
-                            [4회차] 2021 기출 풀기
-                            <span className="badge pending">제출하기</span>
-                        </li>
-                    </ul>
-                </div>
+            {/* 채팅 모달 */}
+            <div style={{ display: isChatOpen ? "block" : "none" }}>
+                <ChatModal
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    onNotificationChange={setBadgeCount}
+                />
             </div>
         </div>
     );

@@ -1,5 +1,7 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.ChatInboundMessage;
+import com.example.demo.dto.ChatOutboundMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.catalina.User;
@@ -12,10 +14,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import com.example.demo.dto.RoomUser;
 
@@ -25,10 +24,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Map<String, WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
     private final Map<String, Map<String, RoomUser>> roomUsers = new ConcurrentHashMap<>();
 
-    private final ObjectMapper objectMapper;
+    private final Map<String, Map<String, TimerTask>> leaveTimers = new ConcurrentHashMap<>();
 
-    public RoomWebSocketHandler(ObjectMapper objectMapper) {
+    private final ObjectMapper objectMapper;
+    private final MeetingRoomService meetingRoomService;
+
+    public RoomWebSocketHandler(ObjectMapper objectMapper, MeetingRoomService meetingRoomService) {
         this.objectMapper = objectMapper;
+        this.meetingRoomService = meetingRoomService;
     }
 
     @Override
@@ -38,14 +41,115 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         String userId = params.get("userId");
         String userName = params.get("userName");
+        String title = params.get("title");
 
-        roomSessions
-                .computeIfAbsent(roomId, k -> new ConcurrentHashMap<>())
-                .put(session.getId(), session);
+        Boolean paramMuted = params.containsKey("muted")
+                ? "true".equals(params.get("muted"))
+                : null;
 
-        roomUsers
-                .computeIfAbsent(roomId, k -> new ConcurrentHashMap<>())
-                .put(session.getId(), new RoomUser(userId, userName));
+        Boolean paramCameraOff = params.containsKey("cameraOff")
+                ? "true".equals(params.get("cameraOff"))
+                : null;
+
+        boolean isFirstJoin =
+                !roomUsers.containsKey(roomId) ||
+                        roomUsers.get(roomId).isEmpty();
+
+        if (title == null || title.isBlank()) {
+            title = "제목 없음";
+        }
+
+        if (isFirstJoin) {
+            meetingRoomService.handleFirstJoin(
+                    roomId,
+                    userId,
+                    title
+            );
+        } else {
+            meetingRoomService.handleJoin(roomId, userId);
+        }
+
+    /* =========================================================
+       2. LEAVE 타이머 취소 (재접속 대응)
+       ========================================================= */
+        Map<String, TimerTask> roomTimerMap = leaveTimers.get(roomId);
+        if (roomTimerMap != null) {
+            TimerTask t = roomTimerMap.remove(userId);
+            if (t != null) t.cancel();
+        }
+
+        Map<String, RoomUser> users =
+                roomUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+
+        Map<String, WebSocketSession> sessions =
+                roomSessions.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+
+        RoomUser restoredUser = null;
+        String existingSessionId = null;
+
+    /* =========================================================
+       3. 기존 유저 탐색 (재접속 판단)
+       ========================================================= */
+        for (Map.Entry<String, RoomUser> e : users.entrySet()) {
+            RoomUser u = e.getValue();
+            if (u != null && u.getUserId().equals(userId)) {
+                restoredUser = u;
+                existingSessionId = e.getKey();
+                break;
+            }
+        }
+
+    /* =========================================================
+       4. 기존 세션 정리
+       ========================================================= */
+        if (existingSessionId != null) {
+            WebSocketSession old = sessions.get(existingSessionId);
+            if (old != null && old.isOpen()) {
+                try { old.close(); } catch (Exception ignore) {}
+            }
+            sessions.remove(existingSessionId);
+            users.remove(existingSessionId);
+        }
+
+        RoomUser finalUser;
+
+    /* =========================================================
+       5. RoomUser 생성 / 복원
+       ========================================================= */
+        if (restoredUser != null) {
+            // 재접속
+            restoredUser.setExplicitlyLeft(false);
+            restoredUser.setOnline(true);
+
+            if (paramMuted != null) {
+                restoredUser.setMuted(paramMuted);
+            }
+            if (paramCameraOff != null) {
+                restoredUser.setCameraOff(paramCameraOff);
+            }
+
+            finalUser = restoredUser;
+        } else {
+            boolean muted = paramMuted != null ? paramMuted : true;
+            boolean cameraOff = paramCameraOff != null ? paramCameraOff : true;
+
+            finalUser = new RoomUser(
+                    userId,
+                    userName,
+                    System.currentTimeMillis(),
+                    false,
+                    muted,
+                    cameraOff,
+                    false,
+                    true   // online = true
+            );
+        }
+
+    /* =========================================================
+       6. 세션 등록 + 브로드캐스트
+       ========================================================= */
+        sessions.put(session.getId(), session);
+        users.put(session.getId(), finalUser);
 
         broadcast(roomId);
     }
@@ -57,8 +161,30 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         Map<String, WebSocketSession> sessions = roomSessions.get(roomId);
         Map<String, RoomUser> users = roomUsers.get(roomId);
 
-        if (sessions != null) sessions.remove(session.getId());
-        if (users != null) users.remove(session.getId());
+        if (sessions == null || users == null) return;
+
+        RoomUser leavingUser = users.get(session.getId());
+
+        // 세션은 항상 제거
+        sessions.remove(session.getId());
+
+        if (leavingUser == null) {
+            broadcast(roomId);
+            return;
+        }
+
+        String userId = leavingUser.getUserId();
+
+        // ✅ 기존 타이머가 있으면 취소
+        Map<String, TimerTask> timerMap = leaveTimers.get(roomId);
+        if (timerMap != null) {
+            TimerTask t = timerMap.remove(userId);
+            if (t != null) t.cancel();
+        }
+
+        // ✅ 연결 종료 시 즉시 유저 제거 (재접속 스피너 없이 바로 퇴장)
+        users.remove(session.getId());
+        System.out.println("🚪 [LEFT] " + userId + " removed immediately");
 
         broadcast(roomId);
     }
@@ -69,7 +195,13 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         if (sessions == null || usersMap == null) return;
 
-        List<RoomUser> users = new ArrayList<>(usersMap.values());
+        List<RoomUser> users = usersMap.values().stream()
+                .sorted(Comparator.comparingLong(RoomUser::getJoinAt))
+                .toList();
+
+        System.out.println("📢 [BROADCAST] Room: " + roomId + ", Users: " +
+                users.stream().map(u -> u.getUserName() + "(online=" + u.isOnline() + ")")
+                        .toList());
 
         try {
             String payload = objectMapper.writeValueAsString(
@@ -115,52 +247,170 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         return path.substring(path.lastIndexOf("/") + 1);
     }
 
-
-    // =====================================================================
-    // ▼ [HJW1] 채팅 메시지 처리 (Team Member Addition)
-    // =====================================================================
-
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        // 1. 들어온 메시지(JSON)를 읽음
-        String payload = message.getPayload();
-        Map<String, Object> data = objectMapper.readValue(payload, Map.class);
 
         String roomId = extractRoomId(session);
-        String type = (String) data.get("type"); // 메시지 타입 확인 (예: "CHAT")
 
-        // 2. 채팅 메시지라면 방 전체에 뿌림
-        if ("CHAT".equals(type)) {
-            String msgText = (String) data.get("message");
-            String senderId = roomUsers.get(roomId).get(session.getId()).getUserId(); // 보낸 사람 ID 찾기
-
-            // 보낼 데이터 조립
-            Map<String, Object> chatData = new HashMap<>();
-            chatData.put("type", "CHAT");
-            chatData.put("userId", senderId);
-            chatData.put("message", msgText);
-
-            // 방에 있는 모든 사람에게 전송
-            sendMessageToRoom(roomId, chatData);
-        }
-    }
-
-    // [Helper] 채팅 메시지 전송용 (기존 broadcast는 유저 목록용이라 따로 만듬)
-    private void sendMessageToRoom(String roomId, Map<String, Object> data) {
+        Map<String, RoomUser> users = roomUsers.get(roomId);
         Map<String, WebSocketSession> sessions = roomSessions.get(roomId);
-        if (sessions == null) return;
 
-        try {
-            String payload = objectMapper.writeValueAsString(data);
-            TextMessage message = new TextMessage(payload);
+        if (users == null || sessions == null) return;
 
-            for (WebSocketSession session : sessions.values()) {
-                if (session.isOpen()) {
-                    session.sendMessage(message);
+        RoomUser sender = users.get(session.getId());
+        if (sender == null) return;
+
+        // JSON 파싱
+        ChatInboundMessage inbound =
+                objectMapper.readValue(message.getPayload(), ChatInboundMessage.class);
+
+        String type = inbound.getType();
+        if (type == null) return;
+
+        //채팅메세지
+        if ("CHAT".equalsIgnoreCase(type)) {
+
+            String text = inbound.getMessage();
+            if (text == null || text.trim().isEmpty()) return;
+
+            text = text.trim();
+            if (text.length() > 1000) {
+                text = text.substring(0, 1000);
+            }
+
+            ChatOutboundMessage outbound = new ChatOutboundMessage(
+                    "CHAT",
+                    sender.getUserId(),
+                    sender.getUserName(),
+                    text,
+                    System.currentTimeMillis()
+            );
+
+            String payload = objectMapper.writeValueAsString(outbound);
+            TextMessage outboundMessage = new TextMessage(payload);
+
+            // 같은 방 전체 브로드캐스트
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(outboundMessage);
                 }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+
+            return;
+        }
+
+        // 말하기
+        if ("SPEAKING".equalsIgnoreCase(type)) {
+
+            Boolean speaking = inbound.getSpeaking();
+            if (speaking == null) return;
+
+            // 상태 갱신
+            sender.setSpeaking(speaking);
+
+            // USERS_UPDATE 재브로드캐스트
+            List<RoomUser> userList = users.values().stream()
+                    .sorted(Comparator.comparingLong(RoomUser::getJoinAt))
+                    .toList();
+
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "USERS_UPDATE",
+                            "users", userList
+                    )
+            );
+
+            TextMessage updateMessage = new TextMessage(payload);
+
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(updateMessage);
+                }
+            }
+            return;
+        }
+        if ("USER_STATE_CHANGE".equalsIgnoreCase(type)) {
+            Map<String, Object> changes = inbound.getChanges();
+
+            if (changes != null) {
+                if (changes.containsKey("muted")) {
+                    sender.setMuted((Boolean) changes.get("muted"));
+                }
+                if (changes.containsKey("cameraOff")) {
+                    sender.setCameraOff((Boolean) changes.get("cameraOff"));
+                }
+            }
+
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "USER_STATE_CHANGE",
+                            "userId", sender.getUserId(), // 보내는 사람 ID (String)
+                            "changes", changes != null ? changes : new HashMap<>()
+                    )
+            );
+
+            TextMessage broadcastMessage = new TextMessage(payload);
+
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
+            return;
+        }
+        if ("PING".equalsIgnoreCase(type)) {
+            session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+            return;
+        }
+
+        if ("LEAVE".equalsIgnoreCase(type)) {
+
+            RoomUser leaver = users.get(session.getId());
+            if (leaver == null) return;
+
+            String userId = leaver.getUserId();
+
+            leaver.setExplicitlyLeft(true);
+
+            Map<String, TimerTask> timerMap = leaveTimers.get(roomId);
+            if (timerMap != null) {
+                TimerTask t = timerMap.remove(userId);
+                if (t != null) t.cancel();
+            }
+
+            // ✅ 즉시 제거 (userId 기준)
+            users.entrySet().removeIf(e ->
+                    userId.equals(e.getValue().getUserId())
+            );
+
+            sessions.remove(session.getId());
+
+            broadcast(roomId);
+            return;
+        }
+
+        if ("REACTION".equalsIgnoreCase(type)) {
+
+            String emoji = inbound.getEmoji();
+            if (emoji == null || emoji.isBlank()) return;
+
+            // 그대로 room 전체에 브로드캐스트
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "REACTION",
+                            "userId", sender.getUserId(),
+                            "emoji", emoji
+                    )
+            );
+
+            TextMessage broadcastMessage = new TextMessage(payload);
+
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
+            return;
         }
     }
 }

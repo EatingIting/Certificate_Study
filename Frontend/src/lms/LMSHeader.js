@@ -6,8 +6,13 @@ export default function Header() {
         <header className="header">
             <div className="header-left">
                 <div className="logo-box" />
-                <span className="title">스터디룸</span>
+
+                <div className="header-text">
+                    <span className="title">정보처리기사 스터디룸</span>
+                    <p>000님 환영합니다!</p>
+                </div>
             </div>
+
 
             <div className="header-right">
                 <MessageCircle size={18} />
