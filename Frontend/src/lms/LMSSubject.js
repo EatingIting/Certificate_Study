@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 
 import LMSHeader from "./LMSHeader";
 import LMSSidebar from "./LMSSidebar";
+import ChatModal from "./chat/ChatModal";
 
 import Dashboard from "./dashboard/Dashboard";
 import Attendance from "./attendance/Attendance";
@@ -16,6 +17,7 @@ import "./LMSSubject.css";
 const LMSSubject = () => {
     const [activeMenu, setActiveMenu] = useState("dashboard");
     const location = useLocation();
+    const { subjectId } = useParams();
 
     // ✅ URL이 바뀌면 사이드바 active도 자동으로 맞추기 (최소 수정 포인트)
     useEffect(() => {
@@ -51,10 +53,13 @@ const LMSSubject = () => {
                         <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 
                         {/* 없는 경로는 대시보드로 */}
-                        <Route path="*" element={<Navigate to="dashboard" replace />} />
+                        <Route path="*" element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />} />
                     </Routes>
                 </main>
             </div>
+
+            {/* 채팅 모달 - 모든 페이지에서 표시 */}
+            <ChatModal />
         </>
     );
 };
