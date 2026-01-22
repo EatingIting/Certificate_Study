@@ -1,11 +1,11 @@
-import "./SampleRecruit.css";
-import SampleRecruitModal from "./SampleRecruitModal";
+import "./RoomPage.css";
+import RoomPageModal from "./RoomPageModal";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/api";
 
 const ITEMS_PER_PAGE = 8;
 
-const SampleRecruit = () => {
+const RoomPage = () => {
     const [rooms, setRooms] = useState([]);
     const [categories, setCategories] = useState([]);
 
@@ -340,7 +340,7 @@ const SampleRecruit = () => {
             </div>
 
             {openModal && selectedRoom && (
-                <SampleRecruitModal
+                <RRoomPageModal
                     open={openModal}
                     study={selectedRoom}
                     onClose={closeModal}
@@ -358,4 +358,4 @@ const SampleRecruit = () => {
 
 };
 
-export default SampleRecruit;
+export default RoomPage;

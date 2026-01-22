@@ -1,8 +1,8 @@
-import "./SampleSideBar.css";
+import "./MainSideBar.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 
-const SampleSideBar = () => {
+const MainSideBar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -65,8 +65,8 @@ const SampleSideBar = () => {
 
             <ul className="submenu">
                 <li
-                className={`submenu-item ${isActive("/sample/recruit") ? "active" : ""}`}
-                onClick={() => go("/sample/recruit")}
+                className={`submenu-item ${isActive("/sample/room") ? "active" : ""}`}
+                onClick={() => go("/room")}
                 >
                 가입 가능한 스터디
                 </li>
@@ -74,7 +74,7 @@ const SampleSideBar = () => {
 
               <li
                 className={`submenu-item ${isActive("/study/create") ? "active" : ""}`}
-                onClick={() => go("/study/create")}
+                onClick={() => go("/create")}
               >
                 스터디 만들기
               </li>
@@ -174,4 +174,4 @@ const SampleSideBar = () => {
   );
 };
 
-export default SampleSideBar;
+export default MainSideBar;

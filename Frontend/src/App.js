@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import RoomPage from "./roomcategorypage/RoomPage";
 import MyPage from "./roomcategorypage/MyPage";
 import Auth from "./auth/Auth";
 import Create from "./roomcreate/Create";
@@ -8,8 +7,8 @@ import MyApplications from "./roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
 import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
-import SampleLayout from "./sample/SampleLayout";
-import SampleRecruit from "./sample/SampleRecruit";
+import MainHeader from "./sample/MainHeader";
+import RoomPage from "./sample/RoomPage";
 import SignUp from "./auth/SignUp";
 
 function App() {
@@ -19,7 +18,6 @@ function App() {
                 <Route path="/" element={<Main />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/signup" element={<SignUp />} />
-                <Route path="/roompage" element={<RoomPage />} />
                 <Route path="/mypage" element={<MyPage />} />
                 <Route path="/create" element={<Create />} />
                 <Route path="/my-applications" element={<MyApplications />} />
@@ -27,9 +25,8 @@ function App() {
                 <Route path="/lmsMain" element={<LMSMain />} />
                 <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
                 {/* 임시*/}
-                <Route path="/sample" element={<SampleLayout />}>
-                  <Route index element={<Navigate to="recruit" replace />} />
-                  <Route path="recruit" element={<SampleRecruit />} />
+                <Route path="/room" element={<MainHeader />}>
+                    <Route index element={<RoomPage />} />
                 </Route>
             </Routes>
         </BrowserRouter>
