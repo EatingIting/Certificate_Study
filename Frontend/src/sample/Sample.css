@@ -1,0 +1,53 @@
+.header {
+  position: sticky;   /* or fixed */
+  top: 0;
+  z-index: 1000;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+
+/* 페이지 전체는 고정 */
+.sample-page {
+  height: 100vh;
+  overflow: hidden;   /* 🔥 여기 중요 */
+}
+
+/* header 아래 영역 */
+.sample-layout {
+  display: flex;
+  height: calc(100vh - 64px); /* 헤더 높이 */
+}
+
+/* ✅ 메인 컨텐츠만 스크롤 */
+.sample-content {
+  flex: 1;
+  overflow-y: auto;   /* 🔥 스크롤은 여기서만 */
+  padding: 20px;
+}
+
+
+/* ✅ 헤더/바디 공통 정렬 기준 */
+.sample-container {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  padding: 0 20px; /* 이 값이 "왼쪽 시작점" 기준이 됨 */
+}
+
+/* 헤더 내부 정렬 */
+.header-inner {
+  height: 64px; /* 너 헤더 높이 */
+  display: flex;
+  align-items: center;
+}
+
+/* 바디 레이아웃 */
+.sample-layout {
+  display: flex;
+  min-height: calc(100vh - 64px);
+}
+
+.sample-content {
+  flex: 1;
+  padding: 20px;
+}
