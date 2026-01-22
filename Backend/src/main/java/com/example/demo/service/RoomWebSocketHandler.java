@@ -27,9 +27,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Map<String, TimerTask>> leaveTimers = new ConcurrentHashMap<>();
 
     private final ObjectMapper objectMapper;
+    private final MeetingRoomService meetingRoomService;
 
-    public RoomWebSocketHandler(ObjectMapper objectMapper) {
+    public RoomWebSocketHandler(ObjectMapper objectMapper, MeetingRoomService meetingRoomService) {
         this.objectMapper = objectMapper;
+        this.meetingRoomService = meetingRoomService;
     }
 
     @Override
@@ -39,6 +41,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         String userId = params.get("userId");
         String userName = params.get("userName");
+        String title = params.get("title");
 
         Boolean paramMuted = params.containsKey("muted")
                 ? "true".equals(params.get("muted"))
@@ -48,6 +51,27 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 ? "true".equals(params.get("cameraOff"))
                 : null;
 
+        boolean isFirstJoin =
+                !roomUsers.containsKey(roomId) ||
+                        roomUsers.get(roomId).isEmpty();
+
+        if (title == null || title.isBlank()) {
+            title = "제목 없음";
+        }
+
+        if (isFirstJoin) {
+            meetingRoomService.handleFirstJoin(
+                    roomId,
+                    userId,
+                    title
+            );
+        } else {
+            meetingRoomService.handleJoin(roomId, userId);
+        }
+
+    /* =========================================================
+       2. LEAVE 타이머 취소 (재접속 대응)
+       ========================================================= */
         Map<String, TimerTask> roomTimerMap = leaveTimers.get(roomId);
         if (roomTimerMap != null) {
             TimerTask t = roomTimerMap.remove(userId);
@@ -63,7 +87,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         RoomUser restoredUser = null;
         String existingSessionId = null;
 
-        // ✅ 기존 유저 상태 탐색 (재접속)
+    /* =========================================================
+       3. 기존 유저 탐색 (재접속 판단)
+       ========================================================= */
         for (Map.Entry<String, RoomUser> e : users.entrySet()) {
             RoomUser u = e.getValue();
             if (u != null && u.getUserId().equals(userId)) {
@@ -73,7 +99,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             }
         }
 
-        // 기존 세션 정리
+    /* =========================================================
+       4. 기존 세션 정리
+       ========================================================= */
         if (existingSessionId != null) {
             WebSocketSession old = sessions.get(existingSessionId);
             if (old != null && old.isOpen()) {
@@ -85,12 +113,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         RoomUser finalUser;
 
+    /* =========================================================
+       5. RoomUser 생성 / 복원
+       ========================================================= */
         if (restoredUser != null) {
-            // ✅ 재접속 or 재입장 → LEAVE 상태 해제
+            // 재접속
             restoredUser.setExplicitlyLeft(false);
-            restoredUser.setOnline(true);  // ✅ 재접속 시 online=true로 설정
+            restoredUser.setOnline(true);
 
-            // ⭐ 쿼리 파라미터로 상태 업데이트 (재접속 시에도 적용)
             if (paramMuted != null) {
                 restoredUser.setMuted(paramMuted);
             }
@@ -111,11 +141,13 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                     muted,
                     cameraOff,
                     false,
-                    true  // online = true
+                    true   // online = true
             );
         }
 
-        // 세션 등록
+    /* =========================================================
+       6. 세션 등록 + 브로드캐스트
+       ========================================================= */
         sessions.put(session.getId(), session);
         users.put(session.getId(), finalUser);
 

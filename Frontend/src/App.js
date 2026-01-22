@@ -6,6 +6,8 @@ import Create from "./roomcreate/Create";
 import Main from "./mainpage/Main";
 import MyApplications from "./roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
+import LMSMain from "./lms/LMSMain";
+import LMSSubject from "./lms/LMSSubject";
 
 function App() {
     return (
@@ -18,9 +20,10 @@ function App() {
                 <Route path="/create" element={<Create />} />
                 <Route path="/my-applications" element={<MyApplications />} />
                 <Route path="/meeting/:roomId" element={<MeetingPage />} />
+                <Route path="/lmsMain" element={<LMSMain />} />
+                <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
             </Routes>
         </BrowserRouter>
     );
 }
-
 export default App;

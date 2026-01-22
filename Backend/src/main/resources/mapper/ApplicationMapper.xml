@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.application.ApplicationMapper">
+
+    <!-- 신청 받은 스터디 -->
+    <select id="selectReceivedApplications"
+            resultType="com.example.demo.application.ApplicationVO">
+        SELECT
+            rjr.join_id            AS joinId,
+            rjr.room_id            AS roomId,
+            r.title                AS studyTitle,
+            rjr.apply_message      AS applyMessage,
+            rjr.requested_at       AS requestedAt,
+            u.nickname             AS applicantNickname,
+            u.gender               AS gender,
+            TIMESTAMPDIFF(YEAR, u.birth_date, CURDATE()) AS age
+        FROM room_join_request rjr
+                 JOIN room r
+                      ON rjr.room_id = r.room_id
+                 JOIN users u
+                      ON rjr.request_user_id = u.user_id
+        WHERE rjr.owner_user_id = #{ownerUserId}
+          AND rjr.status = '신청중'
+        ORDER BY rjr.requested_at DESC
+    </select>
+
+    <!-- 내가 신청한 스터디 -->
+    <select id="selectSentApplications"
+            resultType="com.example.demo.application.ApplicationVO">
+        SELECT
+            rjr.join_id            AS joinId,
+            rjr.room_id            AS roomId,
+            r.title                AS studyTitle,
+            u.nickname             AS ownerNickname,
+            rjr.status             AS status,
+            rjr.requested_at       AS requestedAt
+        FROM room_join_request rjr
+                 JOIN room r
+                      ON rjr.room_id = r.room_id
+                 JOIN users u
+                      ON rjr.owner_user_id = u.user_id
+        WHERE rjr.request_user_id = #{requestUserId}
+        ORDER BY rjr.requested_at DESC
+    </select>
+
+    <!-- 승인 -->
+    <update id="approveApplication">
+        UPDATE room_join_request
+        SET status = '승인'
+        WHERE join_id = #{joinId}
+          AND owner_user_id = #{ownerUserId}
+    </update>
+
+    <!-- 거절 -->
+    <update id="rejectApplication">
+        UPDATE room_join_request
+        SET status = '거절'
+        WHERE join_id = #{joinId}
+          AND owner_user_id = #{ownerUserId}
+    </update>
+
+    <!-- 신청 -->
+    <insert id="insertApplication">
+        INSERT INTO room_join_request (
+            join_id,
+            request_user_id,
+            owner_user_id,
+            room_id,
+            status,
+            apply_message,
+            requested_at
+        )
+        SELECT
+            #{joinId},
+            #{requestUserId},
+            r.host_user_id,
+            #{roomId},
+            '신청중',
+            #{applyMessage},
+            NOW()
+        FROM room r
+        WHERE r.room_id = #{roomId}
+    </insert>
+
+</mapper>
