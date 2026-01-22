@@ -25,4 +25,3 @@ public class ApplicationVO {
     private String gender;
     private Integer age;
 }
-

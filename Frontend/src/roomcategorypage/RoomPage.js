@@ -170,12 +170,23 @@ const RoomPage = () => {
         setIsApplyModalOpen(true);
     };
 
-    const submitApply = () => {
-        alert("스터디에 신청되었습니다.");
-        setApplyMessage("");
-        setIsApplyModalOpen(false);
-        closeModal(); // 상세 모달까지 같이 닫기
+    const submitApply = async () => {
+        try {
+            await api.post("/applications", {
+                roomId: selectedRoom.roomId,
+                applyMessage: applyMessage,
+            });
+
+            alert("스터디에 신청되었습니다.");
+            setApplyMessage("");
+            setIsApplyModalOpen(false);
+            closeModal();
+        } catch (e) {
+            console.error("스터디 신청 실패", e);
+            alert("신청 중 오류가 발생했습니다.");
+        }
     };
+
 
     const closeModal = () => {
         setIsModalOpen(false);
