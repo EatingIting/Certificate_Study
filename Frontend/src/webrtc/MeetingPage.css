@@ -564,12 +564,13 @@ body {
 
   z-index: 1500;
   transition: transform 0.35s ease, opacity 0.25s ease;
+  pointer-events: auto;
 }
 
 .fullscreen-media-controls.hidden {
   transform: translate(-50%, 60px);
   opacity: 0;
-  pointer-events: none;
+  /* pointer-events: none; */
 }
 
 .fullscreen-media-controls.visible {
@@ -1583,7 +1584,7 @@ body {
 
   background: none;
   padding: 0;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .media-status {
