@@ -9,6 +9,7 @@
   top: 0; /* 🔥 layout가 header 아래니까 0으로 */
   height: 100%;
   align-self: flex-start;
+  margin-left: -173px;
 }
 
 

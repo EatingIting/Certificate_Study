@@ -55,7 +55,7 @@ const Auth = () => {
                         /* ===== 1️⃣ OAuth 시작 화면 ===== */
                         <>
                             <div className="logo-area">
-                                <h1 className="logo">온실</h1>
+                                <h1 className="auth-logo">온실</h1>
                             </div>
 
                             <div className="login-title">
