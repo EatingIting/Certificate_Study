@@ -22,7 +22,7 @@ const LMSSubjectInner = () => {
     const location = useLocation();
     const { subjectId } = useParams();
     const navigate = useNavigate();
-    const { isInMeeting, meetingUrl, roomId: contextRoomId } = useMeeting();
+    const { isInMeeting, meetingUrl, roomId: contextRoomId, requestPipIfPossible } = useMeeting();
 
     // 현재 회의 페이지에 있는지 확인
     const isOnMeetingPage = location.pathname.includes("/meeting/");
@@ -43,28 +43,44 @@ const LMSSubjectInner = () => {
         else setActiveMenu("dashboard");
     }, [location.pathname]);
 
+    useEffect(() => {
+        if (!isInMeeting) return;
+
+        const isPipActive = document.pictureInPictureElement;
+
+        // 회의 중 + 회의 페이지를 벗어났을 때만 PiP
+        if (!isOnMeetingPage && !isPipActive) {
+        requestPipIfPossible();
+        }
+    }, [location.pathname, isInMeeting, isOnMeetingPage, requestPipIfPossible]);
+
     // ✅ PIP 복귀 이벤트 리스너 - LMSSubject 레벨에서 관리
     useEffect(() => {
         const handlePipLeave = () => {
-            console.log("[LMSSubject] PIP left, isInMeeting:", isInMeeting, "isOnMeetingPage:", isOnMeetingPage);
-
-            // 회의 중이고 현재 회의 페이지가 아니면 회의 페이지로 이동
-            if (isInMeeting && !location.pathname.includes("/meeting/")) {
-                const targetUrl = meetingUrl || `/lms/${subjectId}/meeting/${contextRoomId}`;
-                console.log("[LMSSubject] Navigating to meeting page:", targetUrl);
-                navigate(targetUrl);
-            }
+        if (isInMeeting && !location.pathname.includes("/meeting/")) {
+            const targetUrl =
+            meetingUrl || `/lms/${subjectId}/meeting/${contextRoomId}`;
+            navigate(targetUrl);
+        }
         };
 
         document.addEventListener("leavepictureinpicture", handlePipLeave);
         return () => {
-            document.removeEventListener("leavepictureinpicture", handlePipLeave);
+        document.removeEventListener(
+            "leavepictureinpicture",
+            handlePipLeave
+        );
         };
-    }, [isInMeeting, meetingUrl, contextRoomId, subjectId, navigate, location.pathname]);
+    }, [
+        isInMeeting,
+        meetingUrl,
+        contextRoomId,
+        subjectId,
+        navigate,
+        location.pathname,
+    ]);
 
-    // MeetingPage를 표시할지 여부 (회의 중이거나 회의 페이지에 있을 때)
     const showMeetingPage = isOnMeetingPage || isInMeeting;
-    // 실제 사용할 roomId (URL 우선, 없으면 context)
     const effectiveRoomId = urlRoomId || contextRoomId;
 
     return (
