@@ -12,6 +12,7 @@ import Board from "./board/Board";
 import Calendar from "./calendar/Calendar"
 
 import "./LMSSubject.css";
+import ChatModal from "./chat/ChatModal";
 
 const LMSSubject = () => {
     const [activeMenu, setActiveMenu] = useState("dashboard");
@@ -56,6 +57,7 @@ const LMSSubject = () => {
                     </Routes>
                 </main>
             </div>
+            <ChatModal />
         </>
     );
 };
