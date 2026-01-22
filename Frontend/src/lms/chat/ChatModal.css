@@ -1,40 +1,48 @@
 /* =================================================================
-   1. 플로팅 버튼 (우측 하단 아이콘)
+   1. 플로팅 버튼 (위치는 JS에서 제어)
    ================================================================= */
 .chat-floating-btn {
     position: fixed;
-    bottom: 30px;
-    right: 30px;
-    width: 60px;
-    height: 60px;
-    background-color: #97c793; /* 테마 색상 (초록) */
+    /* top, left는 JS에서 제어하므로 CSS에서는 제거 */
+    width: 70px;
+    height: 70px;
+    background-color: #97c793; /* 기본 테마: 초록 */
     border-radius: 50%;
     color: white;
-    font-size: 30px;
+    font-size: 28px;
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease;
-    z-index: 9999; /* 최상단 노출 */
+    transition: transform 0.2s ease, background-color 0.3s ease;
+    z-index: 9999;
+    
+    /* 드래그 시 텍스트 선택 방지 */
+    user-select: none;
+    touch-action: none;
 }
 
 .chat-floating-btn:hover {
-    transform: scale(1.1); /* 마우스 올리면 살짝 커짐 */
+    transform: scale(1.1);
 }
 
-/* 🔴 안 읽은 메시지 배지 */
+/* AI 모드일 때 그림자만 보라색 틴트 (배경은 초록 유지) */
+.chat-floating-btn.ai-mode {
+    box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+}
+
+/* 안 읽은 메시지 배지 */
 .chat-badge {
     position: absolute;
-    top: -2px;
-    right: -2px;
-    background-color: #ff4757; /* 빨간색 */
+    top: 0;
+    right: 0;
+    background-color: #ff4757;
     color: white;
     font-size: 12px;
     font-weight: bold;
-    min-width: 22px;
-    height: 22px;
+    min-width: 24px;
+    height: 24px;
     border-radius: 50%;
     display: flex;
     justify-content: center;
@@ -43,7 +51,6 @@
     animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 톡! 튀어나오는 애니메이션 */
 @keyframes pop {
     from { transform: scale(0); }
     to { transform: scale(1); }
@@ -55,11 +62,10 @@
    ================================================================= */
 .tc-wrapper {
     position: fixed;
-    bottom: 100px; /* 버튼 위에 위치 */
-    right: 30px;
-    width: 350px;
-    height: 500px;
-    background-color: #f5f7fb; /* 배경: 연한 회색 */
+    /* 위치는 JS 제어 */
+    width: 360px;
+    height: 550px;
+    background-color: #f5f7fb;
     border-radius: 20px;
     box-shadow: 0 5px 25px rgba(0,0,0,0.15);
     display: flex;
@@ -67,9 +73,9 @@
     overflow: hidden;
     z-index: 9990;
     animation: slideUp 0.3s ease;
+    border: 1px solid rgba(0,0,0,0.05);
 }
 
-/* 아래에서 위로 스르륵 올라오는 효과 */
 @keyframes slideUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
@@ -86,6 +92,13 @@
     justify-content: space-between;
     align-items: center;
     color: white;
+    transition: background-color 0.3s ease;
+}
+
+.tc-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .tc-title {
@@ -95,13 +108,33 @@
 
 .tc-icons {
     display: flex;
-    gap: 15px;
+    align-items: center;
+    gap: 12px;
 }
 
+/* AI 전환 버튼 */
+.ai-toggle-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ai-toggle-btn:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+/* 아이콘 버튼 (햄버거, 닫기) */
 .icon-btn {
     cursor: pointer;
-    font-size: 18px;
-    opacity: 0.9;
+    font-size: 20px;
+    opacity: 0.8;
     transition: opacity 0.2s;
 }
 
@@ -115,11 +148,11 @@
    ================================================================= */
 .tc-sidebar {
     position: absolute;
-    top: 54px; /* 헤더 높이만큼 띄움 */
+    top: 54px;
     right: 0;
     width: 200px;
     height: calc(100% - 54px);
-    background: rgba(255, 255, 255, 0.98); /* 살짝 투명 */
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(5px);
     border-left: 1px solid #eee;
     z-index: 100;
@@ -149,7 +182,7 @@
 }
 
 .status-dot {
-    color: #2ecc71; /* 온라인 표시 (초록) */
+    color: #2ecc71;
     margin-right: 8px;
     font-size: 10px;
 }
@@ -171,72 +204,88 @@
     background-color: #f5f7fb;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 15px;
+    transition: background-color 0.3s;
 }
 
-/* 스크롤바 디자인 (크롬, 사파리 등) */
-.tc-body::-webkit-scrollbar {
-    width: 6px;
-}
-.tc-body::-webkit-scrollbar-thumb {
-    background-color: rgba(0,0,0,0.1);
-    border-radius: 3px;
+/* AI 모드일 때 배경색 미세 변경 (아주 연한 푸른빛) */
+.tc-body.ai-mode {
+    background-color: #fcfcff;
 }
 
-/* 메시지 행 (프로필 + 말풍선) */
+.tc-body::-webkit-scrollbar { width: 6px; }
+.tc-body::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 3px; }
+
 .tc-msg-row {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    max-width: 80%;
+    gap: 10px;
+    max-width: 85%;
 }
 
 .tc-msg-row.me {
-    align-self: flex-end; /* 내 메시지 오른쪽 정렬 */
+    align-self: flex-end;
     flex-direction: row-reverse;
 }
 
+/* 프로필 아이콘 */
 .tc-profile {
-    width: 32px;
-    height: 32px;
-    background-color: #ddd;
+    width: 36px;
+    height: 36px;
+    background-color: #e0e0e0;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
+    font-size: 18px;
     flex-shrink: 0;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* AI 프로필 아이콘 (진한 초록) */
+.tc-profile.ai-profile {
+    background-color: #7ab377;
+    color: white;
 }
 
 .tc-name {
     font-size: 12px;
-    color: #666;
+    color: #888;
     margin-bottom: 4px;
     margin-left: 5px;
 }
-.me .tc-name {
-    margin-right: 5px;
-}
+.me .tc-name { margin-right: 5px; }
 
 /* 말풍선 공통 */
 .tc-bubble {
-    padding: 10px 14px;
-    border-radius: 15px;
+    padding: 12px 16px;
+    border-radius: 18px;
     font-size: 14px;
-    line-height: 1.4;
+    line-height: 1.5;
     word-break: break-word;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    position: relative;
 }
 
 .tc-bubble.other {
     background-color: white;
     color: #333;
-    border-bottom-left-radius: 2px;
+    border-bottom-left-radius: 4px;
 }
 
 .tc-bubble.me {
     background-color: #97c793;
     color: white;
-    border-bottom-right-radius: 2px;
+    border-bottom-right-radius: 4px;
+}
+
+/* AI 답변 말풍선 (초록색 테두리 포인트) */
+.tc-bubble.ai-bubble {
+    background-color: white;
+    color: #333;
+    border: 1px solid #97c793;
+    box-shadow: 0 2px 10px rgba(162, 155, 254, 0.15);
 }
 
 
@@ -244,16 +293,16 @@
    6. 스티커 (이모티콘) 스타일
    ================================================================= */
 .sticker-bubble {
-    background-color: transparent !important; /* 배경 제거 */
-    box-shadow: none !important; /* 그림자 제거 */
+    background-color: transparent !important;
+    box-shadow: none !important;
     padding: 0 !important;
+    border: none !important;
 }
 
 .sticker-text {
-    font-size: 40px; /* 왕따시만한 크기 */
-    color: #333 !important; /* 글씨 잘 보이게 진한 회색 */
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.1); /* 입체감 */
-    animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    font-size: 45px;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    animation: pop 0.3s;
 }
 
 
@@ -266,40 +315,40 @@
     border-top: 1px solid #eee;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     position: relative;
 }
 
-/* 스티커 메뉴 열기 버튼 */
 .tc-sticker-toggle-btn {
     background: none;
     border: none;
-    font-size: 22px;
+    font-size: 24px;
     cursor: pointer;
     padding: 5px;
-    color: #555;
-    transition: transform 0.2s;
+    color: #888;
+    transition: transform 0.2s, color 0.2s;
 }
 
 .tc-sticker-toggle-btn:hover,
 .tc-sticker-toggle-btn.active {
-    transform: scale(1.2);
-    color: #97c793;
+    transform: scale(1.1);
+    color: #f39c12;
 }
 
-/* 텍스트 입력창 */
+/* 입력창 */
 .tc-input {
     flex: 1;
     border: 1px solid #ddd;
-    border-radius: 20px;
-    padding: 10px 15px;
+    border-radius: 25px;
+    padding: 12px 18px;
     font-size: 14px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .tc-input:focus {
     border-color: #97c793;
+    box-shadow: 0 0 0 3px rgba(151, 199, 147, 0.2);
 }
 
 /* 전송 버튼 */
@@ -308,47 +357,55 @@
     color: white;
     border: none;
     border-radius: 20px;
-    padding: 8px 16px;
+    padding: 14px 16px;
     font-size: 14px;
     cursor: pointer;
     font-weight: bold;
+    transition: background 0.3s;
+    
+    /* 버튼 모양 유지 핵심 */
+    white-space: nowrap; 
 }
 
 .tc-send-btn:hover {
     background-color: #7ab377;
 }
 
-/* 스티커 선택 메뉴판 (Grid 레이아웃) */
+
+/* =================================================================
+   8. 스티커 메뉴판
+   ================================================================= */
 .sticker-menu-container {
     position: absolute;
-    bottom: 70px; /* 입력창 위에 띄움 */
+    bottom: 80px;
     left: 15px;
     width: calc(100% - 30px);
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(5px);
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
     border-radius: 15px;
     box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
     padding: 15px;
     display: grid;
-    grid-template-columns: repeat(3, 1fr); /* 3열 배치 */
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     z-index: 50;
     animation: slideUp 0.2s ease;
+    border: 1px solid #eee;
 }
 
 .sticker-grid-btn {
     background: white;
-    border: 1px solid #eee;
-    border-radius: 10px;
+    border: 1px solid #f0f0f0;
+    border-radius: 12px;
     padding: 10px;
-    font-size: 24px;
+    font-size: 28px;
     cursor: pointer;
     transition: all 0.2s;
     text-align: center;
 }
 
 .sticker-grid-btn:hover {
-    background-color: #f0f7f4;
-    transform: scale(1.05);
-    border-color: #97c793;
+    background-color: #fff9e6;
+    transform: scale(1.1);
+    border-color: #f39c12;
 }
