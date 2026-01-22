@@ -1,25 +1,5 @@
-import {
-    ChevronDown,
-    ChevronUp,
-    LayoutGrid,
-    Loader2,
-    Maximize,
-    Minimize,
-    MessageSquare,
-    Mic,
-    MicOff,
-    Monitor,
-    MoreHorizontal,
-    Phone,
-    PictureInPicture2,
-    Send,
-    Share,
-    Smile,
-    Users,
-    Video,
-    VideoOff,
-    X,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, LayoutGrid, Loader2, Maximize, Minimize, MessageSquare, Mic, MicOff,
+    Monitor, MoreHorizontal, Phone, PictureInPicture2, Send, Share, Smile, Users, Video, VideoOff, X, } from "lucide-react";
 import "pretendard/dist/web/static/pretendard.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -629,7 +609,7 @@ function MeetingPage() {
             if (endMeeting) endMeeting();
         } finally {
             // 7) 페이지 이동 (브라우저 종료 대신)
-            window.location.href = "/LMS"; // 홈으로 보내기
+            window.location.href = "/lmsMain"; // 홈으로 보내기
             // 또는: window.location.replace("/ended");
         }
     };

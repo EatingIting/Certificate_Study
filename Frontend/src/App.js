@@ -8,6 +8,7 @@ import MyApplications from "./roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
 import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
+import { MeetingProvider } from "./webrtc/MeetingContext";
 
 function App() {
     return (
@@ -19,7 +20,8 @@ function App() {
                 <Route path="/mypage" element={<MyPage />} />
                 <Route path="/create" element={<Create />} />
                 <Route path="/my-applications" element={<MyApplications />} />
-                <Route path="/meeting/:roomId" element={<MeetingPage />} />
+                {/* <Route path="/meeting/:roomId" element={<MeetingProvider> <MeetingPage /> </MeetingProvider>} /> */}
+                {/* <Route path="MeetingRoom/:roomId" element={<MeetingPage />} /> */}
                 <Route path="/lmsMain" element={<LMSMain />} />
                 <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
             </Routes>
