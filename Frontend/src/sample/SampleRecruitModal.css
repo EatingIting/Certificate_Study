@@ -169,6 +169,11 @@
   background: #fafafa;
 }
 
+.sr2-soon {
+  color: #999;
+  font-style: italic;
+}
+
 /* Mobile */
 @media (max-width: 640px) {
   .sr2-modal {
