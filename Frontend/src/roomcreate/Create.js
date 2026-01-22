@@ -1,142 +1,214 @@
-import { useState, useRef } from "react";
+import { useEffect, useState } from "react";
+import api from "../api/api";
 import "./Create.css";
 
-export default function CreateRoom() {
-    const selectRef = useRef(null);
-
+const CreateRoom = ({ onClose }) => {
     const [form, setForm] = useState({
         title: "",
-        category: "",
         description: "",
         gender: "ALL",
         maxPeople: 4,
     });
 
+    /* ===== 카테고리 상태 ===== */
+    const [allCategories, setAllCategories] = useState([]);
+    const [mainCategories, setMainCategories] = useState([]);
+    const [midCategories, setMidCategories] = useState([]);
+    const [subCategories, setSubCategories] = useState([]);
+
+    const [selectedMain, setSelectedMain] = useState(null);
+    const [selectedMid, setSelectedMid] = useState(null);
+    const [selectedSub, setSelectedSub] = useState(null);
+
+    /* ===== 공통 입력 ===== */
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setForm((prev) => ({
+        setForm(prev => ({
             ...prev,
-            [name]: value,
+            [name]: name === "maxPeople" ? Number(value) : value
         }));
     };
 
-    const handleSubmit = () => {
+    /* ===== 카테고리 전체 로딩 ===== */
+    useEffect(() => {
+        api.get("/category").then(res => {
+            setAllCategories(res.data);
+        });
+
+        api.get("/category/main").then(res => {
+            setMainCategories(res.data);
+        });
+    }, []);
+
+    /* ===== 대분류 선택 ===== */
+    const handleMainChange = (e) => {
+        const mainId = Number(e.target.value) || null;
+
+        setSelectedMain(mainId);
+        setSelectedMid(null);
+        setSelectedSub(null);
+        setSubCategories([]);
+        setMidCategories([]);
+
+        if (!mainId) return;
+
+        const mids = allCategories.filter(
+            c => c.level === 2 && c.parentId === mainId
+        );
+        setMidCategories(mids);
+    };
+
+    /* ===== 중분류 선택 ===== */
+    const handleMidChange = (e) => {
+        const midId = Number(e.target.value) || null;
+
+        setSelectedMid(midId);
+        setSelectedSub(null);
+        setSubCategories([]);
+
+        if (!midId) return;
+
+        const subs = allCategories.filter(
+            c => c.level === 3 && c.parentId === midId
+        );
+        setSubCategories(subs);
+    };
+
+    /* ===== 생성 ===== */
+    const handleSubmit = async () => {
         if (!form.title.trim()) {
-            alert("그룹 제목을 입력해주세요");
+            alert("스터디 그룹 이름을 입력해주세요");
             return;
         }
 
-        console.log("방 생성 데이터:", form);
-        alert("그룹이 생성되었습니다!");
+        const categoryId = selectedSub ?? selectedMid;
+
+        if (!categoryId) {
+            alert("카테고리를 선택해주세요");
+            return;
+        }
+
+        try {
+            await api.post("/rooms", {
+                title: form.title,
+                description: form.description,
+                gender: form.gender,
+                maxPeople: form.maxPeople,
+                categoryId
+            });
+
+            alert("스터디 그룹이 생성되었습니다!");
+            onClose();
+        } catch (error) {
+            console.error("스터디 생성 실패:", error);
+            alert("스터디 생성에 실패했습니다.");
+        }
     };
 
     return (
-        <div className="create-room-container">
-            <div className="create-room-box">
-                <h2 className="create-title">ONSIL </h2>
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="create-room-box" onClick={(e) => e.stopPropagation()}>
+                <h2 className="title">스터디 그룹 만들기</h2>
 
                 <input
                     className="input"
                     name="title"
-                    placeholder="방 제목"
+                    placeholder="스터디 그룹 이름"
                     value={form.title}
-                    onChange={handleChange}
-                />
-
-                <input
-                    className="input"
-                    name="category"
-                    placeholder="카테고리 (예: 토익, 정보처리기사)"
-                    value={form.category}
                     onChange={handleChange}
                 />
 
                 <textarea
                     className="textarea"
                     name="description"
-                    placeholder="방 설명"
+                    placeholder="스터디 그룹 설명"
                     value={form.description}
                     onChange={handleChange}
                 />
 
-                {/* 인원 설정 */}
-                <div className="people-section" style={{ position: "relative" }}>
-                    <p>최대 인원</p>
+                {/* ===== 카테고리 ===== */}
+                <div className="category-section">
+                    <p>카테고리</p>
 
-                    <select
-                        ref={selectRef}
-                        className="select"
-                        name="maxPeople"
-                        value={form.maxPeople}
-                        onChange={handleChange}
-                    >
-                        {Array.from({ length: 10 }, (_, i) => i + 1).map(
-                            (num) => (
-                                <option key={num} value={num}>
-                                    {num}명
-                                </option>
-                            )
-                        )}
+                    {/* 대분류 */}
+                    <select value={selectedMain ?? ""} onChange={handleMainChange}>
+                        <option value="">대분류 선택</option>
+                        {mainCategories.map(c => (
+                            <option key={c.id} value={c.id}>
+                                {c.name}
+                            </option>
+                        ))}
                     </select>
 
-                    <span
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            selectRef.current?.click();
-                        }}
-                        style={{
-                            position: "absolute",
-                            right: "16px",
-                            top: "50%",
-                            transform: "translateY(6px)",
-                            cursor: "pointer",
-                        }}
+                    {/* 중분류 */}
+                    <select
+                        value={selectedMid ?? ""}
+                        onChange={handleMidChange}
+                        disabled={!selectedMain}
                     >
-                        ˅
-                    </span>
+                        <option value="">중분류 선택</option>
+                        {midCategories.map(c => (
+                            <option key={c.id} value={c.id}>
+                                {c.name}
+                            </option>
+                        ))}
+                    </select>
+
+                    {/* 소분류 */}
+                    <select
+                        value={selectedSub ?? ""}
+                        onChange={(e) => setSelectedSub(Number(e.target.value) || null)}
+                        disabled={!selectedMid || subCategories.length === 0}
+                    >
+                        <option value="">소분류 선택 (없으면 생략)</option>
+                        {subCategories.map(c => (
+                            <option key={c.id} value={c.id}>
+                                {c.name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
-                {/* 성별 */}
+                {/* ===== 최대 인원 ===== */}
+                <div className="people-section">
+                    <p>최대 인원</p>
+                    <select name="maxPeople" value={form.maxPeople} onChange={handleChange}>
+                        {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
+                            <option key={num} value={num}>
+                                {num}명
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* ===== 성별 ===== */}
                 <div className="gender-section">
                     <p>성별 제한</p>
-                    <div className="gender-options">
-                        <label>
+                    {["ALL", "FEMALE", "MALE"].map(g => (
+                        <label key={g} className="gender-radio">
                             <input
                                 type="radio"
                                 name="gender"
-                                value="ALL"
-                                checked={form.gender === "ALL"}
+                                value={g}
+                                checked={form.gender === g}
                                 onChange={handleChange}
                             />
-                            전체
+                            {g === "ALL" ? "전체" : g === "FEMALE" ? "여자" : "남자"}
                         </label>
-                        <label>
-                            <input
-                                type="radio"
-                                name="gender"
-                                value="FEMALE"
-                                checked={form.gender === "FEMALE"}
-                                onChange={handleChange}
-                            />
-                            여자
-                        </label>
-                        <label>
-                            <input
-                                type="radio"
-                                name="gender"
-                                value="MALE"
-                                checked={form.gender === "MALE"}
-                                onChange={handleChange}
-                            />
-                            남자
-                        </label>
-                    </div>
+                    ))}
                 </div>
 
-                <button className="submit-btn" onClick={handleSubmit}>
-                    스터디 그룹 만들기
-                </button>
+                <div className="modal-buttons">
+                    <button className="submit-btn" onClick={handleSubmit}>
+                        생성하기
+                    </button>
+                    <button className="submit-close-btn" onClick={onClose}>
+                        닫기
+                    </button>
+                </div>
             </div>
         </div>
     );
-}
+};
+
+export default CreateRoom;
