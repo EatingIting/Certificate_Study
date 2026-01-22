@@ -9,19 +9,26 @@ import Dashboard from "./dashboard/Dashboard";
 import Attendance from "./attendance/Attendance";
 import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
+
 import Board from "./board/Board";
-import Calendar from "./calendar/Calendar"
+import BoardWrite from "./board/BoardWrite";
+import BoardDetail from "./board/BoardDetail";
+// import BoardEdit from "./board/BoardEdit"; // 나중에 필요하면
+
+import Calendar from "./calendar/Calendar";
+import StudyMembers from "./study-members/StudyMembers"
+import StudyLeave from "./study-leave/StudyLeave"
 
 import "./LMSSubject.css";
 
-const LMSSubject = () => {
-    const [activeMenu, setActiveMenu] = useState("dashboard");
-    const location = useLocation();
-    const { subjectId } = useParams();
+function LMSSubject() {
+    let [activeMenu, setActiveMenu] = useState("dashboard");
+    let location = useLocation();
+    let { subjectId } = useParams();
 
-    // ✅ URL이 바뀌면 사이드바 active도 자동으로 맞추기 (최소 수정 포인트)
+    // ✅ URL이 바뀌면 사이드바 active도 자동으로 맞추기
     useEffect(() => {
-        const p = location.pathname;
+        let p = location.pathname;
 
         if (p.includes("/assignment")) setActiveMenu("assignment");
         else if (p.includes("/attendance")) setActiveMenu("attendance");
@@ -45,23 +52,30 @@ const LMSSubject = () => {
                         <Route path="dashboard" element={<Dashboard setActiveMenu={setActiveMenu} />} />
                         <Route path="attendance" element={<Attendance setActiveMenu={setActiveMenu} />} />
 
-                        {/* ✅ 과제 목록 / 상세 */}
+                        {/* 과제 목록 / 상세 */}
                         <Route path="assignment" element={<Assignment setActiveMenu={setActiveMenu} />} />
                         <Route path="assignment/:id" element={<AssignmentDetail />} />
 
+                        {/* ✅ 게시판: 목록 / 글쓰기 / 상세 */}
                         <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
+                        <Route path="board/write" element={<BoardWrite setActiveMenu={setActiveMenu} />} />
+                        <Route path="board/:postId" element={<BoardDetail setActiveMenu={setActiveMenu} />} />
+                        {/* <Route path="board/:postId/edit" element={<BoardEdit setActiveMenu={setActiveMenu} />} /> */}
+
                         <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 
-                        {/* 없는 경로는 대시보드로 */}
-                        <Route path="*" element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />} />
+                        <Route path="study/members" element={<StudyMembers />}  />
+                        <Route path="study/leave" element={<StudyLeave />} />
+
+                        {/* ✅ 없는 경로는 (상대경로) 대시보드로 */}
+                        <Route path="*" element={<Navigate to="dashboard" replace />} />
                     </Routes>
                 </main>
             </div>
 
-            {/* 채팅 모달 - 모든 페이지에서 표시 */}
             <ChatModal />
         </>
     );
-};
+}
 
 export default LMSSubject;
