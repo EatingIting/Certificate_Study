@@ -1,8 +1,10 @@
 import "./LMSSidebar.css";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState } from "react";
+import { useMeeting } from "../webrtc/MeetingContext";
 
 const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
+    const { requestPipIfPossible } = useMeeting();
     const navigate = useNavigate();
     const { subjectId } = useParams();
 
@@ -23,11 +25,12 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
     };
 
     // ✅ 하위 메뉴 클릭: 이동(페이지+쿼리)
-    const goChild = (parentKey, activeKey, path) => {
+    const goChild = async (parentKey, activeKey, path) => {
         setActiveMenu(activeKey);
-
-        // 하위 눌렀을 때 해당 그룹은 열린 상태 유지
         setOpenKeys((prev) => (prev.includes(parentKey) ? prev : [...prev, parentKey]));
+
+        // ✅ 사용자 클릭 컨텍스트에서 PiP 요청
+        await requestPipIfPossible();
 
         navigate(`/lms/${subjectId}/${path}`);
     };
@@ -215,7 +218,14 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                 </ul>
             </div>
 
-            <button className="meeting-btn" type="button" onClick={() => navigate(`/lms/${subjectId}/meeting/${subjectId}`)}>
+            <button 
+            className="meeting-btn" 
+            type="button" 
+            onClick={async () => {
+                await requestPipIfPossible();
+                navigate(`/lms/${subjectId}/meeting/${subjectId}`);
+            }}
+            >
                 화상 채팅방 입장하기
             </button>
         </aside>

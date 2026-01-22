@@ -239,10 +239,14 @@ function safeUUID() {
 
 // --- Main App Component ---
 
-function MeetingPage() {
-    const { roomId, subjectId } = useParams();
+function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
+    const params = useParams();
     const navigate = useNavigate();
     const loggedRef = useRef(false);
+
+    // props 우선, 없으면 useParams에서 가져옴
+    const roomId = propRoomId || params.roomId;
+    const subjectId = propSubjectId || params.subjectId;
 
     useEffect(() => {
         if (!roomId) return;
@@ -256,6 +260,8 @@ function MeetingPage() {
         startMeeting,
         endMeeting,
         saveMeetingState,
+        saveCleanupFunction,
+        meetingUrl,
     } = useMeeting();
 
     const [layoutMode, setLayoutMode] = useState("speaker");
@@ -442,10 +448,11 @@ function MeetingPage() {
 
     const mainUser = getMainUser();
 
-    // ✅ mainStream 계산은 기존 로직(화면공유 포함)을 그대로 쓰시면 됩니다.
-    // 여기서는 단순화해두었으니, 당신 원본의 mainStream 계산식으로 교체하세요.
-    const mainStream = mainUser?.isMe ? localStream : mainUser?.stream;
-    const isMainScreenShare = !!mainUser?.isScreenSharing; // 원본 유지 시 사용
+    // ✅ mainStream 계산: 화면공유 중이면 screenStream, 아니면 일반 stream 사용
+    const mainStream = mainUser?.isMe
+        ? (mainUser?.isScreenSharing ? screenStreamRef.current : localStream)
+        : (mainUser?.isScreenSharing ? mainUser?.screenStream : mainUser?.stream);
+    const isMainScreenShare = !!mainUser?.isScreenSharing;
 
     // 전체화면 핸들러 (원본 유지)
     const handleFullscreen = () => {
@@ -457,7 +464,7 @@ function MeetingPage() {
         }
     };
 
-    const handlePip = useCallback(async () => {
+    /* const handlePip = useCallback(async () => {
         const video = mainVideoRef.current;
         if (!video) return;
 
@@ -474,105 +481,115 @@ function MeetingPage() {
             return;
         }
 
+        // 비디오가 재생 중인지 확인
+        if (video.paused) {
+            try {
+                await video.play();
+            } catch (err) {
+                console.error("[PIP] Failed to play video before PIP:", err);
+            }
+        }
+
         await video.requestPictureInPicture();
-    }, []);
+    }, []); */
+
+    const pipTargetStream = useMemo(() => {
+        if (!mainUser) return null;
+
+        if (mainUser.isScreenSharing) {
+            return mainUser.isMe
+                ? screenStreamRef.current
+                : mainUser.screenStream;
+        }
+
+        return mainUser.isMe
+            ? localStream
+            : mainUser.stream;
+    }, [mainUser, localStream, streamVersion]);
+
+    const pipVideoRef = useRef(null);
+
+    const enterPipWithStream = async (stream) => {
+        if (!stream || stream.getVideoTracks().length === 0) {
+            console.warn("[PiP] invalid stream");
+            return;
+        }
+
+        if (!pipVideoRef.current) {
+            const v = document.createElement("video");
+            v.muted = true;
+            v.playsInline = true;
+            v.style.position = "fixed";
+            v.style.top = "-9999px";
+            v.style.left = "-9999px";
+            document.body.appendChild(v);
+            pipVideoRef.current = v;
+        }
+
+        const video = pipVideoRef.current;
+
+        if (video.srcObject !== stream) {
+            video.srcObject = stream;
+        }
+
+        try {
+            await video.play();
+            if (!document.pictureInPictureElement) {
+                await video.requestPictureInPicture();
+            }
+        } catch (e) {
+            console.error("[PiP] failed:", e);
+        }
+    };
+
+    const enterPipForCurrentMain = async () => {
+        try {
+            if (document.pictureInPictureElement) return true;
+
+            // 1) 메인 타일의 실제 video로 PiP 시도 (가장 안정적)
+            const mainVideo = mainVideoRef.current;
+            const mainStream = mainVideo?.srcObject;
+
+            if (mainVideo && mainStream && mainStream.getVideoTracks().length > 0) {
+                // play를 await 하지 말고 바로 PiP 요청 (제스처 끊김 방지)
+                mainVideo.play?.().catch(() => {});
+                await mainVideo.requestPictureInPicture();
+                return true;
+            }
+
+            // 2) fallback: hidden video + pipTargetStream
+            if (pipTargetStream && pipTargetStream.getVideoTracks().length > 0) {
+                await enterPipWithStream(pipTargetStream);
+                return !!document.pictureInPictureElement;
+            }
+
+            console.warn("[PiP] no valid video track for PiP (mainVideo/pipTargetStream)");
+            return false;
+        } catch (e) {
+            console.error("[PiP] enter failed:", e);
+            return false;
+        }
+    };
 
     // ✅ 강제 PiP: 사이드바 열 때 브라우저 PiP 실행
-    const toggleSidebar = (view) => {
+    const toggleSidebar = async (view) => {
+        console.log("[toggleSidebar] clicked:", view);
+
         if (sidebarOpen && sidebarView === view) {
-        setSidebarOpen(false);
-        } else {
+            setSidebarOpen(false);
+            sessionStorage.setItem("sidebarOpen", "false");
+            return;
+        }
+
+        if (!document.pictureInPictureElement) {
+            console.log("[toggleSidebar] try enter PiP");
+            await enterPipForCurrentMain();
+        }
+
         setSidebarView(view);
         setSidebarOpen(true);
-
-        // 이미 PiP면 재호출 불필요
-        if (!document.pictureInPictureElement) {
-            // 사용자 제스처(클릭) 안에서 실행되는 것이 중요합니다.
-            handlePip();
-        }
-        }
-    };
-
-    // ✅ 전체화면 상태 감지(원본 유지)
-    useEffect(() => {
-        const handleFullscreenChange = () => {
-        const fullscreenEl = document.fullscreenElement;
-        setIsFullscreen(!!fullscreenEl);
-        if (fullscreenEl) document.body.classList.add("fullscreen-active");
-        else document.body.classList.remove("fullscreen-active");
-        };
-        document.addEventListener("fullscreenchange", handleFullscreenChange);
-        return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-    }, []);
-
-    useEffect(() => {
-        if (!sidebarOpen) return;
-        if (!mainVideoRef.current) return;
-
-        const stream = mainVideoRef.current.srcObject;
-        if (!stream || stream.getVideoTracks().length === 0) return;
-
-        if (!document.pictureInPictureElement) {
-            mainVideoRef.current.requestPictureInPicture().catch(() => {});
-        }
-    }, [sidebarOpen, mainStream]);
-
-    useEffect(() => {
-        const onEnter = () => setIsBrowserPip(true);
-        const onLeave = () => setIsBrowserPip(false);
-
-        document.addEventListener("enterpictureinpicture", onEnter);
-        document.addEventListener("leavepictureinpicture", onLeave);
-
-        return () => {
-            document.removeEventListener("enterpictureinpicture", onEnter);
-            document.removeEventListener("leavepictureinpicture", onLeave);
-        };
-    }, []);
-
-    const handleSendMessage = (e) => {
-        e.preventDefault();
-        if (!chatDraft.trim()) return;
-
-        wsRef.current?.send(
-            JSON.stringify({
-                type: "CHAT",
-                message: chatDraft,
-            })
-        );
-
-        setChatDraft("");
-    };
-
-    const handleReaction = (emoji) => {
-        setShowReactions(false);
-
-        // 1️⃣ 기존 타이머 제거
-        const oldTimer = reactionTimersRef.current.myReaction;
-        if (oldTimer) {
-            clearTimeout(oldTimer);
-        }
-
-        // 2️⃣ 이모지 즉시 표시
-        setMyReaction(emoji);
-
-        // 3️⃣ 서버에 이모지 전송 (다른 사용자들이 볼 수 있도록)
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(
-                JSON.stringify({
-                    type: "REACTION",
-                    emoji,
-                })
-            );
-        }
-
-        // 4️⃣ 새 타이머 등록 (2.5초 후 제거)
-        const timerId = setTimeout(() => {
-            setMyReaction(null);
-            delete reactionTimersRef.current.myReaction;
-        }, 2500);
-
-        reactionTimersRef.current.myReaction = timerId;
+        sessionStorage.setItem("sidebarOpen", "true");
+        sessionStorage.setItem("sidebarView", view);
     };
 
     const handleHangup = () => {
@@ -634,6 +651,197 @@ function MeetingPage() {
         }
     };
 
+    // ✅ 전체화면 상태 감지(원본 유지)
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+        const fullscreenEl = document.fullscreenElement;
+        setIsFullscreen(!!fullscreenEl);
+        if (fullscreenEl) document.body.classList.add("fullscreen-active");
+        else document.body.classList.remove("fullscreen-active");
+        };
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    }, []);
+
+    /* useEffect(() => {
+        if (!sidebarOpen) return;
+        if (!mainVideoRef.current) return;
+
+        const videoElement = mainVideoRef.current;
+        const stream = videoElement.srcObject;
+
+        console.log("[PIP] Sidebar opened, checking stream:", {
+            hasStream: !!stream,
+            videoTracks: stream?.getVideoTracks().length || 0,
+            readyState: videoElement.readyState,
+            paused: videoElement.paused
+        });
+
+        if (!stream || stream.getVideoTracks().length === 0) {
+            console.log("[PIP] No valid stream, skipping PIP request");
+            return;
+        }
+
+        // 비디오가 재생 중인지 확인하고, 아니면 재생 시도
+        if (videoElement.paused) {
+            videoElement.play().catch(err => console.error("[PIP] Failed to play video:", err));
+        }
+
+        if (!document.pictureInPictureElement) {
+            // 약간의 지연을 두고 PIP 요청 (비디오가 재생을 시작할 시간 확보)
+            setTimeout(() => {
+                if (videoElement.readyState >= 2) { // HAVE_CURRENT_DATA
+                    videoElement.requestPictureInPicture()
+                        .then(() => console.log("[PIP] Successfully entered PIP mode"))
+                        .catch(err => console.error("[PIP] Failed to enter PIP:", err));
+                } else {
+                    console.log("[PIP] Video not ready, readyState:", videoElement.readyState);
+                }
+            }, 100);
+        }
+    }, [sidebarOpen, mainStream]); */
+
+    useEffect(() => {
+        const onEnter = (e) => {
+            setIsBrowserPip(true);
+
+            // ✅ PIP 진입 시 현재 카메라/마이크 상태를 서버에 재전송 (다른 참가자에게 올바른 상태 표시)
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: "USER_STATE_CHANGE",
+                    userId: userId,
+                    changes: {
+                        muted: !micOnRef.current,
+                        cameraOff: !camOnRef.current,
+                    },
+                }));
+                console.log("[PIP] Sent state sync on PIP enter:", { muted: !micOnRef.current, cameraOff: !camOnRef.current });
+            }
+
+            // PIP 윈도우에 컨트롤 추가
+            const pipWindow = e.pictureInPictureWindow;
+            if (pipWindow && 'navigator' in window && 'mediaSession' in navigator) {
+                // Media Session API를 사용하여 컨트롤 추가
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: '화상 회의 중',
+                    artist: `방 ${roomId}`,
+                });
+
+                // 회의로 돌아가기 액션
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    // 브라우저 PIP 종료하고 회의 페이지로 이동
+                    if (document.pictureInPictureElement) {
+                        document.exitPictureInPicture().then(() => {
+                            sessionStorage.setItem("sidebarOpen", "false");
+                            // 이미 회의 페이지에 있으므로 추가 작업 불필요
+                        }).catch(() => {});
+                    }
+                });
+
+                // 마이크 토글
+                navigator.mediaSession.setActionHandler('play', () => {
+                    if (localStream) {
+                        const audioTrack = localStream.getAudioTracks()[0];
+                        if (audioTrack) {
+                            audioTrack.enabled = true;
+                            setMicOn(true);
+                        }
+                    }
+                });
+
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    if (localStream) {
+                        const audioTrack = localStream.getAudioTracks()[0];
+                        if (audioTrack) {
+                            audioTrack.enabled = false;
+                            setMicOn(false);
+                        }
+                    }
+                });
+
+                // 회의 종료
+                navigator.mediaSession.setActionHandler('stop', () => {
+                    handleHangup();
+                });
+            }
+        };
+
+        const onLeave = () => {
+            setIsBrowserPip(false);
+
+            // PIP 종료 시 사이드바도 닫기
+            setSidebarOpen(false);
+            sessionStorage.setItem("sidebarOpen", "false");
+
+            // Media Session 액션 핸들러 제거
+            if ('navigator' in window && 'mediaSession' in navigator) {
+                try {
+                    navigator.mediaSession.setActionHandler('previoustrack', null);
+                    navigator.mediaSession.setActionHandler('play', null);
+                    navigator.mediaSession.setActionHandler('pause', null);
+                    navigator.mediaSession.setActionHandler('stop', null);
+                } catch (err) {
+                    console.error('Failed to clear media session handlers:', err);
+                }
+            }
+
+            // ✅ 네비게이션은 LMSSubject에서 처리함
+        };
+
+        document.addEventListener("enterpictureinpicture", onEnter);
+        document.addEventListener("leavepictureinpicture", onLeave);
+
+        return () => {
+            document.removeEventListener("enterpictureinpicture", onEnter);
+            document.removeEventListener("leavepictureinpicture", onLeave);
+        };
+    }, [roomId, localStream, handleHangup, setMicOn, setSidebarOpen, userId]);
+
+    const handleSendMessage = (e) => {
+        e.preventDefault();
+        if (!chatDraft.trim()) return;
+
+        wsRef.current?.send(
+            JSON.stringify({
+                type: "CHAT",
+                message: chatDraft,
+            })
+        );
+
+        setChatDraft("");
+    };
+
+    const handleReaction = (emoji) => {
+        setShowReactions(false);
+
+        // 1️⃣ 기존 타이머 제거
+        const oldTimer = reactionTimersRef.current.myReaction;
+        if (oldTimer) {
+            clearTimeout(oldTimer);
+        }
+
+        // 2️⃣ 이모지 즉시 표시
+        setMyReaction(emoji);
+
+        // 3️⃣ 서버에 이모지 전송 (다른 사용자들이 볼 수 있도록)
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+                JSON.stringify({
+                    type: "REACTION",
+                    emoji,
+                })
+            );
+        }
+
+        // 4️⃣ 새 타이머 등록 (2.5초 후 제거)
+        const timerId = setTimeout(() => {
+            setMyReaction(null);
+            delete reactionTimersRef.current.myReaction;
+        }, 2500);
+
+        reactionTimersRef.current.myReaction = timerId;
+    };
+
     const isIOSDevice = () => {
         // iPhone/iPad/iPod (구형 UA)
         const ua = navigator.userAgent || "";
@@ -652,12 +860,12 @@ function MeetingPage() {
     };
 
     useEffect(() => {
-        console.log("[PERMISSION]", {
+        /* console.log("[PERMISSION]", {
             micPermission,
             camPermission,
             micDisabled,
             camDisabled,
-        });
+        }); */
     }, [micPermission, camPermission]);
 
     // --- Local media ---
@@ -690,7 +898,7 @@ function MeetingPage() {
             saveMeetingState({ localStream: stream });
             }
         } catch (e) {
-            console.warn("[startLocalMedia] meeting context error:", e);
+            // console.warn("[startLocalMedia] meeting context error:", e);
         }
 
         return stream;
@@ -704,9 +912,9 @@ function MeetingPage() {
         const shouldGetVideo = !!camOnRef.current; // 카메라 OFF면 video:false로 요청
         const shouldGetAudio = true;              // 오디오는 항상 요청 후 enabled로 제어
 
-        console.log(
+        /* console.log(
         `[startLocalMedia] getUserMedia video=${shouldGetVideo}, audio=${shouldGetAudio}`
-        );
+        ); */
 
         const stream = await navigator.mediaDevices.getUserMedia({
         video: shouldGetVideo,
@@ -716,14 +924,14 @@ function MeetingPage() {
         // ⭐ 트랙 enabled 상태를 현재 설정값 기준으로 맞춤
         const at = stream.getAudioTracks()[0];
         if (at) {
-        at.enabled = !!micOnRef.current;
-        console.log(`[startLocalMedia] audio track enabled = ${at.enabled}`);
+            at.enabled = !!micOnRef.current;
+            // console.log(`[startLocalMedia] audio track enabled = ${at.enabled}`);
         }
 
         const vt = stream.getVideoTracks()[0];
         if (vt) {
-        vt.enabled = !!camOnRef.current;
-        console.log(`[startLocalMedia] video track enabled = ${vt.enabled}`);
+            vt.enabled = !!camOnRef.current;
+            // console.log(`[startLocalMedia] video track enabled = ${vt.enabled}`);
         }
 
         localStreamRef.current = stream;
@@ -743,12 +951,12 @@ function MeetingPage() {
             saveMeetingState({ localStream: stream });
         }
         } catch (e) {
-        console.warn("[startLocalMedia] meeting context error:", e);
+            // console.warn("[startLocalMedia] meeting context error:", e);
         }
 
         return stream;
     } catch (err) {
-        console.error("[startLocalMedia] Failed to get media:", err);
+        // console.error("[startLocalMedia] Failed to get media:", err);
 
         // 권한이 실제로 거부된 케이스만 disabled로 처리되도록 하는 게 이상적이지만,
         // 우선은 실패 시 denied로 내려 버튼 비활성화가 맞습니다.
@@ -780,26 +988,26 @@ function MeetingPage() {
                         appData: { type: "audio" },
                     });
                     producersRef.current.set("audio", p);
-                    console.log(`[ensureLocalProducers] Audio producer created`);
+                    // console.log(`[ensureLocalProducers] Audio producer created`);
                 } catch (e) {
-                    console.error("[ensureLocalProducers] audio produce failed:", e);
+                    // console.error("[ensureLocalProducers] audio produce failed:", e);
                 }
             }
             // 마이크 enabled 상태를 현재 설정 기준으로 동기화
             audioTrack.enabled = !!micOnRef.current;
-            console.log(`[ensureLocalProducers] Audio track enabled set to ${micOnRef.current}`);
+            // console.log(`[ensureLocalProducers] Audio track enabled set to ${micOnRef.current}`);
         }
 
         // --- CAMERA ---
         // camOn이 false면 카메라 producer는 만들지 않음 (상대가 아바타로 보는 게 맞음)
         if (!camOnRef.current) {
-            console.log(`[ensureLocalProducers] Camera is OFF, skipping camera producer`);
+            // console.log(`[ensureLocalProducers] Camera is OFF, skipping camera producer`);
             return;
         }
 
         const videoTrack = stream.getVideoTracks().find((x) => x.readyState === "live");
         if (!videoTrack) {
-            console.log(`[ensureLocalProducers] No live video track found`);
+            // console.log(`[ensureLocalProducers] No live video track found`);
             return;
         }
 
@@ -811,15 +1019,15 @@ function MeetingPage() {
                     appData: { type: "camera" },
                 });
                 producersRef.current.set("camera", p);
-                console.log(`[ensureLocalProducers] Camera producer created`);
+                // console.log(`[ensureLocalProducers] Camera producer created`);
             } catch (e) {
-                console.error("[ensureLocalProducers] camera produce failed:", e);
+                // console.error("[ensureLocalProducers] camera produce failed:", e);
             }
         }
 
         // camOn 상태 반영
         videoTrack.enabled = !!camOnRef.current;
-        console.log(`[ensureLocalProducers] Video track enabled set to ${camOnRef.current}`);
+        // console.log(`[ensureLocalProducers] Video track enabled set to ${camOnRef.current}`);
     };
 
     // --- SFU Functions ---
@@ -1188,12 +1396,12 @@ function MeetingPage() {
                 // 🔐 appData 결정 (server > target > {})
                 const finalAppData = serverAppData ?? targetAppData ?? {};
 
-                console.log(
+                /* console.log(
                     "[consume:response]",
                     "peerId =", peerId,
                     "producerId =", producerId,
                     "appData =", finalAppData
-                );
+                ); */
 
                 consumer = await recvTransport.consume({
                     id: consumerId,
@@ -1208,7 +1416,7 @@ function MeetingPage() {
 
                 const isScreen = consumer.appData?.type === "screen";
 
-                console.log(
+                /* console.log(
                     "[SFU][consumer created]",
                     "peerId =", peerId,
                     "producerId =", producerId,
@@ -1217,7 +1425,7 @@ function MeetingPage() {
                     "consumer.appData =", consumer.appData,
                     "track.readyState =", consumer.track?.readyState,
                     "track.enabled =", consumer.track?.enabled
-                );
+                ); */
 
                 /* -------------------------------------------------
                 스트림 생성/병합
@@ -1246,7 +1454,7 @@ function MeetingPage() {
                     peerStreamsRef.current.set(peerId, next);
                     mergedCameraStream = next;
 
-                    console.log(`[consumer] Merged stream for peer ${peerId}: videoTracks=${next.getVideoTracks().length}, audioTracks=${next.getAudioTracks().length}`);
+                    // console.log(`[consumer] Merged stream for peer ${peerId}: videoTracks=${next.getVideoTracks().length}, audioTracks=${next.getAudioTracks().length}`);
                 } else {
                     // ✅ 화면공유는 "항상 새 MediaStream"으로 만들어 리렌더 강제
                     screenStream = new MediaStream([consumer.track]);
@@ -1608,6 +1816,21 @@ function MeetingPage() {
     const prevScreenSharersRef = useRef(new Set());
 
     useEffect(() => {
+        return () => {
+            // ✅ MeetingPage를 떠나는 순간
+            if (!document.pictureInPictureElement && mainVideoRef.current) {
+            console.log("[PiP] MeetingPage unmount → enter PiP");
+
+            try {
+                mainVideoRef.current.requestPictureInPicture();
+            } catch (e) {
+                console.warn("[PiP] request failed on unmount", e);
+            }
+            }
+        };
+    }, []);
+
+    useEffect(() => {
         const screenSharers = participants.filter(p => p.isScreenSharing);
         const screenSharerIds = new Set(screenSharers.map(p => p.id));
         const hasScreenSharer = screenSharers.length > 0;
@@ -1866,7 +2089,7 @@ function MeetingPage() {
                     if (ws.readyState === WebSocket.OPEN) {
                         const isMuted = !micOnRef.current;
                         const isCameraOff = !camOnRef.current;
-                        console.log(`[WS onopen] Sending initial state: muted=${isMuted}, cameraOff=${isCameraOff}, micOn=${micOnRef.current}, camOn=${camOnRef.current}`);
+                        // console.log(`[WS onopen] Sending initial state: muted=${isMuted}, cameraOff=${isCameraOff}, micOn=${micOnRef.current}, camOn=${camOnRef.current}`);
                         ws.send(JSON.stringify({
                             type: "USER_STATE_CHANGE",
                             userId: userId,
@@ -1909,7 +2132,7 @@ function MeetingPage() {
 
                 // 🔍 모든 메시지 로깅 (디버깅용)
                 if (data.type !== "USERS_UPDATE") {
-                    console.log(`[WS] Received message type: ${data.type}`, data);
+                    // console.log(`[WS] Received message type: ${data.type}`, data);
                 }
 
                 if (data.type === "REACTION") {
@@ -1947,11 +2170,11 @@ function MeetingPage() {
                 }
 
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-                    console.log(`📨 [USERS_UPDATE] Received users:`, data.users.map(u => ({
+                    /* console.log(`📨 [USERS_UPDATE] Received users:`, data.users.map(u => ({
                         userId: u.userId,
                         userName: u.userName,
                         online: u.online
-                    })));
+                    }))); */
 
                     setParticipants((prev) => {
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
@@ -2059,7 +2282,7 @@ function MeetingPage() {
                             if (!old && !hasReconnectHistory) {
                                 // 내 로컬 스트림이 있거나, 이미 로드된 경우 스킵
                                 const shouldStopLoading = isMe && localStreamRef.current;
-                                console.log(`[NEW USER] ${u.userName} - isJoining=true, isReconnecting=${baseUser.isReconnecting}`);
+                                // console.log(`[NEW USER] ${u.userName} - isJoining=true, isReconnecting=${baseUser.isReconnecting}`);
 
                                 // ✅ 신규 유저도 재접속 중이면 reconnectStartedAt 설정
                                 const reconnectStartedAt = shouldShowReconnecting
@@ -2076,7 +2299,7 @@ function MeetingPage() {
 
                             // 기존 유저(재접속 포함)
                             const shouldStopLoading = isMe && localStreamRef.current;
-                            console.log(`[EXISTING USER] ${u.userName} - isReconnecting=${baseUser.isReconnecting}, hasReconnectHistory=${hasReconnectHistory}`);
+                            // console.log(`[EXISTING USER] ${u.userName} - isReconnecting=${baseUser.isReconnecting}, hasReconnectHistory=${hasReconnectHistory}`);
 
                             // ✅ 재접속 중이면 reconnectStartedAt 설정 (없으면 지금 시간, 있으면 기존 시간 유지)
                             const reconnectStartedAt = shouldShowReconnecting
@@ -2141,11 +2364,11 @@ function MeetingPage() {
                 }
 
                 if (data.type === "USER_STATE_CHANGE") {
-                    console.log(`[WS] USER_STATE_CHANGE received:`, data.userId, data.changes);
+                    // console.log(`[WS] USER_STATE_CHANGE received:`, data.userId, data.changes);
                     setParticipants((prev) =>
                         prev.map((p) => {
                             if (String(p.id) === String(data.userId)) {
-                                console.log(`[WS] Updating participant ${p.name} with changes:`, data.changes);
+                                // console.log(`[WS] Updating participant ${p.name} with changes:`, data.changes);
                                 // ✅ 스트림 관련 필드는 절대 덮어쓰지 않음 (서버가 모르는 정보)
                                 const safeChanges = { ...data.changes };
                                 delete safeChanges.stream;
@@ -2185,8 +2408,9 @@ function MeetingPage() {
         return () => {
             if (pingInterval) clearInterval(pingInterval);
             // PiP 모드일 때는 시그널링 WebSocket 연결 유지
+            // (cleanup은 SFU useEffect에서 한번에 처리)
             if (document.pictureInPictureElement) {
-                console.log("keeping connection alive (browser PiP)");
+                console.log("[Signaling] Browser PiP active, keeping connection alive");
                 return;
             }
             if (wsRef.current) wsRef.current.close();
@@ -2510,37 +2734,55 @@ function MeetingPage() {
         };
 
         return () => {
-            // PiP 모드일 때는 연결 유지 (ref를 사용하여 최신 값 참조)
+            // cleanup 함수 정의 (SFU + 시그널링)
+            const cleanup = () => {
+                console.log("[Cleanup] Cleaning up all connections");
+
+                // SFU cleanup
+                effectAliveRef.current = false;
+                try {
+                    safeSfuSend({ action: "leave", requestId: safeUUID(), data: { roomId, peerId: userId } });
+                } catch {}
+
+                producersRef.current.forEach((p) => safeClose(p));
+                producersRef.current.clear();
+                consumersRef.current.forEach((c) => safeClose(c));
+                consumersRef.current.clear();
+                safeClose(sendTransportRef.current);
+                safeClose(recvTransportRef.current);
+                sendTransportRef.current = null;
+                recvTransportRef.current = null;
+                safeClose(sfuDeviceRef.current);
+                sfuDeviceRef.current = null;
+
+                audioElsRef.current.forEach((a) => {
+                    try { a.srcObject = null; } catch {}
+                });
+                audioElsRef.current.clear();
+
+                try { sfuWsRef.current?.close(); } catch {}
+                sfuWsRef.current = null;
+                peerStreamsRef.current.clear();
+                pendingProducersRef.current = [];
+
+                // 시그널링 WebSocket cleanup
+                try {
+                    if (wsRef.current) {
+                        wsRef.current.close();
+                        wsRef.current = null;
+                    }
+                } catch {}
+            };
+
+            // PiP 모드일 때는 연결 유지하고 cleanup 함수를 저장
             if (document.pictureInPictureElement) {
-                console.log("[SFU] Browser PiP active, keeping connection alive");
+                console.log("[Cleanup] Browser PiP active, saving cleanup function for later");
+                saveCleanupFunction(cleanup);
                 return;
             }
 
-            effectAliveRef.current = false;
-            try {
-                safeSfuSend({ action: "leave", requestId: safeUUID(), data: { roomId, peerId: userId } });
-            } catch {}
-
-            producersRef.current.forEach((p) => safeClose(p));
-            producersRef.current.clear();
-            consumersRef.current.forEach((c) => safeClose(c));
-            consumersRef.current.clear();
-            safeClose(sendTransportRef.current);
-            safeClose(recvTransportRef.current);
-            sendTransportRef.current = null;
-            recvTransportRef.current = null;
-            safeClose(sfuDeviceRef.current);
-            sfuDeviceRef.current = null;
-
-            audioElsRef.current.forEach((a) => {
-                try { a.srcObject = null; } catch {}
-            });
-            audioElsRef.current.clear();
-
-            try { sfuWsRef.current?.close(); } catch {}
-            sfuWsRef.current = null;
-            peerStreamsRef.current.clear();
-            pendingProducersRef.current = [];
+            // 일반적인 경우 바로 cleanup 실행
+            cleanup();
         };
     }, [roomId, userId]); // isPipMode를 의존성에서 제거하여 재연결 방지
 
@@ -2571,6 +2813,27 @@ function MeetingPage() {
             })
         );
     }, [isSpeaking]);
+
+    // activeSpeaker 정보를 MeetingContext에 저장 (PIP에서 사용)
+    useEffect(() => {
+        if (typeof saveMeetingState !== "function") return;
+
+        const activeSpeaker = participants.find((p) => String(p.id) === String(activeSpeakerId));
+        const pipTargetUser = activeSpeaker || {
+            id: userId,
+            name: userName,
+            isMe: true,
+            stream: localStream,
+            screenStream: screenStreamRef.current,
+            isScreenSharing: isScreenSharing,
+        };
+
+        saveMeetingState({
+            localStream,
+            participants,
+            pipTargetUser,
+        });
+    }, [participants, activeSpeakerId, localStream, isScreenSharing, userId, userName, saveMeetingState]);
 
     //전체화면 참가자 토글
     useEffect(() => {
@@ -2712,7 +2975,7 @@ function MeetingPage() {
                                             videoRef={mainVideoRef}
                                         />
 
-                                        <button className="pip-btn" onClick={handlePip} title="PiP 모드">
+                                        <button className="pip-btn" onClick={enterPipForCurrentMain} title="PiP 모드">
                                             <PictureInPicture2 size={20} />
                                         </button>
 
