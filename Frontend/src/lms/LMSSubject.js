@@ -75,7 +75,7 @@ const LMSSubjectInner = () => {
                         <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 
                         {/* 화상 채팅 */}
-                        <Route path="meeting/:roomId" element={<MeetingPage />} />
+                        <Route path="MeetingRoom/:roomId" element={<MeetingPage />} />
 
                         {/* 없는 경로는 대시보드로 */}
                         <Route path="*" element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />} />

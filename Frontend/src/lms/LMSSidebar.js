@@ -215,7 +215,13 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                 </ul>
             </div>
 
-            <button className="meeting-btn" type="button" onClick={() => navigate(`/lms/${subjectId}/meeting/${subjectId}`)}>
+            <button className="meeting-btn" type="button" onClick={() => {
+                const roomId =
+                    Date.now().toString(36) +
+                    Math.random().toString(36).substring(2, 6);
+
+                    navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
+            }}>
                 화상 채팅방 입장하기
             </button>
         </aside>
