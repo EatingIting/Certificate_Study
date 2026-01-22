@@ -2,8 +2,9 @@ import { useNavigate } from "react-router-dom";
 import React, { useEffect, useState } from "react";
 import api from "../api/api";
 import "./RoomPage.css";
+import onsil from "./메인로고.png";
 import CreateRoom from "../roomcreate/Create";
-import onsil from "./온실.png";
+
 
 const ITEMS_PER_PAGE = 8;
 
@@ -156,7 +157,7 @@ const RoomPage = () => {
         currentPage * ITEMS_PER_PAGE
     );
 
-    const openModal = async (room) => {
+    const penModal = async (room) => {
         try {
             const res = await api.get(`/rooms/${room.roomId}`);
 
