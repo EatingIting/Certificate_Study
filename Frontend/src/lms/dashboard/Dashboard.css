@@ -4,18 +4,45 @@
     min-height: 100vh;
 }
 
-/* ===== 2번째 사진 레이아웃 (3열) ===== */
-.dashboard-layout {
+/* ✅ 3열 + 오른쪽 일정이 2행 span
+   ✅ 게시판/출석 위치 교체 반영:
+   위: study / attendance / calendar
+   아래: board / assignment / calendar
+*/
+.dashboard-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas:
+    "study attendance calendar"
+    "board assignment calendar";
     gap: 18px;
-    align-items: start;
+    align-items: stretch;
 }
 
-.col {
+/* grid-area 매핑 */
+.dashStudy {
+    grid-area: study;
+}
+.dashAttendance {
+    grid-area: attendance;
+}
+.dashBoard {
+    grid-area: board;
+}
+.dashAssignment {
+    grid-area: assignment;
+}
+.dashCalendar {
+    grid-area: calendar;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+}
+
+/* 일정 카드: 내부만 스크롤되도록 */
+.dashCalBody {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 /* ===== 공통 카드 ===== */
@@ -45,12 +72,6 @@
     margin-left: 10px;
 }
 
-.card-subtitle {
-    margin: 10px 0 10px;
-    font-size: 13px;
-    color: #444;
-}
-
 .card-footer {
     display: flex;
     justify-content: flex-end;
@@ -65,14 +86,34 @@
     cursor: pointer;
     padding: 6px 6px;
 }
+
 .more-btn:hover {
     color: #2f2f2f;
 }
 
+/* ✅ 제목 옆 이동 버튼 */
+.card-linkBtn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+
+    font-size: 13px;
+    font-weight: 800;
+    color: #2c6b40;
+
+    padding: 6px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+.card-linkBtn:hover {
+    background: #f1faf3;
+}
+
 /* ===== 상단 시험 카드 ===== */
-.study-card-back{
-    width:400px;
-    height: 200px;
+/* ✅ height 고정 제거: 내용/레이아웃에 따라 자연스럽게 */
+.study-card-back {
+    height: auto;
 }
 
 .study-card {
@@ -130,7 +171,7 @@
 /* 공통 행 */
 .trow {
     display: grid;
-    grid-template-columns: 1fr auto; /* 왼쪽 넓게, 오른쪽은 내용만큼 */
+    grid-template-columns: 1fr auto;
     align-items: center;
     gap: 12px;
     border-radius: 10px;
@@ -149,22 +190,22 @@
     border: 1px solid #f0f0f0;
 }
 
-/* 출석/과제: 연한 초록 */
+/* 연한 초록 */
 .trow.tinted {
     background: #f1faf3;
 }
 
-/* 왼쪽 컬럼: [회차] 고정폭 + 내용 말줄임 */
+/* 왼쪽 컬럼: [회차]/[MM.DD] 고정폭 + 내용 말줄임 */
 .tleft {
     display: grid;
-    grid-template-columns: 64px 1fr; /* 회차 폭 고정 */
+    grid-template-columns: 72px 1fr;
     gap: 10px;
     min-width: 0;
     align-items: center;
 }
 
 .round {
-    width: 64px;
+    width: 72px;
     font-weight: 900;
     color: #2c6b40;
     white-space: nowrap;
@@ -177,7 +218,6 @@
     white-space: nowrap;
 }
 
-/* 오른쪽 컬럼: 항상 오른쪽 */
 .tright {
     display: flex;
     justify-content: flex-end;
@@ -224,7 +264,7 @@
     border-radius: 10px;
     padding: 20px;
     color: #ffffff;
-    height: 100px
+    height: 100px;
 }
 
 .rate-top {
@@ -246,7 +286,6 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    /*background: rgba(255, 255, 255, 0.25);*/
     border-radius: 6px;
     font-size: 12px;
 }
@@ -279,79 +318,65 @@
     border-radius: 999px;
 }
 
-/* ===== 채팅 플로팅 버튼 ===== */
-.chat-fab-wrap {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    z-index: 999;
+/* =========================
+   ✅ 일정 카드만: 세로(위/아래) 2칸 분리
+   - 기존 .dashCalBody는 overflow:auto 그대로 두고,
+   - split일 때만 내부를 grid로 쪼개고 각 섹션만 스크롤
+========================= */
+.dashCalBody.dashCalSplit {
+    overflow: hidden;            /* 바깥 스크롤 끄고 */
+    display: grid;
+    grid-template-rows: 1fr 1fr; /* 위/아래 반반 */
+    gap: 12px;
 }
 
-.chat-fab {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background-color: #97c793;
-    border: none;
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
-    cursor: pointer;
+.dashCalSection {
+    min-height: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 30px;
-    color: white;
-    position: relative;
-    transition: transform 0.2s;
+    flex-direction: column;
 }
 
-.chat-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background-color: #ff3b30;
-    color: white;
+.dashCalSectionTitle {
     font-size: 12px;
     font-weight: 900;
-    min-width: 20px;
-    height: 20px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 4px;
-    border: 2px solid white;
+    color: #2c6b40;
+    margin-top: 2px;
 }
 
-/* ===== 반응형 (깨짐 방지) ===== */
+/* 섹션 안 리스트만 스크롤 */
+.dashCalSectionList {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* 섹션 리스트는 위쪽 여백 줄이기(기존 table-list margin 12px 상단) */
+.table-list.dashCalListTight {
+    margin-top: 8px;
+}
+
+/* ===== 반응형 ===== */
 @media (max-width: 1100px) {
-    .dashboard-layout {
+    .dashboard-grid {
         grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+      "study attendance"
+      "board assignment"
+      "calendar calendar";
     }
 }
 
 @media (max-width: 740px) {
-    .dashboard-layout {
+    .dashboard-grid {
         grid-template-columns: 1fr;
+        grid-template-areas:
+      "study"
+      "attendance"
+      "board"
+      "assignment"
+      "calendar";
     }
     .progress-bar {
         width: 180px;
     }
-}
-
-.card.clickable {
-    cursor: pointer;
-    outline: none;
-}
-
-
-.card.clickable:hover {
-    /* 아무것도 안 함 */
-} 
-
-
-
-
-/* 키보드 접근성(탭 이동) */
-.card.clickable:focus-visible {
-    box-shadow: 0 0 0 3px rgba(100, 104, 183, 0.35);
 }

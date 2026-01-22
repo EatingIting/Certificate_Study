@@ -1,34 +1,102 @@
 import "./LMSSidebar.css";
-import { useNavigate, useParams } from "react-router-dom";
-import { useState } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 
-const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
-    const navigate = useNavigate();
-    const { subjectId } = useParams();
+let LMSSidebar = ({ activeMenu, setActiveMenu }) => {
+    let navigate = useNavigate();
+    let { subjectId } = useParams();
+    let location = useLocation();
 
     // ✅ 초기값: 전부 열림
-    const [openKeys, setOpenKeys] = useState([
+    let [openKeys, setOpenKeys] = useState([
         "attendance",
         "assignment",
         "board",
         "calendar",
+        "study",
         "profile",
     ]);
 
-    // ✅ 메인메뉴 클릭: 이동 X, 펼침/접힘만
-    const toggleParent = (key) => {
-        setOpenKeys((prev) =>
-            prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-        );
+    /**
+     * ✅ (임시) 스터디 내 내 역할
+     * - 백엔드 붙이면 여기 값을 교체하면 됨.
+     * - 예: "OWNER" | "MEMBER"
+     */
+
+    // let studyRole = "OWNER";
+    let studyRole = "OWNER";
+
+    let isOwner = studyRole === "OWNER";
+    let isMember = studyRole === "MEMBER";
+
+    // ✅ URL 기반으로 activeMenu 자동 동기화 (캘린더 모달/리스트 같은 케이스 포함)
+    useEffect(() => {
+        if (typeof setActiveMenu !== "function") return;
+
+        let path = location.pathname;
+        let search = location.search || "";
+        let sp = new URLSearchParams(search);
+        let last = path.split("/").filter(Boolean).pop(); // dashboard, calendar, board ...
+
+        let nextActive = activeMenu;
+
+        if (last === "dashboard") nextActive = "dashboard";
+
+        if (last === "calendar") {
+            if (sp.get("modal") === "add") nextActive = "calendar/add";
+            else nextActive = "calendar/list";
+        }
+
+        if (last === "assignment") {
+            if (sp.get("modal") === "create") nextActive = "assignment/create";
+            else nextActive = "assignment/list";
+        }
+
+        if (last === "attendance") {
+            if (sp.get("scope") === "all") nextActive = "attendance/all";
+            else nextActive = "attendance/my";
+        }
+
+        if (last === "board") {
+            let category = sp.get("category");
+            if (!category) nextActive = "board/all";
+            else if (category === "공지") nextActive = "board/notice";
+            else if (category === "일반") nextActive = "board/free";
+            else if (category === "질문") nextActive = "board/qna";
+            else if (category === "자료") nextActive = "board/data";
+            else nextActive = "board/all";
+        }
+
+        // ✅ 스터디 관리 라우트 동기화 (추가)
+        // 예: /lms/1/study/members, /lms/1/study/leave
+        if (last === "members") nextActive = "study/members";
+        if (last === "leave") nextActive = "study/leave";
+
+        if (last === "profile") {
+            let tab = sp.get("tab");
+            if (tab === "settings") nextActive = "profile/settings";
+            else nextActive = "profile/me";
+        }
+
+        if (nextActive && nextActive !== activeMenu) {
+            setActiveMenu(nextActive);
+
+            let parentKey = nextActive.split("/")[0];
+            if (parentKey && parentKey !== "dashboard") {
+                setOpenKeys((prev) => (prev.includes(parentKey) ? prev : [...prev, parentKey]));
+            }
+        }
+    }, [location.pathname, location.search]); // eslint 플러그인 이슈 방지: 주석 없음
+
+    // ✅ 상위 메뉴: 펼침/접힘만
+    let toggleParent = (key) => {
+        setOpenKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
     };
 
-    // ✅ 하위 메뉴 클릭: 이동(페이지+쿼리)
-    const goChild = (parentKey, activeKey, path) => {
-        setActiveMenu(activeKey);
-
-        // 하위 눌렀을 때 해당 그룹은 열린 상태 유지
+    // ✅ 하위 메뉴: 이동
+    let goChild = (parentKey, activeKey, path) => {
+        if (typeof setActiveMenu === "function") setActiveMenu(activeKey);
         setOpenKeys((prev) => (prev.includes(parentKey) ? prev : [...prev, parentKey]));
-
         navigate(`/lms/${subjectId}/${path}`);
     };
 
@@ -36,11 +104,11 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
         <aside className="subject-sidebar">
             <div className="sb-scroll">
                 <ul className="menu-list">
-                    {/* 대시보드(이건 이동 유지) */}
+                    {/* 대시보드 */}
                     <li
                         className={`menu-item menu-single ${activeMenu === "dashboard" ? "active" : ""}`}
                         onClick={() => {
-                            setActiveMenu("dashboard");
+                            if (typeof setActiveMenu === "function") setActiveMenu("dashboard");
                             navigate(`/lms/${subjectId}/dashboard`);
                         }}
                         role="button"
@@ -181,6 +249,42 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                             >
                                 일정추가
                             </li>
+                        </ul>
+                    </li>
+
+                    {/* ✅ 스터디 관리 */}
+                    <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
+                        <div
+                            className={`menu-item menu-parent ${activeMenu.startsWith("study") ? "active" : ""}`}
+                            onClick={() => toggleParent("study")}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === "Enter" && toggleParent("study")}
+                        >
+                            <span className="menu-label">스터디 관리</span>
+                            <span className="arrow">{openKeys.includes("study") ? "▾" : "▸"}</span>
+                        </div>
+
+                        <ul className="submenu">
+                            {/* 방장만 */}
+                            {isOwner && (
+                                <li
+                                    className={`submenu-item ${activeMenu === "study/members" ? "active" : ""}`}
+                                    onClick={() => goChild("study", "study/members", "study/members")}
+                                >
+                                    스터디원 관리
+                                </li>
+                            )}
+
+                            {/* 스터디원만 (맨 아래) */}
+                            {isMember && (
+                                <li
+                                    className={`submenu-item submen-danger ${activeMenu === "study/leave" ? "active" : ""}`}
+                                    onClick={() => goChild("study", "study/leave", "study/leave")}
+                                >
+                                    스터디 탈퇴
+                                </li>
+                            )}
                         </ul>
                     </li>
 
