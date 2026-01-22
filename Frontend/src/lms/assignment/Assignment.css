@@ -1,0 +1,437 @@
+.as-page {
+    min-height: calc(100vh - 120px);
+    padding: 18px 18px 28px;
+}
+
+/* 우측 상단 + 과제 생성 */
+.as-topbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.as-create-btn {
+    background: #ffffff;
+    border: 1px solid #e6e9ee;
+    border-radius: 5px;
+    padding: 10px 14px;
+    margin-right: 100px;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.08);
+}
+
+.as-create-btn:hover {
+    box-shadow: 0 4px 10px rgba(16, 24, 40, 0.12);
+}
+
+/* 큰 카드 */
+.as-card {
+    border-radius: 10px;
+    background: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 10px 22px rgba(16, 24, 40, 0.12);
+    border: 1px solid #eef1f5;
+    margin-left: 100px;
+    margin-right:100px;
+}
+
+/* 초록 헤더 영역 */
+.as-card-header {
+    background: #f7f9fc;
+    padding: 18px 22px;
+}
+
+.as-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.as-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: #d8f0de;
+    color: #3f9a66;
+    border: 1px solid #cde8d6;
+}
+
+.as-title {
+    margin: 2px 0 4px;
+    font-size: 18px;
+    font-weight: 800;
+    color: #2f6f4a;
+}
+
+/* 과제 아이콘 박스 안에 이미지 딱 맞추기 */
+.as-icon img {
+    width: 24px;          /* 보기 좋은 기본 크기 */
+    height: 24px;
+    object-fit: contain;  /* 비율 유지 */
+    display: block;
+}
+
+
+.as-subtitle {
+    margin: 0;
+    font-size: 13px;
+    color: #4f7d63;
+}
+
+/* 본문 */
+.as-card-body {
+    padding: 28px 22px 32px;
+}
+
+/* 테이블을 가운데 느낌으로(이미지처럼) */
+.as-table-wrap {
+    width: min(720px, 100%);
+    margin: 0 auto;
+    border-radius: 5px;
+    border: 1px solid #eef1f5;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.as-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.as-table thead th {
+    background: #f7f8fb;
+    color: #7a8391;
+    font-weight: 700;
+    padding: 12px 14px;
+    text-align: center;
+    border-bottom: 1px solid #eef1f5;
+}
+
+.as-table tbody td {
+    padding: 14px 14px;
+    border-bottom: 1px solid #f0f2f6;
+    color: #2b3340;
+    vertical-align: center;
+}
+
+.as-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.as-td-title {
+    width: 45%;
+    text-align: center;
+}
+
+.as-link {
+    color: #3a4657;
+    text-decoration: none;
+    font-weight: 700;
+    text-align: center;
+}
+
+.as-link:hover {
+    text-decoration: underline;
+}
+
+/* 작성자 영역 */
+.as-author {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #2b3340;
+    text-align: center;
+    justify-content: center;
+
+}
+
+.as-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #b08a5a;
+    box-shadow: inset 0 0 0 2px #ffffff;
+}
+
+.as-date {
+    text-align: center;
+}
+
+/* 상태 셀 안에서 버튼/뱃지 중앙 */
+.as-table td:last-child {
+    text-align: center;
+}
+
+/* 상태 뱃지/버튼 공통 (크기 통일 + 볼드 제거) */
+.as-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    display: inline-flex;
+
+    min-width: 96px;       /* 둘 다 동일 폭 */
+    height: 32px;          /* 둘 다 동일 높이 */
+    padding: 0 14px;
+
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;      /* ✅ 볼드 제거 (보통 두께) */
+    letter-spacing: -0.2px;
+
+    border: 1px solid transparent;
+    user-select: none;
+    white-space: nowrap;
+}
+
+/* 제출 완료 (뱃지 느낌: 연한 배경 + 진한 글자) */
+.as-status--done {
+    background: #e8f4ee;
+    border-color: #bfe3cf;
+    color: #2f6f4a;
+}
+
+/* 제출 하기 (버튼 느낌: 테두리/배경 구분 + hover) */
+.as-status--todo {
+    background: #fff4ea;
+
+    border-color: #ffd4b0;
+    color: #9a4d1a;
+
+    cursor: pointer;
+}
+
+.as-status--todo:hover {
+    filter: brightness(0.98);
+}
+
+.as-status--todo:active {
+    transform: translateY(1px);
+}
+
+.as-submit-btn:hover {
+    filter: brightness(0.95);
+}
+
+/* 모달(팝업) */
+.as-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.45);
+    display: grid;
+    place-items: center;
+    z-index: 9999;
+    padding: 18px;
+}
+
+.as-modal {
+    width: min(520px, 100%);
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #eef1f5;
+    box-shadow: 0 18px 40px rgba(16, 24, 40, 0.22);
+    overflow: hidden;
+}
+
+.as-modal-header {
+    background-color: #F4F8F5;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 16px 10px;
+    border-bottom: 1px solid #eef1f5;
+}
+
+.as-modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1f2a37;
+    margin-top:10px;
+    margin-bottom: 10px;
+}
+
+.as-modal-sub {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.as-modal-close {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 6px;
+    border-radius: 10px;
+}
+
+.as-modal-close:hover {
+    background: #f3f4f6;
+}
+
+.as-modal-body {
+    padding: 14px 16px 16px;
+}
+
+.as-field {
+    display: block;
+    margin-bottom: 30px;
+}
+
+.as-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 6px;
+    margin-top: 6px;
+}
+
+.as-input,
+.as-textarea,
+.as-file {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.as-input,
+.as-textarea {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 13px;
+    outline: none;
+}
+
+.as-input:focus,
+.as-textarea:focus {
+    border-color: #49a66f;
+}
+
+.as-help {
+    display: block;
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 6px;
+}
+
+.as-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.as-cancel-btn {
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.as-primary-btn {
+    border: none;
+    background: #49a;
+}
+
+/* 모달 하단 버튼들: 크기 통일 */
+.as-modal-actions button {
+    min-width: 92px;          /* 취소/제출 버튼 폭 동일 */
+    height: 40px;             /* 높이 동일 */
+    padding: 0 18px;          /* 좌우 여백 */
+    border-radius: 10px;      /* 사진처럼 둥글게 */
+    font-weight: 900;
+    font-size: 13px;
+}
+
+/* 취소 버튼 */
+.as-cancel-btn {
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    color: #374151;
+    cursor: pointer;
+    font-weight: 400 !important;
+}
+
+.as-cancel-btn:hover {
+    background: #f9fafb;
+}
+
+/* 제출 버튼  */
+.as-primary-btn {
+    border: none;
+    background: #5f8f73;
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.12);
+    font-weight: 400 !important;
+
+}
+
+.as-primary-btn:hover {
+    filter: brightness(0.97);
+}
+
+.as-primary-btn:active {
+    transform: translateY(1px);
+}
+
+/* ===== 과제 생성 모달 전용 ===== */
+.as-create-modal {
+    width: min(640px, 95vw);
+    border-radius: 14px;
+}
+
+.as-create-header {
+    background: #f4f8f5;
+    padding: 18px 18px 12px;
+}
+
+.as-create-body .as-field {
+    margin-bottom: 20px;
+}
+
+.as-date-wrap {
+    position: relative;
+    width: 100%;
+    cursor: pointer;
+}
+
+.as-date-wrap .as-date-input {
+    cursor: pointer; /* input 위도 손모양 */
+}
+
+.as-date-input {
+    padding-right: 44px; /* 아이콘 자리 */
+}
+
+.as-date-icon {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6b7280;
+    pointer-events: none;
+}
+
+/* 생성 모달 버튼 위치/여백 사진처럼 */
+.as-create-actions {
+    margin-top: 6px;
+    padding-top: 6px;
+}
+
+/* 모달 자체 그림자/경계 톤 업 */
+.as-modal.as-create-modal {
+    box-shadow: 0 22px 60px rgba(16, 24, 40, 0.22);
+    border: 1px solid #e9eef3;
+}
+
