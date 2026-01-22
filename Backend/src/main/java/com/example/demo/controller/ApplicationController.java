@@ -71,4 +71,3 @@ public class ApplicationController {
         applicationService.rejectApplication(joinId, ownerUserId);
     }
 }
-
