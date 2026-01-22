@@ -13,7 +13,6 @@ import Board from "./board/Board";
 import Calendar from "./calendar/Calendar";
 import MeetingPage from "../webrtc/MeetingPage";
 import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
-import PipFloatingWindow from "../webrtc/PipFloatingWindow";
 
 import "./LMSSubject.css";
 
@@ -85,11 +84,6 @@ const LMSSubjectInner = () => {
 
             {/* 채팅 모달 - 모든 페이지에서 표시 */}
             <ChatModal />
-
-            {/* PiP 플로팅 창 - 회의 중 다른 페이지에서 표시 */}
-            {isPipMode && (
-                <PipFloatingWindow onReturnToMeeting={handleReturnToMeeting} />
-            )}
         </>
     );
 };

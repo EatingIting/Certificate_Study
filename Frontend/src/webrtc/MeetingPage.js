@@ -57,7 +57,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     isLoading: false,
   };
 
-  const showVideoOffIcon = isScreen ? false : (safeUser.cameraOff || isVideoTrackMuted);
+  const showVideoOffIcon = safeUser.cameraOff;
 
   const hasLiveVideoTrack = useMemo(() => {
     return stream?.getVideoTracks().some((t) => t.readyState === "live") ?? false;
@@ -144,15 +144,25 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const v = videoEl.current;
     if (!v) return;
 
-    if (stream) {
-      if (v.srcObject !== stream) v.srcObject = stream;
-      v.muted = true;
-      v.play().catch(() => {});
-    } else {
-      // stream이 null이면 srcObject를 비우는 편이 안전
-      if (v.srcObject) v.srcObject = null;
+    // ✅ 카메라 OFF면 stream이 있어도 즉시 끊어버림 (freeze 방지 핵심)
+    if (!isScreen && safeUser.cameraOff) {
+        try {
+        v.pause();
+        if (v.srcObject) v.srcObject = null;
+        v.load?.(); // 일부 브라우저에서 마지막 프레임 잔상 제거에 도움
+        } catch {}
+        return;
     }
-  }, [stream]);
+
+    // ✅ 정상 케이스: stream 붙이기
+    if (stream) {
+        if (v.srcObject !== stream) v.srcObject = stream;
+        v.muted = true;
+        v.play().catch(() => {});
+    } else {
+        if (v.srcObject) v.srcObject = null;
+    }
+  }, [stream, safeUser.cameraOff, isScreen]);
 
   const isSpeaking = safeUser.speaking || isSpeakingLocally;
   const isJoining = safeUser.isJoining;
@@ -292,9 +302,6 @@ function MeetingPage() {
     const [showReactions, setShowReactions] = useState(false);
     const [myReaction, setMyReaction] = useState(null);
 
-    const [isBrowserPip, setIsBrowserPip] = useState(false);
-    const [pipLockedPeerId, setPipLockedPeerId] = useState(null);
-
     const wsRef = useRef(null);
     const sfuWsRef = useRef(null);
 
@@ -356,9 +363,6 @@ function MeetingPage() {
     const [isGridFullscreen, setIsGridFullscreen] = useState(false); // 그리드 전체화면 여부
     const gridFullscreenStageRef = useRef(null); // 그리드 전체화면 컨테이너 ref
 
-    // PiP 관련
-    const mainVideoRef = useRef(null);
-
     useEffect(() => { micOnRef.current = micOn; }, [micOn]);
     useEffect(() => { camOnRef.current = camOn; }, [camOn]);
     useEffect(() => { micPermissionRef.current = micPermission; }, [micPermission]);
@@ -378,14 +382,18 @@ function MeetingPage() {
         userNameRef.current = name;
     }
 
+    /* 브라우저 pip 관련 로직 */
+    const mainVideoRef = useRef(null);
+    const [isBrowserPip, setIsBrowserPip] = useState(false);
+
     const userId = userIdRef.current;
     const userName = userNameRef.current;
 
     const hasAudioTrack = localStream?.getAudioTracks().length > 0;
-    const hasVideoTrack = localStream?.getVideoTracks().length > 0;
+    // const hasVideoTrack = localStream?.getVideoTracks().length > 0;
 
     const micMuted = !hasAudioTrack || !micOn;
-    const camMuted = !hasVideoTrack || !camOn;
+    const camMuted = !camOn;
 
     const micDisabled = micPermission !== "granted";
     const camDisabled = camPermission !== "granted";
@@ -399,7 +407,7 @@ function MeetingPage() {
         id: userId,
         name: userName,
         muted: micMuted,
-        cameraOff: camMuted,
+        cameraOff: !camOn,
         speaking: isSpeaking,
         isMe: true,
         stream: localStream,
@@ -409,22 +417,23 @@ function MeetingPage() {
     };
 
     const getMainUser = useCallback(() => {
-        if (isBrowserPip && pipLockedPeerId != null) {
-        const locked = participants.find((p) => String(p.id) === String(pipLockedPeerId));
-        if (locked) return locked;
-        if (String(pipLockedPeerId) === String(userId)) return me;
-        // 잠긴 사용자가 목록에서 사라지면 fallback
-        }
-
-        const found = participants.find((p) => String(p.id) === String(activeSpeakerId));
+        const found = participants.find(
+            (p) => String(p.id) === String(activeSpeakerId)
+        );
         return found || me;
-    }, [isBrowserPip, pipLockedPeerId, participants, activeSpeakerId, me, userId]);
-
+    }, [participants, activeSpeakerId, me]);
+    
     const mainUser = getMainUser();
 
     // ✅ mainStream 계산은 기존 로직(화면공유 포함)을 그대로 쓰시면 됩니다.
     // 여기서는 단순화해두었으니, 당신 원본의 mainStream 계산식으로 교체하세요.
-    const mainStream = mainUser?.isMe ? localStream : mainUser?.stream;
+    const mainStream =
+        mainUser?.isScreenSharing && mainUser?.screenStream
+            ? mainUser.screenStream
+            : mainUser?.isMe
+                ? localStream
+                : mainUser?.stream;
+
     const isMainScreenShare = !!mainUser?.isScreenSharing; // 원본 유지 시 사용
 
     // 전체화면 핸들러 (원본 유지)
@@ -437,40 +446,63 @@ function MeetingPage() {
         }
     };
 
-    const handlePip = useCallback(async () => {
-        const video = mainVideoRef.current;
-        if (!video) return;
-
-        const stream = video.srcObject;
-
-        // ❗ 핵심: 스트림 없으면 PiP 금지
-        if (!stream || stream.getVideoTracks().length === 0) {
-            console.warn("[PiP] stream not ready, skip PiP");
-            return;
-        }
-
-        if (document.pictureInPictureElement) {
-            await document.exitPictureInPicture();
-            return;
-        }
-
-        await video.requestPictureInPicture();
-    }, []);
-
     // ✅ 강제 PiP: 사이드바 열 때 브라우저 PiP 실행
     const toggleSidebar = (view) => {
         if (sidebarOpen && sidebarView === view) {
-        setSidebarOpen(false);
+            setSidebarOpen(false);
         } else {
-        setSidebarView(view);
-        setSidebarOpen(true);
+            setSidebarView(view);
+            setSidebarOpen(true);
+        }
+    };
 
-        // 이미 PiP면 재호출 불필요
-        if (!document.pictureInPictureElement) {
-            // 사용자 제스처(클릭) 안에서 실행되는 것이 중요합니다.
-            handlePip();
+    const turnOffCamera = () => {
+        const producer = producersRef.current.get("camera");
+        if (producer) {
+            producer.close();          // 🔥 이게 핵심
+            producersRef.current.delete("camera");
         }
-        }
+
+        setCamOn(false);
+
+        // ⭐ 서버에 상태 전파 (이거 꼭 필요)
+        wsRef.current?.send(JSON.stringify({
+            type: "USER_STATE_CHANGE",
+            userId,
+            changes: { cameraOff: true },
+        }));
+    };
+
+    const turnOnCamera = async () => {
+        if (!sendTransportRef.current || sendTransportRef.current.closed) return;
+
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const track = stream.getVideoTracks()[0];
+
+        const producer = await sendTransportRef.current.produce({
+            track,
+            appData: { type: "camera" },
+        });
+
+        producersRef.current.set("camera", producer);
+
+        // 로컬 스트림 병합
+        const prevAudio = localStreamRef.current
+            ?.getAudioTracks()
+            .filter(t => t.readyState !== "ended") ?? [];
+
+        const merged = new MediaStream([...prevAudio, track]);
+        localStreamRef.current = merged;
+        setLocalStream(merged);
+
+        setCamOn(true);
+
+        // ⭐ 서버에 상태 전파
+        wsRef.current?.send(JSON.stringify({
+            type: "USER_STATE_CHANGE",
+            userId,
+            changes: { cameraOff: false },
+        }));
     };
 
     // ✅ 전체화면 상태 감지(원본 유지)
@@ -483,31 +515,6 @@ function MeetingPage() {
         };
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-    }, []);
-
-    useEffect(() => {
-        if (!sidebarOpen) return;
-        if (!mainVideoRef.current) return;
-
-        const stream = mainVideoRef.current.srcObject;
-        if (!stream || stream.getVideoTracks().length === 0) return;
-
-        if (!document.pictureInPictureElement) {
-            mainVideoRef.current.requestPictureInPicture().catch(() => {});
-        }
-    }, [sidebarOpen, mainStream]);
-
-    useEffect(() => {
-        const onEnter = () => setIsBrowserPip(true);
-        const onLeave = () => setIsBrowserPip(false);
-
-        document.addEventListener("enterpictureinpicture", onEnter);
-        document.addEventListener("leavepictureinpicture", onLeave);
-
-        return () => {
-            document.removeEventListener("enterpictureinpicture", onEnter);
-            document.removeEventListener("leavepictureinpicture", onLeave);
-        };
     }, []);
 
     const handleSendMessage = (e) => {
@@ -640,6 +647,43 @@ function MeetingPage() {
         });
     }, [micPermission, camPermission]);
 
+    useEffect(() => {
+        const onEnter = () => setIsBrowserPip(true);
+        const onLeave = () => setIsBrowserPip(false);
+
+        document.addEventListener("enterpictureinpicture", onEnter);
+        document.addEventListener("leavepictureinpicture", onLeave);
+
+        return () => {
+            document.removeEventListener("enterpictureinpicture", onEnter);
+            document.removeEventListener("leavepictureinpicture", onLeave);
+        };
+    }, []);
+
+    const handleBrowserPip = useCallback(async () => {
+        const video = mainVideoRef.current;
+        if (!video) return;
+
+        const stream = video.srcObject;
+
+        // ✅ 스트림/비디오트랙 없으면 PiP 금지
+        if (!stream || stream.getVideoTracks().length === 0) {
+            console.warn("[PiP] stream not ready, skip PiP");
+            return;
+        }
+
+        // ✅ 토글 동작
+        try {
+            if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+            } else {
+            // 브라우저 정책상 사용자 클릭 이벤트 안에서 실행돼야 합니다.
+            await video.requestPictureInPicture();
+            }
+        } catch (e) {
+            console.error("[PiP] request failed:", e);
+        }
+    }, []);
     // --- Local media ---
     const startLocalMedia = async () => {
     // ✅ 1) 이미 로컬 스트림이 있으면 그대로 사용 (중복 getUserMedia 방지)
@@ -1463,7 +1507,37 @@ function MeetingPage() {
         }
     };
 
-    const toggleCam = async () => {
+    const handlePeerCameraOff = (peerId) => {
+        // 1. consumer 제거
+        const key = `${peerId}:camera`;
+        const consumer = consumersRef.current.get(key);
+        if (consumer) {
+            consumer.close();
+            consumersRef.current.delete(key);
+        }
+
+        // 2. MediaStream 즉시 제거 (중요)
+        const prevStream = peerStreamsRef.current.get(peerId);
+        if (prevStream) {
+            prevStream.getTracks().forEach((t) => t.stop());
+            peerStreamsRef.current.delete(peerId);
+        }
+
+        // 3. React 상태 즉시 반영
+        setParticipants((prev) =>
+            prev.map((p) =>
+                p.id === peerId
+                    ? {
+                        ...p,
+                        cameraOff: true,
+                        stream: null,
+                    }
+                    : p
+            )
+        );
+    };
+
+    /* const toggleCam = async () => {
         const newVal = !camOn;
         setCamOn(newVal);
         localStorage.setItem("camOn", newVal);
@@ -1573,7 +1647,7 @@ function MeetingPage() {
             );
             console.log(`[toggleCam] sent USER_STATE_CHANGE to server: cameraOff=${!newVal}`);
         }
-    };
+    }; */
 
     // --- Hooks ---
 
@@ -1689,14 +1763,6 @@ function MeetingPage() {
         }
     }, [isLocalLoading, streamVersion, roomReconnecting]);
 
-/*     useEffect(() => {
-        if (!userId) return;
-
-        if (!joinOrderRef.current.includes(userId)) {
-            joinOrderRef.current.push(userId);
-        }
-    }, [userId]); */
-
     useEffect(() => {
         const interval = setInterval(() => {
             setParticipants(prev =>
@@ -1758,8 +1824,6 @@ function MeetingPage() {
         if (at) at.enabled = micOn;
     }, [camOn, micOn]);
 
-    // ✅ [수정] 여기 있던 로컬 스트림 분석 로직은 VideoTile 내부로 이동했거나,
-    // isSpeaking 상태를 서버로 보내는 용도로만 남겨둡니다.
     useEffect(() => {
         if (!localStream) return;
         ensureLocalProducers();
@@ -1843,26 +1907,20 @@ function MeetingPage() {
 
                 // 연결 직후 현재 상태 전송 (초기 동기화)
                 const sendInitialState = () => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        const isMuted = !micOnRef.current;
-                        const isCameraOff = !camOnRef.current;
-                        console.log(`[WS onopen] Sending initial state: muted=${isMuted}, cameraOff=${isCameraOff}, micOn=${micOnRef.current}, camOn=${camOnRef.current}`);
-                        ws.send(JSON.stringify({
-                            type: "USER_STATE_CHANGE",
-                            userId: userId,
-                            changes: {
-                                muted: isMuted,
-                                cameraOff: isCameraOff,
-                            },
-                        }));
-                    }
+                    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+                    ws.send(JSON.stringify({
+                        type: "USER_STATE_CHANGE",
+                        userId,
+                        changes: {
+                            muted: !micOnRef.current,
+                            cameraOff: !camOnRef.current, // ← 오직 버튼 상태만
+                        },
+                    }));
                 };
 
-                // 즉시 한 번 전송
-                sendInitialState();
-
-                // 100ms 후 한 번 더 전송 (USERS_UPDATE 이후 확실히 반영되도록)
-                setTimeout(sendInitialState, 100);
+                // ⛔ 즉시 보내지 말고
+                setTimeout(sendInitialState, 300);
 
                 pingInterval = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
@@ -2164,11 +2222,6 @@ function MeetingPage() {
 
         return () => {
             if (pingInterval) clearInterval(pingInterval);
-            // PiP 모드일 때는 시그널링 WebSocket 연결 유지
-            if (document.pictureInPictureElement) {
-                console.log("keeping connection alive (browser PiP)");
-                return;
-            }
             if (wsRef.current) wsRef.current.close();
         };
     }, [roomId, userId, userName]); // 의존성 배열 유지
@@ -2400,6 +2453,15 @@ function MeetingPage() {
                 const { producerId, peerId, appData } = msg.data || {};
                 const isScreen = appData?.type === "screen";
 
+                if (appData?.mediaTag === "camera") {
+                    handlePeerCameraOff(peerId);
+                }
+
+                /* if (appData?.mediaTag === "screen") {
+                    handlePeerScreenOff(peerId);
+                } */
+
+                // 🔥 2️⃣ React 상태 업데이트
                 setParticipants((prev) =>
                     prev.map((p) => {
                         if (String(p.id) !== String(peerId)) return p;
@@ -2413,13 +2475,10 @@ function MeetingPage() {
                             };
                         }
 
-                        // ✅ camera producer 종료 = stream만 null로 설정
-                        // ⚠️ cameraOff 상태는 변경하지 않음! (서버 USER_STATE_CHANGE로만 변경)
-                        // 화면공유 시작으로 producer가 닫혀도, 실제 카메라 상태(cameraOff)는 유지되어야 함
                         return {
                             ...p,
                             stream: null,
-                            // cameraOff는 유지 (p.cameraOff 그대로)
+                            cameraOff: true,
                             lastUpdate: Date.now(),
                         };
                     })
@@ -2431,12 +2490,6 @@ function MeetingPage() {
                     try { c.close(); } catch {}
                 }
                 consumersRef.current.delete(producerId);
-
-                const a = audioElsRef.current.get(producerId);
-                if (a) {
-                    try { a.srcObject = null; } catch {}
-                    audioElsRef.current.delete(producerId);
-                }
 
                 bumpStreamVersion();
                 return;
@@ -2652,7 +2705,6 @@ function MeetingPage() {
                         <span className="badge-dot" />
                         <span>00:24:15</span>
                     </div>
-
                     {/* 레이아웃 전환 버튼 - 우측 상단 */}
                     <div className="floating-layout-toggle">
                         <button
@@ -2675,12 +2727,6 @@ function MeetingPage() {
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
                                 <div className={`main-stage`} ref={mainStageRef}>
-                                    {isBrowserPip && (
-                                    <div className="pip-mode-banner">
-                                        PiP 모드 이용중
-                                    </div>
-                                    )}
-
                                     <div className="main-video-area">
                                         <VideoTile
                                             user={mainUser}
@@ -2692,10 +2738,19 @@ function MeetingPage() {
                                             videoRef={mainVideoRef}
                                         />
 
-                                        <button className="pip-btn" onClick={handlePip} title="PiP 모드">
-                                            <PictureInPicture2 size={20} />
+                                        {isBrowserPip && (
+                                            <div className="pip-mode-banner">
+                                                PiP 모드 이용중
+                                            </div>
+                                        )}
+                                        <button
+                                            className="pip-btn"
+                                            onClick={handleBrowserPip}
+                                            title="PiP"
+                                            type="button"
+                                            >
+                                            <PictureInPicture2 size={18} />
                                         </button>
-
                                         <button className="fullscreen-btn" onClick={handleFullscreen} title={isFullscreen ? "전체화면 종료" : "전체화면"}>
                                             {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
                                         </button>
@@ -2811,7 +2866,13 @@ function MeetingPage() {
                                             icon={Video}
                                             active={!camOn}
                                             disabled={camDisabled}
-                                            onClick={toggleCam}
+                                            onClick={() => {
+                                                if (camOn) {
+                                                    turnOffCamera();
+                                                } else {
+                                                    turnOnCamera();
+                                                }
+                                            }}
                                         />
                                         <div className="divider" />
                                         {!isIOS && (
@@ -3075,7 +3136,7 @@ function MeetingPage() {
                                             {/* 미디어 컨트롤 */}
                                             <div className={`grid-fullscreen-media-controls ${gridStripVisible ? "visible" : "hidden"}`}>
                                                 <ButtonControl label={micOn ? "마이크 끄기" : "마이크 켜기"} icon={Mic} active={!micOn} disabled={micDisabled} onClick={toggleMic} />
-                                                <ButtonControl label={camOn ? "카메라 끄기" : "카메라 켜기"} icon={Video} active={!camOn} disabled={camDisabled} onClick={toggleCam} />
+                                                <ButtonControl label={camOn ? "카메라 끄기" : "카메라 켜기"} icon={Video} active={!camOn} disabled={camDisabled} onClick={() => (camOn ? turnOffCamera() : turnOnCamera())} />
                                                 <div className="divider" />
                                                 {!isIOS && (
                                                     <ButtonControl
@@ -3199,7 +3260,7 @@ function MeetingPage() {
                                 icon={Video}
                                 active={!camOn}
                                 disabled={camDisabled}
-                                onClick={toggleCam}
+                                onClick={camOn ? turnOffCamera : turnOnCamera}
                             />
                             <div className="divider"></div>
                             {!isIOS && (
