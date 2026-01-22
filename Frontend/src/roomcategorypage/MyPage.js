@@ -40,7 +40,8 @@ const MyPage = () => {
 
         const fetchMyPage = async () => {
             try {
-                const res = await api.get("/users/me");
+                // ✅ 수정 1: URL 변경
+                const res = await api.get("/mypage/me");
                 const data = res.data;
 
                 setUser({
@@ -61,7 +62,7 @@ const MyPage = () => {
                 }
             } catch (error) {
                 console.error("마이페이지 조회 실패", error);
-                alert("세션이 만료되었습니다. 다시 로그인해주세요.");
+                alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
                 localStorage.clear();
                 navigate("/auth");
             }
@@ -101,7 +102,8 @@ const MyPage = () => {
         }
 
         try {
-            await api.put("/users/me", formData, {
+            // ✅ 수정 2: URL 변경
+            await api.put("/mypage/me", formData, {
                 headers: {
                     "Content-Type": "multipart/form-data",
                 },
@@ -215,10 +217,7 @@ const MyPage = () => {
                                 <input
                                     value={user.nickname}
                                     onChange={(e) =>
-                                        setUser({
-                                            ...user,
-                                            nickname: e.target.value,
-                                        })
+                                        setUser({ ...user, nickname: e.target.value })
                                     }
                                 />
                             </div>
@@ -254,10 +253,7 @@ const MyPage = () => {
                                 <textarea
                                     value={user.introduction}
                                     onChange={(e) =>
-                                        setUser({
-                                            ...user,
-                                            introduction: e.target.value,
-                                        })
+                                        setUser({ ...user, introduction: e.target.value })
                                     }
                                 />
                             </div>

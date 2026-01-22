@@ -35,6 +35,17 @@ body {
   position: relative;
 }
 
+/* LMS 레이아웃 내부에서 사용될 때 */
+.subject-content .meet-layout {
+  height: auto;
+  min-height: calc(100vh - 60px - 32px); /* 헤더 + 패딩 고려 */
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .meet-main {
   flex: 1;
   position: relative;
@@ -45,20 +56,67 @@ body {
   transition: flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* --- Floating Header --- */
+/* LMS 내부에서 meet-main */
+.subject-content .meet-main {
+  overflow: visible;
+}
+
+/* --- Floating Header (숨김 처리) --- */
 .meet-header {
-  position: relative; /* [핵심] absolute -> relative 변경 */
-  width: 100%;
-  height: 72px;       /* 높이 고정 */
-  padding: 0 1.5rem;
-  
+  display: none;
+}
+
+/* 플로팅 정보 배지 */
+.floating-info-badge {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 100;
+
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  
-  background-color: #ffffff; /* 흰색 배경 */
-  border-bottom: 1px solid var(--border-color); /* 하단 경계선 */
-  z-index: 50;
+  gap: 0.5rem;
+
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.floating-info-badge svg {
+  color: var(--brand-color);
+}
+
+.badge-dot {
+  width: 4px;
+  height: 4px;
+  background-color: #d1d5db;
+  border-radius: 50%;
+}
+
+/* 레이아웃 전환 버튼 (우측 상단) */
+.floating-layout-toggle {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 100;
+
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .glass-panel {
@@ -156,6 +214,7 @@ body {
 .meet-stage {
   flex: 1;
   padding: 1rem;
+  padding-top: 4.5rem; /* 플로팅 배지 공간 확보 */
   padding-bottom: 6rem;
 
   display: flex;
@@ -163,7 +222,13 @@ body {
   align-items: stretch;
   justify-content: flex-start;
 
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+}
+
+/* LMS 내부에서 meet-stage */
+.subject-content .meet-stage {
+  overflow: visible;
 }
 
 .video-element.camera {
@@ -180,7 +245,7 @@ body {
 /* Speaker Mode */
 .layout-speaker {
   width: 100%;
-  height: 100%;
+  height: auto;
   max-width: 1200px;
 
   display: flex;
@@ -188,13 +253,19 @@ body {
 
   gap: 1.25rem;
   margin: 0 auto;
-  overflow: hidden;
+  overflow: visible;
+}
+
+/* LMS 내부에서 layout-speaker */
+.subject-content .layout-speaker {
+  height: auto;
+  overflow: visible;
 }
 
 .main-stage {
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  aspect-ratio: 16 / 9;
+  max-height: none;
 
   display: flex;
   align-items: center;
@@ -204,9 +275,68 @@ body {
   overflow: visible;
   position: relative;
   padding: 6px;
+  flex-shrink: 0;
+}
+
+/* LMS 내부에서 main-stage 16:9 비율 유지 */
+.subject-content .main-stage {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: auto;
+  min-height: 400px;
 }
 
 /* 전체화면 버튼 */
+/* PiP 버튼 */
+.pip-btn {
+  position: absolute;
+  bottom: 16px;
+  right: 68px;
+  z-index: 2000;
+
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  color: white;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  opacity: 0;
+  transition: all 0.25s ease;
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.main-stage:hover .pip-btn,
+.main-video-area:hover .pip-btn {
+  opacity: 1;
+}
+
+.pip-btn:hover {
+  background: rgba(79, 70, 229, 0.9);
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+}
+
+.pip-btn:active {
+  transform: scale(0.95);
+}
+
+/* 전체화면 모드에서 PiP 버튼 항상 표시 */
+.main-stage:fullscreen .pip-btn,
+.main-stage:fullscreen .main-video-area .pip-btn {
+  opacity: 1;
+}
+
 .fullscreen-btn {
   position: absolute;
   bottom: 16px;
@@ -686,6 +816,13 @@ body {
   overflow-x: auto;
   overflow-y: visible;
   padding: 12px 2px 0.5rem 2px;
+  margin-top: 1rem;
+}
+
+/* LMS 내부에서 bottom-strip */
+.subject-content .bottom-strip {
+  margin-top: 2rem;
+  padding-bottom: 2rem;
 }
 
 .bottom-strip .strip-item {

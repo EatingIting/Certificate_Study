@@ -8,14 +8,14 @@ function Main() {
                 <div className="logo">ONSIL</div>
 
                 <nav className="nav">
-                    <span>스터디 찾기</span>
+                    <span onClick={() => navigate("/roompage")}>스터디 찾기</span>
                     <span>자격증</span>
                     <span>커뮤니티</span>
                     <span>내 학습</span>
                 </nav>
 
                 <div className="main-actions">
-                    <button className="login-btn">로그인</button>
+                    <button className="login-btn" onClick={() => navigate("/auth")}>로그인</button>
                     <button className="cr-btn">스터디 만들기</button>
                 </div>
             </header>
@@ -35,34 +35,16 @@ function Main() {
             </section>
 
             {/* Category */}
-            <section className="category">
+            <section className="mainpage-category">
                 <h2>스터디 카테고리</h2>
-                <div className="category-list">
+                <div className="main-category-list">
                     {["자격증", "취업", "어학", "자기계발"].map((c) => (
-                        <div key={c} className="category-item">
+                        <div key={c} className="main-category-item">
                             <div className="circle">{c[0]}</div>
                             <span>{c}</span>
                         </div>
                     ))}
                 </div>
-                {/*const categories = [*/}
-                {/*{ label: "자격증", value: "certificate" },*/}
-                {/*{ label: "취업", value: "job" },*/}
-                {/*{ label: "어학", value: "language" },*/}
-                {/*{ label: "자기계발", value: "self" },*/}
-                {/*];*/}
-
-                {/*{categories.map((c) => (*/}
-                {/*    <div*/}
-                {/*        key={c.value}*/}
-                {/*        className={`category-item ${c.value}`}*/}
-                {/*        onClick={() => navigate(`/category/${c.value}`)}*/}
-                {/*    >*/}
-                {/*        <div className="circle">{c.label[0]}</div>*/}
-                {/*        <span>{c.label}</span>*/}
-                {/*    </div>*/}
-                {/*))}*/}
-
             </section>
 
             {/* Study List */}
