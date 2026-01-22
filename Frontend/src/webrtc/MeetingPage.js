@@ -54,10 +54,26 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     isReconnecting: false,
   };
 
+  console.log("[VideoTile]", {
+    name: safeUser.name,
+    videoTracks: stream?.getVideoTracks()?.map(t => ({
+        id: t.id,
+        readyState: t.readyState,
+        enabled: t.enabled,
+    })),
+  });
+
   const [isSpeakingLocally, setIsSpeakingLocally] = useState(false);
   const [isVideoTrackMuted, setIsVideoTrackMuted] = useState(true);
 
-  const cameraOff = safeUser.cameraOff;
+  const cameraOff = useMemo(() => {
+    if (safeUser.isMe) return safeUser.cameraOff;
+
+    const hasLive =
+        stream?.getVideoTracks?.().some((t) => t.readyState === "live") ?? false;
+
+    return hasLive ? false : safeUser.cameraOff;
+  }, [safeUser.isMe, safeUser.cameraOff, stream]);
 
   /* =========================
      비디오 트랙 유효성 판단
@@ -122,8 +138,15 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
   useEffect(() => {
     const videoTrack = stream?.getVideoTracks()[0];
     if (!videoTrack) {
-      setIsVideoTrackMuted(true);
-      return;
+        // 🔥 remote의 경우, track 교체 중일 수 있으므로 muted 처리 금지
+        if (!safeUser.isMe) {
+            setIsVideoTrackMuted(false);
+            return;
+        }
+
+        // local만 muted 처리
+        setIsVideoTrackMuted(true);
+        return;
     }
 
     const check = () => {
@@ -161,17 +184,18 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     const hasLiveVideo =
         stream.getVideoTracks().some(
-        (t) => t.readyState === "live" && t.enabled !== false
+            (t) => t.readyState === "live"
         );
 
-    // ⭐ PiP 복귀 포함: live video track이 있으면 무조건 다시 붙인다
     if (hasLiveVideo) {
-        if (v.srcObject !== stream) {
+        // 🔥 stream 객체가 같아도 항상 재할당
+        v.srcObject = null;
         v.srcObject = stream;
-        }
 
         v.muted = true;
         v.play().catch(() => {});
+    } else {
+        v.srcObject = null;
     }
   }, [stream, streamVersion]);
 
@@ -180,7 +204,11 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
   const isReconnecting = safeUser.isReconnecting;
   const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
 
-  const showVideoOffIcon = !isScreen && (cameraOff || isVideoTrackMuted);
+  const showVideoOffIcon = !isScreen && (
+    safeUser.isMe
+        ? (cameraOff || isVideoTrackMuted)
+        : cameraOff
+  );
 
   /* =========================
      JSX
@@ -805,12 +833,6 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
     };
 
     useEffect(() => {
-        /* console.log("[PERMISSION]", {
-            micPermission,
-            camPermission,
-            micDisabled,
-            camDisabled,
-        }); */
     }, [micPermission, camPermission]);
 
     // --- Local media ---
@@ -1313,6 +1335,32 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
         return producer;
     };
 
+    const getOrCreatePeerStream = (peerId) => {
+        const key = String(peerId);
+        let s = peerStreamsRef.current.get(key);
+        if (!s) {
+            s = new MediaStream();
+            peerStreamsRef.current.set(key, s);
+        }
+        return s;
+    };
+
+    const replaceTrackInStream = (stream, newTrack) => {
+        if (!stream || !newTrack) return;
+
+        // 같은 kind(오디오/비디오) 트랙 제거
+        const kind = newTrack.kind;
+        stream.getTracks()
+            .filter((t) => t.kind === kind)
+            .forEach((t) => {
+            try { stream.removeTrack(t); } catch {}
+            try { t.stop?.(); } catch {} // 로컬 트랙이 아니라면 stop은 무시될 수 있음
+            });
+
+        // 새 트랙 추가
+        try { stream.addTrack(newTrack); } catch {}
+    };
+
     const consumeProducer = async (producerId, fallbackPeerId, targetAppData) => {
         if (!producerId) return;
         if (String(fallbackPeerId) === String(userIdRef.current)) return;
@@ -1380,7 +1428,16 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                     producerId,
                     kind,
                     rtpParameters,
-                    appData: { ...finalAppData },
+                    appData: { ...finalAppData, peerId },
+                });
+
+                try { consumer.track.enabled = true; } catch {}
+
+                console.log("[REMOTE TRACK]", {
+                    peerId,
+                    kind: consumer.track.kind,
+                    readyState: consumer.track.readyState,
+                    enabled: consumer.track.enabled,
                 });
 
                 // ✅ producerId 기준으로 consumer 저장(기존 방식 유지)
@@ -1409,26 +1466,15 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                 let screenStream = null;
 
                 if (!isScreen) {
-                    const prev = peerStreamsRef.current.get(peerId);
-                    const next = new MediaStream();
+                    // ✅ peerId별 고정 stream을 가져옴 (없으면 생성)
+                    const fixed = getOrCreatePeerStream(peerId);
 
-                    if (prev) {
-                        prev.getTracks().forEach((t) => {
-                            // ⭐ 같은 종류(kind)의 트랙은 새 consumer 트랙으로 교체
-                            if (t.readyState !== "ended" && t.kind !== consumer.track.kind) {
-                                next.addTrack(t);
-                            }
-                        });
-                    }
+                    // ✅ 새 consumer.track으로 기존 kind 트랙을 교체
+                    replaceTrackInStream(fixed, consumer.track);
 
-                    // 새 consumer 트랙 추가 (오디오 or 비디오)
-                    next.addTrack(consumer.track);
-                    peerStreamsRef.current.set(peerId, next);
-                    mergedCameraStream = next;
-
-                    // console.log(`[consumer] Merged stream for peer ${peerId}: videoTracks=${next.getVideoTracks().length}, audioTracks=${next.getAudioTracks().length}`);
+                    mergedCameraStream = fixed;
                 } else {
-                    // ✅ 화면공유는 "항상 새 MediaStream"으로 만들어 리렌더 강제
+                    // 화면공유는 단독 stream으로 두어도 됨 (이건 OK)
                     screenStream = new MediaStream([consumer.track]);
                 }
 
@@ -1468,17 +1514,21 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                     const next = [...prev];
                     const p = next[idx];
 
+                    const isCameraProducer = consumer.appData?.type === "camera";
+                    const isScreenProducer = consumer.appData?.type === "screen";
+
                     next[idx] = {
                         ...p,
 
+                        cameraOff: isCameraProducer ? false : p.cameraOff,
                         // ✅ screen이면 stream 건드리지 않음, camera면 stream 갱신
-                        stream: isScreen ? p.stream : mergedCameraStream,
+                        stream: isCameraProducer ? mergedCameraStream : p.stream,
 
                         // ✅ screen이면 screenStream 갱신(항상 새 객체), 아니면 유지
-                        screenStream: isScreen ? screenStream : p.screenStream,
+                        screenStream: isScreenProducer ? screenStream : p.screenStream,
 
                         // ✅ screen일 때만 true로 세팅 (종료는 종료 이벤트에서 false)
-                        isScreenSharing: isScreen ? true : p.isScreenSharing,
+                        isScreenSharing: isScreenProducer ? true : p.isScreenSharing,
 
                         // ⭐ muted/cameraOff는 절대 변경하지 않음! 서버 상태만 사용
                         // muted: p.muted,  // 명시적으로 유지 (사실 spread로 이미 유지됨)
@@ -1550,9 +1600,12 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                                     ...p,
                                     screenStream: null,
                                     isScreenSharing: false,
+                                    // cameraOff: true,
                                     lastUpdate: Date.now(),
                                 };
                             }
+
+                            console.log("[SFU] consumer cleanup", { producerId, peerId, type: finalAppData?.type });
 
                             // 카메라 트랙 종료
                             const cur = peerStreamsRef.current.get(peerId);
@@ -1560,19 +1613,31 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                                 return { ...p, stream: null, lastUpdate: Date.now() };
                             }
 
-                            const aliveTracks = cur
-                                .getTracks()
-                                .filter(
-                                    (t) =>
-                                        t.readyState !== "ended" &&
-                                        t.id !== consumer?.track?.id
-                                );
+                            // ✅ 종료된 consumer.track kind만 제거 (stream 객체는 유지)
+                            const endedKind = consumer?.track?.kind;
 
-                            const rebuilt = aliveTracks.length ? new MediaStream(aliveTracks) : null;
-                            if (rebuilt) peerStreamsRef.current.set(peerId, rebuilt);
-                            else peerStreamsRef.current.delete(peerId);
+                            if (endedKind) {
+                                cur.getTracks()
+                                    .filter((t) => t.kind === endedKind)
+                                    .forEach((t) => {
+                                        try { cur.removeTrack(t); } catch {}
+                                    });
+                            }
 
-                            return { ...p, stream: rebuilt, lastUpdate: Date.now() };
+                            // ✅ 아직 살아있는 트랙이 남아있으면 stream은 유지, 없으면 null로만 표시
+                            const hasAnyLiveTrack = cur.getTracks().some((t) => t.readyState !== "ended");
+
+                            if (!hasAnyLiveTrack) {
+                                // stream 객체는 map에서 지워도 되고 유지해도 되는데,
+                                // 다음 재접속 때 새로 만들게 하려면 delete 권장
+                                peerStreamsRef.current.delete(peerId);
+                                return { ...p, stream: null, lastUpdate: Date.now() };
+                            }
+
+                            // ✅ 트랙이 남아있으면 같은 stream 객체를 계속 사용
+                            peerStreamsRef.current.set(peerId, cur);
+                            return { ...p, stream: cur, lastUpdate: Date.now() };
+
                         })
                     );
 
@@ -1608,6 +1673,15 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
             }
         }
         return false;
+    };
+
+    const hasLiveCameraEvidence = (peerId, oldStream) => {
+        const streamHasLiveVideo =
+            oldStream?.getVideoTracks?.().some((t) => t.readyState === "live") ?? false;
+
+        const consumerHasCamera = hasCameraConsumer(peerId);
+
+        return streamHasLiveVideo || consumerHasCamera;
     };
 
     const hasLiveRemoteVideo = (stream) => {
@@ -2272,11 +2346,6 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                 }
 
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
-                    /* console.log(`📨 [USERS_UPDATE] Received users:`, data.users.map(u => ({
-                        userId: u.userId,
-                        userName: u.userName,
-                        online: u.online
-                    }))); */
 
                     setParticipants((prev) => {
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
@@ -2284,14 +2353,28 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
 
                         // 1. 서버에서 온 최신 정보로 업데이트
                         const updatedUsers = data.users.map((u) => {
+                            
                             const peerId = String(u.userId);
                             const old = prevMap.get(peerId);
+                            const isMe = peerId === String(userId);
 
-                            /* -------------------------------------------------
-                            재접속 이력 정리
-                            ------------------------------------------------- */
+                            const cameraOffFinal = isMe
+                                ? !camOnRef.current
+                                : (u.cameraOff ?? true);
+
+                            
                             if (!old && reconnectHistoryRef.current.has(peerId)) {
                                 reconnectHistoryRef.current.delete(peerId);
+                            }
+
+                            if (!isMe) {
+                                console.log("[USERS_UPDATE] peer", peerId, {
+                                    serverCameraOff: u.cameraOff,
+                                    oldHasLiveVideo: old?.stream?.getVideoTracks?.().some(t => t.readyState === "live"),
+                                    hasCameraConsumer: hasCameraConsumer(peerId),
+                                    finalCameraOff: cameraOffFinal,
+                                    online: u.online,
+                                });
                             }
 
                             if (reconnectTimeoutRef.current.has(peerId)) {
@@ -2299,7 +2382,6 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                                 reconnectTimeoutRef.current.delete(peerId);
                             }
 
-                            const isMe = peerId === String(userId);
 
                             const remoteHasVideo = hasLiveRemoteVideo(old?.stream);
 
@@ -2335,10 +2417,8 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                                 reconnectHistoryRef.current.delete(peerId);
                             }
 
-                            const hasLiveVideo =
-                                old?.stream?.getVideoTracks?.().some(
-                                    (t) => t.readyState === "live"
-                                );
+                            const hasCameraStream =
+                                    old?.stream?.getVideoTracks?.().some(t => t.readyState === "live");
 
                                 const baseUser = {
                                 id: peerId,
@@ -2350,14 +2430,8 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                                     ? !micOnRef.current
                                     : (u.muted ?? false),
 
-                                // ✅ 핵심 수정
-                                cameraOff: isMe
-                                    ? !camOnRef.current
-                                    : (
-                                        hasLiveVideo
-                                        ? false
-                                        : (u.cameraOff ?? true)
-                                    ),
+
+                                cameraOff: cameraOffFinal,
 
                                 stream: shouldShowReconnecting ? null : old?.stream ?? null,
                                 screenStream: shouldShowReconnecting ? null : old?.screenStream ?? null,
@@ -2701,42 +2775,6 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                         safeSfuSend({ action: "produce", requestId: reqId, data: { transportId, kind, rtpParameters, appData } });
                     });
 
-                    /* const streamToProduce = localStreamRef.current;
-
-                    if (streamToProduce) {
-                        for (const track of streamToProduce.getTracks()) {
-                            // ✅ ended 트랙 produce 방지
-                            if (!track || track.readyState !== "live") {
-                                console.warn("[produce-skip] track not live:", track?.kind, track?.readyState);
-                                continue;
-                            }
-
-                            // ✅ enabled false 트랙도 스킵(원하면)
-                            if (track.enabled === false) {
-                                console.warn("[produce-skip] track disabled:", track.kind);
-                                continue;
-                            }
-
-                            const type = track.kind === "video" ? "camera" : "audio";
-
-                            // ✅ 이미 같은 타입 producer가 있으면 중복 produce 방지
-                            if (producersRef.current.has(type)) continue;
-
-                            try {
-                                const producer = await sendTransport.produce({
-                                    track,
-                                    appData: { type },
-                                });
-                                producersRef.current.set(type, producer);
-                                console.log("[produce-ok]", type, producer.id);
-                            } catch (e) {
-                                console.error("[produce-failed]", type, e);
-                            }
-                        }
-                    } else {
-                        console.log("[produce] no local stream yet");
-                    } */
-
                     sendTransportRef.current = sendTransport;
                     setTimeout(() => {
                         ensureLocalProducers();
@@ -2817,9 +2855,8 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                             };
                         }
 
-                        // ✅ camera producer 종료 = stream만 null로 설정
-                        // ⚠️ cameraOff 상태는 변경하지 않음! (서버 USER_STATE_CHANGE로만 변경)
-                        // 화면공유 시작으로 producer가 닫혀도, 실제 카메라 상태(cameraOff)는 유지되어야 함
+                        console.log("[SFU] producerClosed", msg.data);
+
                         return {
                             ...p,
                             stream: null,
@@ -2850,21 +2887,28 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                 const { peerId } = msg.data || {};
                 if (!peerId) return;
 
-                // ✅ 1. 재접속 이력만 기록 (UI는 건드리지 않음)
                 reconnectHistoryRef.current.add(peerId);
 
-                // ✅ 2. 스트림 정리 (메모리 누수 방지)
-                clearPeerStreamOnly(peerId);
-                bumpStreamVersion();
+                setParticipants((prev) =>
+                    prev.map((p) =>
+                    String(p.id) === String(peerId)
+                        ? {
+                            ...p,
+                            isReconnecting: true,
+                            isLoading: true,
+                            reconnectStartedAt: p.reconnectStartedAt ?? Date.now(),
+                            // stream/screenStream 절대 건드리지 않음
+                        }
+                        : p
+                    )
+                );
 
                 // ✅ 3. 기존 삭제 타이머 있으면 제거
                 if (reconnectTimeoutRef.current.has(peerId)) {
                     clearTimeout(reconnectTimeoutRef.current.get(peerId));
                 }
 
-                // ✅ 4. 10초 후에도 복귀 없으면 완전 제거
                 const timer = setTimeout(() => {
-                    // 🔑 아직 USERS_UPDATE에 존재하면 제거 금지
                     setParticipants(prev => {
                         const stillExists = prev.some(p => String(p.id) === String(peerId));
                         if (stillExists) {
@@ -3145,9 +3189,6 @@ function MeetingPage({ roomId: propRoomId, subjectId: propSubjectId }) {
                                         </button>
                                     </div>
 
-                                    {/* ===============================
-                                        ✅ 전체화면 전용 UI
-                                    =============================== */}
                                     {isFullscreen && (
                                     <>
                                             {/* 🎭 전체화면 이모지 팝업 */}
