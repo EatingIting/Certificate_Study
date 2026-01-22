@@ -10,6 +10,7 @@ import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
 import SampleLayout from "./sample/SampleLayout";
 import SampleRecruit from "./sample/SampleRecruit";
+import SignUp from "./auth/SignUp";
 
 function App() {
     return (
@@ -17,6 +18,7 @@ function App() {
             <Routes>
                 <Route path="/" element={<Main />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/signup" element={<SignUp />} />
                 <Route path="/roompage" element={<RoomPage />} />
                 <Route path="/mypage" element={<MyPage />} />
                 <Route path="/create" element={<Create />} />
@@ -33,4 +35,5 @@ function App() {
         </BrowserRouter>
     );
 }
+
 export default App;

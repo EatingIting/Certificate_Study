@@ -215,7 +215,7 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                 </ul>
             </div>
 
-            <button className="meeting-btn" type="button" onClick={() => navigate("/meeting")}>
+            <button className="meeting-btn" type="button" onClick={() => navigate(`/lms/${subjectId}/meeting/${subjectId}`)}>
                 화상 채팅방 입장하기
             </button>
         </aside>
