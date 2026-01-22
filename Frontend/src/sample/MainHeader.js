@@ -7,26 +7,19 @@ const MainHeader = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="sample-page">
+    <div className="page">
       <header className="header">
-        <div className="sample-container header-inner">
-          <div className="logo" onClick={() => navigate("/")}>ONSIL</div>
+        <div className="logo">ONSIL</div>
 
-          <nav className="nav">
-            <span onClick={() => navigate("/sample/room")}>스터디 찾기</span>
-            <span>자격증</span>
-            <span>커뮤니티</span>
-            <span>내 학습</span>
-          </nav>
+        <div className="search-box">
+          <input placeholder="어떤 스터디를 찾고 있나요? (ex. 정보처리기사)" />
+          <button>스터디 검색</button>
+        </div>
 
-          <div className="header-actions">
-            <button className="login-btn" onClick={() => navigate("/auth")}>
-              로그인
-            </button>
-            <button className="create-btn" onClick={() => navigate("/create")}>
-              스터디 만들기
-            </button>
-          </div>
+
+        <div className="main-actions">
+          <button className="login-btn" onClick={() => navigate("/auth")}>로그인</button>
+          <button className="cr-btn" onClick={() => navigate("/create")}>스터디 만들기</button>
         </div>
       </header>
 

@@ -1,3 +1,8 @@
+.page {
+  font-family: Arial, sans-serif;
+  color: #111;
+}
+
 .header {
   position: sticky;   /* or fixed */
   top: 0;
