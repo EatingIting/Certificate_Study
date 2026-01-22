@@ -1,7 +1,7 @@
-import "./SampleRecruitModal.css";
+import "./RoomPageModal.css";
 import { useEffect, useState } from "react";
 
-const SampleRecruitModal = ({ open, onClose, study }) => {
+const RoomPageModal = ({ open, onClose, study }) => {
   const [step, setStep] = useState(1);
   const [intro, setIntro] = useState("");
 
@@ -189,4 +189,4 @@ const SampleRecruitModal = ({ open, onClose, study }) => {
   );
 };
 
-export default SampleRecruitModal;
+export default RoomPageModal;
