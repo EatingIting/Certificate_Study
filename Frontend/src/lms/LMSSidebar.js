@@ -19,20 +19,26 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
 
     // ✅ 메인메뉴 클릭: 이동 X, 펼침/접힘만
     const toggleParent = (key) => {
-        setOpenKeys((prev) =>
-            prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-        );
+      setOpenKeys((prev) =>
+        prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+      );
+    };
+
+    const navigateWithPip = async (path) => {
+      if (isInMeeting) {
+        await requestPipIfPossible();
+      }
+      navigate(path);
     };
 
     // ✅ 하위 메뉴 클릭: 이동(페이지+쿼리)
-    const goChild = async (parentKey, activeKey, path) => {
-        setActiveMenu(activeKey);
-        setOpenKeys((prev) => (prev.includes(parentKey) ? prev : [...prev, parentKey]));
+    const goChild = (parentKey, activeKey, path) => {
+      setActiveMenu(activeKey);
+      setOpenKeys((prev) =>
+          prev.includes(parentKey) ? prev : [...prev, parentKey]
+      );
 
-        // ✅ 사용자 클릭 컨텍스트에서 PiP 요청
-        await requestPipIfPossible();
-
-        navigate(`/lms/${subjectId}/${path}`);
+      navigate(`/lms/${subjectId}/${path}`);
     };
 
     return (
@@ -44,7 +50,7 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                         className={`menu-item menu-single ${activeMenu === "dashboard" ? "active" : ""}`}
                         onClick={() => {
                             setActiveMenu("dashboard");
-                            navigate(`/lms/${subjectId}/dashboard`);
+                            navigateWithPip(`/lms/${subjectId}/dashboard`);
                         }}
                         role="button"
                         tabIndex={0}
@@ -221,8 +227,7 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
             <button 
             className="meeting-btn" 
             type="button" 
-            onClick={async () => {
-                await requestPipIfPossible();
+            onClick={() => {
                 navigate(`/lms/${subjectId}/meeting/${subjectId}`);
             }}
             >
