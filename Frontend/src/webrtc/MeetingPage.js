@@ -69,11 +69,13 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
   const canShowVideo = useMemo(() => {
     if (!stream) return false;
     if (cameraOff) return false;
-    if (isScreen) return stream.getVideoTracks().length > 0;
 
-    // ⭐ 핵심: live video track 존재 여부만 본다
-    return hasLiveVideoTrack;
-  }, [stream, cameraOff, isScreen, hasLiveVideoTrack]);
+    if (!safeUser.isMe) {
+        return hasLiveVideoTrack; // 🔥 remote는 이것만 본다
+    }
+
+    return hasLiveVideoTrack && !isVideoTrackMuted;
+  }, [stream, cameraOff, safeUser.isMe, hasLiveVideoTrack, isVideoTrackMuted]);
 
   /* =========================
      오디오 볼륨 감지
@@ -125,10 +127,12 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     }
 
     const check = () => {
+      const isLocal = safeUser.isMe;
+
       const muted =
-        !videoTrack.enabled ||
-        videoTrack.muted ||
-        videoTrack.readyState === "ended";
+      videoTrack.readyState === "ended" ||
+      (isLocal && (!videoTrack.enabled || videoTrack.muted));
+
       setIsVideoTrackMuted(muted);
     };
 
