@@ -1,19 +1,27 @@
-import "./Dashboard.css";
-import "../chat/ChatModal"; // 채팅방 모달 추가
-import { useState } from "react";
+import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import ChatModal from "../chat/ChatModal";
+import "./Dashboard.css";
 
-const Dashboard = ({ setActiveMenu }) => {
-    const [isChatOpen, setIsChatOpen] = useState(false);
-    const [badgeCount, setBadgeCount] = useState(0);
+function Dashboard({ setActiveMenu }) {
+    let navigate = useNavigate();
+    let params = useParams();
 
-    const navigate = useNavigate();
-    const { subjectId } = useParams(); // URL이 /lms/:subjectId/dashboard 구조면 사용 가능
+    // ✅ 라우트 파라미터 이름이 프로젝트마다 달라질 수 있어서 안전하게 처리
+    // 예: /lms/:roomId/dashboard  또는 /lms/:subjectId/dashboard  또는 /lms/:id/dashboard
+    let subjectId =
+        params.roomId ||
+        params.subjectId ||
+        params.id ||
+        window.location.pathname.split("/")[2]; // /lms/1/dashboard -> "1"
 
-    const go = (menu) => {
-        setActiveMenu(menu);
-        // ✅ 라우트 기반으로 이동
+    let go = (menu) => {
+        // setActiveMenu는 있을 수도/없을 수도 있으니 안전하게
+        if (typeof setActiveMenu === "function") {
+            setActiveMenu(menu);
+        }
+
+        // ✅ 라우트 기반 이동
+        // menu 예: "board", "attendance", "assignment"
         navigate(`/lms/${subjectId}/${menu}`);
     };
 
@@ -22,7 +30,7 @@ const Dashboard = ({ setActiveMenu }) => {
             <div className="dashboard-layout">
                 {/* LEFT COLUMN */}
                 <div className="col left-col">
-                    {/* 자격증 카드 (클릭 없음) */}
+                    {/* 자격증 카드 */}
                     <div className="card study-card-back">
                         <div className="card study-card">
                             <div className="study-info">
@@ -42,7 +50,7 @@ const Dashboard = ({ setActiveMenu }) => {
                         </div>
                     </div>
 
-                    {/* 게시판 카드 (클릭 이동) */}
+                    {/* 게시판 카드 */}
                     <div
                         className="card clickable"
                         role="button"
@@ -66,7 +74,6 @@ const Dashboard = ({ setActiveMenu }) => {
                             </li>
                         </ul>
 
-                        {/* ✅ 버튼 유지하고 싶으면 stopPropagation */}
                         <div className="card-footer">
                             <button
                                 className="more-btn"
@@ -223,33 +230,8 @@ const Dashboard = ({ setActiveMenu }) => {
                     </div>
                 </div>
             </div>
-
-            {/* 채팅 플로팅 버튼 */}
-            <div className="chat-fab-wrap">
-                <button
-                    onClick={() => setIsChatOpen(!isChatOpen)}
-                    className="chat-fab"
-                    onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
-                    onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
-                >
-                    {isChatOpen ? "✕" : "💬"}
-
-                    {!isChatOpen && badgeCount > 0 && (
-                        <div className="chat-badge">{badgeCount > 99 ? "99+" : badgeCount}</div>
-                    )}
-                </button>
-            </div>
-
-            {/* 채팅 모달 */}
-            <div style={{ display: isChatOpen ? "block" : "none" }}>
-                <ChatModal
-                    isOpen={isChatOpen}
-                    onClose={() => setIsChatOpen(false)}
-                    onNotificationChange={setBadgeCount}
-                />
-            </div>
         </div>
     );
-};
+}
 
 export default Dashboard;
