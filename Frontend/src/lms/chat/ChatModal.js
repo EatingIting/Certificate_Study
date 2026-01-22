@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './ChatModal.css';
 
-// 🔹 상수 및 설정
-const ROOM_ID = 1;
+// 🔹 상수 설정
 const STICKER_LIST = ["👌", "👍", "🎉", "😭", "🔥", "🤔"];
 
 /**
  * ChatModal 컴포넌트
  * - 기능: 실시간 채팅(WebSocket), AI 튜터 대화, 스티커 전송
  * - 특징: 드래그 가능한 플로팅 버튼 및 모달 창 (화면 밖 이탈 방지 적용)
+ * - 중요: 상위 컴포넌트(LMSSubject)로부터 roomId를 받아 방을 구분함
  */
-const ChatModal = () => {
+const ChatModal = ({ roomId }) => {
   // =================================================================
   // 1. 상태 관리 (State)
   // =================================================================
@@ -68,11 +68,17 @@ const ChatModal = () => {
   // 3. 웹소켓 연결 (useEffect)
   // =================================================================
   useEffect(() => {
+    // roomId가 없으면 연결하지 않음 (방어 코드)
+    if (!roomId) return;
+
+    console.log(`📡 채팅방 [${roomId}] 연결 시도...`);
+
+    // ✅ 고정된 상수(ROOM_ID) 대신 props로 받은 roomId를 사용해 동적으로 연결
     const socket = new WebSocket(
-        `wss://localhost:8080/ws/room/${ROOM_ID}?userId=${myInfo.userId}&userName=${myInfo.userName}`
+        `wss://localhost:8080/ws/room/${roomId}?userId=${myInfo.userId}&userName=${myInfo.userName}`
     );
 
-    socket.onopen = () => console.log("✅ 웹소켓 연결됨");
+    socket.onopen = () => console.log(`✅ [Room ${roomId}] 웹소켓 연결됨`);
 
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -96,7 +102,9 @@ const ChatModal = () => {
 
     ws.current = socket;
     return () => socket.close(); // 언마운트 시 연결 종료
-  }, [isOpen, isAiMode, myInfo.userId, myInfo.userName]);
+    
+    // ⚠️ roomId가 바뀌면 소켓을 끊고 다시 연결해야 하므로 의존성 배열에 추가
+  }, [isOpen, isAiMode, myInfo.userId, myInfo.userName, roomId]);
 
   // 자동 스크롤 (새 메시지 오면 맨 아래로)
   useEffect(() => {
@@ -106,7 +114,7 @@ const ChatModal = () => {
   }, [currentMessages, isOpen]);
 
   // =================================================================
-  // 4. 🖱️ 드래그 앤 드롭 로직 (핵심 기능)
+  // 4. 🖱️ 드래그 앤 드롭 로직 (화면 이탈 방지 포함)
   // =================================================================
   
   // 드래그 시작
@@ -118,7 +126,7 @@ const ChatModal = () => {
         y: e.clientY - position.y 
     };
     
-    // 전역 이벤트 등록 (빠르게 움직여도 놓치지 않게 document에 등록)
+    // 전역 이벤트 등록
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
@@ -132,8 +140,7 @@ const ChatModal = () => {
     let newY = e.clientY - dragStart.current.y;
 
     // 2. ⛔ 화면 밖 이탈 방지 (Boundary Check)
-    // 버튼 크기(약 70px)를 고려하여 화면 최대 좌표 설정
-    const maxX = window.innerWidth - 70; 
+    const maxX = window.innerWidth - 70; // 버튼 크기 고려
     const maxY = window.innerHeight - 70;
 
     // 0보다 작으면 0으로, max보다 크면 max로 고정
@@ -213,12 +220,10 @@ const ChatModal = () => {
   // 6. 모달 위치 계산 (렌더링 직전)
   // =================================================================
   
-  // 📍 모달 창이 화면 위로 잘리는 것 방지
-  // 기본적으로 버튼 위(position.y - 480)에 뜨게 하되, 최소 10px(천장) 아래에 위치시킴
+  // 📍 모달 창이 화면 위로 잘리는 것 방지 (최소 10px 아래)
   const modalTop = Math.max(10, position.y - 480);
   
   // 📍 모달 창이 화면 오른쪽으로 잘리는 것 방지
-  // 기본적으로 버튼 왼쪽(position.x - 290)에 뜨게 하되, 화면 너비를 넘지 않게 조정
   const modalLeft = Math.min(Math.max(10, position.x - 290), window.innerWidth - 370);
 
 

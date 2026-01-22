@@ -57,7 +57,7 @@ const LMSSubject = () => {
                     </Routes>
                 </main>
             </div>
-            <ChatModal />
+            <ChatModal roomId={subjectId || "lobby"}/>
         </>
     );
 };
