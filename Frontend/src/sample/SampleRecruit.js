@@ -1,4 +1,5 @@
 import "./SampleRecruit.css";
+import SampleRecruitModal from "./SampleRecruitModal";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/api";
 
@@ -9,8 +10,10 @@ const SampleRecruit = () => {
     const [categories, setCategories] = useState([]);
 
     const [keyword, setKeyword] = useState("");
-    const [cat, setCat] = useState("전체");   // 대분류 이름
-    const [sub, setSub] = useState("");      // 중분류 or 소분류 이름
+    const [cat, setCat] = useState("전체");
+    const [mid, setMid] = useState(null);
+    const [sub, setSub] = useState(null);
+
 
     const [page, setPage] = useState(1);
     const [selectedRoom, setSelectedRoom] = useState(null);
@@ -37,7 +40,10 @@ const SampleRecruit = () => {
             { key: "전체", label: "전체" },
             ...categories
                 .filter(c => c.level === 1)
-                .map(c => ({ key: c.name, label: c.name })),
+                .map(c => ({
+                    key: c.name,
+                    label: c.name
+                })),
         ];
     }, [categories]);
 
@@ -60,7 +66,7 @@ const SampleRecruit = () => {
             )
         );
 
-        // ✅ 중분류만 있는 경우
+        // ✅ 대–중 구조
         if (!hasSub) {
             return [
                 {
@@ -70,19 +76,16 @@ const SampleRecruit = () => {
             ];
         }
 
-        // ✅ 중-소 있는 경우
-        return mids.map(mid => {
-            const subs = categories.filter(
-                c => c.level === 3 && c.parentId === mid.id
-            );
-
-            return {
-                type: "WITH_SUB",
-                title: mid.name,
-                items: subs.map(s => s.name)
-            };
-        });
+        // ✅ 대–중–소 구조
+        return mids.map(mid => ({
+            type: "WITH_SUB",
+            title: mid.name,
+            items: categories
+                .filter(c => c.level === 3 && c.parentId === mid.id)
+                .map(s => s.name)
+        }));
     }, [categories, cat]);
+
 
 
 
@@ -92,6 +95,7 @@ const SampleRecruit = () => {
     const filtered = useMemo(() => {
         let list = [...rooms];
 
+        // 검색
         if (keyword.trim()) {
             const k = keyword.toLowerCase();
             list = list.filter(
@@ -103,18 +107,40 @@ const SampleRecruit = () => {
             );
         }
 
+        // 대분류
         if (cat !== "전체") {
-            list = list.filter(r => r.mainCategoryName === cat);
+            const main = categories.find(
+                c => c.level === 1 && c.name === cat
+            );
+            if (main) {
+                const mids = categories
+                    .filter(c => c.level === 2 && c.parentId === main.id)
+                    .map(c => c.name);
+
+                list = list.filter(
+                    r => mids.includes(r.midCategoryName)
+                );
+            }
         }
 
-        if (sub) {
+        // 중분류
+        if (mid !== null) {
             list = list.filter(
-                r => (r.midCategoryName ?? r.subCategoryName) === sub
+                r => r.midCategoryName === mid
+            );
+        }
+
+        // 소분류
+        if (sub !== null) {
+            list = list.filter(
+                r => r.subCategoryName === sub
             );
         }
 
         return list;
-    }, [rooms, keyword, cat, sub]);
+    }, [rooms, keyword, cat, mid, sub, categories]);
+
+
 
     /* ===== 페이징 ===== */
     const pageSize = 8;
@@ -183,9 +209,10 @@ const SampleRecruit = () => {
                         className={`cat-chip ${cat === c.key ? "active" : ""}`}
                         onClick={() => {
                             setCat(c.key);
-                            setSub("");
+                            setSub(null);
                             setPage(1);
                         }}
+
                     >
                         {c.label}
                     </button>
@@ -210,13 +237,14 @@ const SampleRecruit = () => {
                                                 key={item}
                                                 className={`sub-btn ${sub === item ? "active" : ""}`}
                                                 onClick={() => {
-                                                    setSub(item);
+                                                    setSub(item);   // ← name
                                                     setPage(1);
                                                 }}
                                             >
                                                 {item}
                                             </button>
                                         ))}
+
                                     </div>
                                 </>
                             )}
@@ -226,18 +254,19 @@ const SampleRecruit = () => {
                                 <div className="sub-items">
                                     {g.items.map(item => (
                                         <button
-                                            key={item}
+                                            key={item}   // ✅ 문자열
                                             className={`sub-btn ${sub === item ? "active" : ""}`}
                                             onClick={() => {
-                                                setSub(item);
+                                                setSub(item);  // ✅ name
                                                 setPage(1);
                                             }}
                                         >
-                                            {item}
+                                            {item}  {/* ✅ 문자열 출력 */}
                                         </button>
                                     ))}
                                 </div>
                             )}
+
                         </div>
                     ))}
 
@@ -245,7 +274,7 @@ const SampleRecruit = () => {
                         <button
                             type="button"
                             className="sub-clear-btn"
-                            onClick={() => setSub("")}
+                            onClick={() => setSub(null)}
                             disabled={!sub}
                         >
                             필터 해제
@@ -269,12 +298,10 @@ const SampleRecruit = () => {
                     <div
                         className="trow"
                         key={room.roomId}
-                        onClick={() => {
-                            setSelectedStudy(room);
-                            setOpenModal(true);
-                        }}
+                        onClick={() => openDetail(room)}
                     >
-                        <div>{(page - 1) * pageSize + idx + 1}</div>
+
+                    <div>{(page - 1) * pageSize + idx + 1}</div>
                         <div>{room.midCategoryName ?? room.subCategoryName}</div>
                         <div className="title-col">
                             <strong className="row-title">{room.title}</strong>
@@ -311,6 +338,21 @@ const SampleRecruit = () => {
                 <button onClick={() => setPage(p => Math.min(totalPage, p + 1))} disabled={page === totalPage}>›</button>
                 <button onClick={() => setPage(totalPage)} disabled={page === totalPage}>»</button>
             </div>
+
+            {openModal && selectedRoom && (
+                <SampleRecruitModal
+                    open={openModal}
+                    study={selectedRoom}
+                    onClose={closeModal}
+                    onApply={({ roomId, applyMessage }) => {
+                        api.post("/applications", {
+                            roomId,
+                            applyMessage,
+                        });
+                    }}
+                />
+            )}
+
         </div>
     );
 
