@@ -215,7 +215,6 @@ const Dashboard = ({ setActiveMenu }) => {
                     </div>
                 </div>
             </div>
-
         </div>
     );
 };

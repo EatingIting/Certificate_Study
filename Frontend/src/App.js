@@ -8,6 +8,8 @@ import MyApplications from "./roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
 import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
+import SampleLayout from "./sample/SampleLayout";
+import SampleRecruit from "./sample/SampleRecruit";
 
 function App() {
     return (
@@ -22,6 +24,11 @@ function App() {
                 <Route path="/meeting/:roomId" element={<MeetingPage />} />
                 <Route path="/lmsMain" element={<LMSMain />} />
                 <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
+                {/* 임시*/}
+                <Route path="/sample" element={<SampleLayout />}>
+                  <Route index element={<Navigate to="recruit" replace />} />
+                  <Route path="recruit" element={<SampleRecruit />} />
+                </Route>
             </Routes>
         </BrowserRouter>
     );

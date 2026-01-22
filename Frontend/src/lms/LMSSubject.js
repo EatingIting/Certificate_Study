@@ -3,7 +3,6 @@ import { Routes, Route, Navigate, useLocation, useParams } from "react-router-do
 
 import LMSHeader from "./LMSHeader";
 import LMSSidebar from "./LMSSidebar";
-import ChatModal from "./chat/ChatModal";
 
 import Dashboard from "./dashboard/Dashboard";
 import Attendance from "./attendance/Attendance";
@@ -11,8 +10,10 @@ import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
 import Board from "./board/Board";
 import Calendar from "./calendar/Calendar"
+import ChatModal from "./chat/ChatModal";
 
 import "./LMSSubject.css";
+import {Cable} from "lucide-react";
 
 const LMSSubject = () => {
     const [activeMenu, setActiveMenu] = useState("dashboard");
