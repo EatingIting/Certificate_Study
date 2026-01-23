@@ -1643,6 +1643,25 @@ function MeetingPage() {
         init();
     }, []);
 
+     useEffect(() => {
+        // roomId는 기존 로직에서 가져오면 됩니다
+        startMeeting(/* roomId */);
+        return () => {
+            // ❗ 언마운트 시에만 종료 (숨김일 땐 호출 안 됨)
+            endMeeting();
+        };
+    }, [startMeeting, endMeeting]); 
+
+    useEffect(() => {
+        const onRequestPip = () => {
+            handleBrowserPip();
+        };
+        window.addEventListener("meeting:request-pip", onRequestPip);
+        return () => {
+            window.removeEventListener("meeting:request-pip", onRequestPip);
+        };
+    }, [handleBrowserPip]);
+
     // 이전에 화면공유 중이었던 사람 추적 (화면공유 종료 감지용)
     const prevScreenSharersRef = useRef(new Set());
 
@@ -1709,23 +1728,18 @@ function MeetingPage() {
 
     useEffect(() => {
         const handleBeforeUnload = () => {
-            // ✅ 통화종료 버튼으로 나가는 경우 이미 LEAVE를 보냈으므로 아무것도 하지 않음
-            if (isLeavingRef.current) {
+            // ❗ 통화 종료 버튼일 때만 LEAVE
+            if (!isLeavingRef.current) {
+                console.log("[beforeunload] ignored (PiP / LMS 이동)");
                 return;
             }
 
-            // ✅ 탭 닫기/브라우저 종료/새로고침 모두 LEAVE 전송
-            //    → 다른 참가자에게 즉시 타일 제거됨
-            //    → 새로고침 시에는 같은 userId로 빠르게 재접속하여 복원됨
             try {
                 wsRef.current?.send(
-                    JSON.stringify({
-                        type: "LEAVE",
-                    })
+                    JSON.stringify({ type: "LEAVE" })
                 );
             } catch {}
 
-            // WebSocket을 즉시 닫아 서버가 afterConnectionClosed 실행하게 함
             try {
                 wsRef.current?.close();
             } catch {}
@@ -2169,8 +2183,19 @@ function MeetingPage() {
         connect();
 
         return () => {
+            // ❗ 통화 종료 버튼이 아닌 경우에는 절대 끊지 않는다
+            if (!isLeavingRef.current) {
+                console.log("[SPRING WS] unmount ignored (PiP / LMS 이동)");
+                return;
+            }
+
             if (pingInterval) clearInterval(pingInterval);
-            if (wsRef.current) wsRef.current.close();
+
+            try {
+                wsRef.current?.close();
+            } catch {}
+
+            wsRef.current = null;
         };
     }, [roomId, userId, userName]); // 의존성 배열 유지
 
@@ -2493,35 +2518,30 @@ function MeetingPage() {
         };
 
         return () => {
-            // PiP 모드일 때는 연결 유지 (ref를 사용하여 최신 값 참조)
-            if (document.pictureInPictureElement) return;
-            
+            // ❗ 통화 종료 버튼이 아닌 경우에는 절대 leave하지 않는다
+            if (!isLeavingRef.current) {
+                console.log("[SFU] unmount ignored (PiP / LMS 이동)");
+                return;
+            }
 
             effectAliveRef.current = false;
+
             try {
-                safeSfuSend({ action: "leave", requestId: safeUUID(), data: { roomId, peerId: userId } });
+                safeSfuSend({
+                    action: "leave",
+                    requestId: safeUUID(),
+                    data: { roomId, peerId: userId },
+                });
             } catch {}
 
             producersRef.current.forEach((p) => safeClose(p));
-            producersRef.current.clear();
             consumersRef.current.forEach((c) => safeClose(c));
-            consumersRef.current.clear();
-            safeClose(sendTransportRef.current);
-            safeClose(recvTransportRef.current);
-            sendTransportRef.current = null;
-            recvTransportRef.current = null;
-            safeClose(sfuDeviceRef.current);
-            sfuDeviceRef.current = null;
 
-            audioElsRef.current.forEach((a) => {
-                try { a.srcObject = null; } catch {}
-            });
-            audioElsRef.current.clear();
+            producersRef.current.clear();
+            consumersRef.current.clear();
 
             try { sfuWsRef.current?.close(); } catch {}
             sfuWsRef.current = null;
-            peerStreamsRef.current.clear();
-            pendingProducersRef.current = [];
         };
     }, [roomId, userId]); // isPipMode를 의존성에서 제거하여 재연결 방지
 

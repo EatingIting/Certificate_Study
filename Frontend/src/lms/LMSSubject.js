@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useLocation, useParams, useNavigate } from "react-router-dom";
 
 import LMSHeader from "./LMSHeader";
@@ -11,44 +10,26 @@ import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
 import Board from "./board/Board";
 import Calendar from "./calendar/Calendar";
+
 import MeetingPage from "../webrtc/MeetingPage";
 import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
 
 import "./LMSSubject.css";
 
-// 내부 컴포넌트 - MeetingContext 사용
 const LMSSubjectInner = () => {
-    const [activeMenu, setActiveMenu] = useState("dashboard");
     const location = useLocation();
     const navigate = useNavigate();
     const { subjectId } = useParams();
-    const { isInMeeting, isPipMode, enterPipMode, exitPipMode, roomId } = useMeeting();
+    const { isInMeeting, isPipMode, exitPipMode, roomId } = useMeeting();
 
-    // URL이 바뀌면 사이드바 active도 자동으로 맞추기
-    useEffect(() => {
-        const p = location.pathname;
+    const isMeetingRoute = location.pathname.includes("/MeetingRoom/");
 
-        if (p.includes("/assignment")) setActiveMenu("assignment");
-        else if (p.includes("/attendance")) setActiveMenu("attendance");
-        else if (p.includes("/board")) setActiveMenu("board");
-        else if (p.includes("/calendar")) setActiveMenu("calendar");
-        else if (p.includes("/meeting")) setActiveMenu("meeting");
-        else setActiveMenu("dashboard");
-    }, [location.pathname]);
-
-    // 회의 중 다른 페이지로 이동하면 자동으로 PiP 모드로 전환
-    useEffect(() => {
-        const isMeetingPage = location.pathname.includes("/meeting/");
-
-        if (isInMeeting && !isMeetingPage && !isPipMode) {
-            enterPipMode();
-        }
-    }, [location.pathname, isInMeeting, isPipMode, enterPipMode]);
-
-    // PiP에서 회의로 돌아가기
     const handleReturnToMeeting = () => {
+        if (document.pictureInPictureElement) {
+            document.exitPictureInPicture().catch(() => {});
+        }
         exitPipMode();
-        navigate(`/lms/${subjectId}/meeting/${roomId}`);
+        navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
     };
 
     return (
@@ -56,39 +37,55 @@ const LMSSubjectInner = () => {
             <LMSHeader />
 
             <div className="lms-subject-layout">
-                <LMSSidebar activeMenu={activeMenu} setActiveMenu={setActiveMenu} />
+                <LMSSidebar />
 
                 <main className="subject-content">
                     <Routes>
-                        {/* /lms/:subjectId 로 오면 대시보드로 */}
                         <Route index element={<Navigate to="dashboard" replace />} />
-
-                        <Route path="dashboard" element={<Dashboard setActiveMenu={setActiveMenu} />} />
-                        <Route path="attendance" element={<Attendance setActiveMenu={setActiveMenu} />} />
-
-                        {/* 과제 목록 / 상세 */}
-                        <Route path="assignment" element={<Assignment setActiveMenu={setActiveMenu} />} />
+                        <Route path="dashboard" element={<Dashboard />} />
+                        <Route path="attendance" element={<Attendance />} />
+                        <Route path="assignment" element={<Assignment />} />
                         <Route path="assignment/:id" element={<AssignmentDetail />} />
+                        <Route path="board" element={<Board />} />
+                        <Route path="calendar" element={<Calendar />} />
 
-                        <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
-                        <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
-
-                        {/* 화상 채팅 */}
+                        {/* 회의 라우트는 URL 용도만 */}
                         <Route path="MeetingRoom/:roomId" element={<MeetingPage />} />
 
-                        {/* 없는 경로는 대시보드로 */}
-                        <Route path="*" element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />} />
+                        <Route
+                            path="*"
+                            element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />}
+                        />
                     </Routes>
                 </main>
             </div>
 
-            {/* 채팅 모달 - 모든 페이지에서 표시 */}
+            {/* 🔥 MeetingPage는 항상 마운트 유지 */}
+            {(isInMeeting || isPipMode) && roomId && (
+                <div
+                    className={`meeting-floating-layer ${
+                        isMeetingRoute ? "show" : "hide"
+                    }`}
+                >
+                    <MeetingPage />
+                </div>
+            )}
+
+            {/* PiP 상태에서 복귀 버튼 */}
+            {(isInMeeting || isPipMode) && !isMeetingRoute && (
+                <button
+                    className="return-to-meeting-btn"
+                    onClick={handleReturnToMeeting}
+                >
+                    화상 채팅방으로 복귀
+                </button>
+            )}
+
             <ChatModal />
         </>
     );
 };
 
-// 외부 래퍼 컴포넌트 - MeetingProvider 제공
 const LMSSubject = () => {
     return (
         <MeetingProvider>
