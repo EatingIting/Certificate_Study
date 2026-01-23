@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.demo.board.mapper.BoardPostMapper">
+
+    <resultMap id="PostMap" type="com.example.demo.board.vo.BoardPostVo">
+        <id property="postId" column="post_id"/>
+        <result property="roomId" column="room_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="category" column="category"/>
+        <result property="title" column="title"/>
+        <result property="content" column="content"/>
+        <result property="isPinned" column="is_pinned"/>
+        <result property="viewCount" column="view_count"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <select id="selectList" resultMap="PostMap">
+        SELECT *
+        FROM board_posts
+        WHERE room_id = #{roomId}
+        AND deleted_at IS NULL
+        <if test="category != null">
+            AND category = #{category}
+        </if>
+        <if test="cursor != null">
+            AND post_id &lt; #{cursor}
+        </if>
+        ORDER BY is_pinned DESC, post_id DESC
+        LIMIT #{size}
+    </select>
+
+    <select id="countComments" resultType="long">
+        SELECT COUNT(*)
+        FROM board_comments
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="countAttachments" resultType="long">
+        SELECT COUNT(*)
+        FROM board_attachments
+        WHERE post_id = #{postId}
+    </select>
+
+    <select id="selectById" resultMap="PostMap">
+        SELECT *
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
+    <update id="increaseViewCount">
+        UPDATE board_posts
+        SET view_count = view_count + 1
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </update>
+
+    <select id="selectByPostId" resultMap="AttachmentMap">
+        SELECT *
+        FROM board_attachments
+        WHERE post_id = #{postId}
+        ORDER BY attachment_id ASC
+    </select>
+
+    <select id="selectByPostId" resultMap="CommentMap">
+        SELECT *
+        FROM board_comments
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+        ORDER BY comment_id ASC
+    </select>
+</mapper>

@@ -1,10 +1,13 @@
 package com.example.demo.dto;
 
 import jakarta.validation.constraints.Size;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 
+@Getter
+@NoArgsConstructor
 public class ScheduleUpdateRequest {
 
     @Size(max = 200)
