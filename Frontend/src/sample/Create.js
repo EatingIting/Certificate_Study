@@ -100,7 +100,7 @@ const CreateRoom = () => {
             {/* 🔽 하나의 섹션으로 통합 */}
             <div className="create-section">
 
-                <p className="section-label">스터디장 닉네임</p>
+                <p className="section-label">스터디 정보</p>
                 <input
                     className="form-input"
                     name="studyLeaderNickname"
@@ -109,7 +109,6 @@ const CreateRoom = () => {
                     onChange={handleChange}
                 />
 
-                <p className="section-label">스터디 정보</p>
                 <input
                     className="form-input"
                     name="title"

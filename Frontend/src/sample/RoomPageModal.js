@@ -29,9 +29,7 @@ const RoomPageModal = ({ open, onClose, study }) => {
     MALE: "남자",
   };
 
-  const gender = study.gender
-      ? genderMap[study.gender]
-      : "백엔드 추가 예정";
+  const gender = study.gender;
 
   const leaderName = study.nickname;
 
@@ -40,8 +38,9 @@ const RoomPageModal = ({ open, onClose, study }) => {
       study.midCategoryName;
 
   /* 아직 없는 값 */
-  const startDate = "백엔드 추가 예정" //스터디 시작일(미정)
-  const endDate = "백엔드 추가 예정"; //스터디 종료일(미정)
+  const examDate = "백엔드 추가 예정" // 시험
+  const startDate = "백엔드 추가 예정" //스터디 시작일
+  const endDate = "백엔드 추가 예정"; //스터디 종료일
 
 
   const handleGoStep2 = () => setStep(2);
@@ -113,6 +112,11 @@ const RoomPageModal = ({ open, onClose, study }) => {
                     <div className="sr2-row">
                       <div className="sr2-k">모집 마감일</div>
                       <div className="sr2-v sr2-soon">{deadline}</div>
+                    </div>
+
+                    <div className="sr2-row">
+                      <div className="sr2-k">시험일자</div>
+                      <div className="sr2-v sr2-soon">{examDate}</div>
                     </div>
 
                     <div className="sr2-row">

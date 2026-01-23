@@ -24,7 +24,8 @@
             r.capacity          AS capacity,
             r.created_at        AS createdAt
         FROM room r
-                 JOIN users u ON r.host_user_id = u.user_id
+                 JOIN users u
+                      ON r.host_user_email = u.email
                  LEFT JOIN category c
                            ON r.cat_id = c.id
                  LEFT JOIN category sc
@@ -32,7 +33,7 @@
                  LEFT JOIN category mc
                            ON sc.parent_id = mc.id
         ORDER BY r.created_at DESC;
-    </select>
 
+    </select>
 
 </mapper>
