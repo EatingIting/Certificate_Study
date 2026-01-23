@@ -541,7 +541,7 @@ function Calendar() {
 
                             return (
                                 <div className="calDayTopRow">
-                                    <span className="calDayNum">{arg.dayNumberText}</span>
+                                    <span className="calDayNum">{arg.date.getDate()}</span>
                                     {roundText ? <span className="calDayStudyRound">{roundText}</span> : null}
                                 </div>
                             );
