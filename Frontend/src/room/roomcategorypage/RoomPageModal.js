@@ -1,27 +1,62 @@
 import "./RoomPageModal.css";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import api from "../../api/api";
+
+const formatKoreanDate = (value) => {
+  if (!value) return "미정";
+
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}년 ${month}월 ${day}일`;
+};
 
 const RoomPageModal = ({ open, onClose, study }) => {
   const [step, setStep] = useState(1);
-  const [intro, setIntro] = useState("");
+  const [requestUserNickname, setRequestUserNickname] = useState("");
+  const [applyMessage, setApplyMessage] = useState("");
 
   useEffect(() => {
     if (open) {
       setStep(1);
-      setIntro("");
+      setRequestUserNickname("");
+      setApplyMessage("");
     }
   }, [open]);
 
   if (!open || !study) return null;
 
-  const studyName = study.title;
-  const description = study.description;
+  const handleGoStep2 = () => setStep(2);
 
-  const deadline = study.deadline ?? "백엔드 추가 예정"; // 모집 마감일 (미정)
+  const handleSubmit = async () => {
+    if (!requestUserNickname.trim()) {
+      alert("신청자 닉네임을 입력해 주세요.");
+      return;
+    }
 
-  const maxPeople = study.maxPeople
-      ? `${study.maxPeople}명`
-      : "백엔드 추가 예정";
+    if (!applyMessage.trim()) {
+      alert("신청 목적 및 간단한 자기소개를 입력해 주세요.");
+      return;
+    }
+
+    try {
+      await api.post("/applications", {
+        roomId: study.roomId,
+        requestUserNickname,
+        applyMessage,
+      });
+
+      alert("신청이 완료되었습니다.");
+      onClose();
+    } catch (e) {
+      console.error("신청 실패", e);
+      alert(e.response?.data?.message || "신청 중 오류가 발생했습니다.");
+    }
+  };
+
+  const maxPeople = study.maxPeople ? `${study.maxPeople}명` : "미정";
 
   const genderMap = {
     ALL: "전체",
@@ -29,58 +64,26 @@ const RoomPageModal = ({ open, onClose, study }) => {
     MALE: "남자",
   };
 
-  const gender = study.gender;
-
-  const leaderName = study.nickname;
-
-  const category =
-      study.subCategoryName ??
-      study.midCategoryName;
-
-  /* 아직 없는 값 */
-  const examDate = "백엔드 추가 예정" // 시험
-  const startDate = "백엔드 추가 예정" //스터디 시작일
-  const endDate = "백엔드 추가 예정"; //스터디 종료일
-
-
-  const handleGoStep2 = () => setStep(2);
-
-  const handleSubmit = () => {
-    if (!intro.trim()) {
-      alert("신청 목적 및 간단한 자기소개를 입력해 주세요.");
-      return;
-    }
-
-    console.log("신청 데이터:", {
-      roomId: study.roomId,
-      intro,
-    });
-
-    alert("신청이 완료되었습니다!");
-    onClose();
-  };
-
-
   return (
       <div className="sr2-backdrop" onClick={onClose}>
         <div className="sr2-modal" onClick={(e) => e.stopPropagation()}>
-          {/* 헤더 */}
+          {/* ===== 헤더 ===== */}
           <div className="sr2-header">
             <div className="sr2-title">
               {step === 1 ? "스터디 가입하기" : "스터디 신청하기"}
             </div>
             <div className="sr2-subtitle">
               {step === 1
-                  ? "같은 목표를 가진 사람들과 함께 더 꾸준한 공부를 시작해 보세요."
+                  ? "스터디 정보를 확인해 주세요."
                   : "신청 목적과 간단한 자기소개를 작성해 주세요."}
             </div>
           </div>
 
-          {/* 본문 */}
+          {/* ===== 본문 ===== */}
           <div className="sr2-body">
             {step === 1 ? (
                 <div className="sr2-content">
-                  {/* 왼쪽 일러스트 (이 부분 스터디 등록할 때 올린 파일로 바꿀 예정 아마도*/}
+                  {/* ===== 왼쪽 일러스트 ===== */}
                   <div className="sr2-illust" aria-hidden="true">
                     <svg width="150" height="150" viewBox="0 0 160 160">
                       <rect x="26" y="98" width="108" height="34" rx="10" fill="#EAF6EE" />
@@ -97,35 +100,36 @@ const RoomPageModal = ({ open, onClose, study }) => {
                     </svg>
                   </div>
 
-                  {/* 오른쪽 정보 */}
+                  {/* ===== 오른쪽 정보 ===== */}
                   <div className="sr2-info">
                     <div className="sr2-row">
                       <div className="sr2-k">스터디명</div>
-                      <div className="sr2-v">{studyName}</div>
+                      <div className="sr2-v">{study.title}</div>
                     </div>
 
                     <div className="sr2-row">
                       <div className="sr2-k">카테고리</div>
-                      <div className="sr2-v">{category}</div>
+                      <div className="sr2-v">
+                        {study.subCategoryName ?? study.midCategoryName}
+                      </div>
                     </div>
 
                     <div className="sr2-row">
                       <div className="sr2-k">모집 마감일</div>
-                      <div className="sr2-v sr2-soon">{deadline}</div>
+                      <div className="sr2-v">{formatKoreanDate(study.deadline)}</div>
                     </div>
 
                     <div className="sr2-row">
                       <div className="sr2-k">시험일자</div>
-                      <div className="sr2-v sr2-soon">{examDate}</div>
+                      <div className="sr2-v">{formatKoreanDate(study.examDate)}</div>
                     </div>
 
                     <div className="sr2-row">
-                      <div className="sr2-k">스터디 시작일</div>
-                      <div className="sr2-v sr2-soon">{startDate}</div>
-                    </div>
-                    <div className="sr2-row">
-                      <div className="sr2-k">스터디 종료일</div>
-                      <div className="sr2-v sr2-soon">{endDate}</div>
+                      <div className="sr2-k">스터디 기간</div>
+                      <div className="sr2-v">
+                        {formatKoreanDate(study.startDate)} ~{" "}
+                        {formatKoreanDate(study.endDate)}
+                      </div>
                     </div>
 
                     <div className="sr2-row">
@@ -135,38 +139,46 @@ const RoomPageModal = ({ open, onClose, study }) => {
 
                     <div className="sr2-row">
                       <div className="sr2-k">성별 제한</div>
-                      <div className="sr2-v">{gender}</div>
+                      <div className="sr2-v">{genderMap[study.gender]}</div>
                     </div>
 
                     <div className="sr2-row">
                       <div className="sr2-k">스터디장</div>
-                      <div className="sr2-v">{leaderName}</div>
+                      <div className="sr2-v">{study.nickname}</div>
                     </div>
 
                     <div className="sr2-row sr2-row-desc">
                       <div className="sr2-k">설명</div>
-                      <div className="sr2-v sr2-desc">{description}</div>
+                      <div className="sr2-v sr2-desc">{study.content}</div>
                     </div>
                   </div>
                 </div>
             ) : (
                 <div className="sr2-form">
+                  <div className="sr2-form-label">신청자 닉네임</div>
+                  <input
+                      className="form-input"
+                      placeholder="닉네임을 입력해 주세요"
+                      value={requestUserNickname}
+                      onChange={(e) => setRequestUserNickname(e.target.value)}
+                  />
+
                   <div className="sr2-form-label">
                     신청 목적 및 간단한 자기소개
                   </div>
                   <textarea
                       className="sr2-textarea"
-                      placeholder="예) 토익 800 목표입니다. 매주 2회 이상 참여 가능합니다..."
-                      value={intro}
+                      placeholder="예) 토익 800 목표입니다. 매주 2회 이상 참여 가능합니다."
+                      value={applyMessage}
                       maxLength={300}
-                      onChange={(e) => setIntro(e.target.value)}
+                      onChange={(e) => setApplyMessage(e.target.value)}
                   />
-                  <div className="sr2-count">{intro.length}/300</div>
+                  <div className="sr2-count">{applyMessage.length}/300</div>
                 </div>
             )}
           </div>
 
-          {/* 하단 버튼 */}
+          {/* ===== 하단 버튼 ===== */}
           <div className="sr2-actions">
             {step === 1 ? (
                 <>

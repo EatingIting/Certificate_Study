@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import api from "../api/api";
+import api from "../../api/api";
 import "./Create.css";
 import {useLocation, useNavigate} from "react-router-dom";
 
@@ -19,14 +19,15 @@ const CreateRoom = () => {
     }, [navigate]);
 
     const [form, setForm] = useState({
+        hostUserNickname: "",
         title: "",
-        description: "",
+        content: "",
         startDate: "",
         endDate: "",
         examDate: "",
         deadline: "",
         gender: "ALL",
-        maxPeople: 4,
+        maxParticipants: 4,
     });
 
     const [allCategories, setAllCategories] = useState([]);
@@ -47,7 +48,7 @@ const CreateRoom = () => {
         const { name, value } = e.target;
         setForm(prev => ({
             ...prev,
-            [name]: name === "maxPeople" ? Number(value) : value
+            [name]: name === "maxParticipants" ? Number(value) : value
         }));
     };
 
@@ -71,6 +72,11 @@ const CreateRoom = () => {
 
         if (!id) return;
         setSubCategories(allCategories.filter(c => c.level === 3 && c.parentId === id));
+    };
+
+    const toDateInputValue = (value) => {
+        if (!value) return "";
+        return value.substring(0, 10); // YYYY-MM-DD
     };
 
     const handleSubmit = async () => {
@@ -103,9 +109,9 @@ const CreateRoom = () => {
                 <p className="section-label">스터디 정보</p>
                 <input
                     className="form-input"
-                    name="studyLeaderNickname"
+                    name="hostUserNickname"
                     placeholder="스터디장 닉네임"
-                    value={form.nickname}
+                    value={form.hostUserNickname}
                     onChange={handleChange}
                 />
 
@@ -119,9 +125,9 @@ const CreateRoom = () => {
 
                 <textarea
                     className="form-textarea"
-                    name="description"
+                    name="content"
                     placeholder="스터디 그룹 설명"
-                    value={form.description}
+                    value={form.content}
                     onChange={handleChange}
                 />
                 <div className="create-inline">
@@ -152,7 +158,7 @@ const CreateRoom = () => {
                         <input
                             className="exam-date"
                             type="date"
-                            name="exam-date"
+                            name="examDate"
                             value={form.examDate}
                             onChange={handleChange}
                         />
@@ -205,8 +211,8 @@ const CreateRoom = () => {
                     <div>
                         <p className="section-label">최대 인원</p>
                         <select
-                            name="maxPeople"
-                            value={form.maxPeople}
+                            name="maxParticipants"
+                            value={form.maxParticipants}
                             onChange={handleChange}
                         >
                             {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (

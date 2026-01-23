@@ -11,28 +11,19 @@
         SELECT
             r.room_id           AS roomId,
             r.title             AS title,
-            u.nickname          AS nickname,
-            CASE
-                WHEN sc.level = 3 THEN mc.name
-                WHEN c.level = 2 THEN c.name
-                END                 AS midCategoryName,
-            CASE
-                WHEN sc.level = 3 THEN sc.name
-                ELSE NULL
-                END                 AS subCategoryName,
+            r.host_user_nickname AS nickname,
+            mc.name             AS midCategoryName,
+            sc.name             AS subCategoryName,
             r.max_participants  AS maxParticipants,
-            r.capacity          AS capacity,
+            r.gender            AS gender,
             r.created_at        AS createdAt
+
         FROM room r
-                 JOIN users u
-                      ON r.host_user_email = u.email
-                 LEFT JOIN category c
-                           ON r.cat_id = c.id
                  LEFT JOIN category sc
-                           ON c.level = 3 AND sc.id = c.id
+                           ON r.categoryId = sc.id
                  LEFT JOIN category mc
                            ON sc.parent_id = mc.id
-        ORDER BY r.created_at DESC;
+        ORDER BY r.created_at DESC
 
     </select>
 

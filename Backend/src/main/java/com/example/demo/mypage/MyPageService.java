@@ -14,4 +14,6 @@ public interface MyPageService {
             String introduction,
             MultipartFile profileImage
     );
+
+    void withdraw(String email);
 }

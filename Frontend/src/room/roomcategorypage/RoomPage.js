@@ -1,7 +1,7 @@
 import "./RoomPage.css";
 import RoomPageModal from "./RoomPageModal";
 import { useEffect, useMemo, useState } from "react";
-import api from "../api/api";
+import api from "../../api/api";
 
 const ITEMS_PER_PAGE = 8;
 

@@ -2,14 +2,10 @@ package com.example.demo.controller;
 
 import com.example.demo.roomcreate.RoomCreateRequest;
 import com.example.demo.roomcreate.RoomCreateService;
-import com.example.demo.roomcreate.RoomCreateVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/rooms")
@@ -21,11 +17,9 @@ public class RoomCreateController {
     @PostMapping
     public ResponseEntity<Void> createRoom(
             @RequestBody RoomCreateRequest request,
-            @AuthenticationPrincipal String userId
+            Authentication authentication
     ) {
-
-        roomService.createRoom(request, userId);
+        roomService.insertRoom(request, authentication.getName());
         return ResponseEntity.ok().build();
     }
-
 }
