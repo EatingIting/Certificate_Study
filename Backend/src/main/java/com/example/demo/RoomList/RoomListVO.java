@@ -12,6 +12,6 @@ public class RoomListVO {
     private String midCategoryName;
     private String subCategoryName;
     private int maxParticipants;
-    private String capacity;
+    private String gender;
     private LocalDateTime createdAt;
 }

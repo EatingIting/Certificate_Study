@@ -15,21 +15,31 @@ public class RoomCreateImpl implements RoomCreateService {
     private final RoomCreateMapper mapper;
 
     @Override
-    public void createRoom(RoomCreateRequest request, String userId) {
+    public void insertRoom(RoomCreateRequest request, String userEmail) {
+
         RoomCreateVO vo = new RoomCreateVO();
+
         vo.setRoomId(UUID.randomUUID().toString());
-        vo.setHostUserId(userId);
+        vo.setHostUserEmail(userEmail);
+        vo.setHostUserNickname(request.getHostUserNickname());
 
         vo.setTitle(request.getTitle());
-        vo.setContent(request.getDescription());      // description -> content
-        vo.setCapacity(request.getGender());          // gender -> capacity(컬럼명/VO명은 capacity지만 의미는 성별제한)
-        vo.setMaxParticipants(request.getMaxPeople()); // maxPeople -> maxParticipants
-        vo.setStatus("OPEN");
-        vo.setCategoryId(request.getCategoryId());
+        vo.setContent(request.getContent());
 
-        int result = mapper.insertRoom(vo);
-        System.out.println("insert result = " + result);
+        vo.setGender(request.getGender());
+        vo.setMaxParticipants(request.getMaxParticipants());
+
+        vo.setCategoryId(request.getCategoryId());
+        vo.setStatus("OPEN");
+
+        vo.setStartDate(request.getStartDate());
+        vo.setEndDate(request.getEndDate());
+        vo.setExamDate(request.getExamDate());
+        vo.setDeadline(request.getDeadline());
+
+        mapper.insertRoom(vo);
     }
+
 
     @Override
     public List<RoomCreateVO> getRooms() {

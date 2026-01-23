@@ -104,17 +104,17 @@ const MainSideBar = () => {
 
                                     <li
                                         className={`submenu-item ${
-                                            isExact("/my-applications") ? "active" : ""
+                                            isExact("/room/my-applications") ? "active" : ""
                                         }`}
-                                        onClick={() => go("/my-applications")}
+                                        onClick={() => go("/room/my-applications")}
                                     >
                                         스터디 신청현황
                                     </li>
                                     <li
                                         className={`submenu-item ${
-                                            isExact("/mypage") ? "active" : ""
+                                            isExact("/room/mypage") ? "active" : ""
                                         }`}
-                                        onClick={() => go("/mypage")}
+                                        onClick={() => go("/room/mypage")}
                                     >
                                         마이페이지
                                     </li>

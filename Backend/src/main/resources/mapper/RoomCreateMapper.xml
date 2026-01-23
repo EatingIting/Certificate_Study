@@ -11,50 +11,78 @@
             host_user_email,
             title,
             content,
-            capacity,
-            max_participants,
+            gender,
+        max_participants,
             status,
-            cat_id
+            categoryId,
+            start_date,
+            exam_date,
+            deadline,
+            ended_at,
+            hostUserNickname,
+            created_at
         ) VALUES (
-                     #{roomId},
-                     #{hostUserEmail},
-                     #{title},
-                     #{content},
-                     #{capacity},
-                     #{maxParticipants},
-                     #{status},
-                     #{categoryId}
-                 )
+            #{roomId},
+            #{hostUserEmail},
+            #{title},
+            #{content},
+            #{gender},
+            #{maxParticipants},
+            'OPEN',
+            #{categoryId},
+            #{startDate},
+            #{examDate},
+            #{deadline},
+            #{endDate},
+            #{hostUserNickname},
+            NOW()
+        )
     </insert>
+
+
 
     <select id="findAllRooms"
             resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
-            room_id           AS roomId,
+            room_id            AS roomId,
+            host_user_email    AS hostUserEmail,
+            hostUserNickname,
             title,
             content,
-            capacity,
-            max_participants  AS maxParticipants,
+            gender,
+            max_participants   AS maxParticipants,
             status,
-            created_at        AS createdAt,
-            cat_id            AS categoryId
+            categoryId,
+            start_date         AS startDate,
+            ended_at           AS endDate,
+            exam_date          AS examDate,
+            deadline,
+            created_at         AS createdAt
         FROM room
         ORDER BY created_at DESC
     </select>
 
+
     <select id="findRoomById"
             resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
-            room_id           AS roomId,
+            room_id            AS roomId,
+            host_user_email    AS hostUserEmail,
+            hostUserNickname,
             title,
             content,
-            capacity,
-            max_participants  AS maxParticipants,
+            gender,
+            max_participants   AS maxParticipants,
             status,
-            created_at        AS createdAt,
-            cat_id            AS categoryId
+            categoryId,
+            start_date         AS startDate,
+            ended_at           AS endDate,
+            exam_date          AS examDate,
+            deadline,
+            created_at         AS createdAt
         FROM room
         WHERE room_id = #{roomId}
     </select>
+
 
 </mapper>

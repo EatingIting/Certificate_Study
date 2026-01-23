@@ -18,4 +18,6 @@ public interface MyPageMapper {
             @Param("introduction") String introduction,
             @Param("profileImg") String profileImg
     );
+
+    void deleteByEmail(@Param("email") String email);
 }

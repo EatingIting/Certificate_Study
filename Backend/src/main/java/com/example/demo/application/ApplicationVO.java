@@ -9,8 +9,9 @@ public class ApplicationVO {
 
     // room_join_request
     private String joinId;
-    private String requestUserId;
-    private String ownerUserId;
+    private String requestUserEmail;
+    private String requestUserNickname;
+    private String hostUserEmail;
     private String roomId;
     private String status;
     private String applyMessage;

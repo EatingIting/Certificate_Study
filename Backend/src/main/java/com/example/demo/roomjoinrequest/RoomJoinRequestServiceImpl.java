@@ -2,7 +2,6 @@ package com.example.demo.roomjoinrequest;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
 import java.util.List;
 
 @Service
@@ -17,13 +16,13 @@ public class RoomJoinRequestServiceImpl implements RoomJoinRequestService {
     }
 
     @Override
-    public List<RoomJoinRequestVO> getSent(String userId) {
-        return mapper.selectSent(userId);
+    public List<RoomJoinRequestVO> getSent(String userEmail) {
+        return mapper.selectSent(userEmail);
     }
 
     @Override
-    public List<RoomJoinRequestVO> getReceived(String userId) {
-        return mapper.selectReceived(userId);
+    public List<RoomJoinRequestVO> getReceived(String userEmail) {
+        return mapper.selectReceived(userEmail);
     }
 
     @Override

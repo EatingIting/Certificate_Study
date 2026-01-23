@@ -2,8 +2,8 @@ package com.example.demo.controller;
 
 import com.example.demo.roomjoinrequest.RoomJoinRequestService;
 import com.example.demo.roomjoinrequest.RoomJoinRequestVO;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,35 +15,26 @@ public class RoomJoinRequestController {
 
     private final RoomJoinRequestService service;
 
-    // 신청
     @PostMapping
     public void apply(
             @RequestBody RoomJoinRequestVO vo,
-            HttpSession session
+            Authentication authentication
     ) {
-        // 로그인한 유저 ID
-        String loginUserId = (String) session.getAttribute("userId");
-
-        vo.setRequestUserId(loginUserId); // 신청자
+        String userEmail = authentication.getName();
+        vo.setRequestUserEmail(userEmail);
         service.apply(vo);
     }
 
-
-    // 내가 신청한 스터디
     @GetMapping("/sent")
-    public List<RoomJoinRequestVO> sent(HttpSession session) {
-        String userId = (String) session.getAttribute("userId");
-        return service.getSent(userId);
+    public List<RoomJoinRequestVO> sent(Authentication authentication) {
+        return service.getSent(authentication.getName());
     }
 
-    // 내가 받은 신청
     @GetMapping("/received")
-    public List<RoomJoinRequestVO> received(HttpSession session) {
-        String userId = (String) session.getAttribute("userId");
-        return service.getReceived(userId);
+    public List<RoomJoinRequestVO> received(Authentication authentication) {
+        return service.getReceived(authentication.getName());
     }
 
-    // 승인 / 거절
     @PatchMapping("/{joinId}")
     public void update(
             @PathVariable String joinId,

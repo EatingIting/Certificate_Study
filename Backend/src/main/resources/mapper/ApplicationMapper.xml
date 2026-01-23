@@ -9,21 +9,27 @@
     <select id="selectReceivedApplications"
             resultType="com.example.demo.application.ApplicationVO">
         SELECT
-            rjr.join_id            AS joinId,
-            rjr.room_id            AS roomId,
-            r.title                AS studyTitle,
-            rjr.apply_message      AS applyMessage,
-            rjr.requested_at       AS requestedAt,
-            u.nickname             AS applicantNickname,
-            u.gender               AS gender,
-            TIMESTAMPDIFF(YEAR, u.birth_date, CURDATE()) AS age
+        rjr.join_id                  AS joinId,
+        rjr.room_id                  AS roomId,
+        r.title                      AS studyTitle,
+
+        rjr.request_user_nickname    AS applicantNickname,
+
+        rjr.apply_message            AS applyMessage,
+        rjr.requested_at             AS requestedAt,
+
+        u.gender                     AS gender,
+        TIMESTAMPDIFF(YEAR, u.birth_date, CURDATE()) AS age
+
         FROM room_join_request rjr
-                 JOIN room r
-                      ON rjr.room_id = r.room_id
-                 JOIN users u
-                      ON rjr.request_user_email = u.email
+        JOIN room r
+        ON rjr.room_id = r.room_id
+        JOIN users u
+        ON rjr.request_user_email = u.email
+
         WHERE rjr.host_user_email = #{hostUserEmail}
-          AND rjr.status = '신청중'
+        AND rjr.status = '신청중'
+
         ORDER BY rjr.requested_at DESC
     </select>
 
@@ -65,24 +71,40 @@
     <!-- 신청 -->
     <insert id="insertApplication">
         INSERT INTO room_join_request (
-            join_id,
-            request_user_email,
-            host_user_email,
-            room_id,
-            status,
-            apply_message,
-            requested_at
+        join_id,
+        request_user_email,
+        request_user_nickname,
+        host_user_email,
+        room_id,
+        status,
+        apply_message,
+        requested_at
         )
         SELECT
-            #{joinId},
-            #{requestUserEmail},
-            r.host_user_email,
-            #{roomId},
-            '신청중',
-            #{applyMessage},
-            NOW()
+        #{joinId},
+        #{requestUserEmail},
+        #{requestUserNickname},
+        r.host_user_email,
+        #{roomId},
+        '신청중',
+        #{applyMessage},
+        NOW()
         FROM room r
         WHERE r.room_id = #{roomId}
+
+        <!-- ✅ 본인이 만든 방이면 신청 불가 -->
+        AND r.host_user_email != #{requestUserEmail}
     </insert>
+
+    <!--  중복여부  -->
+    <select id="existsActiveApplication" resultType="int">
+        SELECT COUNT(*)
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{requestUserEmail}
+          AND status IN ('신청중', '승인')
+    </select>
+
+
 
 </mapper>

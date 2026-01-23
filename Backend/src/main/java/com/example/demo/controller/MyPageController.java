@@ -15,7 +15,6 @@ public class MyPageController {
 
     private final MyPageService myPageService;
 
-    /* ===== 마이페이지 조회 ===== */
     @GetMapping("/me")
     public ResponseEntity<MyPageVO> getMyPage(Authentication authentication) {
         String userId = (String) authentication.getPrincipal();
@@ -24,7 +23,6 @@ public class MyPageController {
         return ResponseEntity.ok(myPage);
     }
 
-    /* ===== 마이페이지 수정 ===== */
     @PutMapping("/me")
     public ResponseEntity<Void> updateMyPage(
             Authentication authentication,
@@ -44,6 +42,16 @@ public class MyPageController {
                 introduction,
                 profileImage
         );
+
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> withdraw(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        myPageService.withdraw(email);
 
         return ResponseEntity.ok().build();
     }

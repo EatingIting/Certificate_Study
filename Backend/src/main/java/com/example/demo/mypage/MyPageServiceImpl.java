@@ -64,5 +64,9 @@ public class MyPageServiceImpl implements MyPageService {
                 profileImgPath
         );
     }
-}
 
+    @Override
+    public void withdraw(String email) {
+        myPageMapper.deleteByEmail(email);
+    }
+}

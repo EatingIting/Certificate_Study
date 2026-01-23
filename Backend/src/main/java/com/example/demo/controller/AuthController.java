@@ -35,7 +35,7 @@ public class AuthController {
                 request.get("password")
         );
 
-        String token = jwtTokenProvider.createAccessToken(user.getUserId());
+        String token = jwtTokenProvider.createAccessToken(user.getEmail());
 
         return ResponseEntity.ok(
                 Map.of(
@@ -51,7 +51,4 @@ public class AuthController {
         authService.signup(vo);
         return ResponseEntity.ok().build();
     }
-
-
-
 }
