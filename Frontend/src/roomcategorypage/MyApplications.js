@@ -74,68 +74,6 @@ const MyApplications = () => {
 
     return (
         <>
-            <header className="top-header">
-                <div className="page-container header-inner">
-                    <div className="header-logo">
-                        <img
-                            src={onsil}
-                            alt="온실"
-                            onClick={() => navigate("/")}
-                            style={{ cursor: "pointer" }}
-                        />
-                    </div>
-
-                    {nickname ? (
-                        <div className="user-menu-wrapper">
-                            <button
-                                className="auth-btns"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsUserMenuOpen((prev) => !prev);
-                                }}
-                            >
-                                {nickname} 님 ▾
-                            </button>
-
-                            {isUserMenuOpen && (
-                                <div
-                                    className="user-dropdown"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <ul>
-                                        <li onClick={() => navigate("/mypage")}>
-                                            마이페이지
-                                        </li>
-                                        <li onClick={() => navigate("/lmsMain")}>
-                                            내 클래스
-                                        </li>
-                                        <li onClick={() => navigate("/my-applications")}>
-                                            스터디 신청 현황
-                                        </li>
-                                        <li
-                                            className="logout"
-                                            onClick={() => {
-                                                localStorage.clear();
-                                                window.location.reload();
-                                            }}
-                                        >
-                                            로그아웃
-                                        </li>
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <button
-                            className="auth-btns"
-                            onClick={() => navigate("/auth")}
-                        >
-                            로그인 / 회원가입
-                        </button>
-                    )}
-                </div>
-            </header>
-
             <div className="page-container my-applications">
                 <div className="application-header">
                     <h2>스터디 신청 현황</h2>
