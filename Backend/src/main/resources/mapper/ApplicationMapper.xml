@@ -21,8 +21,8 @@
                  JOIN room r
                       ON rjr.room_id = r.room_id
                  JOIN users u
-                      ON rjr.request_user_id = u.user_id
-        WHERE rjr.owner_user_id = #{ownerUserId}
+                      ON rjr.request_user_email = u.email
+        WHERE rjr.host_user_email = #{hostUserEmail}
           AND rjr.status = '신청중'
         ORDER BY rjr.requested_at DESC
     </select>
@@ -41,8 +41,8 @@
                  JOIN room r
                       ON rjr.room_id = r.room_id
                  JOIN users u
-                      ON rjr.owner_user_id = u.user_id
-        WHERE rjr.request_user_id = #{requestUserId}
+                      ON rjr.host_user_email = u.email
+        WHERE rjr.request_user_email = #{requestUserEmail}
         ORDER BY rjr.requested_at DESC
     </select>
 
@@ -51,7 +51,7 @@
         UPDATE room_join_request
         SET status = '승인'
         WHERE join_id = #{joinId}
-          AND owner_user_id = #{ownerUserId}
+          AND host_user_email = #{hostUserEmail}
     </update>
 
     <!-- 거절 -->
@@ -59,15 +59,15 @@
         UPDATE room_join_request
         SET status = '거절'
         WHERE join_id = #{joinId}
-          AND owner_user_id = #{ownerUserId}
+          AND host_user_email = #{hostUserEmail}
     </update>
 
     <!-- 신청 -->
     <insert id="insertApplication">
         INSERT INTO room_join_request (
             join_id,
-            request_user_id,
-            owner_user_id,
+            request_user_email,
+            host_user_email,
             room_id,
             status,
             apply_message,
@@ -75,8 +75,8 @@
         )
         SELECT
             #{joinId},
-            #{requestUserId},
-            r.host_user_id,
+            #{requestUserEmail},
+            r.host_user_email,
             #{roomId},
             '신청중',
             #{applyMessage},

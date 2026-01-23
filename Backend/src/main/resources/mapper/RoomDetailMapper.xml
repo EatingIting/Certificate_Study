@@ -20,9 +20,12 @@
             sc.name             AS subCategoryName,
             r.created_at        AS createdAt
         FROM room r
-                 JOIN users u ON r.host_user_id = u.user_id
-                 LEFT JOIN category sc ON r.cat_id = sc.id
-                 LEFT JOIN category mc ON sc.parent_id = mc.id
+                 JOIN users u
+                      ON r.host_user_email = u.email
+                 LEFT JOIN category sc
+                           ON r.cat_id = sc.id
+                 LEFT JOIN category mc
+                           ON sc.parent_id = mc.id
         WHERE r.room_id = #{roomId}
 
     </select>

@@ -7,27 +7,28 @@
 
     <insert id="insertRoom">
         INSERT INTO room (
-        room_id,
-        host_user_id,
-        title,
-        content,
-        capacity,
-        max_participants,
-        status,
-        cat_id
+            room_id,
+            host_user_email,
+            title,
+            content,
+            capacity,
+            max_participants,
+            status,
+            cat_id
         ) VALUES (
-        #{roomId},
-        #{hostUserId},
-        #{title},
-        #{content},
-        #{capacity},
-        #{maxParticipants},
-        #{status},
-        #{categoryId}
-        )
+                     #{roomId},
+                     #{hostUserEmail},
+                     #{title},
+                     #{content},
+                     #{capacity},
+                     #{maxParticipants},
+                     #{status},
+                     #{categoryId}
+                 )
     </insert>
 
-    <select id="findAllRooms" resultType="com.example.demo.roomcreate.RoomCreateVO">
+    <select id="findAllRooms"
+            resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
             room_id           AS roomId,
             title,
@@ -41,7 +42,8 @@
         ORDER BY created_at DESC
     </select>
 
-    <select id="findRoomById" resultType="com.example.demo.roomcreate.RoomCreateVO">
+    <select id="findRoomById"
+            resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
             room_id           AS roomId,
             title,
