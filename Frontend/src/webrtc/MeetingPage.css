@@ -820,8 +820,9 @@ body {
   flex-shrink: 0;
   display: flex;
   gap: 1rem;
-  overflow-x: auto;
-  overflow-y: visible;
+
+  overflow: hidden;
+
   padding: 12px 2px 0.5rem 2px;
   margin-top: 1rem;
 }

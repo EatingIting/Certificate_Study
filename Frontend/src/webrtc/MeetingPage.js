@@ -1969,19 +1969,17 @@ function MeetingPage() {
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
                         const newServerIds = new Set(data.users.map((u) => String(u.userId)));
 
-
-                        // 1. 서버에서 온 최신 정보로 업데이트
+                        // -------------------------------------------------------------
+                        // 1. 서버 목록에 있는 유저들 업데이트 (신규 + 기존)
+                        // -------------------------------------------------------------
                         const updatedUsers = data.users.map((u) => {
                             const peerId = String(u.userId);
                             const old = prevMap.get(peerId);
 
-                            /* -------------------------------------------------
-                            재접속 이력 정리
-                            ------------------------------------------------- */
+                            // 재접속 완료된 경우 이력 정리
                             if (!old && reconnectHistoryRef.current.has(peerId)) {
                                 reconnectHistoryRef.current.delete(peerId);
                             }
-
                             if (reconnectTimeoutRef.current.has(peerId)) {
                                 clearTimeout(reconnectTimeoutRef.current.get(peerId));
                                 reconnectTimeoutRef.current.delete(peerId);
@@ -1989,154 +1987,123 @@ function MeetingPage() {
 
                             const isMe = peerId === String(userId);
 
+                            // 스트림 복구 (React 상태 갱신 전 Ref 확인)
                             const refStream = peerStreamsRef.current.get(peerId);
-            
-                            // 기존 스트림(old.stream)이 있으면 쓰고, 없으면 Ref에서 찾고, 그래도 없으면 null
                             const currentStream = old?.stream || refStream || null;
 
-                            // ✅ 서버에서 online=false면 재접속 중 (새로고침 등)
-                            const isOffline =
-                                u.online === false &&
-                                everOnlineRef.current.has(peerId);
-
-                            // ✅ 최근 완료 시간 체크 (1초 이내면 재접속 상태 무시)
+                            // 변수 선언 순서 수정 (ReferenceError 방지)
+                            const isOnline = u.online === true;
+                            const isOffline = u.online === false && everOnlineRef.current.has(peerId);
+                            
                             const completedTime = reconnectCompletedTimeRef.current.get(peerId);
                             const now = Date.now();
                             const recentlyCompleted = completedTime && (now - completedTime) < 1000;
 
                             if (isOffline && !recentlyCompleted) {
-                                console.log(`🔴 [RECONNECTING] ${u.userName} (${peerId}) is offline, online=${u.online}, isMe=${isMe}`);
-                                // ✅ 재접속 시작 시간 기록
                                 if (!reconnectHistoryRef.current.has(peerId)) {
                                     reconnectHistoryRef.current.add(peerId);
                                     console.log(`➕ [ADD RECONNECT] ${u.userName} (${peerId})`);
                                 }
-                            } else if (isOffline && recentlyCompleted) {
-                                console.log(`⏭️ [SKIP RECONNECT] ${u.userName} (${peerId}) - recently completed, treating as online`);
-                            }
-
-                            // ✅ 재접속 중인지 판단: offline이고 최근에 완료되지 않았거나, reconnectHistory에 있으면
-                            const hasReconnectHistory = reconnectHistoryRef.current.has(peerId);
-
-                            // ✅ online=true면 절대로 reconnecting 상태가 아님 (서버가 확인한 상태)
-                            const isOnline = u.online === true;
-                            const shouldShowReconnecting =
-                                isOffline &&
-                                !recentlyCompleted;
-
-                            // ✅ online=true이고 reconnectHistory에 있으면 정리
-                            if (isOnline && hasReconnectHistory) {
-                                console.log(`✅ [CLEANUP] ${u.userName} (${peerId}) is online, removing from reconnectHistory`);
+                            } else if (isOnline && reconnectHistoryRef.current.has(peerId)) {
                                 reconnectHistoryRef.current.delete(peerId);
                             }
 
-                            /* -------------------------------------------------
-                            [핵심] 기존 로컬 상태(스트림, 화면공유) 보존하며 병합
+                            const shouldShowReconnecting = isOffline && !recentlyCompleted;
 
-                            ⚠️ 중요:
-                            - 내 상태(isMe): 로컬 Ref 기준
-                            - 타인 상태: 서버 상태 우선 (새로고침 시 정확한 상태 반영)
-                            - 스트림/화면공유: 클라이언트만 알고 있으므로 old 유지
-                            ------------------------------------------------- */
                             const baseUser = {
                                 id: peerId,
                                 name: u.userName,
                                 joinAt: u.joinAt,
                                 isMe,
-
-                                // ⭐ 내 상태는 로컬 기준 (micOn/camOn), 타인은 서버 상태 우선
-                                muted: isMe
-                                    ? !micOnRef.current
-                                    : (u.muted ?? false),
-
-                                cameraOff: isMe
-                                    ? !camOnRef.current
-                                    : (u.cameraOff ?? true),
-
-                                // 🚀 [중요] 스트림 정보는 서버가 모르므로, 기존(old) 것을 유지해야 함
-                                // ⭐ 단, 재접속 중이면 스트림 무효화하여 스피너 표시
-                                // → shouldShowReconnecting (online=true면 항상 false)
+                                muted: isMe ? !micOnRef.current : (u.muted ?? false),
+                                cameraOff: isMe ? !camOnRef.current : (u.cameraOff ?? true),
+                                
                                 stream: shouldShowReconnecting ? null : currentStream,
-                                speaking: old?.speaking ?? false,
-
-                                // 🚀 [중요] 화면 공유 정보도 기존(old) 것을 반드시 유지
-                                // ⭐ 단, 재접속 중이면 화면 공유도 무효화
                                 screenStream: (shouldShowReconnecting ? null : old?.screenStream) ?? null,
                                 isScreenSharing: shouldShowReconnecting ? false : (old?.isScreenSharing ?? false),
-
-                                // 이모지 반응
+                                
                                 reaction: old?.reaction ?? null,
-
-                                // ✅ 접속 상태: shouldShowReconnecting이면 재접속 중 스피너 표시
+                                speaking: old?.speaking ?? false,
+                                
                                 isJoining: false,
                                 isReconnecting: shouldShowReconnecting,
                                 isLoading: false,
-
                                 lastUpdate: Date.now(),
+                                reconnectStartedAt: shouldShowReconnecting ? (old?.reconnectStartedAt ?? Date.now()) : undefined
                             };
 
-                            // 신규 유저(재접속 아님)인 경우 로딩 표시
-                            if (!old && !hasReconnectHistory) {
-                                // 내 로컬 스트림이 있거나, 이미 로드된 경우 스킵
+                            // 신규 유저 로딩 처리
+                            if (!old && !reconnectHistoryRef.current.has(peerId)) {
                                 const shouldStopLoading = isMe && localStreamRef.current;
-                                // console.log(`[NEW USER] ${u.userName} - isJoining=true, isReconnecting=${baseUser.isReconnecting}`);
-
-                                // ✅ 신규 유저도 재접속 중이면 reconnectStartedAt 설정
-                                const reconnectStartedAt = shouldShowReconnecting
-                                    ? (old?.reconnectStartedAt ?? Date.now())
-                                    : undefined;
-
                                 return {
                                     ...baseUser,
                                     isJoining: true,
                                     isLoading: !shouldStopLoading,
-                                    reconnectStartedAt
                                 };
                             }
 
-                            // 기존 유저(재접속 포함)
+                            // 기존 유저 업데이트
                             const shouldStopLoading = isMe && localStreamRef.current;
-                            
-                            // 재접속 중이면 reconnectStartedAt 설정 (없으면 지금 시간, 있으면 기존 시간 유지)
-                            const reconnectStartedAt = shouldShowReconnecting
-                                ? (old?.reconnectStartedAt ?? Date.now())
-                                : undefined;
-
                             return {
                                 ...baseUser,
-                                isLoading: !shouldStopLoading && baseUser.isLoading,
-                                reconnectStartedAt
+                                isLoading: !shouldStopLoading && baseUser.isLoading
                             };
                         });
 
-                        // 2. [Ghost Retention 비활성화] 서버 목록에 없는 유저는 즉시 제거
-                        //    LEAVE로 나간 유저가 스피너 없이 바로 사라지도록 함
-                        const ghostUsers = [];
+                        // -------------------------------------------------------------
+                        // 2. [Ghost Retention] 서버 목록엔 없지만, 로컬에 있던 유저 살리기
+                        // -------------------------------------------------------------
+                        const ghostUsers = prev.filter((p) => {
+                            const peerId = String(p.id);
 
-                        // 3. 신규 유저 joining 타이머 설정 (무한 스피너 방지)
-                        for (const u of data.users) {
-                            const peerId = String(u.userId);
-                            if (!prevMap.has(peerId) && !joiningTimeoutRef.current.has(peerId)) {
-                                const t = setTimeout(() => {
-                                    setParticipants((curr) =>
-                                        curr.map((p) =>
-                                            String(p.id) === peerId ? { ...p, isJoining: false } : p
-                                        )
-                                    );
-                                    joiningTimeoutRef.current.delete(peerId);
-                                }, 1500);
-                                joiningTimeoutRef.current.set(peerId, t);
+                            // 이미 위에서 업데이트된 유저는 제외
+                            if (newServerIds.has(peerId)) return false;
+
+                            // 1) 나 자신은 절대 삭제 안 함
+                            if (p.isMe) return true;
+
+                            // 2) 재접속 중이면 유지
+                            if (reconnectHistoryRef.current.has(peerId) || p.isReconnecting) {
+                                console.log(`👻 [GHOST RETAINED] ${p.name} (${peerId}) - Reconnecting logic`);
+                                return true;
                             }
-                        }
 
-                        // 4. Active Speaker 보정 (현재 발표자가 사라졌는지 확인)
+                            // 3) ✅ [핵심 추가] 오디오/비디오 Consumer가 하나라도 살아있으면 절대 삭제하지 않음
+                            //    화면공유를 끄고 카메라를 켜는 과도기에도 '오디오'는 연결되어 있으므로 여기서 살아남습니다.
+                            const hasActiveConsumer = Array.from(consumersRef.current.values()).some(
+                                (c) => String(c.appData?.peerId) === peerId && !c.closed
+                            );
+
+                            if (hasActiveConsumer) {
+                                console.log(`🛡️ [CONSUMER PROTECTED] ${p.name} (${peerId}) missing from server list but has active consumers.`);
+                                return true;
+                            }
+
+                            // 그 외(진짜 나감)는 제거
+                            return false;
+                        }).map(p => ({
+                            ...p,
+                            // 유령 상태이므로 재접속 중으로 표시하되, 기존 스트림이 있다면 유지 시도
+                            isReconnecting: true,
+                            // 만약 hasActiveConsumer로 살려진 경우라면, 스트림을 null로 밀지 않는게 나을 수도 있지만
+                            // 안전하게 일단 재접속 UI를 보여줍니다. (곧 newProducer가 오거나 USERS_UPDATE가 정상화됨)
+                            stream: null, 
+                            screenStream: null,
+                            isScreenSharing: false,
+                            reconnectStartedAt: p.reconnectStartedAt || Date.now()
+                        }));
+
+                        // -------------------------------------------------------------
+                        // 3. 최종 병합
+                        // -------------------------------------------------------------
+                        const mergedUsers = [...updatedUsers, ...ghostUsers];
+
                         setActiveSpeakerId((currentSpeakerId) => {
-                            const allUsers = [...updatedUsers, ...ghostUsers];
-                            const exists = allUsers.some((u) => String(u.id) === String(currentSpeakerId));
-                            return exists ? currentSpeakerId : String(allUsers[0]?.id ?? "") || null;
+                            const exists = mergedUsers.some((u) => String(u.id) === String(currentSpeakerId));
+                            return exists ? currentSpeakerId : String(mergedUsers[0]?.id ?? "") || null;
                         });
 
-                        return [...updatedUsers, ...ghostUsers];
+                        return mergedUsers;
                     });
                     return;
                 }
@@ -2473,30 +2440,39 @@ function MeetingPage() {
                 const { peerId } = msg.data || {};
                 if (!peerId) return;
 
-                // ✅ 1. 재접속 이력만 기록 (UI는 건드리지 않음)
+                console.log(`[SFU] peerLeft received for ${peerId}. Starting grace period.`);
+
+                // 1. 재접속 이력에 추가 (USERS_UPDATE에서 이 사람을 삭제하지 않도록 보호)
                 reconnectHistoryRef.current.add(peerId);
 
-                // ✅ 2. 스트림 정리 (메모리 누수 방지)
+                // 2. 미디어 스트림 정리 (메모리 누수 방지)
                 clearPeerStreamOnly(peerId);
                 bumpStreamVersion();
 
-                // ✅ 3. 기존 삭제 타이머 있으면 제거
+                // 3. 기존에 돌고 있던 삭제 타이머가 있다면 취소 (타이머 리셋 효과)
                 if (reconnectTimeoutRef.current.has(peerId)) {
                     clearTimeout(reconnectTimeoutRef.current.get(peerId));
                 }
 
-                // ✅ 4. 10초 후에도 복귀 없으면 완전 제거
+                // ✅ 4. [10초 유예] 10초 뒤에도 복귀하지 않으면 그때 삭제
                 const timer = setTimeout(() => {
-                    // 🔑 아직 USERS_UPDATE에 존재하면 제거 금지
                     setParticipants(prev => {
-                        const stillExists = prev.some(p => String(p.id) === String(peerId));
-                        if (stillExists) {
-                            // 아직 signaling 기준으로는 살아 있음
-                            return prev;
+                        // 현재 시점에서도 여전히 이 peerId가 있다면 삭제
+                        // (만약 복귀했다면 reconnectHistoryRef에서 제거되었을 것임)
+                        const stillOffline = reconnectHistoryRef.current.has(peerId);
+                        
+                        if (stillOffline) {
+                            console.log(`💀 [REMOVE] Peer ${peerId} timed out. Removing from UI.`);
+                            return prev.filter(p => String(p.id) !== String(peerId));
                         }
                         return prev;
                     });
-                }, 10000);
+
+                    // 5. 메모리 정리
+                    reconnectHistoryRef.current.delete(peerId);
+                    reconnectTimeoutRef.current.delete(peerId);
+                    
+                }, 10000); // 10초 대기
 
                 reconnectTimeoutRef.current.set(peerId, timer);
                 return;
