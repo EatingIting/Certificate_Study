@@ -8,7 +8,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const { subjectId } = useParams();
 
     // ✅ 회의 상태 (PiP 트리거용)
-    const { isInMeeting, enterPipMode } = useMeeting();
+    const { isInMeeting } = useMeeting();
 
     // ✅ 초기값: 전부 열림
     const [openKeys, setOpenKeys] = useState([
@@ -24,19 +24,14 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const activeMenu = activeMenuProp ?? localActiveMenu;
     const setActiveMenu = setActiveMenuProp ?? setLocalActiveMenu;
 
-    // ===============================
-    // 🔥 회의 중이면 PiP 요청
-    // (반드시 사용자 클릭 이벤트 안에서 호출)
-    // ===============================
     const requestPipIfMeeting = useCallback(() => {
         if (!isInMeeting) return;
 
-        // 상태 플래그 (UI용)
-        enterPipMode();
-
-        // 실제 PiP 실행은 MeetingPage가 담당
-        window.dispatchEvent(new Event("meeting:request-pip"));
-    }, [isInMeeting, enterPipMode]);
+        // ✅ 오직 "의도"만 전달
+        window.dispatchEvent(
+            new CustomEvent("meeting:request-pip")
+        );
+    }, [isInMeeting]);
 
     // ===============================
     // 메인메뉴 클릭: 이동 X, 펼침/접힘만

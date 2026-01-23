@@ -159,13 +159,9 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     if (!v) return;
 
     // ✅ video를 렌더링하지 않는 상태면, 잔상/흰배경 방지 위해 srcObject 제거
-    if (!shouldRenderVideo) {
-      try {
+    if (!shouldRenderVideo && !document.pictureInPictureElement) {
         v.pause();
         if (v.srcObject) v.srcObject = null;
-        v.load?.();
-      } catch {}
-      return;
     }
 
     // ✅ 정상 케이스: stream 붙이기
@@ -201,25 +197,22 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
       )}
 
       <div className="video-content">
-        {/* ✅ 핵심: shouldRenderVideo일 때만 video를 렌더링 */}
-        {shouldRenderVideo && (
-          <video
+        <video
             ref={setVideoRef}
             autoPlay
             playsInline
             muted
             className={`video-element ${isScreen ? "screen" : ""}`}
-          />
-        )}
+            style={{ display: shouldRenderVideo ? "block" : "none" }}
+        />
 
-        {/* ✅ 비디오가 없거나 재생 불가면 항상 아바타 */}
         {!shouldRenderVideo && (
-          <div className="camera-off-placeholder">
+            <div className="camera-off-placeholder">
             <UserAvatar name={safeUser.name} size={isMain ? "lg" : "md"} />
             <p className="stream-label">{safeUser.name}</p>
-          </div>
+            </div>
         )}
-      </div>
+    </div>
 
       {!isReconnecting && (
         <div className="video-overlay">
@@ -265,6 +258,7 @@ function MeetingPage() {
         startMeeting,
         endMeeting,
         saveMeetingState,
+        requestBrowserPip,
     } = useMeeting();
 
     const [layoutMode, setLayoutMode] = useState("speaker");
@@ -679,30 +673,18 @@ function MeetingPage() {
         };
     }, []);
 
-    const handleBrowserPip = useCallback(async () => {
+    const handleBrowserPip = useCallback(() => {
         const video = mainVideoRef.current;
         if (!video) return;
 
-        const stream = video.srcObject;
-
-        // ✅ 스트림/비디오트랙 없으면 PiP 금지
-        if (!stream || stream.getVideoTracks().length === 0) {
-            console.warn("[PiP] stream not ready, skip PiP");
-            return;
+        // 이미 PiP 상태라면 종료
+        if (document.pictureInPictureElement) {
+            document.exitPictureInPicture().catch(console.error);
+        } else {
+            requestBrowserPip(video);
         }
+    }, [requestBrowserPip, roomId, subjectId, navigate]);
 
-        // ✅ 토글 동작
-        try {
-            if (document.pictureInPictureElement) {
-            await document.exitPictureInPicture();
-            } else {
-            // 브라우저 정책상 사용자 클릭 이벤트 안에서 실행돼야 합니다.
-            await video.requestPictureInPicture();
-            }
-        } catch (e) {
-            console.error("[PiP] request failed:", e);
-        }
-    }, []);
     // --- Local media ---
     const startLocalMedia = async () => {
     // ✅ 1) 이미 로컬 스트림이 있으면 그대로 사용 (중복 getUserMedia 방지)
@@ -726,11 +708,8 @@ function MeetingPage() {
 
         // MeetingContext 호출은 실패해도 미디어 동작에 영향 없게 격리
         try {
-            if (typeof startMeeting === "function" && roomId) {
-            startMeeting(roomId, subjectId);
-            }
             if (typeof saveMeetingState === "function") {
-            saveMeetingState({ localStream: stream });
+                saveMeetingState({ localStream: stream });
             }
         } catch (e) {
             console.warn("[startLocalMedia] meeting context error:", e);
@@ -1662,6 +1641,25 @@ function MeetingPage() {
         };
     }, [handleBrowserPip]);
 
+    useEffect(() => {
+        const onPipExit = () => {
+            console.log("[PiP] restore to meeting room");
+
+            // 통화 종료 아님
+            isLeavingRef.current = false;
+
+            navigate(
+                `/lms/${subjectId}/MeetingRoom/${roomId}`,
+                { replace: true }
+            );
+        };
+
+        window.addEventListener("meeting:pip-exit", onPipExit);
+        return () => {
+            window.removeEventListener("meeting:pip-exit", onPipExit);
+        };
+    }, [navigate, subjectId, roomId]);
+
     // 이전에 화면공유 중이었던 사람 추적 (화면공유 종료 감지용)
     const prevScreenSharersRef = useRef(new Set());
 
@@ -1751,6 +1749,32 @@ function MeetingPage() {
             window.removeEventListener("beforeunload", handleBeforeUnload);
         };
     }, []);
+
+    /* useEffect(() => {
+        const video = mainVideoRef.current;
+        if (!video) return;
+
+        const handleLeavePiP = () => {
+            console.log("[PiP] 복귀 - MeetingPage로 돌아갑니다");
+
+            // ❗ 통화 종료 아님 → LEAVE 보내지 않도록
+            isLeavingRef.current = false;
+
+            navigate(
+                `/lms/${subjectId}/MeetingRoom/${roomId}`,
+                { replace: true }
+            );
+        };
+
+        video.addEventListener("leavepictureinpicture", handleLeavePiP);
+
+        return () => {
+            video.removeEventListener(
+                "leavepictureinpicture",
+                handleLeavePiP
+            );
+        };
+    }, [navigate, subjectId, roomId]); */
 
     useEffect(() => {
         // 이미 해제됐으면 아무것도 안 함
@@ -2942,35 +2966,35 @@ function MeetingPage() {
                             {/* 일반 모드 하단 스트립 (전체화면 아님) */}
                             <div className="bottom-strip custom-scrollbar">
                                 {orderedParticipants.map((p) => (
-                                <div
-                                    key={p.id}
-                                    className={`strip-item ${
-                                    activeSpeakerId === p.id ? "active-strip" : ""
-                                    } ${p.isScreenSharing ? "screen-sharing" : ""}`}
-                                    onClick={() => {
-                                    manuallySelectedRef.current = true;
-                                    setActiveSpeakerId(p.id);
-                                    }}
-                                >
-                                    <VideoTile
-                                    user={p}
-                                    stream={
-                                        p.isScreenSharing
-                                        ? p.screenStream
-                                        : p.isMe
-                                        ? localStream
-                                        : p.stream
-                                    }
-                                    roomReconnecting={roomReconnecting}
-                                    isScreen={p.isScreenSharing}
-                                    reaction={p.reaction}
-                                    />
-                                    <span className="strip-name">
-                                    {p.isMe ? "(나)" : p.name}
-                                    </span>
+                                    <div
+                                        key={p.id}
+                                        className={`strip-item ${
+                                        activeSpeakerId === p.id ? "active-strip" : ""
+                                        } ${p.isScreenSharing ? "screen-sharing" : ""}`}
+                                        onClick={() => {
+                                        manuallySelectedRef.current = true;
+                                        setActiveSpeakerId(p.id);
+                                        }}
+                                    >
+                                        <VideoTile
+                                        user={p}
+                                        stream={
+                                            p.isScreenSharing
+                                            ? p.screenStream
+                                            : p.isMe
+                                            ? localStream
+                                            : p.stream
+                                        }
+                                        roomReconnecting={roomReconnecting}
+                                        isScreen={p.isScreenSharing}
+                                        reaction={p.reaction}
+                                        />
+                                        <span className="strip-name">
+                                        {p.isMe ? "(나)" : p.name}
+                                        </span>
+                                    </div>
+                                    ))}
                                 </div>
-                                ))}
-                            </div>
                             </div>
                         ) : (
                             /* Grid 모드 */
