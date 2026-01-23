@@ -15,7 +15,9 @@ function App() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<Main />} />
+
+
+
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/signup" element={<SignUp />} />
                 <Route path="/mypage" element={<MyPage />} />
@@ -25,8 +27,10 @@ function App() {
                 <Route path="/lmsMain" element={<LMSMain />} />
                 <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
                 {/* 임시*/}
-                <Route path="/room" element={<MainHeader />}>
-                    <Route index element={<RoomPage />} />
+                <Route element={<MainHeader />}>
+                    <Route path="/room" element={<RoomPage />} />
+
+                    <Route path="/" element={<Main />} />
                 </Route>
             </Routes>
         </BrowserRouter>

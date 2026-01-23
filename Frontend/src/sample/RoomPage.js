@@ -340,7 +340,7 @@ const RoomPage = () => {
             </div>
 
             {openModal && selectedRoom && (
-                <RRoomPageModal
+                <RoomPageModal
                     open={openModal}
                     study={selectedRoom}
                     onClose={closeModal}

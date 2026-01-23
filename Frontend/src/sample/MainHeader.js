@@ -1,14 +1,16 @@
 import "./MainHeader.css";
-import { useNavigate } from "react-router-dom";
+import {useLocation, useNavigate, useParams} from "react-router-dom";
 import { Outlet } from "react-router-dom";
 import MainSideBar from "./MainSideBar";
 
 const MainHeader = () => {
   const navigate = useNavigate();
 
+  const {pathname} = useLocation();
+
   return (
     <div className="page">
-      <header className="header">
+      <header className="header sample-container">
         <div className="logo">ONSIL</div>
 
         <div className="search-box">
@@ -22,15 +24,18 @@ const MainHeader = () => {
           <button className="cr-btn" onClick={() => navigate("/create")}>스터디 만들기</button>
         </div>
       </header>
-
-      <div className="sample-container sample-layout">
-        <MainSideBar />
-
-        <main className="sample-content">
-          {/* ✅ 여기만 페이지별로 갈아끼워짐 */}
-          <Outlet />
-        </main>
-      </div>
+        {
+            pathname === '/room' ?
+                <div className="sample-container sample-layout">
+                    <MainSideBar />
+                    <main className="sample-content">
+                        {/* ✅ 여기만 페이지별로 갈아끼워짐 */}
+                        <Outlet />
+                    </main>
+                </div>
+            :
+            <Outlet/>
+        }
     </div>
   );
 };

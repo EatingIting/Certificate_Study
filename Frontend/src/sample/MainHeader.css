@@ -14,12 +14,14 @@
 
 /* 페이지 전체는 고정 */
 .sample-page {
-  height: 100vh;
-  overflow: hidden;   /* 🔥 여기 중요 */
+  min-height: 100vh;
+  display : flex;
+  flex-direction: column;
 }
 
 /* header 아래 영역 */
 .sample-layout {
+  flex : 1;
   display: flex;
   height: calc(100vh - 64px); /* 헤더 높이 */
 }
@@ -34,9 +36,9 @@
 
 /* ✅ 헤더/바디 공통 정렬 기준 */
 .sample-container {
-  width: min(1200px, 100%);
+  width: min(1400px, 100%);
   margin: 0 auto;
-  padding: 0 20px; /* 이 값이 "왼쪽 시작점" 기준이 됨 */
+
 }
 
 /* 헤더 내부 정렬 */
