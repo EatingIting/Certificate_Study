@@ -25,7 +25,6 @@ const LMSMain=()=>{
 
     return(
         <>
-            <LMSHeader/>
             <main className="lms-main">
                 <h2 className="section-title">내 클래스룸</h2>
 

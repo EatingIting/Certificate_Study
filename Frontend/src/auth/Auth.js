@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Auth.css";
+import logo from "./메인로고.png";
 import { login } from "../api/api";
 
 const Auth = () => {
@@ -41,7 +42,7 @@ const Auth = () => {
             localStorage.setItem("accessToken", res.data.token);
 
             alert("로그인 성공");
-            navigate("/roompage");
+            navigate("/room");
         } catch {
             alert("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
@@ -55,7 +56,7 @@ const Auth = () => {
                         /* ===== 1️⃣ OAuth 시작 화면 ===== */
                         <>
                             <div className="logo-area">
-                                <h1 className="auth-logo">온실</h1>
+                                <img src={logo} alt="온실 로고" onClick={() => navigate("/")} className="onsil-logo"/>
                             </div>
 
                             <div className="login-title">

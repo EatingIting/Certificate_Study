@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import MyPage from "./roomcategorypage/MyPage";
 import Auth from "./auth/Auth";
-import Create from "./roomcreate/Create";
+import Create from "./sample/Create";
 import Main from "./mainpage/Main";
 import MyApplications from "./roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
@@ -15,22 +14,18 @@ function App() {
     return (
         <BrowserRouter>
             <Routes>
-
-
-
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/signup" element={<SignUp />} />
-                <Route path="/mypage" element={<MyPage />} />
-                <Route path="/create" element={<Create />} />
+
                 <Route path="/my-applications" element={<MyApplications />} />
                 <Route path="/meeting/:roomId" element={<MeetingPage />} />
-                <Route path="/lmsMain" element={<LMSMain />} />
                 <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
                 {/* 임시*/}
                 <Route element={<MainHeader />}>
-                    <Route path="/room" element={<RoomPage />} />
-
                     <Route path="/" element={<Main />} />
+                    <Route path="/room" element={<RoomPage />} />
+                    <Route path="/room/create" element={<Create />} />
+                    <Route path="/room/mystudy" element={<LMSMain />} />
                 </Route>
             </Routes>
         </BrowserRouter>

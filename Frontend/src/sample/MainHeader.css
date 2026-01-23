@@ -11,6 +11,10 @@
   border-bottom: 1px solid #eee;
 }
 
+.header-nickname {
+    margin-top: 5px;
+}
+
 
 /* 페이지 전체는 고정 */
 .sample-page {

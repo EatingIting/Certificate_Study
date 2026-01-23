@@ -107,7 +107,7 @@ const RoomPageModal = ({ open, onClose, study }) => {
 
                     <div className="sr2-row">
                       <div className="sr2-k">카테고리</div>
-                      <div className="sr2-v sr2-soon">{category}</div>
+                      <div className="sr2-v">{category}</div>
                     </div>
 
                     <div className="sr2-row">
