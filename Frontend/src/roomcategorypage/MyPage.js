@@ -1,274 +1,366 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import api from "../api/api";
+import { useMemo, useState } from "react";
 import "./MyPage.css";
-import onsil from "./온실.png";
-import Profile from "./기본이미지.jpg";
 
 const MyPage = () => {
-    const navigate = useNavigate();
+  // ✅ 더미 데이터(나중에 API로 교체)
+  const [profile, setProfile] = useState({
+    name: "홍길동",
+    nickname: "hong",
+    email: "hong@example.com",
+    birth: "1990-05-05",
+    gender: "남",
+    joinedAt: "2024-04-01",
+    bio: "안녕하세요. 자격증 공부 함께 해요!",
+    imageUrl: "/profile.jpeg"
+  });
 
-    const [user, setUser] = useState({
-        name: "",
-        nickname: "",
-        email: "",
-        birthDate: "",
-        gender: "",
-        introduction: "",
-        created_at: "",
-        profileImage: null,
-    });
+  const [editOpen, setEditOpen] = useState(false);
 
-    const [previewImage, setPreviewImage] = useState(Profile);
+  // 관심 자격증
+  const [certInput, setCertInput] = useState("");
+  const [certs, setCerts] = useState(["정보처리기사", "토익", "SQLD"]);
 
-    const nickname = localStorage.getItem("nickname");
-    const userId = localStorage.getItem("userId");
+  // 스터디 목록 (더미)
+  const joinedStudies = useMemo(
+    () => [
+      {
+        id: 1,
+        title: "정보처리기사 스터디",
+        status: "진행중",
+      },
+      { id: 2, title: "토익 준비반", status: "진행중" },
+    ],
+    []
+  );
 
-    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const completedStudies = useMemo(
+    () => [
+      { id: 101, title: "SQLD 자격증 따기", meta: "2024.03.15" },
+      { id: 102, title: "NCS 공부", meta: "2024.02.20" },
+    ],
+    []
+  );
 
-    /* ===== 로그인 체크 ===== */
-    useEffect(() => {
-        if (!userId) {
-            alert("로그인이 필요합니다.");
-            navigate("/auth");
-        }
-    }, [userId, navigate]);
+  // ✅ 프로필 수정(더미)
+  const [draft, setDraft] = useState(profile);
 
-    /* ===== 유저 정보 로딩 ===== */
-    useEffect(() => {
-        if (!userId) return;
+  const openEdit = () => {
+    setDraft(profile);
+    setPreviewImage(profile.imageUrl);
+    setEditOpen(true);
+  };
 
-        const fetchMyPage = async () => {
-            try {
-                // ✅ 수정 1: URL 변경
-                const res = await api.get("/mypage/me");
-                const data = res.data;
+  const saveEdit = () => {
+    setProfile(draft);
+    setEditOpen(false);
+  };
 
-                setUser({
-                    name: data.name ?? "",
-                    nickname: data.nickname ?? "",
-                    email: data.email ?? "",
-                    birthDate: data.birthDate ?? "",
-                    gender: data.gender ?? "",
-                    introduction: data.introduction ?? "",
-                    created_at: data.createdAt ?? "",
-                    profileImage: null,
-                });
+  const addCert = () => {
+    const v = certInput.trim();
+    if (!v) return;
+    if (certs.includes(v)) {
+      setCertInput("");
+      return;
+    }
+    setCerts((prev) => [v, ...prev]);
+    setCertInput("");
+  };
 
-                if (data.profileImg) {
-                    setPreviewImage(`http://172.30.1.61:8080${data.profileImg}`);
-                } else {
-                    setPreviewImage(Profile);
-                }
-            } catch (error) {
-                console.error("마이페이지 조회 실패", error);
-                alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
-                localStorage.clear();
-                navigate("/auth");
-            }
-        };
+  const removeCert = (name) => {
+    setCerts((prev) => prev.filter((c) => c !== name));
+  };
 
-        fetchMyPage();
-    }, [userId, navigate]);
+  const withdraw = () => {
+    // 나중에 API 연결
+    const ok = window.confirm("정말 회원탈퇴 하시겠어요? (되돌릴 수 없음)");
+    if (!ok) return;
+    alert("탈퇴 요청(더미) 완료!");
+  };
 
-    /* ===== 드롭다운 닫기 ===== */
-    useEffect(() => {
-        const closeMenu = () => setIsUserMenuOpen(false);
-        window.addEventListener("click", closeMenu);
-        return () => window.removeEventListener("click", closeMenu);
-    }, []);
+  //이미지
+  const [previewImage, setPreviewImage] = useState(profile.imageUrl);
 
-    /* ===== 프로필 이미지 변경 ===== */
-    const handleImageChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+  const onSelectImage = (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-        setUser((prev) => ({ ...prev, profileImage: file }));
-        setPreviewImage(URL.createObjectURL(file));
-    };
+  // 이미지 파일만 허용
+  if (!file.type.startsWith("image/")) {
+    alert("이미지 파일만 선택할 수 있어요.");
+    return;
+  }
 
-    /* ===== 저장 ===== */
-    const handleSave = async () => {
-        if (!userId) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    setPreviewImage(reader.result); // 미리보기
+    setDraft({ ...draft, imageUrl: reader.result }); // 임시 저장
+  };
+  reader.readAsDataURL(file);
+};
 
-        const formData = new FormData();
-        formData.append("name", user.name);
-        formData.append("nickname", user.nickname);
-        formData.append("birthDate", user.birthDate);
-        formData.append("introduction", user.introduction ?? "");
 
-        if (user.profileImage) {
-            formData.append("profileImage", user.profileImage);
-        }
 
-        try {
-            // ✅ 수정 2: URL 변경
-            await api.put("/mypage/me", formData, {
-                headers: {
-                    "Content-Type": "multipart/form-data",
-                },
-            });
+  return (
+    <div className="mypage-wrap">
+      <h2 className="mypage-title">마이페이지</h2>
 
-            alert("회원 정보가 수정되었습니다.");
-        } catch (error) {
-            console.error("저장 실패", error);
-            alert("저장에 실패했습니다.");
-        }
-    };
+      <div className="mypage-card">
+        {/* ===== 섹션: 프로필 ===== */}
+        <section className="section">
+          <div className="section-head">
+            <h3>내 프로필</h3>
+            <button className="btn btn-ghost" onClick={openEdit}>
+              ✎ 프로필 수정
+            </button>
+          </div>
 
-    return (
-        <>
-            {/* ===== 헤더 ===== */}
-            <header className="top-header">
-                <div className="page-container header-inner">
-                    <div className="header-logo">
-                        <img
-                            src={onsil}
-                            alt="온실"
-                            onClick={() => navigate("/")}
-                            style={{ cursor: "pointer" }}
-                        />
-                    </div>
-
-                    {nickname ? (
-                        <div className="user-menu-wrapper">
-                            <button
-                                className="auth-btns"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsUserMenuOpen((prev) => !prev);
-                                }}
-                            >
-                                {nickname} 님 ▾
-                            </button>
-
-                            {isUserMenuOpen && (
-                                <div
-                                    className="user-dropdown"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <ul>
-                                        <li onClick={() => navigate("/mypage")}>
-                                            마이페이지
-                                        </li>
-                                        <li onClick={() => navigate("/lms")}>
-                                            내 클래스
-                                        </li>
-                                        <li onClick={() => navigate("/my-applications")}>
-                                            스터디 신청 현황
-                                        </li>
-                                        <li
-                                            className="logout"
-                                            onClick={() => {
-                                                localStorage.clear();
-                                                navigate("/auth");
-                                            }}
-                                        >
-                                            로그아웃
-                                        </li>
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <button
-                            className="auth-btns"
-                            onClick={() => navigate("/auth")}
-                        >
-                            로그인 / 회원가입
-                        </button>
-                    )}
-                </div>
-            </header>
-
-            {/* ===== 본문 ===== */}
-            <div className="page-container">
-                <div className="mypage-wrapper">
-                    <h2>마이페이지</h2>
-
-                    <div className="profile-card">
-                        <div className="profile-image">
-                            <label htmlFor="profileUpload">
-                                <img src={previewImage} alt="프로필" />
-                                <span className="edit-text">사진 변경</span>
-                            </label>
-                            <input
-                                id="profileUpload"
-                                type="file"
-                                accept="image/*"
-                                hidden
-                                onChange={handleImageChange}
-                            />
-                        </div>
-
-                        <div className="profile-info">
-                            <div className="info-row">
-                                <label>이름</label>
-                                <input
-                                    value={user.name}
-                                    onChange={(e) =>
-                                        setUser({ ...user, name: e.target.value })
-                                    }
-                                />
-                            </div>
-
-                            <div className="info-row">
-                                <label>닉네임</label>
-                                <input
-                                    value={user.nickname}
-                                    onChange={(e) =>
-                                        setUser({ ...user, nickname: e.target.value })
-                                    }
-                                />
-                            </div>
-
-                            <div className="info-row">
-                                <label>이메일</label>
-                                <span>{user.email}</span>
-                            </div>
-
-                            <div className="info-row">
-                                <label>생년월일</label>
-                                <span>{user.birthDate}</span>
-                            </div>
-
-                            <div className="info-row">
-                                <label>성별</label>
-                                <span>
-                                    {user.gender === "MALE"
-                                        ? "남성"
-                                        : user.gender === "FEMALE"
-                                            ? "여성"
-                                            : ""}
-                                </span>
-                            </div>
-
-                            <div className="info-row">
-                                <label>가입일</label>
-                                <span>{user.created_at?.substring(0, 10)}</span>
-                            </div>
-
-                            <div className="info-row">
-                                <label>자기소개</label>
-                                <textarea
-                                    value={user.introduction}
-                                    onChange={(e) =>
-                                        setUser({ ...user, introduction: e.target.value })
-                                    }
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mypage-actions">
-                        <button className="save-btn" onClick={handleSave}>
-                            저장하기
-                        </button>
-                    </div>
-                </div>
+          <div className="profile-grid">
+            <div className="avatar-box">
+              <img className="avatar" src={profile.imageUrl} alt="profile" />
             </div>
-        </>
-    );
+
+            <div className="profile-box">
+              <div className="profile-col">
+                <div className="kv">
+                  <span className="k">이름</span>
+                  <span className="v">{profile.name}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">닉네임</span>
+                  <span className="v">{profile.nickname}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">생년월일</span>
+                  <span className="v">{profile.birth}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">가입일</span>
+                  <span className="v">{profile.joinedAt}</span>
+                </div>
+              </div>
+
+              <div className="divider" />
+
+              <div className="profile-col">
+                <div className="kv">
+                  <span className="k">이메일</span>
+                  <span className="v">{profile.email}</span>
+                </div>
+                <div className="kv">
+                  <span className="k">성별</span>
+                  <span className="v">{profile.gender}</span>
+                </div>
+                <div className="kv kv-bio">
+                  <span className="k">자기소개</span>
+                  <span className="v">{profile.bio}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== 섹션: 관심 자격증 ===== */}
+        <section className="section">
+          <div className="section-head">
+            <h3>관심 자격증</h3>
+            <div className="cert-actions">
+              <div className="cert-input">
+                <input
+                  value={certInput}
+                  onChange={(e) => setCertInput(e.target.value)}
+                  placeholder="자격증명 입력 (예: 정보처리기사)"
+                  onKeyDown={(e) => e.key === "Enter" && addCert()}
+                />
+                <button className="btn btn-soft" onClick={addCert}>
+                  + 추가
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="chip-row">
+            {certs.length === 0 ? (
+              <div className="empty">등록된 관심 자격증이 없어요.</div>
+            ) : (
+              certs.map((c) => (
+                <span className="chip" key={c}>
+                  {c}
+                  <button className="chip-x" onClick={() => removeCert(c)} aria-label="remove">
+                    ×
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
+        </section>
+
+        {/* ===== 섹션: 스터디 목록 ===== */}
+        <section className="section">
+          <div className="section-head">
+            <h3>스터디 목록</h3>
+          </div>
+
+          <div className="study-grid">
+            {/* 가입한 스터디 */}
+            <div className="study-col">
+              <h4 className="sub-title">가입한 스터디</h4>
+
+              {joinedStudies.map((s) => (
+                <div className="study-item" key={s.id}>
+                  <div className="study-left">
+                    <div className="study-name">{s.title}</div>
+                    <div className="study-sub">{s.dateText}</div>
+                  </div>
+
+                  <div className="study-right">
+                    <span className="badge badge-green">{s.status}</span>
+                  </div>
+                </div>
+              ))}
+
+              {joinedStudies.length === 0 && (
+                <div className="empty-box">가입한 스터디가 없어요.</div>
+              )}
+            </div>
+
+            {/* 완료된 스터디 */}
+            <div className="study-col">
+              <h4 className="sub-title">완료된 스터디</h4>
+
+              {completedStudies.map((s) => (
+                <div className="study-item" key={s.id}>
+                  <div className="study-left">
+                    <div className="study-name">{s.title}</div>
+                    <div className="study-sub">종료일: {s.meta}</div>
+                  </div>
+
+                  <div className="study-right">
+                    <span className="badge badge-gray">종료</span>
+                  </div>
+                </div>
+              ))}
+
+              {completedStudies.length === 0 && (
+                <div className="empty-box">완료된 스터디가 없어요.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="withdraw-row">
+            <button className="btn btn-danger" onClick={withdraw}>
+              회원탈퇴
+            </button>
+          </div>
+        </section>
+      </div>
+
+      {/* ===== 프로필 수정 모달 (더미) ===== */}
+      {editOpen && (
+        <div className="modal-dim" onMouseDown={() => setEditOpen(false)}>
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>프로필 수정</h3>
+              <button className="icon-btn" onClick={() => setEditOpen(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-grid">
+                <label className="field">
+                  <span>이름</span>
+                  <input
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>닉네임</span>
+                  <input
+                    value={draft.nickname}
+                    onChange={(e) => setDraft({ ...draft, nickname: e.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>이메일</span>
+                  <input
+                    value={draft.email}
+                    onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>생년월일</span>
+                  <input
+                    value={draft.birth}
+                    onChange={(e) => setDraft({ ...draft, birth: e.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>성별</span>
+                  <select
+                    value={draft.gender}
+                    onChange={(e) => setDraft({ ...draft, gender: e.target.value })}
+                  >
+                    <option value="남">남</option>
+                    <option value="여">여</option>
+                  </select>
+                </label>
+
+                <label className="field field-full">
+                  <span>자기소개</span>
+                  <textarea
+                    rows={3}
+                    value={draft.bio}
+                    onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
+                  />
+                </label>
+
+                <label className="field field-full">
+                <span>프로필 이미지</span>
+
+                {/* 미리보기 */}
+                <div className="profile-upload">
+                    <img
+                    src={previewImage}
+                    alt="preview"
+                    className="preview-img"
+                    onError={(e) => {
+                        e.currentTarget.src = "/profile.jpeg"; // fallback
+                    }}
+                    />
+
+                    <label className="upload-btn">
+                    이미지 선택
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={onSelectImage}
+                        hidden
+                    />
+                    </label>
+                </div>
+                </label>
+
+              </div>
+            </div>
+
+            <div className="modal-foot">
+              <button className="btn btn-gray" onClick={() => setEditOpen(false)}>
+                취소
+              </button>
+              <button className="btn btn-soft" onClick={saveEdit}>
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default MyPage;
