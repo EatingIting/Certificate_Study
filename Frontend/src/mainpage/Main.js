@@ -7,24 +7,10 @@ function Main() {
 
     return (
         <div className="page">
-            {/* Header */}
-            <header className="header">
-                <div className="logo">ONSIL</div>
 
-                <div className="search-box">
-                    <input placeholder="어떤 스터디를 찾고 있나요? (ex. 정보처리기사)" />
-                    <button>스터디 검색</button>
-                </div>
-
-
-                <div className="main-actions">
-                    <button className="login-btn" onClick={() => navigate("/auth")}>로그인</button>
-                    <button className="cr-btn">스터디 만들기</button>
-                </div>
-            </header>
 
             {/* Hero */}
-            <section className="hero"
+            <section className="hero sample-container"
                      style={{ "--hero-img": `url(${heroImg})` }}
             >
                 <h1>
@@ -36,7 +22,7 @@ function Main() {
                 </section>
 
             {/* Category */}
-            <section className="main-category">
+            <section className="main-category sample-container">
                 <h2>스터디 카테고리</h2>
                 <div className="main-list">
                     {["자격증", "취업", "어학", "자기계발"].map((c) => (
@@ -49,7 +35,7 @@ function Main() {
             </section>
 
             {/* Study List */}
-            <section className="study">
+            <section className="study sample-container">
                 <h2>지금 모집 중인 화상 스터디</h2>
                 <div className="study-list">
                     {[1, 2, 3, 4].map((i) => (
