@@ -20,17 +20,17 @@ function App() {
 
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/signup" element={<SignUp />} />
-                <Route path="/mypage" element={<MyPage />} />
                 <Route path="/create" element={<Create />} />
-                <Route path="/my-applications" element={<MyApplications />} />
+                
                 <Route path="/meeting/:roomId" element={<MeetingPage />} />
                 <Route path="/lmsMain" element={<LMSMain />} />
                 <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
                 {/* 임시*/}
                 <Route element={<MainHeader />}>
                     <Route path="/room" element={<RoomPage />} />
-
                     <Route path="/" element={<Main />} />
+                    <Route path="/mypage" element={<MyPage />} />
+                    <Route path="/my-applications" element={<MyApplications />} />
                 </Route>
             </Routes>
         </BrowserRouter>

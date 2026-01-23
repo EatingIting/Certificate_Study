@@ -25,7 +25,7 @@ const MainHeader = () => {
         </div>
       </header>
         {
-            pathname === '/room' ?
+            pathname === '/room' || pathname === '/mypage' || pathname === '/my-applications' ?
                 <div className="sample-container sample-layout">
                     <MainSideBar />
                     <main className="sample-content">

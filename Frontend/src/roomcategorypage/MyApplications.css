@@ -1,184 +1,250 @@
-/* ===== 공통 ===== */
-.my-applications {
-    padding: 40px 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+/* 전체 래퍼 (RoomPage 톤) */
+.apply-wrap {
+  padding: 8px 4px;
 }
 
-/* ===== 헤더 아래 상단 영역 ===== */
-.application-header {
-    width: 1200px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
+/* 상단 */
+.apply-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 12px;
 }
 
-.application-header h2 {
-    padding-left: 0;
-    margin: 0;
+.apply-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
 }
 
-/* ===== 탭 ===== */
-.tabs {
-    display: flex;
-    gap: 12px;
+/* 탭: RoomPage 카테고리 칩 느낌 */
+.apply-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  background: #fbfbfa;
+  border: 1px solid #eee;
+  border-radius: 12px;
 }
 
-.tabs button {
-    background: #e5f2e3;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: 600;
+.tab-chip {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #444;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.tabs button.active {
-    background: #97c793;
-    color: white;
+.tab-chip.active {
+  background: #e7f3ec;
+  border-color: #bfe1c3;
+  color: #1f7a41;
 }
 
-.tabs button:hover {
-    opacity: 0.9;
+/* 리스트 박스(테이블 컨테이너) */
+.apply-table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #eee;
+  background: #fff;
 }
 
-/* ===== 테이블 ===== */
-.application-table {
-    width: 1200px;
-    border-collapse: separate;
-    border-spacing: 0 10px;
+/* 헤더 */
+.apply-thead {
+  display: grid;
+  align-items: center;
+  text-align: center;
+  background: #fafafa;
+  font-size: 12px;
+  font-weight: 800;
+  color: #666;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f2f2f2;
 }
 
-.application-table th {
-    text-align: center;
-    font-size: 13px;
-    color: #6b7280;
-    padding-bottom: 8px;
+/* empty */
+.apply-empty {
+  padding: 28px 14px;
+  text-align: center;
+  color: #9aa0a6;
+  font-weight: 700;
+  font-size: 13px;
 }
 
-.application-table tbody tr {
-    background: #ffffff;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+/* row */
+.apply-row {
+  display: grid;
+  align-items: center;
+  text-align: center;
+  padding: 14px;
+  border-top: 1px solid #f2f2f2;
+  font-size: 13px;
+  background: #fff;
 }
 
-.application-table td {
-    padding: 16px;
-    text-align: center;
+.apply-row.clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-/* ===== 비어있을 때 ===== */
-.empty {
-    padding: 40px;
-    color: #9ca3af;
+.apply-row.clickable:hover {
+  background: #f8faf8;
 }
 
-/* ===== 상태 ===== */
-.status {
-    font-weight: 600;
+.apply-row.opened {
+  background: #f8faf8;
 }
 
-.status.신청중 {
-    color: #f59e0b;
+/* cell */
+.cell.title {
+  display: flex;
+  justify-content: center;
+  margin-bottom:0;
+  /* align-items: center; */
+  gap: 10px;
 }
 
-.status.승인 {
-    color: #16a34a;
+.study-title {
+  font-weight: 500;
+  font-size:15px;
 }
 
-.status.거절 {
-    color: #dc2626;
+.cell.who {
+  font-weight: 700;
+  color: #374151;
 }
 
-/* ===== 관리 버튼 ===== */
+/* 상태 pill */
+.status-pill {
+  justify-self: center;
+  width: fit-content;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.status-pill.신청중 {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.status-pill.승인 {
+  background: #eaf6ea;
+  border-color: #cfe8d0;
+  color: #2a6b33;
+}
+
+.status-pill.거절 {
+  background: #fff5f5;
+  border-color: #ffd6d6;
+  color: #d92d20;
+}
+
+/* actions */
 .actions {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
 }
 
-.actions .approve {
-    background: #97c793;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 8px;
-    cursor: pointer;
+.btn-approve,
+.btn-reject {
+  border: none;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 900;
+  font-size: 12px;
 }
 
-.actions .reject {
-    background: #f3f4f6;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 8px;
-    cursor: pointer;
+.btn-approve {
+  background: #97c793;
+  color: #fff;
 }
 
-.actions button:hover {
-    opacity: 0.9;
+.btn-reject {
+  background: #f2f4f7;
+  color: #344054;
+  border: 1px solid #eaecf0;
 }
 
-/* ===== 클릭 가능한 행 ===== */
-.clickable-row {
-    cursor: pointer;
-    transition: background 0.15s ease;
+.btn-approve:hover,
+.btn-reject:hover {
+  filter: brightness(0.98);
 }
 
-.clickable-row:hover {
-    background: #f8faf8;
+/* detail area */
+.apply-detail {
+  padding: 0 14px 14px;
+  background: #f8faf8;
+  border-top: 1px solid #f2f2f2;
 }
 
-/* ===== 드롭다운 상세 행 ===== */
-.application-detail td {
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
+.detail-card {
+  margin-top: 10px;
+  background: #ffffff;
+  border: 1px solid #eef1ee;
+  border-radius: 12px;
+  padding: 14px;
 }
 
-/* ===== 상세 박스 ===== */
-.detail-box {
-    background: #f8faf8;
-    border-radius: 10px;
-    padding: 20px 24px;
-    margin-top: -6px;
-    text-align: left;
-    font-size: 14px;
-    color: #374151;
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
-/* ===== 상세 정보 텍스트 ===== */
-.detail-box p {
-    margin: 6px 0;
+.detail-item {
+  border: 1px solid #eef1ee;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fbfbfa;
 }
 
-/* ===== 신청 메시지 ===== */
-.message-box {
-    margin-top: 12px;
+.dk {
+  font-size: 12px;
+  font-weight: 900;
+  color: #6b7280;
+  margin-bottom: 6px;
 }
 
-.message-box textarea {
-    width: 100%;
-    min-height: 90px;
-    margin-top: 6px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    background: #ffffff;
-    resize: none;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #374151;
+.dv {
+  font-size: 13px;
+  font-weight: 800;
+  color: #111;
 }
 
-/* ===== textarea 포커스 ===== */
-.message-box textarea:focus {
-    outline: none;
-    border-color: #97c793;
+.msg-title {
+  font-size: 12px;
+  font-weight: 900;
+  color: #6b7280;
+  margin-bottom: 8px;
 }
 
-/* ===== 클릭 방지 보완 ===== */
-.actions button {
-    pointer-events: auto;
+.msg textarea {
+  width: 100%;
+  min-height: 96px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 10px 12px;
+  resize: none;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+  outline: none;
+}
+
+.msg textarea:focus {
+  border-color: #97c793;
+  box-shadow: 0 0 0 3px rgba(151, 199, 147, 0.18);
 }
