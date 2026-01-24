@@ -1507,117 +1507,39 @@ function MeetingPage() {
         );
     };
 
-    /* const toggleCam = async () => {
-        const newVal = !camOn;
-        setCamOn(newVal);
-        localStorage.setItem("camOn", newVal);
-
-        console.log(`[toggleCam] newVal=${newVal}, camOn=${camOn}`);
-
-        // 1️⃣ 실제 미디어 트랙 제어
-        const producer = producersRef.current.get("camera");
-        const vt = localStreamRef.current?.getVideoTracks()[0];
-
-        console.log(`[toggleCam] producer exists:`, !!producer, `track:`, producer?.track?.readyState);
-        console.log(`[toggleCam] local video track exists:`, !!vt, `readyState:`, vt?.readyState);
-
-        // 🔥 카메라를 켜는데 producer나 비디오 트랙이 없는 경우
-        if (newVal && (!vt || !producer)) {
-            console.log(`[toggleCam] No video track or producer, creating new one. vt=${!!vt}, producer=${!!producer}`);
-
-            if (!sendTransportRef.current || sendTransportRef.current.closed) {
-                console.warn("[toggleCam] sendTransport not ready");
-                return;
-            }
-
-            try {
-                let newVideoTrack;
-
-                // 비디오 트랙이 없으면 새로 가져오기
-                if (!vt) {
-                    const newStream = await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: false,
-                    });
-
-                    newVideoTrack = newStream.getVideoTracks()[0];
-                    if (!newVideoTrack || newVideoTrack.readyState !== "live") {
-                        console.warn("[toggleCam] Failed to get new video track");
-                        return;
-                    }
-
-                    console.log(`[toggleCam] Got new video track:`, {
-                        id: newVideoTrack.id,
-                        readyState: newVideoTrack.readyState,
-                        enabled: newVideoTrack.enabled,
-                        muted: newVideoTrack.muted,
-                    });
-
-                    // 로컬 스트림 병합 (오디오 + 새 비디오)
-                    const prevAudioTracks = localStreamRef.current
-                        ? localStreamRef.current.getAudioTracks().filter(t => t.readyState !== "ended")
-                        : [];
-
-                    const merged = new MediaStream([...prevAudioTracks, newVideoTrack]);
-                    localStreamRef.current = merged;
-                    setLocalStream(merged);
-                } else {
-                    // 비디오 트랙은 있는데 producer가 없는 경우 (새로고침 후 카메라 OFF 상태)
-                    newVideoTrack = vt;
-                    console.log(`[toggleCam] Using existing video track for producer`);
-                }
-
-                // 새 producer 생성
-                await produceCamera(newVideoTrack, true);
-
-                console.log(`[toggleCam] Created producer for video track`);
-            } catch (e) {
-                console.error(`[toggleCam] Failed to create producer:`, e);
-                return;
-            }
-        } else if (newVal) {
-            // 카메라를 켜는데 producer와 트랙이 모두 있는 경우 - enabled만 변경
-            if (producer?.track) {
-                producer.track.enabled = true;
-                console.log(`[toggleCam] producer track enabled set to: true`);
-            }
-
-            if (vt) {
-                vt.enabled = true;
-                console.log(`[toggleCam] local stream track enabled set to: true`);
-            }
-        } else {
-            // 카메라를 끄는 경우
-            if (producer?.track) {
-                producer.track.enabled = false;
-                console.log(`[toggleCam] producer track enabled set to: false`);
-            }
-
-            if (vt) {
-                vt.enabled = false;
-                console.log(`[toggleCam] local stream track enabled set to: false`);
+    const removeVideoConsumer = (peerId) => {
+        for (const [producerId, c] of consumersRef.current.entries()) {
+            if (
+                c.appData?.type === "camera" &&
+                String(c.appData?.peerId) === String(peerId)
+            ) {
+                try { c.close(); } catch {}
+                consumersRef.current.delete(producerId);
             }
         }
-
-        // 2️⃣ UI 즉시 반영
-        setParticipants((prev) =>
-            prev.map((p) =>
-                p.isMe ? { ...p, cameraOff: !newVal } : p
+    
+        peerStreamsRef.current.delete(peerId);
+    
+        setParticipants(prev =>
+            prev.map(p =>
+                String(p.id) === String(peerId)
+                    ? { ...p, stream: null, cameraOff: true }
+                    : p
             )
         );
-
-        // 3️⃣ 서버에 상태 전파
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(
-                JSON.stringify({
-                    type: "USER_STATE_CHANGE",
-                    userId,
-                    changes: { cameraOff: !newVal },
-                })
-            );
-            console.log(`[toggleCam] sent USER_STATE_CHANGE to server: cameraOff=${!newVal}`);
+    };
+    
+    const removeAudioConsumer = (peerId) => {
+        for (const [producerId, c] of consumersRef.current.entries()) {
+            if (
+                c.appData?.type === "audio" &&
+                String(c.appData?.peerId) === String(peerId)
+            ) {
+                try { c.close(); } catch {}
+                consumersRef.current.delete(producerId);
+            }
         }
-    }; */
+    };
 
     // --- Hooks ---
 
@@ -1648,22 +1570,77 @@ function MeetingPage() {
 
     useEffect(() => {
         const onPipExit = () => {
-            console.log("[PiP] restore to meeting room");
-
-            // 통화 종료 아님
+            console.log("[PiP] restore + hard reload");
+    
+            // ❗ 통화 종료 아님
             isLeavingRef.current = false;
-
-            navigate(
-                `/lms/${subjectId}/MeetingRoom/${roomId}`,
-                { replace: true }
+    
+            // 🔥 회의 복귀는 "상태 복원"이 아니라 "재시작"
+            window.location.replace(
+                `/lms/${subjectId}/MeetingRoom/${roomId}`
             );
         };
-
+    
         window.addEventListener("meeting:pip-exit", onPipExit);
         return () => {
             window.removeEventListener("meeting:pip-exit", onPipExit);
         };
-    }, [navigate, subjectId, roomId]);
+    }, [subjectId, roomId]);
+
+    useEffect(() => {
+        if (!roomReconnecting) return;
+    
+        const sfuWs = sfuWsRef.current;
+        if (!sfuWs || sfuWs.readyState !== WebSocket.OPEN) return;
+    
+        sfuWs.send(JSON.stringify({
+            action: "room:sync",
+            requestId: safeUUID(),
+        }));
+    
+        const handler = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.action !== "room:sync:response") return;
+    
+            const peers = msg.data;
+    
+            peers.forEach(peer => {
+                // 🔥 이 값이 “진실”
+                setParticipants(prev =>
+                    prev.map(p =>
+                        String(p.id) === String(peer.peerId)
+                            ? {
+                                ...p,
+                                muted: !peer.micOn,
+                                cameraOff: !peer.cameraOn,
+                                isReconnecting: false,
+                                isLoading: false,
+                            }
+                            : p
+                    )
+                );
+    
+                // ❗ producer 없으면 절대 consume 시도 X
+                if (!peer.cameraOn) {
+                    removeVideoConsumer(peer.peerId);
+                }
+                if (!peer.micOn) {
+                    removeAudioConsumer(peer.peerId);
+                }
+            });
+    
+            hasFinishedInitialSyncRef.current = true;
+            setRoomReconnecting(false);
+    
+            sfuWs.removeEventListener("message", handler);
+        };
+    
+        sfuWs.addEventListener("message", handler);
+    
+        return () => {
+            sfuWs.removeEventListener("message", handler);
+        };
+    }, [roomReconnecting]);
 
     // 이전에 화면공유 중이었던 사람 추적 (화면공유 종료 감지용)
     const prevScreenSharersRef = useRef(new Set());
@@ -2456,7 +2433,7 @@ function MeetingPage() {
                 const { producerId, peerId, appData } = msg.data || {};
                 const isScreen = appData?.type === "screen";
 
-                if (appData?.mediaTag === "camera") {
+                if (appData?.type === "camera") {
                     handlePeerCameraOff(peerId);
                 }
 
