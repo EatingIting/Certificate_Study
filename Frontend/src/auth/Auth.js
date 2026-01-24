@@ -42,7 +42,7 @@ const Auth = () => {
             localStorage.setItem("accessToken", res.data.token);
 
             alert("로그인 성공");
-            navigate("/room");
+            navigate("/");
         } catch {
             alert("이메일 또는 비밀번호가 올바르지 않습니다.");
         }

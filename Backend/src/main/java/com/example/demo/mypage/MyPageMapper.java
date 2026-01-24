@@ -4,6 +4,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Mapper
 public interface MyPageMapper {
@@ -21,6 +22,20 @@ public interface MyPageMapper {
 
     void deleteByEmail(@Param("email") String email);
 
-    // ✅ 내 성별 조회 추가
     String getGender(@Param("email") String email);
+
+    List<MyStudyVO> getJoinedStudies(
+            @Param("email") String email,
+            @Param("today") LocalDate today
+    );
+
+    // 완료된 스터디 (종료일이 오늘 이전)
+    List<MyStudyVO> getCompletedStudies(
+            @Param("email") String email,
+            @Param("today") LocalDate today
+    );
+
+    List<MyStudyVO> getJoinedStudies(String email);
+
+    List<MyStudyVO> getCompletedStudies(String email);
 }

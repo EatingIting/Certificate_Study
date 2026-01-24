@@ -22,4 +22,6 @@ public class RoomListVO {
     private LocalDateTime createdAt;
 
     private LocalDate deadline;
+    private LocalDate startDate;
+    private String roomImg;
 }

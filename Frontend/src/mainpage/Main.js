@@ -1,44 +1,53 @@
 import "./Main.css";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../api/api";
 import heroImg from "./메인메인.png";
-
-/* ============================= */
-/* 🔹 [추가] 스터디 카드 데이터 */
-/* 👉 컴포넌트 함수 밖에 위치 */
-/* ============================= */
-const studyList = [
-    {
-        id: 1,
-        tag: "화상 스터디",
-        title: "정보처리기사 실전반",
-        desc: "주 3회 · 최대 10명",
-    },
-    {
-        id: 2,
-        tag: "화상 스터디",
-        title: "SQLD 단기 완성",
-        desc: "주 2회 · 최대 8명",
-    },
-    {
-        id: 3,
-        tag: "화상 스터디",
-        title: "리눅스 마스터",
-        desc: "주 5회 · 최대 6명",
-    },
-    {
-        id: 4,
-        tag: "화상 스터디",
-        title: "토익(일반)",
-        desc: "주 4회 · 최대 4명",
-    },
-];
 
 function Main() {
     const navigate = useNavigate();
 
+    const [rooms, setRooms] = useState([]);
+    const [categories, setCategories] = useState([]);
+
+    useEffect(() => {
+        fetchRooms();
+        fetchCategories();
+    }, []);
+
+    const fetchRooms = async () => {
+        const res = await api.get("/rooms");
+
+        setRooms(
+            [...res.data]
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .slice(0, 4)
+        );
+    };
+
+    const fetchCategories = async () => {
+        const res = await api.get("/category");
+
+        setCategories(
+            res.data.filter((c) => c.level === 1)
+        );
+    };
+
+    const formatStartDate = (dateStr) => {
+        if (!dateStr) return "";
+
+        const [y, m, d] = dateStr.split("-");
+        return `${y}년 ${m}월 ${d}일 시작`;
+    };
+
+    //오류 아님 수정x 가운데 특수문자 때문에 그런거임
+    const categoryNameMap = {
+        공무원·공공시험: "공공시험",
+        민간자격·실무능력: "민간자격"
+}
+
     return (
         <div className="page">
-            {/* Hero */}
             <section
                 className="hero sample-container"
                 style={{ "--hero-img": `url(${heroImg})` }}
@@ -50,34 +59,58 @@ function Main() {
                 <p>자격증 · 취업 · 개발 스터디를 실시간 화상으로</p>
             </section>
 
-            {/* Category */}
             <section className="main-category sample-container">
                 <h2>스터디 카테고리</h2>
+
                 <div className="main-list">
-                    {["기능장", "기사", "산업기사", "자기계발", "자격증","자격증","자격증"].map((c) => (
-                        <div key={c} className="main-item">
-                            <div className="circle">{c[0]}</div>
-                            <span>{c}</span>
+                    {categories.map((c) => (
+                        <div
+                            key={c.id}
+                            className="main-item"
+                            onClick={() => navigate(`/room?cat=${c.name}`)}
+                            style={{ cursor: "pointer" }}
+                        >
+                            <div className="circle">
+                                {(categoryNameMap[c.name] ?? c.name)[0]}
+                            </div>
+
+                            <span>
+                                {categoryNameMap[c.name] ?? c.name}
+                            </span>
                         </div>
                     ))}
                 </div>
             </section>
 
-            {/* Study List */}
             <section className="study sample-container">
                 <h2>지금 모집 중인 화상 스터디</h2>
+
                 <div className="study-list">
-                    {/* 🔹 [수정] [1,2,3,4].map → studyList.map */}
-                    {studyList.map((study) => (
-                        <div key={study.id} className="cardbox">
-                            <div className="thumbnail" />
+                    {rooms.map((room) => (
+                        <div key={room.roomId} className="cardbox">
+                            <div className="thumbnail">
+                                <img
+                                    src={`http://localhost:8080${room.roomImg}`}
+                                    alt="스터디 썸네일"
+                                    className="thumb-img"
+                                />
+                            </div>
 
-                            {/* 🔹 [수정] 하드코딩 제거 → 데이터 사용 */}
-                            <span className="tag">{study.tag}</span>
-                            <h3>{study.title}</h3>
-                            <p>{study.desc}</p>
+                            <span className="main-tag">
+                                {room.subCategoryName ?? room.midCategoryName}
+                            </span>
 
-                            <button>자세히 보기</button>
+                            <h3>{room.title}</h3>
+
+                            <p>{formatStartDate(room.startDate)}</p>
+
+                            <button
+                                onClick={() =>
+                                    navigate(`/room?open=${room.roomId}`)
+                                }
+                            >
+                                자세히 보기
+                            </button>
                         </div>
                     ))}
                 </div>

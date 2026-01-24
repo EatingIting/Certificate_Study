@@ -24,7 +24,7 @@ const MainSideBar = () => {
     const go = (path) => navigate(path);
 
     const handleLogout = () => {
-        localStorage.removeItem("accessToken");
+        localStorage.clear(); //
         alert("로그아웃 되었습니다.");
         navigate("/auth");
     };

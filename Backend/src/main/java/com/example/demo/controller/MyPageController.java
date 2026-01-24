@@ -65,4 +65,24 @@ public class MyPageController {
 
         return ResponseEntity.ok(gender);
     }
+
+    @GetMapping("/me/studies/joined")
+    public ResponseEntity<?> getJoinedStudies(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        return ResponseEntity.ok(
+                myPageService.getJoinedStudies(email)
+        );
+    }
+
+    @GetMapping("/me/studies/completed")
+    public ResponseEntity<?> getCompletedStudies(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        return ResponseEntity.ok(
+                myPageService.getCompletedStudies(email)
+        );
+    }
 }

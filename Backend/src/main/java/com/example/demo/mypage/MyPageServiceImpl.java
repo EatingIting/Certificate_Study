@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -74,5 +75,15 @@ public class MyPageServiceImpl implements MyPageService {
     @Override
     public String getGender(String email) {
         return myPageMapper.getGender(email);
+    }
+
+    @Override
+    public List<MyStudyVO> getJoinedStudies(String email) {
+        return myPageMapper.getJoinedStudies(email);
+    }
+
+    @Override
+    public List<MyStudyVO> getCompletedStudies(String email) {
+        return myPageMapper.getCompletedStudies(email);
     }
 }

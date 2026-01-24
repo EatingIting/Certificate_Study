@@ -5,7 +5,7 @@
 
 <mapper namespace="com.example.demo.RoomList.RoomListMapper">
 
-    <!-- ✅ 모집 리스트 조회 (OPEN만) -->
+    <!-- 모집 리스트 조회 (OPEN만) -->
     <select id="selectRoomList"
             resultType="com.example.demo.RoomList.RoomListVO">
 
@@ -14,6 +14,8 @@
             r.title,
             u.nickname,
 
+            r.room_img AS roomImg,
+            r.start_date AS startDate,
             r.max_participants AS maxParticipants,
 
             (
@@ -27,19 +29,31 @@
             r.gender,
             r.created_at AS createdAt,
 
-            c2.name AS midCategoryName,
-            c3.name AS subCategoryName
+
+            CASE
+                WHEN c.level = 1 THEN c.name
+                WHEN c.level = 2 THEN c.name
+                WHEN c.level = 3 THEN mid.name
+                END AS midCategoryName,
+
+
+            CASE
+                WHEN c.level = 3 THEN c.name
+                ELSE NULL
+                END AS subCategoryName
 
         FROM room r
                  JOIN users u ON r.host_user_email = u.email
 
-                 LEFT JOIN category c3 ON r.categoryId = c3.id
-                 LEFT JOIN category c2 ON c3.parent_id = c2.id
+
+                 LEFT JOIN category c ON r.categoryId = c.id
+
+                 LEFT JOIN category mid ON c.parent_id = mid.id
 
         WHERE r.status = 'OPEN'
         ORDER BY r.created_at DESC
-    </select>
 
+    </select>
 
 
 
