@@ -28,4 +28,6 @@ public class RoomCreateVO {
     private LocalDate deadline;
 
     private LocalDateTime createdAt;
+
+    private String roomImg;
 }

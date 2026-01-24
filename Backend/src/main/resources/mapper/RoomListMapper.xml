@@ -5,26 +5,64 @@
 
 <mapper namespace="com.example.demo.RoomList.RoomListMapper">
 
+    <!-- ✅ 모집 리스트 조회 (OPEN만) -->
     <select id="selectRoomList"
             resultType="com.example.demo.RoomList.RoomListVO">
 
         SELECT
-            r.room_id           AS roomId,
-            r.title             AS title,
-            r.host_user_nickname AS nickname,
-            mc.name             AS midCategoryName,
-            sc.name             AS subCategoryName,
-            r.max_participants  AS maxParticipants,
-            r.gender            AS gender,
-            r.created_at        AS createdAt
+            r.room_id AS roomId,
+            r.title,
+            u.nickname,
+
+            r.max_participants AS maxParticipants,
+
+            (
+                SELECT COUNT(*)
+                FROM room_join_request rjr
+                WHERE rjr.room_id = r.room_id
+                  AND rjr.status = '승인'
+            ) AS currentParticipants,
+
+            r.deadline,
+            r.gender,
+            r.created_at AS createdAt,
+
+            c2.name AS midCategoryName,
+            c3.name AS subCategoryName
 
         FROM room r
-                 LEFT JOIN category sc
-                           ON r.categoryId = sc.id
-                 LEFT JOIN category mc
-                           ON sc.parent_id = mc.id
-        ORDER BY r.created_at DESC
+                 JOIN users u ON r.host_user_email = u.email
 
+                 LEFT JOIN category c3 ON r.categoryId = c3.id
+                 LEFT JOIN category c2 ON c3.parent_id = c2.id
+
+        WHERE r.status = 'OPEN'
+        ORDER BY r.created_at DESC
     </select>
+
+
+
+
+    <!-- deadline 지난 방 CLOSED 처리 -->
+    <update id="closeExpiredRooms">
+        UPDATE room
+        SET status = 'CLOSED'
+        WHERE deadline &lt; CURDATE()
+          AND status = 'OPEN'
+    </update>
+
+
+    <!-- 정원 다 찬 방 CLOSED 처리 -->
+    <update id="closeFullRooms">
+        UPDATE room r
+        SET r.status = 'CLOSED'
+        WHERE r.status = 'OPEN'
+          AND (
+                  SELECT COUNT(*)
+                  FROM room_join_request rjr
+                  WHERE rjr.room_id = r.room_id
+                    AND rjr.status = '승인'
+              ) &gt;= r.max_participants
+    </update>
 
 </mapper>

@@ -14,12 +14,22 @@ public class RoomCreateController {
 
     private final RoomCreateService roomService;
 
-    @PostMapping
+    @PostMapping(consumes = "multipart/form-data")
     public ResponseEntity<Void> createRoom(
-            @RequestBody RoomCreateRequest request,
+            @ModelAttribute RoomCreateRequest request,
             Authentication authentication
     ) {
         roomService.insertRoom(request, authentication.getName());
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping(value = "/{roomId}", consumes = "multipart/form-data")
+    public ResponseEntity<Void> updateRoom(
+            @PathVariable String roomId,
+            @ModelAttribute RoomCreateRequest request,
+            Authentication authentication
+    ) {
+        roomService.updateRoom(roomId, request, authentication.getName());
         return ResponseEntity.ok().build();
     }
 }

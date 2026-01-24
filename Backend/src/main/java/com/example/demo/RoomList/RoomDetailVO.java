@@ -13,16 +13,26 @@ public class RoomDetailVO {
     private String content;
 
     private String gender;
-    private int maxPeople;
+    private int maxParticipants;
+
+    private int currentParticipants;
 
     private String nickname;
+    private String hostUserEmail;
+
+    private String hostUserNickname;
+    private Long categoryId;
+
     private String midCategoryName;
     private String subCategoryName;
 
     private LocalDate startDate;
     private LocalDate examDate;
     private LocalDate deadline;
-    private LocalDateTime endDate;
+    private LocalDate endDate;
 
     private LocalDateTime createdAt;
+    private String roomImg;
 }
+
+

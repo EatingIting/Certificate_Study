@@ -2,18 +2,17 @@ package com.example.demo.application;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-
 import java.util.List;
 
 @Mapper
 public interface ApplicationMapper {
 
-    // 신청 받은 스터디 목록
+    // 신청 받은 목록
     List<ApplicationVO> selectReceivedApplications(
             @Param("hostUserEmail") String hostUserEmail
     );
 
-    // 내가 신청한 스터디 목록
+    // 내가 신청한 목록
     List<ApplicationVO> selectSentApplications(
             @Param("requestUserEmail") String requestUserEmail
     );
@@ -39,10 +38,30 @@ public interface ApplicationMapper {
             @Param("applyMessage") String applyMessage
     );
 
-    //중복
+    // 중복 체크
     int existsActiveApplication(
             @Param("roomId") String roomId,
             @Param("requestUserEmail") String requestUserEmail
     );
 
+    // joinId → roomId 조회
+    String getRoomIdByJoinId(@Param("joinId") String joinId);
+
+    // 승인 인원 count
+    int countApprovedByRoomId(@Param("roomId") String roomId);
+
+    // 정원 조회
+    int getMaxParticipants(@Param("roomId") String roomId);
+
+    // 신청중 자동 거절
+    int autoRejectPending(@Param("roomId") String roomId);
+
+    // 방 상태 CLOSED 변경
+    int closeRoom(@Param("roomId") String roomId);
+
+    // 신청자 성별 조회
+    String getUserGender(@Param("email") String email);
+
+    // 방 성별 제한 조회
+    String getRoomGender(@Param("roomId") String roomId);
 }

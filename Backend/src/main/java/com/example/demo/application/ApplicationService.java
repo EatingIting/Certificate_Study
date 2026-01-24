@@ -18,5 +18,4 @@ public interface ApplicationService {
             String roomId,
             String applyMessage
     );
-
 }

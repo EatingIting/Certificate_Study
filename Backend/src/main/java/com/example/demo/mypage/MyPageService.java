@@ -16,4 +16,7 @@ public interface MyPageService {
     );
 
     void withdraw(String email);
+
+    // 성별 조회
+    String getGender(String email);
 }

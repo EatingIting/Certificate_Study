@@ -6,33 +6,44 @@
 <mapper namespace="com.example.demo.RoomList.RoomDetailMapper">
 
     <select id="selectRoomDetail"
-            parameterType="string"
             resultType="com.example.demo.RoomList.RoomDetailVO">
 
         SELECT
-            r.room_id           AS roomId,
-            r.title             AS title,
-            r.content           AS content,
-            r.gender            AS gender,
-            r.max_participants  AS maxPeople,
-            u.nickname          AS nickname,
+            r.room_id AS roomId,
+            r.title,
+            r.content,
+            r.gender,
+            r.max_participants AS maxParticipants,
 
-            mc.name             AS midCategoryName,
-            sc.name             AS subCategoryName,
+            -- ✅ 현재 참여 인원 (방장 포함)
+            (
+                SELECT COUNT(*) + 1
+                FROM room_join_request rjr
+                WHERE rjr.room_id = r.room_id
+                  AND rjr.status = '승인'
+            ) AS currentParticipants,
 
-            r.start_date        AS startDate,
-            r.exam_date         AS examDate,
-            r.deadline          AS deadline,
-            r.ended_at          AS endDate,
-            r.created_at        AS createdAt
+            r.deadline,
+            r.start_date AS startDate,
+            r.exam_date AS examDate,
+            r.ended_at AS endDate,
+            r.created_at AS createdAt,
+            r.room_img AS roomImg,
+
+            u.nickname,
+            r.host_user_email AS hostUserEmail,
+
+            r.hostUserNickname AS hostUserNickname,
+            r.categoryId       AS categoryId,
+
+            c2.name AS midCategoryName,
+            c3.name AS subCategoryName
 
         FROM room r
-                 JOIN users u
-                      ON r.host_user_email = u.email
-                 LEFT JOIN category sc
-                           ON r.categoryId = sc.id
-                 LEFT JOIN category mc
-                           ON sc.parent_id = mc.id
+                 JOIN users u ON r.host_user_email = u.email
+                 LEFT JOIN category c2 ON r.categoryId = c2.id
+                 LEFT JOIN category c3 ON c2.parent_id = c3.id
+
         WHERE r.room_id = #{roomId}
 
     </select>

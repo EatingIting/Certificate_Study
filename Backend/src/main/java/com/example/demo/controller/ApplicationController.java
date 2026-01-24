@@ -17,6 +17,8 @@ public class ApplicationController {
 
     private final ApplicationService applicationService;
 
+
+    // 신청하기
     @PostMapping
     public void applyToRoom(
             Authentication authentication,
@@ -42,6 +44,7 @@ public class ApplicationController {
     }
 
 
+    // 신청 받은 목록
     @GetMapping("/received")
     public List<ApplicationVO> getReceivedApplications(
             Authentication authentication
@@ -49,10 +52,12 @@ public class ApplicationController {
         if (authentication == null) {
             throw new RuntimeException("인증 정보가 없습니다.");
         }
-        String hostUserEmail = authentication.getName();
-        return applicationService.getReceivedApplications(hostUserEmail);
+
+        return applicationService.getReceivedApplications(authentication.getName());
     }
 
+
+    // 내가 신청한 목록
     @GetMapping("/sent")
     public List<ApplicationVO> getSentApplications(
             Authentication authentication
@@ -60,10 +65,12 @@ public class ApplicationController {
         if (authentication == null) {
             throw new RuntimeException("인증 정보가 없습니다.");
         }
-        String requestUserEmail = authentication.getName();
-        return applicationService.getSentApplications(requestUserEmail);
+
+        return applicationService.getSentApplications(authentication.getName());
     }
 
+
+    // 승인
     @PostMapping("/{joinId}/approve")
     public void approveApplication(
             @PathVariable String joinId,
@@ -73,10 +80,22 @@ public class ApplicationController {
             throw new RuntimeException("인증 정보가 없습니다.");
         }
 
-        String hostUserEmail = authentication.getName();
-        applicationService.approveApplication(joinId, hostUserEmail);
+        try {
+            applicationService.approveApplication(
+                    joinId,
+                    authentication.getName()
+            );
+
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    e.getMessage()
+            );
+        }
     }
 
+
+    // 거절
     @PostMapping("/{joinId}/reject")
     public void rejectApplication(
             @PathVariable String joinId,
@@ -86,7 +105,9 @@ public class ApplicationController {
             throw new RuntimeException("인증 정보가 없습니다.");
         }
 
-        String hostUserEmail = authentication.getName();
-        applicationService.rejectApplication(joinId, hostUserEmail);
+        applicationService.rejectApplication(
+                joinId,
+                authentication.getName()
+        );
     }
 }

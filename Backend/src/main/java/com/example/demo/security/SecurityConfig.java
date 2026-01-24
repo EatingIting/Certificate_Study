@@ -45,7 +45,7 @@ public class SecurityConfig {
                                 "/*.png", "/*.jpg", "/*.jpeg", "/*.svg", "/*.ico",
                                 "/assets/**",
                                 "/images/**",
-                                "/uploads/**"
+                                "/upload/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/users/login",
