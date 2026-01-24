@@ -69,4 +69,10 @@ public class MyPageServiceImpl implements MyPageService {
     public void withdraw(String email) {
         myPageMapper.deleteByEmail(email);
     }
+
+    // 성별 조회 추가
+    @Override
+    public String getGender(String email) {
+        return myPageMapper.getGender(email);
+    }
 }

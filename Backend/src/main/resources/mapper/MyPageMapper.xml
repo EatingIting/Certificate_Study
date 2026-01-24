@@ -26,4 +26,11 @@
         WHERE email = #{email}
     </delete>
 
+    <!-- 내 성별 조회 추가 -->
+    <select id="getGender" resultType="String">
+        SELECT gender
+        FROM users
+        WHERE email = #{email}
+    </select>
+
 </mapper>

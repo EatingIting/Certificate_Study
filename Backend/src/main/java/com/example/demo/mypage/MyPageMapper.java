@@ -20,4 +20,7 @@ public interface MyPageMapper {
     );
 
     void deleteByEmail(@Param("email") String email);
+
+    // ✅ 내 성별 조회 추가
+    String getGender(@Param("email") String email);
 }

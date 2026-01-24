@@ -55,4 +55,14 @@ public class MyPageController {
 
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/me/gender")
+    public ResponseEntity<String> getMyGender(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        String gender = myPageService.getGender(email);
+
+        return ResponseEntity.ok(gender);
+    }
 }

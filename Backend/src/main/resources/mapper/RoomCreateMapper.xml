@@ -5,6 +5,7 @@
 
 <mapper namespace="com.example.demo.roomcreate.RoomCreateMapper">
 
+    <!-- ✅ 방 생성 -->
     <insert id="insertRoom">
         INSERT INTO room (
             room_id,
@@ -12,7 +13,7 @@
             title,
             content,
             gender,
-        max_participants,
+            max_participants,
             status,
             categoryId,
             start_date,
@@ -20,27 +21,29 @@
             deadline,
             ended_at,
             hostUserNickname,
+            room_img,
             created_at
         ) VALUES (
-            #{roomId},
-            #{hostUserEmail},
-            #{title},
-            #{content},
-            #{gender},
-            #{maxParticipants},
-            'OPEN',
-            #{categoryId},
-            #{startDate},
-            #{examDate},
-            #{deadline},
-            #{endDate},
-            #{hostUserNickname},
-            NOW()
-        )
+                     #{roomId},
+                     #{hostUserEmail},
+                     #{title},
+                     #{content},
+                     #{gender},
+                     #{maxParticipants},
+                     'OPEN',
+                     #{categoryId},
+                     #{startDate},
+                     #{examDate},
+                     #{deadline},
+                     #{endDate},
+                     #{hostUserNickname},
+                     #{roomImg},
+                     NOW()
+                 )
     </insert>
 
 
-
+    <!-- ✅ 전체 방 조회 -->
     <select id="findAllRooms"
             resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
@@ -57,12 +60,14 @@
             ended_at           AS endDate,
             exam_date          AS examDate,
             deadline,
+            room_img           AS roomImg,
             created_at         AS createdAt
         FROM room
         ORDER BY created_at DESC
     </select>
 
 
+    <!-- ✅ 방 상세 조회 -->
     <select id="findRoomById"
             resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
@@ -79,10 +84,29 @@
             ended_at           AS endDate,
             exam_date          AS examDate,
             deadline,
+            room_img           AS roomImg,
             created_at         AS createdAt
         FROM room
         WHERE room_id = #{roomId}
     </select>
 
+
+    <!-- ✅ 방 수정 -->
+    <update id="updateRoom">
+        UPDATE room
+        SET
+            title = #{title},
+            content = #{content},
+            gender = #{gender},
+            max_participants = #{maxParticipants},
+            categoryId = #{categoryId},
+            start_date = #{startDate},
+            ended_at = #{endDate},
+            exam_date = #{examDate},
+            deadline = #{deadline},
+            hostUserNickname = #{hostUserNickname},
+            room_img = #{roomImg}
+        WHERE room_id = #{roomId}
+    </update>
 
 </mapper>
