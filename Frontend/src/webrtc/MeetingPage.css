@@ -1561,6 +1561,12 @@ body {
   pointer-events: none;
 }
 
+.video-element.pip-black-screen {
+  background-color: #000000 !important;
+  background: #000000 !important;
+  object-fit: cover;
+}
+
 .stream-label {
   margin-top: 1rem;
   font-size: 1.125rem;
