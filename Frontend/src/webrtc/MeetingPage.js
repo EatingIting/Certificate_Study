@@ -182,14 +182,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
   return (
     <div className={`video-tile ${isMain ? "main" : ""} ${isSpeaking ? "speaking" : ""}`}>
-      {isJoining && (
+      {(isJoining && !safeUser.isMe) && (
         <div className="reconnecting-overlay">
           <Loader2 className="spinner" />
           <p>접속 중...</p>
         </div>
       )}
 
-      {(isReconnecting || showRoomReconnecting) && (
+      {((isReconnecting && !safeUser.isMe) || showRoomReconnecting) && (
         <div className="reconnecting-overlay">
           <Loader2 className="spinner" />
           <p>재접속 중...</p>
@@ -1792,13 +1792,22 @@ function MeetingPage() {
                 prev.map(p => {
                     if (!p.isReconnecting) return p;
 
+                    const peerId = String(p.id);
+                    if (p.isMe) {
+                        return {
+                            ...p,
+                            isReconnecting: false,
+                            isLoading: false,
+                            reconnectStartedAt: undefined,
+                        };
+                    }
+
                     const elapsed = Date.now() - (p.reconnectStartedAt ?? 0);
 
                     // 최소 800ms는 보여주기
                     if (elapsed < 800) return p;
 
                     // ✅ 800ms 이상 경과했으면 재접속 상태 종료
-                    const peerId = String(p.id);
                     if (reconnectHistoryRef.current.has(peerId)) {
                         console.log(`✅ [RECONNECT COMPLETED] ${p.name} (${peerId}) - elapsed=${elapsed}ms`);
                         reconnectHistoryRef.current.delete(peerId);
@@ -1807,7 +1816,6 @@ function MeetingPage() {
 
                     // 스트림이 생겼거나, 카메라 OFF면 종료
                     if (p.stream || p.cameraOff) {
-                        // 사용자가 다시 접속하고 스트림이 복구되면 reconnectHistoryRef에서도 제거
                         if (reconnectHistoryRef.current.has(peerId)) {
                             reconnectHistoryRef.current.delete(peerId);
                             reconnectCompletedTimeRef.current.set(peerId, Date.now());  // ✅ 완료 시간 기록
@@ -2037,16 +2045,18 @@ function MeetingPage() {
                             const now = Date.now();
                             const recentlyCompleted = completedTime && (now - completedTime) < 1000;
 
-                            if (isOffline && !recentlyCompleted) {
-                                if (!reconnectHistoryRef.current.has(peerId)) {
-                                    reconnectHistoryRef.current.add(peerId);
-                                    console.log(`➕ [ADD RECONNECT] ${u.userName} (${peerId})`);
+                            if (!isMe) {
+                                if (isOffline && !recentlyCompleted) {
+                                    if (!reconnectHistoryRef.current.has(peerId)) {
+                                        reconnectHistoryRef.current.add(peerId);
+                                        console.log(`➕ [ADD RECONNECT] ${u.userName} (${peerId})`);
+                                    }
+                                } else if (isOnline && reconnectHistoryRef.current.has(peerId)) {
+                                    reconnectHistoryRef.current.delete(peerId);
                                 }
-                            } else if (isOnline && reconnectHistoryRef.current.has(peerId)) {
-                                reconnectHistoryRef.current.delete(peerId);
                             }
 
-                            const shouldShowReconnecting = isOffline && !recentlyCompleted;
+                            const shouldShowReconnecting = !isMe && isOffline && !recentlyCompleted;
 
                             const baseUser = {
                                 id: peerId,
@@ -2075,8 +2085,8 @@ function MeetingPage() {
                                 const shouldStopLoading = isMe && localStreamRef.current;
                                 return {
                                     ...baseUser,
-                                    isJoining: true,
-                                    isLoading: !shouldStopLoading,
+                                    isJoining: !isMe,
+                                    isLoading: !isMe && !shouldStopLoading,
                                 };
                             }
 
@@ -2121,14 +2131,11 @@ function MeetingPage() {
                             return false;
                         }).map(p => ({
                             ...p,
-                            // 유령 상태이므로 재접속 중으로 표시하되, 기존 스트림이 있다면 유지 시도
-                            isReconnecting: true,
-                            // 만약 hasActiveConsumer로 살려진 경우라면, 스트림을 null로 밀지 않는게 나을 수도 있지만
-                            // 안전하게 일단 재접속 UI를 보여줍니다. (곧 newProducer가 오거나 USERS_UPDATE가 정상화됨)
-                            stream: null, 
-                            screenStream: null,
-                            isScreenSharing: false,
-                            reconnectStartedAt: p.reconnectStartedAt || Date.now()
+                            isReconnecting: p.isMe ? false : true,
+                            stream: p.isMe ? p.stream : null, 
+                            screenStream: p.isMe ? p.screenStream : null,
+                            isScreenSharing: p.isMe ? p.isScreenSharing : false,
+                            reconnectStartedAt: p.isMe ? undefined : (p.reconnectStartedAt || Date.now())
                         }));
 
                         // -------------------------------------------------------------
@@ -2186,6 +2193,7 @@ function MeetingPage() {
 
                 if (data.type === "USER_RECONNECTING") {
                     const peerId = String(data.userId);
+                    if (peerId === String(userId)) return;
 
                     setParticipants(prev =>
                         prev.map(p =>
