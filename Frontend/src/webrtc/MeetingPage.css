@@ -34,6 +34,14 @@ body {
 }
 
 /* --- Layout --- */
+/* Portal로 렌더링될 때만 fixed 오버레이 */
+#meeting-root > .meeting-page {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+}
+
 .meet-layout {
   display: flex;
   height: 100vh;

@@ -11,23 +11,61 @@ const MeetingContext = createContext(null);
 export const MeetingProvider = ({ children }) => {
     const [isInMeeting, setIsInMeeting] = useState(false);
     const [isPipMode, setIsPipMode] = useState(false);
+    const [roomId, setRoomId] = useState(null);
 
-    const roomIdRef = useRef(null);
-
-    const startMeeting = useCallback((roomId) => {
-        roomIdRef.current = roomId;
+    const startMeeting = useCallback((roomId, subjectId) => {
+        setRoomId(roomId);
         setIsInMeeting(true);
+    
+        sessionStorage.setItem("pip.roomId", roomId);
+        sessionStorage.setItem("pip.subjectId", subjectId);
     }, []);
 
     const endMeeting = useCallback(() => {
-        roomIdRef.current = null;
+        setRoomId(null);
         setIsInMeeting(false);
         setIsPipMode(false);
     }, []);
 
     const requestBrowserPip = async (videoEl) => {
-        if (!videoEl) return;
-        if (document.pictureInPictureElement) return;
+        if (!videoEl) {
+            console.warn("[PiP] 비디오 요소가 없습니다.");
+            return;
+        }
+        if (document.pictureInPictureElement) {
+            console.log("[PiP] 이미 PiP 모드입니다.");
+            return;
+        }
+
+        // ✅ 비디오 메타데이터가 로드될 때까지 대기
+        if (videoEl.readyState < 1) { // HAVE_NOTHING (0) → HAVE_METADATA (1) 이상 필요
+            console.log("[PiP] 비디오 메타데이터 로드 대기 중...");
+            
+            try {
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error("비디오 메타데이터 로드 타임아웃"));
+                    }, 5000); // 5초 타임아웃
+
+                    const onLoadedMetadata = () => {
+                        clearTimeout(timeout);
+                        videoEl.removeEventListener("loadedmetadata", onLoadedMetadata);
+                        resolve();
+                    };
+
+                    videoEl.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
+                    
+                    // 이미 로드되어 있으면 즉시 resolve
+                    if (videoEl.readyState >= 1) {
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                });
+            } catch (err) {
+                console.error("[PiP] 비디오 메타데이터 로드 실패:", err);
+                return; // 에러 발생 시 PiP 요청 중단
+            }
+        }
 
         const handleLeavePiP = () => {
             console.log("[PiP] leavepictureinpicture");
@@ -46,8 +84,14 @@ export const MeetingProvider = ({ children }) => {
             { once: true }
         );
 
-        await videoEl.requestPictureInPicture();
-        setIsPipMode(true);
+        try {
+            await videoEl.requestPictureInPicture();
+            setIsPipMode(true);
+            console.log("[PiP] PiP 모드 활성화됨");
+        } catch (error) {
+            console.error("[PiP] PiP 요청 실패:", error);
+            // 에러 발생 시 사용자에게 알리지 않고 조용히 실패 처리
+        }
     };
 
     const exitBrowserPip = async () => {
@@ -61,7 +105,7 @@ export const MeetingProvider = ({ children }) => {
             value={{
                 isInMeeting,
                 isPipMode,
-                roomId: roomIdRef.current,
+                roomId,
                 startMeeting,
                 endMeeting,
                 requestBrowserPip,

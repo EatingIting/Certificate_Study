@@ -8,7 +8,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const { subjectId } = useParams();
 
     // ✅ 회의 상태 (PiP 트리거용)
-    const { isInMeeting } = useMeeting();
+    const { isInMeeting, isPipMode, roomId } = useMeeting();
 
     // ✅ 초기값: 전부 열림
     const [openKeys, setOpenKeys] = useState([
@@ -25,13 +25,20 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const setActiveMenu = setActiveMenuProp ?? setLocalActiveMenu;
 
     const requestPipIfMeeting = useCallback(() => {
-        if (!isInMeeting) return;
+        // roomId가 있으면 회의 중으로 간주 (isInMeeting이 false여도)
+        const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("currentMeetingRoomId");
+        
+        if (!hasActiveMeeting) {
+            console.log("[LMSSidebar] 회의 중이 아니므로 PiP 요청 안 함");
+            return;
+        }
 
+        console.log("[LMSSidebar] PiP 요청 이벤트 발생");
         // ✅ 오직 "의도"만 전달
         window.dispatchEvent(
             new CustomEvent("meeting:request-pip")
         );
-    }, [isInMeeting]);
+    }, [isInMeeting, isPipMode, roomId]);
 
     // ===============================
     // 메인메뉴 클릭: 이동 X, 펼침/접힘만
@@ -53,8 +60,16 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             prev.includes(parentKey) ? prev : [...prev, parentKey]
         );
 
-        // 🔥 회의 중이면 자동 PiP
-        requestPipIfMeeting();
+        // 사이드바 클릭 이벤트 발생 (PiP 복귀 방지용)
+        sessionStorage.setItem("sidebarNavigation", "true");
+        window.dispatchEvent(new CustomEvent("sidebar:navigation", {
+            detail: { path: `/lms/${subjectId}/${path}` }
+        }));
+
+        // 🔥 회의 중이면 자동 PiP (PiP가 이미 활성화되어 있으면 다시 요청하지 않음)
+        if (!document.pictureInPictureElement) {
+            requestPipIfMeeting();
+        }
 
         navigate(`/lms/${subjectId}/${path}`);
     };
@@ -64,6 +79,11 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     // ===============================
     const goDashboard = () => {
         setActiveMenu("dashboard");
+
+        // 사이드바 클릭 이벤트 발생 (PiP 복귀 방지용)
+        window.dispatchEvent(new CustomEvent("sidebar:navigation", {
+            detail: { path: `/lms/${subjectId}/dashboard` }
+        }));
 
         // 🔥 회의 중이면 자동 PiP
         requestPipIfMeeting();
