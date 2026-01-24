@@ -1,6 +1,7 @@
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import "./MyPage.css";
+import {useNavigate} from "react-router-dom";
 
 const MyPage = () => {
   const [profile, setProfile] = useState(null);
@@ -10,32 +11,27 @@ const MyPage = () => {
   const [certInput, setCertInput] = useState("");
   const [certs, setCerts] = useState(["정보처리기사", "토익", "SQLD"]);
 
-  const joinedStudies = useMemo(
-      () => [
-        {
-          id: 1,
-          title: "정보처리기사 스터디",
-          status: "진행중",
-        },
-        { id: 2, title: "토익 준비반", status: "진행중" },
-      ],
-      []
-  );
+  const [joinedStudies, setJoinedStudies] = useState([]);
 
-  const completedStudies = useMemo(
-      () => [
-        { id: 101, title: "SQLD 자격증 따기", meta: "2024.03.15" },
-        { id: 102, title: "NCS 공부", meta: "2024.02.20" },
-      ],
-      []
-  );
+  const [completedStudies, setCompletedStudies] = useState([]);
 
   const [draft, setDraft] = useState(null);
 
   const [previewImage, setPreviewImage] = useState("");
 
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      alert("로그인이 필요한 페이지입니다.");
+      navigate("/auth");
+    }
+  }, [navigate]);
+
   useEffect(() => {
     fetchProfile();
+    fetchStudies();
   }, []);
 
   const fetchProfile = async () => {
@@ -51,6 +47,35 @@ const MyPage = () => {
       setProfile(res.data);
     } catch (err) {
       console.error("마이페이지 조회 실패", err);
+    }
+  };
+
+  const fetchStudies = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+
+      const joinedRes = await axios.get(
+          "/api/mypage/me/studies/joined",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+      );
+
+      const completedRes = await axios.get(
+          "/api/mypage/me/studies/completed",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+      );
+
+      setJoinedStudies(joinedRes.data);
+      setCompletedStudies(completedRes.data);
+    } catch (err) {
+      console.error("스터디 목록 조회 실패", err);
     }
   };
 
@@ -139,6 +164,18 @@ const MyPage = () => {
 
     setPreviewImage(URL.createObjectURL(file));
     setDraft({ ...draft, profileImg: file });
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+
+    const date = new Date(dateStr);
+
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+
+    return `${yyyy}년 ${mm}월 ${dd}일`;
   };
 
   if (!profile) return <div>로딩중...</div>;
@@ -253,13 +290,18 @@ const MyPage = () => {
                 <h4 className="sub-title">가입한 스터디</h4>
 
                 {joinedStudies.map((s) => (
-                    <div className="study-item" key={s.id}>
+                    <div className="study-item" key={s.roomId}>
                       <div className="study-left">
                         <div className="study-name">{s.title}</div>
-                        <div className="study-sub">{s.dateText}</div>
+                        <div className="study-sub">
+                          시작일: {formatDate(s.startDate)}
+                        </div>
                       </div>
 
                       <div className="study-right">
+                        {s.hostEmail === profile.email && (
+                            <span className="badge badge-blue">방장</span>
+                        )}
                         <span className="badge badge-green">{s.status}</span>
                       </div>
                     </div>
@@ -274,14 +316,18 @@ const MyPage = () => {
                 <h4 className="sub-title">완료된 스터디</h4>
 
                 {completedStudies.map((s) => (
-                    <div className="study-item" key={s.id}>
+                    <div className="study-item" key={s.roomId}>
                       <div className="study-left">
                         <div className="study-name">{s.title}</div>
-                        <div className="study-sub">종료일: {s.meta}</div>
+                        <div className="study-sub">종료일: {formatDate(s.endAt)}</div>
                       </div>
 
                       <div className="study-right">
                         <span className="badge badge-gray">종료</span>
+
+                        {s.hostEmail === profile.email && (
+                            <span className="badge badge-blue">방장</span>
+                        )}
                       </div>
                     </div>
                 ))}

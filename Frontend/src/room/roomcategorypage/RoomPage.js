@@ -2,10 +2,12 @@ import "./RoomPage.css";
 import RoomPageModal from "./RoomPageModal";
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/api";
+import {useNavigate} from "react-router-dom";
 
 const ITEMS_PER_PAGE = 8;
 
 const RoomPage = () => {
+    const navigate = useNavigate();
     const [rooms, setRooms] = useState([]);
     const [categories, setCategories] = useState([]);
 
@@ -23,14 +25,34 @@ const RoomPage = () => {
         fetchCategories();
     }, []);
 
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const catParam = params.get("cat");
+
+        if (catParam) {
+            setCat(catParam);
+            setMid(null);
+            setSub(null);
+            setPage(1);
+
+            navigate("/room", { replace: true });
+        }
+    }, [location.search]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const keywordParam = params.get("keyword");
+
+        if (keywordParam) {
+            setKeyword(keywordParam);
+            setPage(1);
+        }
+    }, [location.search]);
+
     const fetchRooms = async () => {
         const res = await api.get("/rooms");
         setRooms([...res.data].sort((a, b) => b.id - a.id));
     };
-
-    useEffect(() => {
-        console.log("rooms:", rooms);
-    }, [rooms]);
 
     const fetchCategories = async () => {
         const res = await api.get("/category");
@@ -128,7 +150,7 @@ const RoomPage = () => {
             }
         }
 
-        if (mid !== null && sub === null) {
+        if (mid !== null) {
             list = list.filter(
                 r => r.midCategoryName === mid
             );

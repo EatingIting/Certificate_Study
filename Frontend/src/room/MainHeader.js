@@ -11,10 +11,11 @@ const MainHeader = () => {
     const [nickname, setNickname] = useState(null);
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
+    const [searchText, setSearchText] = useState("");
 
     useEffect(() => {
         setNickname(localStorage.getItem("nickname"));
-    }, []);
+    }, [pathname]);
 
     // 바깥 클릭 시 드롭다운 닫기
     useEffect(() => {
@@ -42,8 +43,25 @@ const MainHeader = () => {
                 </div>
 
                 <div className="search-box">
-                    <input placeholder="어떤 스터디를 찾고 있나요? (ex. 정보처리기사)" />
-                    <button>스터디 검색</button>
+                    <input
+                        placeholder="어떤 스터디를 찾고 있나요?"
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                navigate(`/room?keyword=${searchText}`);
+                                setSearchText("");
+                            }
+                        }}
+                    />
+                    <button
+                        onClick={() => {
+                            navigate(`/room?keyword=${searchText}`);
+                            setSearchText("");
+                        }}
+                    >
+                        스터디 검색
+                    </button>
                 </div>
 
                 <div className="main-actions">
@@ -63,12 +81,21 @@ const MainHeader = () => {
                                     </div>
 
                                     <ul>
-                                        <li onClick={() => navigate("/room/mypage")}>내 프로필 보기</li>
-                                        <li onClick={() => navigate("/room/mystudy")}>내 클래스룸</li>
-                                        <li onClick={() => navigate("/room/create")}>스터디 만들기</li>
+                                        <li onClick={() => navigate("/room/mypage")}>
+                                            내 프로필 보기
+                                        </li>
+                                        <li onClick={() => navigate("/room/mystudy")}>
+                                            내 클래스룸
+                                        </li>
+                                        <li onClick={() => navigate("/room/create")}>
+                                            스터디 만들기
+                                        </li>
                                     </ul>
 
-                                    <div className="dropdown-footer" onClick={handleLogout}>
+                                    <div
+                                        className="dropdown-footer"
+                                        onClick={handleLogout}
+                                    >
                                         로그아웃
                                     </div>
                                 </div>

@@ -2,6 +2,8 @@ package com.example.demo.mypage;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 public interface MyPageService {
 
     MyPageVO getMyPage(String userId);
@@ -19,4 +21,8 @@ public interface MyPageService {
 
     // 성별 조회
     String getGender(String email);
+
+    List<MyStudyVO> getJoinedStudies(String email);
+
+    List<MyStudyVO> getCompletedStudies(String email);
 }

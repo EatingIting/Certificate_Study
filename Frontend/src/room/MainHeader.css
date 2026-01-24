@@ -15,6 +15,17 @@
     margin-top: 5px;
 }
 
+.logo {
+    cursor: pointer;
+}
+
+.login-btn {
+    display: block;
+    padding: 10px 15px;
+    border-radius: 8px;
+    border: 1px solid #b6b5b5;
+    cursor: pointer;
+}
 
 /* 페이지 전체는 고정 */
 .sample-page {

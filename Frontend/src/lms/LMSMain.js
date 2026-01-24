@@ -2,9 +2,19 @@ import React, { useEffect, useState } from "react";
 import ClassCard from "./ClassCard";
 import api from "../api/api";
 import "./LMSMain.css";
+import {useNavigate} from "react-router-dom";
 
 const LMSMain = () => {
     const [classList, setClassList] = useState([]);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const token = localStorage.getItem("accessToken");
+        if (!token) {
+            alert("로그인이 필요한 페이지입니다.");
+            navigate("/auth");
+        }
+    }, [navigate]);
 
     // ✅ 내 클래스룸 목록 불러오기
     useEffect(() => {

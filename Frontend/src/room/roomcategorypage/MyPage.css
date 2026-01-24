@@ -458,3 +458,11 @@
   font-weight: 700;
   font-size: 13px;
 }
+.badge-blue {
+  background: #3b82f6;
+  color: white;
+  margin-left: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
