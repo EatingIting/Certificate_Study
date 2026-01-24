@@ -202,6 +202,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             autoPlay
             playsInline
             muted
+            data-main-video
             className={`video-element ${isScreen ? "screen" : ""}`}
             style={{ display: shouldRenderVideo ? "block" : "none" }}
         />
@@ -242,7 +243,7 @@ function safeUUID() {
 // --- Main App Component ---
 
 function MeetingPage() {
-    const { roomId, subjectId } = useParams();
+    const { subjectId, roomId } = useParams();
     const navigate = useNavigate();
     const loggedRef = useRef(false);
 
@@ -260,6 +261,13 @@ function MeetingPage() {
         saveMeetingState,
         requestBrowserPip,
     } = useMeeting();
+
+    useEffect(() => {
+        if (!roomId || !subjectId) return;
+
+        console.log("[MeetingPage] startMeeting", { roomId, subjectId });
+        startMeeting(roomId, subjectId);
+    }, [roomId, subjectId, startMeeting]);
 
     const [layoutMode, setLayoutMode] = useState("speaker");
 
@@ -334,6 +342,7 @@ function MeetingPage() {
     const chatEndRef = useRef(null);
     const [chatConnected, setChatConnected] = useState(false);
     const lastSpeakingRef = useRef(null);
+    const isInitialMountRef = useRef(true);
 
     const reactionTimersRef = useRef({});
 
@@ -754,12 +763,9 @@ function MeetingPage() {
 
         // MeetingContext 호출은 실패해도 미디어 동작에 영향 없게 격리
         try {
-        if (typeof startMeeting === "function" && roomId) {
-            startMeeting(roomId, subjectId);
-        }
-        if (typeof saveMeetingState === "function") {
-            saveMeetingState({ localStream: stream });
-        }
+            if (typeof saveMeetingState === "function") {
+                saveMeetingState({ localStream: stream });
+            }
         } catch (e) {
         console.warn("[startLocalMedia] meeting context error:", e);
         }
@@ -1622,14 +1628,13 @@ function MeetingPage() {
         init();
     }, []);
 
-     useEffect(() => {
-        // roomId는 기존 로직에서 가져오면 됩니다
-        startMeeting(/* roomId */);
+    useEffect(() => {
+        // startMeeting은 MeetingRouteBridge / startLocalMedia에서 roomId·subjectId와 함께 호출됨
         return () => {
             // ❗ 언마운트 시에만 종료 (숨김일 땐 호출 안 됨)
             endMeeting();
         };
-    }, [startMeeting, endMeeting]); 
+    }, [endMeeting]); 
 
     useEffect(() => {
         const onRequestPip = () => {
@@ -2586,7 +2591,16 @@ function MeetingPage() {
     }, [sidebarView]);
 
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        // 마운트 직후 첫 렌더링에서는 스크롤하지 않음 (자동 스크롤 방지)
+        if (isInitialMountRef.current) {
+            isInitialMountRef.current = false;
+            return;
+        }
+        
+        // 메시지가 있고 채팅 영역이 보이는 상태일 때만 스크롤
+        if (messages.length > 0 && chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
     }, [messages]);
 
     useEffect(() => {
@@ -2695,7 +2709,7 @@ function MeetingPage() {
     const _sv = streamVersion;
 
     return (
-        <>
+        <div className="meeting-page">
             <div className="meet-layout">
                 <main className="meet-main">
                     {/* 플로팅 정보 배지 - 메인 스테이지 왼쪽 상단에 표시 */}
@@ -3362,7 +3376,7 @@ function MeetingPage() {
                     </div>
                 </aside>
             </div>
-        </>
+        </div>
     );
 }
 

@@ -23,7 +23,7 @@ function App() {
                 {/* <Route path="/meeting/:roomId" element={<MeetingProvider> <MeetingPage /> </MeetingProvider>} /> */}
                 {/* <Route path="MeetingRoom/:roomId" element={<MeetingPage />} /> */}
                 <Route path="/lmsMain" element={<LMSMain />} />
-                <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
+                <Route path="/lms/:subjectId/*" element={<LMSSubject />} />
             </Routes>
         </BrowserRouter>
     );
