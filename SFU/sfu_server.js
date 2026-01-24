@@ -39,16 +39,16 @@ function randomId(prefix = "") {
 }
 
 function getLocalIp() {
-    const interfaces = os.networkInterfaces();
-    for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name]) {
-            // IPv4이고, 내부(127.0.0.1)가 아닌 주소를 찾음
-            if (iface.family === 'IPv4' && !iface.internal) {
-                return iface.address;
-            }
-        }
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // IPv4이고, 내부(127.0.0.1)가 아닌 주소를 찾음
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
     }
-    return "127.0.0.1"; // 못 찾으면 기본값
+  }
+  return "127.0.0.1"; // 못 찾으면 기본값
 }
 
 const MY_IP = getLocalIp(); // 서버 켜질 때 자동으로 IP 감지!
@@ -89,19 +89,19 @@ function cleanupPeer(room, peerId) {
   const peer = room.peers.get(peerId);
   if (!peer) return;
 
-  for (const consumer of peer.consumers.values()) { try { consumer.close(); } catch {} }
+  for (const consumer of peer.consumers.values()) { try { consumer.close(); } catch { } }
   peer.consumers.clear();
 
-  for (const producer of peer.producers.values()) { try { producer.close(); } catch {} }
+  for (const producer of peer.producers.values()) { try { producer.close(); } catch { } }
   peer.producers.clear();
 
-  for (const { transport } of peer.transports.values()) { try { transport.close(); } catch {} }
+  for (const { transport } of peer.transports.values()) { try { transport.close(); } catch { } }
   peer.transports.clear();
 
   room.peers.delete(peerId);
 
   if (room.peers.size === 0) {
-    try { room.router.close(); } catch {}
+    try { room.router.close(); } catch { }
     rooms.delete(room.roomId);
     console.log(`🧹 room removed: ${room.roomId}`);
   }
@@ -183,7 +183,11 @@ wss.on("connection", (ws) => {
         const room = await getOrCreateRoom(roomId);
         const newPeerId = peerId || randomId("p_");
 
-        if (room.peers.has(newPeerId)) throw new Error("peerId already exists in room");
+        // ✅ 같은 peerId가 이미 있으면 기존 peer 정리 후 재연결 허용 (PIP 복귀 지원)
+        if (room.peers.has(newPeerId)) {
+          console.log(`🔄 [SFU] Peer ${newPeerId} already exists, cleaning up old connection...`);
+          cleanupPeer(room, newPeerId);
+        }
 
         const peer = {
           peerId: newPeerId,
@@ -195,9 +199,9 @@ wss.on("connection", (ws) => {
 
         room.peers.set(newPeerId, peer);
         const count = room.peers.size;
-        broadcast(room, null, { 
-            action: "peerCount", 
-            data: { count } 
+        broadcast(room, null, {
+          action: "peerCount",
+          data: { count }
         });
 
         console.log("👤 [SFU] peer joined", { roomId, peerId: newPeerId, peerCount: room.peers.size });
@@ -221,6 +225,28 @@ wss.on("connection", (ws) => {
       const room = rooms.get(joinedRoomId);
       if (!room) throw new Error("ROOM_NOT_FOUND");
       const peer = getPeer(room, joinedPeerId);
+
+      if (action === "room:sync") {
+        const peersState = [];
+        const existingProducers = listOtherProducers(room, joinedPeerId);
+
+        for (const [pid, p] of room.peers.entries()) {
+          peersState.push({
+            peerId: pid,
+            micOn: [...p.producers.values()].some(prod => prod.kind === "audio"),
+            cameraOn: [...p.producers.values()].some(prod => prod.kind === "video" && !prod.appData?.screen),
+            screenOn: [...p.producers.values()].some(
+              prod => prod.kind === "video" && prod.appData?.screen === true
+            ),
+          });
+        }
+
+        reply({
+          peers: peersState,
+          existingProducers,
+        });
+        return;
+      }
 
       if (action === "createTransport") {
         const { direction } = data || {};
@@ -247,7 +273,7 @@ wss.on("connection", (ws) => {
 
         transport.on("dtlsstatechange", (state) => {
           if (state === "closed") {
-            try { transport.close(); } catch {}
+            try { transport.close(); } catch { }
             peer.transports.delete(transport.id);
           }
         });
@@ -292,9 +318,9 @@ wss.on("connection", (ws) => {
           peer.producers.delete(producer.id);
           broadcast(room, peer.peerId, {
             action: "producerClosed",
-            data: { 
-              roomId: room.roomId, 
-              peerId: peer.peerId, 
+            data: {
+              roomId: room.roomId,
+              peerId: peer.peerId,
               producerId: producer.id,
               appData: producer.appData,
             },
@@ -404,9 +430,9 @@ wss.on("connection", (ws) => {
     cleanupPeer(room, joinedPeerId);
     if (rooms.has(joinedRoomId)) { // 방이 아직 살아있다면
       const currentRoom = rooms.get(joinedRoomId);
-      broadcast(currentRoom, null, { 
-          action: "peerCount", 
-          data: { count: currentRoom.peers.size } 
+      broadcast(currentRoom, null, {
+        action: "peerCount",
+        data: { count: currentRoom.peers.size }
       });
     }
   });
