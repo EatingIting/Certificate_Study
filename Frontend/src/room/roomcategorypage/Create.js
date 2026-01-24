@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api/api";
 import "./Create.css";
-import {useLocation, useNavigate} from "react-router-dom";
-
-
+import { useLocation, useNavigate } from "react-router-dom";
 
 const CreateRoom = () => {
     const navigate = useNavigate();
-    const {pathname} = useLocation();
-    console.log("현재 pathname:", pathname);
+    const location = useLocation();
+    const editStudy = location.state?.study;
+    const isEditMode = !!editStudy;
 
     useEffect(() => {
         const token = localStorage.getItem("accessToken");
@@ -30,6 +29,10 @@ const CreateRoom = () => {
         maxParticipants: 4,
     });
 
+    /* ✅ 이미지 파일 state */
+    const [studyImage, setStudyImage] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState("");
+
     const [allCategories, setAllCategories] = useState([]);
     const [mainCategories, setMainCategories] = useState([]);
     const [midCategories, setMidCategories] = useState([]);
@@ -39,19 +42,33 @@ const CreateRoom = () => {
     const [selectedMid, setSelectedMid] = useState(null);
     const [selectedSub, setSelectedSub] = useState(null);
 
+    /* ✅ 수정모드 카테고리 id 저장 */
+    const [editCategoryId, setEditCategoryId] = useState(null);
+
     useEffect(() => {
-        api.get("/category").then(res => setAllCategories(res.data));
-        api.get("/category/main").then(res => setMainCategories(res.data));
+        api.get("/category").then((res) => setAllCategories(res.data));
+        api.get("/category/main").then((res) => setMainCategories(res.data));
     }, []);
 
+    /* 입력값 변경 */
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({
+        setForm((prev) => ({
             ...prev,
-            [name]: name === "maxParticipants" ? Number(value) : value
+            [name]: name === "maxParticipants" ? Number(value) : value,
         }));
     };
 
+    /* ✅ 이미지 선택 */
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setStudyImage(file);
+        setPreviewUrl(URL.createObjectURL(file));
+    };
+
+    /* 카테고리 변경 */
     const handleMainChange = (e) => {
         const id = Number(e.target.value) || null;
         setSelectedMain(id);
@@ -61,7 +78,10 @@ const CreateRoom = () => {
         setSubCategories([]);
 
         if (!id) return;
-        setMidCategories(allCategories.filter(c => c.level === 2 && c.parentId === id));
+
+        setMidCategories(
+            allCategories.filter((c) => c.level === 2 && c.parentId === id)
+        );
     };
 
     const handleMidChange = (e) => {
@@ -71,14 +91,104 @@ const CreateRoom = () => {
         setSubCategories([]);
 
         if (!id) return;
-        setSubCategories(allCategories.filter(c => c.level === 3 && c.parentId === id));
+
+        setSubCategories(
+            allCategories.filter((c) => c.level === 3 && c.parentId === id)
+        );
     };
 
     const toDateInputValue = (value) => {
         if (!value) return "";
-        return value.substring(0, 10); // YYYY-MM-DD
+        return value.substring(0, 10);
     };
 
+    /* ===========================
+       ✅ 수정 모드 기본값 채우기
+    =========================== */
+    useEffect(() => {
+        if (!isEditMode || allCategories.length === 0) return;
+
+        setForm({
+            hostUserNickname:
+                editStudy.hostUserNickname ?? editStudy.nickname ?? "",
+            title: editStudy.title,
+            content: editStudy.content,
+            startDate: toDateInputValue(editStudy.startDate),
+            endDate: toDateInputValue(editStudy.endDate),
+            examDate: toDateInputValue(editStudy.examDate),
+            deadline: toDateInputValue(editStudy.deadline),
+            gender: editStudy.gender,
+            maxParticipants: editStudy.maxParticipants,
+        });
+
+        let categoryId = editStudy.categoryId;
+
+        if (editStudy.roomImg) {
+            setPreviewUrl(`http://localhost:8080${editStudy.roomImg}`);
+        }
+
+        if (!categoryId) {
+            const matched = allCategories.find(
+                (c) =>
+                    c.name === editStudy.subCategoryName ||
+                    c.name === editStudy.midCategoryName
+            );
+            if (matched) categoryId = matched.id;
+        }
+
+        setEditCategoryId(categoryId);
+    }, [isEditMode, allCategories, editStudy]);
+
+    /* ===========================
+       ✅ categoryId 기반 main/mid/sub 선택
+    =========================== */
+    useEffect(() => {
+        if (!editCategoryId) return;
+
+        const current = allCategories.find((c) => c.id === editCategoryId);
+        if (!current) return;
+
+        if (current.level === 3) {
+            const mid = allCategories.find((c) => c.id === current.parentId);
+            const main = allCategories.find((c) => c.id === mid.parentId);
+
+            setSelectedMain(main.id);
+            setSelectedMid(mid.id);
+            setSelectedSub(current.id);
+        }
+
+        if (current.level === 2) {
+            const main = allCategories.find((c) => c.id === current.parentId);
+
+            setSelectedMain(main.id);
+            setSelectedMid(current.id);
+            setSelectedSub(null);
+        }
+    }, [editCategoryId]);
+
+    /* ===========================
+       ✅ main 선택되면 mid 목록 자동 로딩
+    =========================== */
+    useEffect(() => {
+        if (!selectedMain) return;
+
+        setMidCategories(
+            allCategories.filter((c) => c.level === 2 && c.parentId === selectedMain)
+        );
+    }, [selectedMain]);
+
+    /* ===========================
+       ✅ mid 선택되면 sub 목록 자동 로딩
+    =========================== */
+    useEffect(() => {
+        if (!selectedMid) return;
+
+        setSubCategories(
+            allCategories.filter((c) => c.level === 3 && c.parentId === selectedMid)
+        );
+    }, [selectedMid]);
+
+    /* 제출 */
     const handleSubmit = async () => {
         if (!form.title.trim()) {
             alert("스터디 그룹 이름을 입력해주세요");
@@ -91,22 +201,48 @@ const CreateRoom = () => {
             return;
         }
 
+        /* ✅ FormData 생성 */
+        const formData = new FormData();
+
+        Object.entries(form).forEach(([key, value]) => {
+            formData.append(key, value);
+        });
+
+        formData.append("categoryId", categoryId);
+
+        /* ✅ 이미지 포함 */
+        if (studyImage) {
+            formData.append("image", studyImage);
+        }
+
         try {
-            await api.post("/rooms", { ...form, categoryId });
-            alert("스터디 그룹이 생성되었습니다!");
+            if (isEditMode) {
+                await api.put(`/rooms/${editStudy.roomId}`, formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
+                alert("스터디가 수정되었습니다!");
+            } else {
+                await api.post("/rooms", formData, {
+                    headers: { "Content-Type": "multipart/form-data" },
+                });
+                alert("스터디 그룹이 생성되었습니다!");
+            }
+
+            navigate("/room");
         } catch {
-            alert("스터디 생성에 실패했습니다.");
+            alert("스터디 저장에 실패했습니다.");
         }
     };
 
     return (
         <div className="create-wrap">
-            <h2 className="create-title">스터디 그룹 만들기</h2>
+            <h2 className="create-title">
+                {isEditMode ? "스터디 수정하기" : "스터디 그룹 만들기"}
+            </h2>
 
-            {/* 🔽 하나의 섹션으로 통합 */}
             <div className="create-section">
-
                 <p className="section-label">스터디 정보</p>
+
                 <input
                     className="form-input"
                     name="hostUserNickname"
@@ -130,6 +266,27 @@ const CreateRoom = () => {
                     value={form.content}
                     onChange={handleChange}
                 />
+
+                {/* ✅ 스터디 사진 첨부 */}
+                <div className="study-image-upload">
+                    <p className="section-label">스터디 사진 첨부</p>
+
+                    <input
+                        className="form-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                    />
+
+                    {/* 미리보기 */}
+                    {previewUrl && (
+                        <div className="image-preview">
+                            <img src={previewUrl} alt="스터디 사진 미리보기" />
+                        </div>
+                    )}
+                </div>
+
+                {/* 날짜 */}
                 <div className="create-inline">
                     <div>
                         <p className="section-label">스터디 시작일</p>
@@ -176,12 +333,15 @@ const CreateRoom = () => {
                     </div>
                 </div>
 
-
+                {/* 카테고리 */}
                 <p className="section-label">카테고리</p>
+
                 <select value={selectedMain ?? ""} onChange={handleMainChange}>
                     <option value="">대분류 선택</option>
-                    {mainCategories.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                    {mainCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.name}
+                        </option>
                     ))}
                 </select>
 
@@ -191,22 +351,27 @@ const CreateRoom = () => {
                     disabled={!selectedMain}
                 >
                     <option value="">중분류 선택</option>
-                    {midCategories.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                    {midCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.name}
+                        </option>
                     ))}
                 </select>
 
                 <select
                     value={selectedSub ?? ""}
-                    onChange={e => setSelectedSub(Number(e.target.value) || null)}
+                    onChange={(e) => setSelectedSub(Number(e.target.value) || null)}
                     disabled={!selectedMid || subCategories.length === 0}
                 >
                     <option value="">소분류 선택 (선택)</option>
-                    {subCategories.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                    {subCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.name}
+                        </option>
                     ))}
                 </select>
 
+                {/* 인원 + 성별 */}
                 <div className="create-inline">
                     <div>
                         <p className="section-label">최대 인원</p>
@@ -215,8 +380,10 @@ const CreateRoom = () => {
                             value={form.maxParticipants}
                             onChange={handleChange}
                         >
-                            {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                                <option key={n} value={n}>{n}명</option>
+                            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                                <option key={n} value={n}>
+                                    {n}명
+                                </option>
                             ))}
                         </select>
                     </div>
@@ -226,7 +393,7 @@ const CreateRoom = () => {
 
                         <div className="create-gender-group">
                             <span className="gender-label">성별</span>
-                            {["ALL", "FEMALE", "MALE"].map(g => (
+                            {["ALL", "FEMALE", "MALE"].map((g) => (
                                 <label className="gender-radio" key={g}>
                                     <input
                                         type="radio"
@@ -235,18 +402,20 @@ const CreateRoom = () => {
                                         checked={form.gender === g}
                                         onChange={handleChange}
                                     />
-                                    {g === "ALL" ? "전체" : g === "FEMALE" ? "여자" : "남자"}
+                                    {g === "ALL"
+                                        ? "전체"
+                                        : g === "FEMALE"
+                                            ? "여자"
+                                            : "남자"}
                                 </label>
                             ))}
                         </div>
                     </div>
-
                 </div>
-
             </div>
 
             <button className="create-submit" onClick={handleSubmit}>
-                생성하기
+                {isEditMode ? "수정하기" : "생성하기"}
             </button>
         </div>
     );

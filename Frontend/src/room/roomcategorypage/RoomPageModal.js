@@ -1,5 +1,6 @@
 import "./RoomPageModal.css";
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../api/api";
 
 const formatKoreanDate = (value) => {
@@ -14,19 +15,46 @@ const formatKoreanDate = (value) => {
 };
 
 const RoomPageModal = ({ open, onClose, study }) => {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [requestUserNickname, setRequestUserNickname] = useState("");
   const [applyMessage, setApplyMessage] = useState("");
 
+  const [myGender, setMyGender] = useState(null);
+  const [genderLoading, setGenderLoading] = useState(true);
+
+  const getEmailFromToken = () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return null;
+
+    const payload = token.split(".")[1];
+    const decoded = JSON.parse(atob(payload));
+
+    return decoded.sub;
+  };
+
   useEffect(() => {
     if (open) {
-      setStep(1);
-      setRequestUserNickname("");
-      setApplyMessage("");
+      setGenderLoading(true);
+
+      api.get("/mypage/me/gender")
+          .then((res) => {
+            setMyGender(res.data);
+          })
+          .finally(() => {
+            setGenderLoading(false);
+          });
     }
   }, [open]);
 
   if (!open || !study) return null;
+
+  const myEmail = getEmailFromToken();
+
+  const isMyStudy = study.hostUserEmail?.trim() === myEmail?.trim();
+
+  const isGenderAllowed =
+      study.gender === "ALL" || (myGender && study.gender === myGender);
 
   const handleGoStep2 = () => setStep(2);
 
@@ -50,13 +78,16 @@ const RoomPageModal = ({ open, onClose, study }) => {
 
       alert("신청이 완료되었습니다.");
       onClose();
+      navigate("/room");
     } catch (e) {
       console.error("신청 실패", e);
       alert(e.response?.data?.message || "신청 중 오류가 발생했습니다.");
     }
   };
 
-  const maxPeople = study.maxPeople ? `${study.maxPeople}명` : "미정";
+  const maxParticipants = study.maxParticipants
+      ? `${study.maxParticipants}명`
+      : "미정";
 
   const genderMap = {
     ALL: "전체",
@@ -84,20 +115,12 @@ const RoomPageModal = ({ open, onClose, study }) => {
             {step === 1 ? (
                 <div className="sr2-content">
                   {/* ===== 왼쪽 일러스트 ===== */}
-                  <div className="sr2-illust" aria-hidden="true">
-                    <svg width="150" height="150" viewBox="0 0 160 160">
-                      <rect x="26" y="98" width="108" height="34" rx="10" fill="#EAF6EE" />
-                      <rect x="34" y="106" width="92" height="18" rx="8" fill="#D7ECD9" />
-                      <circle cx="72" cy="60" r="20" fill="#97C793" opacity="0.45" />
-                      <circle cx="92" cy="58" r="18" fill="#97C793" opacity="0.25" />
-                      <rect x="52" y="72" width="56" height="14" rx="7" fill="#97C793" opacity="0.5" />
-                      <path d="M58 46c6-10 14-14 24-14s18 4 24 14" stroke="#2F6A43" strokeWidth="3" fill="none" />
-                      <path d="M52 62c6 8 14 12 24 12s18-4 24-12" stroke="#2F6A43" strokeWidth="3" fill="none" />
-                      <circle cx="70" cy="54" r="2.6" fill="#2F6A43" />
-                      <circle cx="90" cy="54" r="2.6" fill="#2F6A43" />
-                      <path d="M115 52l18-12" stroke="#97C793" strokeWidth="3" />
-                      <path d="M133 40l-4 14 14-4z" fill="#97C793" />
-                    </svg>
+                  <div className="sr2-illust">
+                    <img
+                        src={`http://localhost:8080${study.roomImg}`}
+                        alt="스터디 사진"
+                        className="sr2-study-img"
+                    />
                   </div>
 
                   {/* ===== 오른쪽 정보 ===== */}
@@ -133,14 +156,29 @@ const RoomPageModal = ({ open, onClose, study }) => {
                     </div>
 
                     <div className="sr2-row">
-                      <div className="sr2-k">최대 인원</div>
-                      <div className="sr2-v">{maxPeople}</div>
+                      <div className="sr2-k">참여 인원</div>
+                      <div className="sr2-v">
+                        {study.currentParticipants}명 / {study.maxParticipants}명
+                      </div>
                     </div>
 
                     <div className="sr2-row">
                       <div className="sr2-k">성별 제한</div>
                       <div className="sr2-v">{genderMap[study.gender]}</div>
                     </div>
+
+                    {!genderLoading && !isMyStudy && !isGenderAllowed && (
+                        <div
+                            style={{
+                              marginTop: "3px",
+                              fontSize: "13px",
+                              color: "red",
+                              fontWeight: "700",
+                            }}
+                        >
+                          ⚠ 성별 제한으로 신청할 수 없습니다.
+                        </div>
+                    )}
 
                     <div className="sr2-row">
                       <div className="sr2-k">스터디장</div>
@@ -163,9 +201,7 @@ const RoomPageModal = ({ open, onClose, study }) => {
                       onChange={(e) => setRequestUserNickname(e.target.value)}
                   />
 
-                  <div className="sr2-form-label">
-                    신청 목적 및 간단한 자기소개
-                  </div>
+                  <div className="sr2-form-label">신청 목적 및 간단한 자기소개</div>
                   <textarea
                       className="sr2-textarea"
                       placeholder="예) 토익 800 목표입니다. 매주 2회 이상 참여 가능합니다."
@@ -182,9 +218,24 @@ const RoomPageModal = ({ open, onClose, study }) => {
           <div className="sr2-actions">
             {step === 1 ? (
                 <>
-                  <button className="sr2-primary" onClick={handleGoStep2}>
-                    가입하기
+                  <button
+                      className="sr2-primary"
+                      disabled={!genderLoading && !isMyStudy && !isGenderAllowed}
+                      onClick={() => {
+                        if (!isMyStudy && !isGenderAllowed) return;
+
+                        if (isMyStudy) {
+                          api.get(`/rooms/${study.roomId}`).then((res) => {
+                            navigate("/room/create", { state: { study: res.data } });
+                          });
+                        } else {
+                          handleGoStep2();
+                        }
+                      }}
+                  >
+                    {isMyStudy ? "수정하기" : "신청하기"}
                   </button>
+
                   <button className="sr2-outline" onClick={onClose}>
                     취소
                   </button>
