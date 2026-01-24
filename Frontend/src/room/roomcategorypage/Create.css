@@ -168,3 +168,18 @@ select {
 .deadline:invalid {
     color: #9ca3af;
 }
+
+.study-image-upload {
+    margin-bottom: 14px;
+}
+
+.image-preview {
+    margin-top: 10px;
+}
+
+.image-preview img {
+    width: 100%;
+    max-width: 250px;
+    border-radius: 12px;
+    border: 1px solid #eee;
+}

@@ -6,16 +6,24 @@ const ClassCard = ({ data }) => {
 
     return (
         <div className="class-card">
-            <img src={data.image} alt={data.title} />
+
+            {/* ✅ 이미지 출력 */}
+            <img
+                src={
+                    data.roomImg
+                        ? `http://localhost:8080${data.roomImg}`
+                        : "/default.png"
+                }
+                alt={data.title}
+            />
 
             <div className="card-body">
                 <div className="card-title">🎓 {data.title}</div>
-                <div className="card-sub">{data.sub}</div>
-                <div className="card-date">{data.date}</div>
 
+                <div className="card-date">{data.date}</div>
                 <button
                     className="enter-btn"
-                    onClick={() => navigate(`/lms/${data.id}`)}
+                    onClick={() => navigate(`/lms/${data.roomId}`)}
                 >
                     클래스룸 들어가기
                 </button>

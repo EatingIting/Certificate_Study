@@ -128,7 +128,6 @@
     margin: 8px 0 14px;
 }
 
-/* 기본: 대–중–소 구조 */
 .subgroup {
     display: flex;
     gap: 12px;
@@ -140,9 +139,8 @@
     border-bottom: none;
 }
 
-/* ✅ 중분류만 있는 경우 */
 .subgroup.mid-only {
-    display: block; /* 🔥 flex 해제 → 전체 폭 사용 */
+    display: block;
 }
 
 .subgroup-title {
@@ -252,6 +250,15 @@
     border-radius: 999px;
 }
 
+.dday {
+    font-size: 11px;
+    padding: 4px 8px;
+    background: #ffebee;       /* 연한 빨강 배경 */
+    color: #d32f2f;            /* 진한 빨강 글씨 */
+    border-radius: 999px;
+    font-weight: 800;
+}
+
 /* ================= 페이징 ================= */
 
 .pager {
@@ -280,19 +287,16 @@
     cursor: default;
 }
 
-/* ✅ 중분류만 있는 경우: 세로 스크롤 */
 .subgroup.mid-only .sub-items {
-    max-height: 200px;        /* 원하는 높이 */
+    max-height: 200px;
     overflow-y: auto;
-    padding-right: 4px;      /* 스크롤바 공간 */
+    padding-right: 4px;
 }
 
-/* 스크롤 부드럽게 */
 .subgroup.mid-only .sub-items {
     scroll-behavior: smooth;
 }
 
-/* (선택) 스크롤바 스타일 */
 .subgroup.mid-only .sub-items::-webkit-scrollbar {
     width: 6px;
 }
