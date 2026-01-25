@@ -40,9 +40,9 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        const video = document.querySelector("video[data-main-video]");
+        const video = document.querySelector('video[data-main-video="main"]');
         if (!video) {
-            console.log("[LMSSidebar] video 요소를 찾을 수 없음");
+            console.log('[LMSSidebar] video[data-main-video="main"] 요소를 찾을 수 없음');
             return;
         }
 

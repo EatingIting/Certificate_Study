@@ -47,6 +47,7 @@ const LMSSubjectInner = () => {
     const peerNameRef = useRef("참가자");
     const isPipCameraOffRef = useRef(false);
     const pipActiveRef = useRef(false);    // 모니터링 활성화 플래그
+    const pipTrackEndedCountRef = useRef(0); // 🔥 track ended 연속 감지 카운터
 
     // 직접 비디오 PiP 초기화 (Canvas 없이 - cross-origin 문제 해결)
     const initCanvasPip = useCallback(async (originalVideo, peerName) => {
@@ -132,33 +133,17 @@ const LMSSubjectInner = () => {
         // 원본 스트림의 track에 이벤트 리스너 추가
         const videoTrack = mediaStream.getVideoTracks()[0];
 
-        // 🔥 track 이벤트로 카메라 꺼짐 감지 → PiP 종료
+        // 🔥 track 이벤트 - 모두 무시 (canvas 스트림은 탭 전환 시 상태가 변할 수 있음)
         const handleUnmute = () => {
-            console.log("[PiP] track unmute 이벤트");
+            console.log("[PiP] track unmute 이벤트 (무시)");
         };
 
         const handleMute = () => {
-            console.log("[PiP] track mute 이벤트 → PiP 종료");
-            if (pipActiveRef.current && !isPipCameraOffRef.current) {
-                isPipCameraOffRef.current = true;
-                setToastMessage("상대방이 카메라를 껐습니다");
-                setToastVisible(true);
-                if (document.pictureInPictureElement) {
-                    document.exitPictureInPicture().catch(() => { });
-                }
-            }
+            console.log("[PiP] track mute 이벤트 (무시)");
         };
 
         const handleEnded = () => {
-            console.log("[PiP] track ended 이벤트 → PiP 종료");
-            if (pipActiveRef.current && !isPipCameraOffRef.current) {
-                isPipCameraOffRef.current = true;
-                setToastMessage("상대방이 카메라를 껐습니다");
-                setToastVisible(true);
-                if (document.pictureInPictureElement) {
-                    document.exitPictureInPicture().catch(() => { });
-                }
-            }
+            console.log("[PiP] track ended 이벤트 (무시)");
         };
 
         if (videoTrack) {
@@ -173,61 +158,33 @@ const LMSSubjectInner = () => {
             });
         }
 
-        // 🔥 주기적 모니터링 (백업 - 원본 스트림의 track 상태 확인)
-        // 초기 2초간은 카메라 off 감지 비활성화 (일시적인 muted 상태 무시)
-        let monitorStartTime = Date.now();
-        let prevEnabled = videoTrack?.enabled;
-
-        const monitorTrack = () => {
-            if (!pipActiveRef.current) return;
-
-            // 🔥 저장된 track 직접 사용 (MediaStream에서 다시 가져오지 않음)
-            const origTrack = sourceTrackRef.current;
-
-            // 🔥 enabled 상태만 체크 (muted는 일시적일 수 있음)
-            const isCameraOff = !origTrack ||
-                origTrack.readyState === "ended" ||
-                !origTrack.enabled;
-
-            // 초기 2초간은 off 감지 무시 (스트림 안정화 대기)
-            const elapsed = Date.now() - monitorStartTime;
-            const canDetect = elapsed > 2000;
-
-            // enabled 상태 변화 로그
-            if (origTrack && origTrack.enabled !== prevEnabled) {
-                console.log("[PiP] track.enabled 변경:", prevEnabled, "→", origTrack.enabled);
-                prevEnabled = origTrack.enabled;
-            }
-
-            // 상태 변경 감지 - 카메라 꺼지면 Toast + PiP 종료
-            if (canDetect && isCameraOff && !isPipCameraOffRef.current) {
-                console.log("[PiP] 카메라 꺼짐 감지 → PiP 종료", {
-                    hasTrack: !!origTrack,
-                    readyState: origTrack?.readyState,
-                    enabled: origTrack?.enabled
-                });
-
-                isPipCameraOffRef.current = true;
-
-                // Toast 표시
-                setToastMessage("상대방이 카메라를 껐습니다.\nPIP를 종료합니다.");
-                setToastVisible(true);
-
-                // PiP 종료
-                if (document.pictureInPictureElement) {
-                    document.exitPictureInPicture().catch(() => { });
-                }
-
-                return; // 모니터링 중단
-            }
-
-            pipAnimationRef.current = setTimeout(monitorTrack, 500);
-        };
-
-        monitorTrack();
+        // 🔥 주기적 모니터링 완전 비활성화
+        // canvas 기반 스트림은 탭 전환 시 브라우저가 track 상태를 변경할 수 있으므로
+        // 자동 종료 기능을 비활성화하여 PiP 안정성 보장
+        console.log("[PiP] 모니터링 비활성화 - 자동 종료 기능 off");
 
         // cleanup 시 이벤트 리스너 제거를 위해 저장
         pipVideo._trackListeners = { videoTrack, handleUnmute, handleMute, handleEnded };
+
+        // 🔥 visibilitychange 이벤트 핸들러 - 탭 전환 시 video 유지
+        const handleVisibilityChange = () => {
+            if (!pipActiveRef.current) return;
+            const video = sourceVideoRef.current;
+            if (!video) return;
+
+            console.log("[PiP] visibilitychange:", document.visibilityState);
+
+            if (document.visibilityState === "visible") {
+                // 탭이 다시 보일 때 video 재생 보장
+                if (video.paused) {
+                    video.play().catch(() => { });
+                }
+            }
+            // hidden일 때도 video.play() 유지 - 브라우저가 PiP를 유지하도록 함
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        pipVideo._visibilityHandler = handleVisibilityChange;
 
         // PiP 요청
         try {
@@ -237,6 +194,7 @@ const LMSSubjectInner = () => {
         } catch (e) {
             console.error("[PiP] PiP 요청 실패:", e);
             pipActiveRef.current = false;
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
             return false;
         }
     }, []);
@@ -263,6 +221,12 @@ const LMSSubjectInner = () => {
             sourceVideoRef.current._trackListeners = null;
         }
 
+        // 🔥 visibilitychange 이벤트 리스너 제거
+        if (sourceVideoRef.current?._visibilityHandler) {
+            document.removeEventListener("visibilitychange", sourceVideoRef.current._visibilityHandler);
+            sourceVideoRef.current._visibilityHandler = null;
+        }
+
         originalVideoRef.current = null;
         sourceStreamRef.current = null;
         sourceTrackRef.current = null;
@@ -274,7 +238,7 @@ const LMSSubjectInner = () => {
     ========================= */
     const handleSidebarNavigate = async (path) => {
         if (isInMeeting && !document.pictureInPictureElement) {
-            const video = document.querySelector("video[data-main-video]");
+            const video = document.querySelector('video[data-main-video="main"]');
             if (video) {
                 try {
                     // Canvas 기반 PiP 사용
@@ -320,19 +284,19 @@ const LMSSubjectInner = () => {
                 return;
             }
 
-            const video = document.querySelector("video[data-main-video]");
-            if (video) {
-                try {
-                    // Canvas 기반 PiP 사용
-                    const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
-                    await initCanvasPip(video, peerName);
-                    console.log("[LMSSubject] Canvas PiP 활성화 성공");
-                } catch (e) {
-                    console.warn("[LMSSubject] Canvas PiP 요청 실패:", e);
-                }
-            } else {
-                console.warn("[LMSSubject] video[data-main-video] 요소를 찾을 수 없음");
+        const video = document.querySelector('video[data-main-video="main"]');
+        if (video) {
+            try {
+                // Canvas 기반 PiP 사용
+                const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
+                await initCanvasPip(video, peerName);
+                console.log("[LMSSubject] Canvas PiP 활성화 성공");
+            } catch (e) {
+                console.warn("[LMSSubject] Canvas PiP 요청 실패:", e);
             }
+        } else {
+            console.warn('[LMSSubject] video[data-main-video="main"] 요소를 찾을 수 없음');
+        }
         };
 
         // Canvas PiP 요청 (video와 peerName을 직접 전달받음)
