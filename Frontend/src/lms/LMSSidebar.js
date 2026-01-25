@@ -26,7 +26,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
     const requestPipIfMeeting = useCallback(() => {
         // roomId가 있으면 회의 중으로 간주 (isInMeeting이 false여도)
-        const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("currentMeetingRoomId");
+        // ✅ 수정: pip.roomId 키 사용 (MeetingContext와 일치)
+        const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("pip.roomId");
         
         if (!hasActiveMeeting) {
             console.log("[LMSSidebar] 회의 중이 아니므로 PiP 요청 안 함");

@@ -46,14 +46,16 @@ const LMSSubjectInner = () => {
     /* =========================
        Sidebar 이동 시 PiP 강제
     ========================= */
-    const handleSidebarNavigate = (path) => {
+    const handleSidebarNavigate = async (path) => {
         if (isInMeeting && !document.pictureInPictureElement) {
-            setTimeout(() => {
-                const video = document.querySelector("video[data-main-video]");
-                if (video) {
-                    requestBrowserPip(video).catch(() => {});
+            const video = document.querySelector("video[data-main-video]");
+            if (video) {
+                try {
+                    await requestBrowserPip(video);
+                } catch (e) {
+                    // PiP 실패해도 네비게이션은 진행
                 }
-            }, 100);
+            }
         }
 
         navigate(`/lms/${subjectId}/${path}`);
@@ -72,6 +74,37 @@ const LMSSubjectInner = () => {
         window.addEventListener("ui:toast", handler);
         return () => window.removeEventListener("ui:toast", handler);
     }, []);
+
+    /* =========================
+       🔥 PiP 요청 이벤트 (Sidebar에서 발생)
+       - MeetingPage가 언마운트되어도 여기서 리스닝
+    ========================= */
+    useEffect(() => {
+        const handlePipRequest = async () => {
+            console.log("[LMSSubject] meeting:request-pip 이벤트 수신");
+            
+            // 이미 PiP 모드면 스킵
+            if (document.pictureInPictureElement) {
+                console.log("[LMSSubject] 이미 PiP 모드임");
+                return;
+            }
+
+            const video = document.querySelector("video[data-main-video]");
+            if (video) {
+                try {
+                    await requestBrowserPip(video);
+                    console.log("[LMSSubject] PiP 활성화 성공");
+                } catch (e) {
+                    console.warn("[LMSSubject] PiP 요청 실패:", e);
+                }
+            } else {
+                console.warn("[LMSSubject] video[data-main-video] 요소를 찾을 수 없음");
+            }
+        };
+
+        window.addEventListener("meeting:request-pip", handlePipRequest);
+        return () => window.removeEventListener("meeting:request-pip", handlePipRequest);
+    }, [requestBrowserPip]);
 
     /* =========================
        🔥 PiP POLLING (핵심)
@@ -126,7 +159,7 @@ const LMSSubjectInner = () => {
                     onClick={() => {
                         const video = document.querySelector("video[data-main-video]");
                         if (video) {
-                            requestBrowserPip(video).catch(() => {});
+                            requestBrowserPip(video).catch(() => { });
                         }
                     }}
                 >
