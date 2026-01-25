@@ -402,7 +402,8 @@ const LMSSubjectInner = () => {
                 </main>
             </div>
 
-            {(isInMeeting || isPipMode) && roomId && <MeetingPortal />}
+            {/* PiP 모드일 때만 Portal 사용 (일반 모드에서는 Routes로 렌더링) */}
+            {isPipMode && roomId && <MeetingPortal />}
             <ChatModal />
         </>
     );

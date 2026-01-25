@@ -3085,11 +3085,18 @@ function MeetingPage() {
     useEffect(() => {
         // startMeeting은 MeetingRouteBridge / startLocalMedia에서 roomId·subjectId와 함께 호출됨
         return () => {
-            // 🔥 언마운트 시 얼굴 필터 정리
+            // ❗ 통화 종료 버튼이 아니면(PiP/LMS 이동) cleanup 스킵
+            // 이모지 필터/draw 루프를 유지해야 상대방에게 계속 이모지가 보임
+            if (!isLeavingRef.current) {
+                console.log("[MeetingPage] unmount cleanup skipped (PiP / LMS 이동)");
+                return;
+            }
+
+            // 🔥 통화 종료 시에만 얼굴 필터 정리
             stopFaceEmojiFilter().catch(() => { });
             stopAvatarFilter().catch(() => { });
 
-            // ❗ 언마운트 시에만 종료 (숨김일 땐 호출 안 됨)
+            // ❗ 통화 종료 시에만 회의 상태 종료
             endMeeting();
         };
     }, [endMeeting, stopFaceEmojiFilter, stopAvatarFilter]);
