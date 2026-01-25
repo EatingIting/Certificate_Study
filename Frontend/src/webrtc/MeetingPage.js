@@ -8,6 +8,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import * as mediasoupClient from "mediasoup-client";
 import "./MeetingPage.css";
 import { useMeeting } from "./MeetingContext";
+import Toast from "../toast/Toast";
 
 // --- Components ---
 
@@ -327,6 +328,10 @@ function MeetingPage() {
 
     const [showReactions, setShowReactions] = useState(false);
     const [myReaction, setMyReaction] = useState(null);
+    
+    // 🔥 토스트 메시지 상태
+    const [toastMessage, setToastMessage] = useState("");
+    const [showToast, setShowToast] = useState(false);
 
     /* const [pipClosedByCameraOff, setPipClosedByCameraOff] = useState(false);
     const [showPipReopenButton, setShowPipReopenButton] = useState(false); */
@@ -487,6 +492,27 @@ function MeetingPage() {
         } else {
             setSidebarView(view);
             setSidebarOpen(true);
+        }
+    };
+
+    // 🔥 초대 링크 복사
+    const handleInvite = async () => {
+        const inviteUrl = window.location.href;
+        try {
+            await navigator.clipboard.writeText(inviteUrl);
+            setToastMessage("링크가 복사되었습니다.");
+            setShowToast(true);
+        } catch (err) {
+            console.error("클립보드 복사 실패:", err);
+            // fallback
+            const textArea = document.createElement("textarea");
+            textArea.value = inviteUrl;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+            setToastMessage("링크가 복사되었습니다.");
+            setShowToast(true);
         }
     };
 
@@ -653,8 +679,11 @@ function MeetingPage() {
             if (endMeeting) endMeeting();
         } finally {
             // 7) 페이지 이동 (브라우저 종료 대신)
-            window.location.href = "/lmsMain"; // 홈으로 보내기
-            // 또는: window.location.replace("/ended");
+            if (subjectId) {
+                navigate(`/lms/${subjectId}/dashboard`, { replace: true });
+            } else {
+                navigate("/lmsMain", { replace: true });
+            }
         }
     };
 
@@ -2219,7 +2248,6 @@ function MeetingPage() {
                             }
 
                             // 3) ✅ [핵심 추가] 오디오/비디오 Consumer가 하나라도 살아있으면 절대 삭제하지 않음
-                            //    화면공유를 끄고 카메라를 켜는 과도기에도 '오디오'는 연결되어 있으므로 여기서 살아남습니다.
                             const hasActiveConsumer = Array.from(consumersRef.current.values()).some(
                                 (c) => String(c.appData?.peerId) === peerId && !c.closed
                             );
@@ -2229,7 +2257,23 @@ function MeetingPage() {
                                 return true;
                             }
 
+                            // 4) ✅ [강화] peerStreamsRef에 스트림이 있으면 보호
+                            const hasPeerStream = peerStreamsRef.current.has(peerId);
+                            if (hasPeerStream) {
+                                console.log(`🔒 [STREAM PROTECTED] ${p.name} (${peerId}) has active peer stream.`);
+                                return true;
+                            }
+
+                            // 5) ✅ [강화] 최근 30초 내 업데이트된 사용자 보호
+                            const lastUpdate = p.lastUpdate || 0;
+                            const timeSinceUpdate = Date.now() - lastUpdate;
+                            if (timeSinceUpdate < 30000) {
+                                console.log(`⏰ [TIME PROTECTED] ${p.name} (${peerId}) updated ${Math.round(timeSinceUpdate/1000)}s ago.`);
+                                return true;
+                            }
+
                             // 그 외(진짜 나감)는 제거
+                            console.log(`❌ [REMOVING] ${p.name} (${peerId}) - no protection criteria met.`);
                             return false;
                         }).map(p => {
                             // 활성 consumer가 있는지 확인
@@ -2642,15 +2686,27 @@ function MeetingPage() {
                     clearTimeout(reconnectTimeoutRef.current.get(peerId));
                 }
 
-                // ✅ 4. [10초 유예] 10초 뒤에도 복귀하지 않으면 그때 삭제
+                // ✅ 4. [30초 유예] 30초 뒤에도 복귀하지 않으면 그때 삭제
                 const timer = setTimeout(() => {
                     setParticipants(prev => {
                         // 현재 시점에서도 여전히 이 peerId가 있다면 삭제
                         // (만약 복귀했다면 reconnectHistoryRef에서 제거되었을 것임)
                         const stillOffline = reconnectHistoryRef.current.has(peerId);
 
+                        // 🔥 추가 보호: consumer가 살아있으면 삭제하지 않음
+                        const hasActiveConsumer = Array.from(consumersRef.current.values()).some(
+                            (c) => String(c.appData?.peerId) === peerId && !c.closed
+                        );
+
+                        if (hasActiveConsumer) {
+                            console.log(`🛡️ [TIMEOUT PROTECTED] Peer ${peerId} still has active consumers. Keeping.`);
+                            reconnectHistoryRef.current.delete(peerId);
+                            reconnectTimeoutRef.current.delete(peerId);
+                            return prev;
+                        }
+
                         if (stillOffline) {
-                            console.log(`💀 [REMOVE] Peer ${peerId} timed out. Removing from UI.`);
+                            console.log(`💀 [REMOVE] Peer ${peerId} timed out after 30s. Removing from UI.`);
                             return prev.filter(p => String(p.id) !== String(peerId));
                         }
                         return prev;
@@ -2660,7 +2716,7 @@ function MeetingPage() {
                     reconnectHistoryRef.current.delete(peerId);
                     reconnectTimeoutRef.current.delete(peerId);
 
-                }, 10000); // 10초 대기
+                }, 30000); // 🔥 30초 대기 (10초에서 증가)
 
                 reconnectTimeoutRef.current.set(peerId, timer);
                 return;
@@ -2867,7 +2923,7 @@ function MeetingPage() {
                     <div className="meet-stage">
                         {layoutMode === "speaker" ? (
                             <div className="layout-speaker">
-                                <div className={`main-stage`} ref={mainStageRef}>
+                                <div className={`main-stage ${isFullscreen && sidebarOpen ? "sidebar-open" : ""}`} ref={mainStageRef}>
                                     <div className="main-video-area">
                                         <VideoTile
                                             user={mainUser}
@@ -2984,6 +3040,11 @@ function MeetingPage() {
                                                                     </div>
                                                                 </div>
                                                             ))}
+                                                            <div className="invite-section">
+                                                                <button className="invite-btn" onClick={handleInvite}>
+                                                                    <Share size={16} /> 초대하기
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -3264,6 +3325,11 @@ function MeetingPage() {
                                                                     </div>
                                                                 </div>
                                                             ))}
+                                                            <div className="invite-section">
+                                                                <button className="invite-btn" onClick={handleInvite}>
+                                                                    <Share size={16} /> 초대하기
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -3489,7 +3555,7 @@ function MeetingPage() {
                                     </div>
                                 ))}
                                 <div className="invite-section">
-                                    <button className="invite-btn">
+                                    <button className="invite-btn" onClick={handleInvite}>
                                         <Share size={16} /> 초대하기
                                     </button>
                                 </div>
@@ -3498,6 +3564,12 @@ function MeetingPage() {
                     </div>
                 </aside>
             </div>
+            
+            <Toast
+                message={toastMessage}
+                visible={showToast}
+                onClose={() => setShowToast(false)}
+            />
         </div>
     );
 }

@@ -217,7 +217,7 @@ const LMSSubjectInner = () => {
                 isPipCameraOffRef.current = true;
                 
                 // Toast 표시
-                setToastMessage("상대방이 카메라를 껐습니다");
+                setToastMessage("상대방이 카메라를 껐습니다.\nPIP를 종료합니다.");
                 setToastVisible(true);
                 
                 // PiP 종료
