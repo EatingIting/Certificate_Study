@@ -8,7 +8,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const { subjectId } = useParams();
 
     // ✅ 회의 상태 (PiP 트리거용)
-    const { isInMeeting, isPipMode, roomId, requestBrowserPip } = useMeeting();
+    const { isInMeeting, isPipMode, roomId } = useMeeting();
 
     // ✅ 초기값: 전부 열림
     const [openKeys, setOpenKeys] = useState([
@@ -24,8 +24,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const activeMenu = activeMenuProp ?? localActiveMenu;
     const setActiveMenu = setActiveMenuProp ?? setLocalActiveMenu;
 
-    // 🔥 직접 PiP 요청 (user gesture 컨텍스트 유지를 위해 이벤트 대신 직접 호출)
-    const requestPipIfMeeting = useCallback(async () => {
+    // 🔥 Canvas PiP 요청 (LMSSubject에서 처리)
+    const requestPipIfMeeting = useCallback(() => {
         // roomId가 있으면 회의 중으로 간주 (isInMeeting이 false여도)
         const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("pip.roomId");
         
@@ -46,14 +46,15 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        console.log("[LMSSidebar] PiP 직접 요청");
-        try {
-            await requestBrowserPip(video);
-            console.log("[LMSSidebar] PiP 활성화 성공");
-        } catch (e) {
-            console.warn("[LMSSidebar] PiP 요청 실패:", e);
-        }
-    }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
+        // 🔥 Canvas PiP 요청 이벤트 발생 (LMSSubject에서 처리)
+        console.log("[LMSSidebar] Canvas PiP 요청 이벤트 발생");
+        window.dispatchEvent(new CustomEvent("meeting:request-canvas-pip", {
+            detail: {
+                video,
+                peerName: video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자"
+            }
+        }));
+    }, [isInMeeting, isPipMode, roomId]);
 
     // ===============================
     // 메인메뉴 클릭: 이동 X, 펼침/접힘만

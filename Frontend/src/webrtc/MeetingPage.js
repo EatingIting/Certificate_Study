@@ -498,6 +498,7 @@ function MeetingPage() {
         }
 
         setCamOn(false);
+        localStorage.setItem("camOn", "false");  // 🔥 localStorage 저장
 
         // ⭐ 서버에 상태 전파 (이거 꼭 필요)
         wsRef.current?.send(JSON.stringify({
@@ -530,6 +531,7 @@ function MeetingPage() {
         setLocalStream(merged);
 
         setCamOn(true);
+        localStorage.setItem("camOn", "true");  // 🔥 localStorage 저장
 
         // ⭐ 서버에 상태 전파
         wsRef.current?.send(JSON.stringify({
