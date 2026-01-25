@@ -40,11 +40,10 @@ function Main() {
         return `${y}년 ${m}월 ${d}일 시작`;
     };
 
-    //오류 아님 수정x 가운데 특수문자 때문에 그런거임
     const categoryNameMap = {
-        공무원·공공시험: "공공시험",
-        민간자격·실무능력: "민간자격"
-}
+        "공무원·공공시험": "공공시험",
+        "민간자격·실무능력": "민간자격",
+    };
 
     return (
         <div className="page">

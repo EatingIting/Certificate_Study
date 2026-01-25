@@ -10,7 +10,8 @@ const CreateRoom = () => {
     const isEditMode = !!editStudy;
 
     useEffect(() => {
-        const token = localStorage.getItem("accessToken");
+        const token = sessionStorage.getItem("accessToken");
+
         if (!token) {
             alert("로그인이 필요한 페이지입니다.");
             navigate("/auth");
@@ -29,7 +30,7 @@ const CreateRoom = () => {
         maxParticipants: 4,
     });
 
-    /* ✅ 이미지 파일 state */
+
     const [studyImage, setStudyImage] = useState(null);
     const [previewUrl, setPreviewUrl] = useState("");
 
@@ -42,7 +43,7 @@ const CreateRoom = () => {
     const [selectedMid, setSelectedMid] = useState(null);
     const [selectedSub, setSelectedSub] = useState(null);
 
-    /* ✅ 수정모드 카테고리 id 저장 */
+
     const [editCategoryId, setEditCategoryId] = useState(null);
 
     useEffect(() => {
@@ -59,7 +60,7 @@ const CreateRoom = () => {
         }));
     };
 
-    /* ✅ 이미지 선택 */
+
     const handleImageChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -102,9 +103,6 @@ const CreateRoom = () => {
         return value.substring(0, 10);
     };
 
-    /* ===========================
-       ✅ 수정 모드 기본값 채우기
-    =========================== */
     useEffect(() => {
         if (!isEditMode || allCategories.length === 0) return;
 

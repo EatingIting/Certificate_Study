@@ -16,6 +16,7 @@ public interface MyPageMapper {
             @Param("name") String name,
             @Param("nickname") String nickname,
             @Param("birthDate") LocalDate birthDate,
+            @Param("gender") String gender,
             @Param("introduction") String introduction,
             @Param("profileImg") String profileImg
     );
