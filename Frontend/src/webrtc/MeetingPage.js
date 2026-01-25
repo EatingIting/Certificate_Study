@@ -9,6 +9,14 @@ import * as mediasoupClient from "mediasoup-client";
 import "./MeetingPage.css";
 import { useMeeting } from "./MeetingContext";
 import Toast from "../toast/Toast";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import {
+    VRMHumanBoneName,
+    VRMLoaderPlugin,
+    VRMUtils,
+    VRMExpressionPresetName,
+} from "@pixiv/three-vrm";
 
 // --- Components ---
 
@@ -137,11 +145,16 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             setIsVideoTrackMuted(muted);
         };
 
+        // 🔥 stream이 변경되면 즉시 상태 체크 (초기화)
         checkState();
 
         videoTrack.addEventListener("mute", checkState);
         videoTrack.addEventListener("unmute", checkState);
         videoTrack.addEventListener("ended", checkState);
+
+        // 🔥 트랙이 live 상태가 될 때까지 짧은 간격으로 체크
+        const quickCheck = setInterval(checkState, 100);
+        setTimeout(() => clearInterval(quickCheck), 2000); // 2초 후 빠른 체크 중지
 
         const interval = setInterval(checkState, 1000);
 
@@ -149,37 +162,49 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             videoTrack.removeEventListener("mute", checkState);
             videoTrack.removeEventListener("unmute", checkState);
             videoTrack.removeEventListener("ended", checkState);
+            clearInterval(quickCheck);
             clearInterval(interval);
         };
     }, [stream, safeUser.cameraOff, isScreen]);
 
+    // 🔥 stream 참조를 추적하여 변경 감지 강화
+    const streamIdRef = useRef(null);
+    const currentStreamId = stream?.id ?? null;
+
     useEffect(() => {
-        const v= videoEl.current;
+        const v = videoEl.current;
         if (!v) return;
 
-        if(!shouldRenderVideo) {
+        if (!shouldRenderVideo) {
             try {
                 v.pause();
             } catch {
 
             }
             if (v.srcObject) v.srcObject = null;
+            streamIdRef.current = null;
             return;
         }
 
-        if (stream && v.srcObject !== stream) {
+        // 🔥 stream id가 변경되었거나 srcObject가 없으면 강제로 다시 설정
+        const needsUpdate = streamIdRef.current !== currentStreamId || v.srcObject !== stream;
+
+        if (stream && needsUpdate) {
+            console.log("[VideoTile] updating srcObject, streamId:", currentStreamId);
             v.srcObject = stream;
+            streamIdRef.current = currentStreamId;
         }
+
         v.muted = true;
-        v.play().catch(() => {});
-    }, [stream, shouldRenderVideo])
+        v.play().catch(() => { });
+    }, [stream, shouldRenderVideo, currentStreamId])
 
     const isSpeaking = safeUser.speaking || isSpeakingLocally;
     const isJoining = safeUser.isJoining;
     const isReconnecting = safeUser.isReconnecting;
 
     const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
-    
+
     // pip 모드 여부 확인 (렌더링 시점)
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
 
@@ -209,7 +234,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                     muted
                     data-main-video
                     className={`video-element ${isScreen ? "screen" : ""}`}
-                    style={{ 
+                    style={{
                         display: shouldRenderVideo ? "block" : "none"
                     }}
                 />
@@ -328,10 +353,36 @@ function MeetingPage() {
 
     const [showReactions, setShowReactions] = useState(false);
     const [myReaction, setMyReaction] = useState(null);
-    
+
     // 🔥 토스트 메시지 상태
     const [toastMessage, setToastMessage] = useState("");
     const [showToast, setShowToast] = useState(false);
+
+    // 🔥 얼굴 이모지 필터
+    const [faceEmoji, setFaceEmoji] = useState(() => {
+        try {
+            return sessionStorage.getItem("faceEmoji") || "";
+        } catch {
+            return "";
+        }
+    });
+
+    // 🔥 얼굴 필터 모드: "", "emoji", "avatar"
+    const [faceMode, setFaceMode] = useState(() => {
+        try {
+            return sessionStorage.getItem("faceMode") || "";
+        } catch {
+            return "";
+        }
+    });
+
+    // 이전 버전(emoji만 저장)과의 호환: faceEmoji만 있고 mode가 없으면 emoji로 간주
+    useEffect(() => {
+        if (!faceMode && faceEmoji) {
+            setFaceMode("emoji");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     /* const [pipClosedByCameraOff, setPipClosedByCameraOff] = useState(false);
     const [showPipReopenButton, setShowPipReopenButton] = useState(false); */
@@ -365,6 +416,37 @@ function MeetingPage() {
     const camOnRef = useRef(camOn);
     const micPermissionRef = useRef(micPermission);
     const camPermissionRef = useRef(camPermission);
+
+    // 🔥 얼굴 필터 파이프라인 refs
+    const faceEmojiRef = useRef(faceEmoji);
+    const faceModeRef = useRef(faceMode);
+    const faceFilterActiveRef = useRef(false);
+    const faceFilterRafRef = useRef(null);
+    const faceFilterVideoElRef = useRef(null);
+    const faceFilterCanvasRef = useRef(null);
+    const faceFilterOutStreamRef = useRef(null);
+    const faceFilterOutTrackRef = useRef(null);
+    const faceFilterRawTrackRef = useRef(null);
+    const faceDetectorRef = useRef(null);
+    const lastFaceBoxRef = useRef(null);
+    const lastDetectAtRef = useRef(0);
+
+    // 🔥 3D 아바타 필터 파이프라인 refs
+    const avatarFilterActiveRef = useRef(false);
+    const avatarFilterRafRef = useRef(null);
+    const avatarVideoElRef = useRef(null);          // 원본 트랙 재생용 video
+    const avatarOutCanvasRef = useRef(null);        // 최종 합성 canvas
+    const avatarOutTrackRef = useRef(null);         // 송출용 video track
+    const avatarRawTrackRef = useRef(null);         // 원본 video track
+    const faceLandmarkerRef = useRef(null);         // MediaPipe FaceLandmarker
+    const avatarThreeRef = useRef(null);            // { renderer, scene, camera, vrm, clock }
+    const lastAvatarFaceRef = useRef({              // 최신 추론 결과
+        bbox: null,
+        blend: null,
+        matrix: null,
+        videoW: 0,
+        videoH: 0,
+    });
 
     const reconnectTimeoutRef = useRef(new Map());
 
@@ -442,6 +524,11 @@ function MeetingPage() {
         []
     );
 
+    const faceEmojis = useMemo(
+        () => ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "😊", "😎", "🤓"],
+        []
+    );
+
     const me = {
         id: userId,
         name: userName,
@@ -516,12 +603,44 @@ function MeetingPage() {
         }
     };
 
-    const turnOffCamera = () => {
+    const turnOffCamera = async () => {
+        // ✅ 레이스 방지: 필터 정리를 먼저 "await"로 끝내고 producer를 닫는다
+        if (faceModeRef.current === "avatar") {
+            await stopAvatarFilter();
+        }
+        if (faceModeRef.current === "emoji" || faceEmojiRef.current) {
+            await stopFaceEmojiFilter();
+        }
+
         const producer = producersRef.current.get("camera");
         if (producer) {
-            producer.close();          // 🔥 이게 핵심
-            producersRef.current.delete("camera");
+            try {
+                // 🔥 producer.close() 대신 pause()를 사용하여 SFU 연결 유지
+                // close()하면 다시 produce()할 때 SFU에서 새 producer 생성이 필요하고
+                // 그 과정에서 문제가 발생할 수 있음
+                producer.pause();
+                console.log("[turnOffCamera] producer paused");
+            } catch (e) {
+                console.warn("[turnOffCamera] producer pause failed:", e);
+            }
+            // 🔥 producer는 삭제하지 않음 - 나중에 resume할 때 필요
+            // producersRef.current.delete("camera");
         }
+
+        // 🔥 로컬 스트림에서 비디오 트랙 제거(검은 화면 잔상 방지)
+        const prevAudio = localStreamRef.current
+            ?.getAudioTracks()
+            .filter((t) => t.readyState === "live") ?? [];
+
+        try {
+            localStreamRef.current?.getVideoTracks?.()?.forEach((t) => {
+                try { t.stop(); } catch { }
+            });
+        } catch { }
+
+        const audioOnly = new MediaStream([...prevAudio]);
+        localStreamRef.current = audioOnly;
+        setLocalStream(audioOnly);
 
         setCamOn(false);
         localStorage.setItem("camOn", "false");  // 🔥 localStorage 저장
@@ -535,29 +654,92 @@ function MeetingPage() {
     };
 
     const turnOnCamera = async () => {
-        if (!sendTransportRef.current || sendTransportRef.current.closed) return;
+        if (!sendTransportRef.current || sendTransportRef.current.closed) {
+            console.warn("[turnOnCamera] sendTransport not ready");
+            return;
+        }
 
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         const track = stream.getVideoTracks()[0];
+        console.log("[turnOnCamera] got new video track:", track.id, track.readyState);
 
-        const producer = await sendTransportRef.current.produce({
-            track,
-            appData: { type: "camera" },
-        });
+        const wantEmoji = faceModeRef.current === "emoji" && !!faceEmojiRef.current;
+        const wantAvatar = faceModeRef.current === "avatar";
 
-        producersRef.current.set("camera", producer);
+        // 🔥 기존 producer가 있는지 확인
+        const existingProducer = producersRef.current.get("camera");
 
-        // 로컬 스트림 병합
+        // 로컬 스트림은 먼저 raw(카메라)로 붙여둔다 (필터는 이후 outTrack으로 다시 덮음)
         const prevAudio = localStreamRef.current
             ?.getAudioTracks()
-            .filter(t => t.readyState !== "ended") ?? [];
+            .filter((t) => t.readyState !== "ended") ?? [];
+        const mergedRaw = new MediaStream([...prevAudio, track]);
+        localStreamRef.current = mergedRaw;
+        setLocalStream(mergedRaw);
+        bumpStreamVersion();
+        console.log("[turnOnCamera] local stream (raw) updated:", mergedRaw.getTracks().map((t) => t.kind + ":" + t.readyState));
 
-        const merged = new MediaStream([...prevAudio, track]);
-        localStreamRef.current = merged;
-        setLocalStream(merged);
+        const ensureProducer = async () => {
+            let p = producersRef.current.get("camera");
+            if (p && !p.closed) return p;
+
+            if (p?.closed) {
+                producersRef.current.delete("camera");
+                p = null;
+            }
+
+            console.log("[turnOnCamera] no active producer, producing new camera producer");
+            const created = await sendTransportRef.current.produce({
+                track,
+                appData: { type: "camera" },
+            });
+            producersRef.current.set("camera", created);
+            return created;
+        };
+
+        const producer = await ensureProducer();
+
+        // ✅ 핵심: 필터 모드(emoji/avatar)일 때는 여기서 raw replace를 하지 않는다.
+        // (raw -> outTrack 연속 replaceTrack 레이스로 검은 화면이 발생할 수 있음)
+        if (!wantEmoji && !wantAvatar) {
+            console.log("[turnOnCamera] no filter, replacing producer track with raw");
+            try {
+                await producer.replaceTrack({ track });
+            } catch (e) {
+                console.error("[turnOnCamera] replaceTrack(raw) failed:", e);
+            }
+            try { producer.resume?.(); } catch { }
+        } else {
+            // 필터가 outTrack으로 교체할 때까지 송출은 일단 멈춤
+            try { producer.pause?.(); } catch { }
+        }
 
         setCamOn(true);
         localStorage.setItem("camOn", "true");  // 🔥 localStorage 저장
+
+        // 얼굴 필터가 선택되어 있으면 적용 (outTrack으로 1번만 replace되도록)
+        if (wantEmoji) {
+            await startFaceEmojiFilter(faceEmojiRef.current);
+            const p = producersRef.current.get("camera");
+            // 필터 적용 실패 시 raw로라도 복구
+            if (!faceFilterActiveRef.current) {
+                try { await p?.replaceTrack?.({ track }); } catch { }
+                localStreamRef.current = mergedRaw;
+                setLocalStream(mergedRaw);
+                bumpStreamVersion();
+            }
+            try { p?.resume?.(); } catch { }
+        } else if (wantAvatar) {
+            await startAvatarFilter();
+            const p = producersRef.current.get("camera");
+            if (!avatarFilterActiveRef.current) {
+                try { await p?.replaceTrack?.({ track }); } catch { }
+                localStreamRef.current = mergedRaw;
+                setLocalStream(mergedRaw);
+                bumpStreamVersion();
+            }
+            try { p?.resume?.(); } catch { }
+        }
 
         // ⭐ 서버에 상태 전파
         wsRef.current?.send(JSON.stringify({
@@ -638,6 +820,10 @@ function MeetingPage() {
         alert("채팅이 종료되었습니다.");
 
         try {
+            // 0) 얼굴 필터 정리
+            stopFaceEmojiFilter().catch(() => { });
+            stopAvatarFilter().catch(() => { });
+
             // 1) 로컬 미디어 정리
             if (localStreamRef.current) {
                 localStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -705,6 +891,619 @@ function MeetingPage() {
     };
 
     useEffect(() => {
+        faceEmojiRef.current = faceEmoji;
+        faceModeRef.current = faceMode;
+        try {
+            if (faceEmoji) sessionStorage.setItem("faceEmoji", faceEmoji);
+            else sessionStorage.removeItem("faceEmoji");
+
+            if (faceMode) sessionStorage.setItem("faceMode", faceMode);
+            else sessionStorage.removeItem("faceMode");
+        } catch { }
+    }, [faceEmoji, faceMode]);
+
+    const stopFaceEmojiFilter = useCallback(async () => {
+        faceFilterActiveRef.current = false;
+
+        if (faceFilterRafRef.current) {
+            cancelAnimationFrame(faceFilterRafRef.current);
+            faceFilterRafRef.current = null;
+        }
+
+        const producer = producersRef.current.get("camera");
+        const rawTrack = faceFilterRawTrackRef.current;
+        const outTrack = faceFilterOutTrackRef.current;
+
+        // producer track 원복
+        // ⚠️ 카메라 OFF/ON 이후 stale(ended) rawTrack로 원복하면 검은화면/레이스가 날 수 있어
+        // rawTrack이 live일 때만 원복한다.
+        if (
+            producer?.replaceTrack &&
+            rawTrack &&
+            rawTrack.readyState === "live" &&
+            producer.track?.id !== rawTrack.id
+        ) {
+            try {
+                await producer.replaceTrack({ track: rawTrack });
+            } catch { }
+        }
+
+        // 로컬 스트림 원복(오디오 + rawTrack)
+        if (rawTrack && rawTrack.readyState === "live") {
+            const prevAudio = localStreamRef.current
+                ?.getAudioTracks()
+                .filter((t) => t.readyState === "live") ?? [];
+            const merged = new MediaStream([...prevAudio, rawTrack]);
+            localStreamRef.current = merged;
+            setLocalStream(merged);
+        }
+
+        // 리소스 정리
+        try { outTrack?.stop?.(); } catch { }
+        faceFilterOutTrackRef.current = null;
+        faceFilterOutStreamRef.current = null;
+        faceFilterCanvasRef.current = null;
+        try { faceDetectorRef.current?.detector?.close?.(); } catch { }
+        faceDetectorRef.current = null;
+        lastFaceBoxRef.current = null;
+        lastDetectAtRef.current = 0;
+
+        if (faceFilterVideoElRef.current) {
+            try { faceFilterVideoElRef.current.srcObject = null; } catch { }
+            try { faceFilterVideoElRef.current.remove(); } catch { }
+            faceFilterVideoElRef.current = null;
+        }
+
+        // stale rawTrack 참조 제거(카메라 재시작 시 잘못된 원복 방지)
+        faceFilterRawTrackRef.current = null;
+    }, []);
+
+    const stopAvatarFilter = useCallback(async () => {
+        avatarFilterActiveRef.current = false;
+
+        if (avatarFilterRafRef.current) {
+            cancelAnimationFrame(avatarFilterRafRef.current);
+            avatarFilterRafRef.current = null;
+        }
+
+        const producer = producersRef.current.get("camera");
+        const rawTrack = avatarRawTrackRef.current;
+        const outTrack = avatarOutTrackRef.current;
+
+        // producer track 원복
+        if (
+            producer?.replaceTrack &&
+            rawTrack &&
+            rawTrack.readyState === "live" &&
+            producer.track?.id !== rawTrack.id
+        ) {
+            try {
+                await producer.replaceTrack({ track: rawTrack });
+            } catch { }
+        }
+
+        // 로컬 스트림 원복(오디오 + rawTrack)
+        if (rawTrack && rawTrack.readyState === "live") {
+            const prevAudio = localStreamRef.current
+                ?.getAudioTracks()
+                .filter((t) => t.readyState === "live") ?? [];
+            const merged = new MediaStream([...prevAudio, rawTrack]);
+            localStreamRef.current = merged;
+            setLocalStream(merged);
+        }
+
+        // 트랙/요소 정리
+        try { outTrack?.stop?.(); } catch { }
+        avatarOutTrackRef.current = null;
+        avatarOutCanvasRef.current = null;
+        avatarRawTrackRef.current = null;
+
+        if (avatarVideoElRef.current) {
+            try { avatarVideoElRef.current.srcObject = null; } catch { }
+            try { avatarVideoElRef.current.remove(); } catch { }
+            avatarVideoElRef.current = null;
+        }
+
+        // FaceLandmarker 정리
+        try { faceLandmarkerRef.current?.close?.(); } catch { }
+        faceLandmarkerRef.current = null;
+
+        // Three/VRM 정리
+        if (avatarThreeRef.current) {
+            const { renderer, vrm } = avatarThreeRef.current;
+            try {
+                if (vrm?.scene) VRMUtils.deepDispose(vrm.scene);
+            } catch { }
+            try { renderer?.dispose?.(); } catch { }
+            try { renderer?.domElement?.remove?.(); } catch { }
+            avatarThreeRef.current = null;
+        }
+
+        lastAvatarFaceRef.current = { bbox: null, blend: null, matrix: null, videoW: 0, videoH: 0 };
+    }, []);
+
+    const startAvatarFilter = useCallback(async () => {
+        // 기존 2D 이모지 필터가 켜져있으면 종료
+        await stopFaceEmojiFilter();
+
+        // 기존 아바타 필터가 있으면 재시작
+        await stopAvatarFilter();
+
+        const cameraProducer = producersRef.current.get("camera");
+        if (!cameraProducer?.replaceTrack) return;
+
+        // 원본(로컬) 비디오 트랙 확보
+        const rawTrack =
+            localStreamRef.current?.getVideoTracks?.()?.find((t) => t.readyState === "live") ||
+            cameraProducer.track;
+
+        if (!rawTrack) return;
+        avatarRawTrackRef.current = rawTrack;
+
+        // hidden video element (raw track 재생)
+        const v = document.createElement("video");
+        v.autoplay = true;
+        v.playsInline = true;
+        v.muted = true;
+        v.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:640px;height:480px;opacity:0;pointer-events:none;";
+        document.body.appendChild(v);
+        avatarVideoElRef.current = v;
+        v.srcObject = new MediaStream([rawTrack]);
+        try { await v.play(); } catch { }
+
+        // 메타데이터(실제 해상도) 로드 대기
+        await new Promise((resolve) => {
+            if (v.videoWidth > 0 && v.videoHeight > 0) return resolve();
+            const onLoaded = () => {
+                v.removeEventListener("loadedmetadata", onLoaded);
+                resolve();
+            };
+            v.addEventListener("loadedmetadata", onLoaded);
+            setTimeout(resolve, 1500);
+        });
+
+        const videoW = v.videoWidth || 640;
+        const videoH = v.videoHeight || 480;
+
+        // 최종 합성 canvas (배경: 원본 비디오 + 오버레이: 아바타)
+        const outCanvas = document.createElement("canvas");
+        outCanvas.width = videoW;
+        outCanvas.height = videoH;
+        const outCtx = outCanvas.getContext("2d");
+        avatarOutCanvasRef.current = outCanvas;
+
+        const outStream = outCanvas.captureStream(15);
+        const outTrack = outStream.getVideoTracks()[0];
+        avatarOutTrackRef.current = outTrack;
+
+        // 송출 트랙 교체 (상대도 아바타 오버레이가 보임)
+        try {
+            await cameraProducer.replaceTrack({ track: outTrack });
+        } catch {
+            try { outTrack?.stop?.(); } catch { }
+            return;
+        }
+
+        // 내 화면도 동일하게 보이도록 로컬 스트림을 (오디오 + outTrack)으로 변경
+        const prevAudio = localStreamRef.current
+            ?.getAudioTracks()
+            .filter((t) => t.readyState === "live") ?? [];
+        const merged = new MediaStream([...prevAudio, outTrack]);
+        localStreamRef.current = merged;
+        setLocalStream(merged);
+
+        // FaceLandmarker 준비 (로컬 모델 사용)
+        const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
+        const vision = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
+        );
+        const landmarker = await FaceLandmarker.createFromOptions(vision, {
+            baseOptions: {
+                modelAssetPath: "/mediapipe/face_landmarker.task",
+                delegate: "CPU",
+            },
+            runningMode: "VIDEO",
+            numFaces: 1,
+            minFaceDetectionConfidence: 0.5,
+            minFacePresenceConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            outputFaceBlendshapes: true,
+            outputFacialTransformationMatrixes: true,
+        });
+        faceLandmarkerRef.current = landmarker;
+
+        // Three/VRM 준비
+        const renderer = new THREE.WebGLRenderer({
+            alpha: true,
+            antialias: true,
+            preserveDrawingBuffer: true,
+        });
+        renderer.setSize(512, 512, false);
+        renderer.setClearColor(0x000000, 0);
+        try { renderer.outputColorSpace = THREE.SRGBColorSpace; } catch { }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 10);
+        camera.position.set(0, 1.45, 1.2);
+        camera.lookAt(0, 1.45, 0);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+        dir.position.set(1, 1.5, 1);
+        scene.add(dir);
+
+        const loader = new GLTFLoader();
+        loader.register((parser) => new VRMLoaderPlugin(parser));
+        const gltf = await loader.loadAsync("/avatars/default.vrm");
+        const vrm = gltf.userData?.vrm;
+        if (!vrm) return;
+
+        // VRM 장면 최적화/정리
+        try { VRMUtils.rotateVRM0(vrm); } catch { }
+        // 카메라를 바라보도록 회전(모델마다 다를 수 있음)
+        try { vrm.scene.rotation.y = Math.PI; } catch { }
+
+        scene.add(vrm.scene);
+        const clock = new THREE.Clock();
+
+        avatarThreeRef.current = { renderer, scene, camera, vrm, clock };
+
+        avatarFilterActiveRef.current = true;
+
+        let lastInferAt = 0;
+
+        const tick = () => {
+            if (!avatarFilterActiveRef.current) return;
+
+            // 1) 원본 비디오 프레임
+            try {
+                outCtx.drawImage(v, 0, 0, outCanvas.width, outCanvas.height);
+            } catch {
+                avatarFilterRafRef.current = requestAnimationFrame(tick);
+                return;
+            }
+
+            // 2) 추론(스로틀)
+            const now = performance.now();
+            if (now - lastInferAt > 120) {
+                lastInferAt = now;
+                try {
+                    const res = landmarker.detectForVideo(v, now);
+                    const lm = res?.faceLandmarks?.[0];
+
+                    // bbox 계산 (landmarks normalized → px)
+                    if (lm?.length) {
+                        let minX = 1, minY = 1, maxX = 0, maxY = 0;
+                        for (const p of lm) {
+                            if (p.x < minX) minX = p.x;
+                            if (p.y < minY) minY = p.y;
+                            if (p.x > maxX) maxX = p.x;
+                            if (p.y > maxY) maxY = p.y;
+                        }
+                        const x = minX * videoW;
+                        const y = minY * videoH;
+                        const w = (maxX - minX) * videoW;
+                        const h = (maxY - minY) * videoH;
+                        lastAvatarFaceRef.current.bbox = { x, y, width: w, height: h };
+                    } else {
+                        lastAvatarFaceRef.current.bbox = null;
+                    }
+
+                    // blendshapes
+                    const cats = res?.faceBlendshapes?.[0]?.categories;
+                    if (cats?.length) {
+                        const blend = {};
+                        for (const c of cats) {
+                            blend[c.categoryName] = c.score;
+                        }
+                        lastAvatarFaceRef.current.blend = blend;
+                    } else {
+                        lastAvatarFaceRef.current.blend = null;
+                    }
+
+                    // transformation matrix
+                    const mats = res?.facialTransformationMatrixes;
+                    const m0 = mats?.[0]?.data || mats?.[0];
+                    if (m0?.length >= 16) {
+                        lastAvatarFaceRef.current.matrix = Array.from(m0).slice(0, 16);
+                    } else {
+                        lastAvatarFaceRef.current.matrix = null;
+                    }
+
+                    lastAvatarFaceRef.current.videoW = videoW;
+                    lastAvatarFaceRef.current.videoH = videoH;
+                } catch { }
+            }
+
+            // 3) VRM 업데이트(표정/회전)
+            const t = avatarThreeRef.current;
+            const dt = t?.clock?.getDelta?.() ?? 0.016;
+            if (t?.vrm) {
+                const head = t.vrm.humanoid?.getBoneNode?.(VRMHumanBoneName.Head);
+                const neck = t.vrm.humanoid?.getBoneNode?.(VRMHumanBoneName.Neck);
+
+                const matArr = lastAvatarFaceRef.current.matrix;
+                if (matArr && head) {
+                    const m = new THREE.Matrix4().fromArray(matArr);
+                    const q = new THREE.Quaternion().setFromRotationMatrix(m);
+                    // 부드럽게 따라가기
+                    head.quaternion.slerp(q, 0.35);
+                    if (neck) neck.quaternion.slerp(q, 0.15);
+                }
+
+                const blend = lastAvatarFaceRef.current.blend;
+                const em = t.vrm.expressionManager;
+                if (em && blend) {
+                    const blinkL = blend.eyeBlinkLeft ?? 0;
+                    const blinkR = blend.eyeBlinkRight ?? 0;
+                    const jawOpen = blend.jawOpen ?? 0;
+                    const smile = ((blend.mouthSmileLeft ?? 0) + (blend.mouthSmileRight ?? 0)) / 2;
+
+                    try { em.setValue(VRMExpressionPresetName.BlinkLeft, blinkL); } catch { }
+                    try { em.setValue(VRMExpressionPresetName.BlinkRight, blinkR); } catch { }
+                    // 입벌림 → Aa
+                    try { em.setValue(VRMExpressionPresetName.Aa, jawOpen); } catch { }
+                    // 미소 → Happy
+                    try { em.setValue(VRMExpressionPresetName.Happy, smile); } catch { }
+                }
+
+                try { t.vrm.update(dt); } catch { }
+                try { t.renderer.render(t.scene, t.camera); } catch { }
+            }
+
+            // 4) 오버레이 합성 (얼굴 bbox가 있을 때만)
+            const bbox = lastAvatarFaceRef.current.bbox;
+            if (bbox && t?.renderer?.domElement) {
+                const cx = bbox.x + bbox.width / 2;
+                const cy = bbox.y + bbox.height / 2;
+
+                // 얼굴 bbox보다 조금 크게(머리+상반신 느낌)
+                const dw = Math.max(120, bbox.width * 2.0);
+                const dh = Math.max(120, bbox.height * 2.2);
+                const dx = cx - dw / 2;
+                const dy = cy - dh * 0.60; // 위로 올려서 얼굴 중심 맞춤
+
+                outCtx.save();
+                // 얼굴 주변만 자연스럽게 보이도록 타원 클리핑
+                outCtx.beginPath();
+                outCtx.ellipse(cx, cy, dw * 0.42, dh * 0.42, 0, 0, Math.PI * 2);
+                outCtx.clip();
+                outCtx.drawImage(t.renderer.domElement, dx, dy, dw, dh);
+                outCtx.restore();
+            }
+
+            avatarFilterRafRef.current = requestAnimationFrame(tick);
+        };
+
+        tick();
+    }, [stopFaceEmojiFilter, stopAvatarFilter]);
+
+    const startFaceEmojiFilter = useCallback(async (emoji) => {
+        if (!emoji) return;
+
+        // 🔥 즉시 반영(렌더 루프는 faceEmojiRef.current를 매 프레임 읽음)
+        faceEmojiRef.current = emoji;
+
+        // 아바타 필터가 켜져있으면 종료
+        await stopAvatarFilter();
+
+        // ✅ 이미 필터가 실행 중이면 "이모지 변경"만 하고 그대로 유지
+        // (트랙 재교체/재시작을 하면 레이스로 검은 화면이 뜰 수 있음)
+        const cameraProducer = producersRef.current.get("camera");
+        const existingOutTrack = faceFilterOutTrackRef.current;
+        const rawTrackAlive = faceFilterRawTrackRef.current?.readyState === "live";
+        const outTrackAlive = existingOutTrack?.readyState === "live";
+        const producerUsingOutTrack = !!(cameraProducer?.track && existingOutTrack && cameraProducer.track.id === existingOutTrack.id);
+
+        if (
+            faceFilterActiveRef.current &&
+            rawTrackAlive &&
+            outTrackAlive &&
+            producerUsingOutTrack &&
+            faceFilterVideoElRef.current &&
+            faceFilterCanvasRef.current
+        ) {
+            return;
+        }
+
+        // 기존 필터가 있으면 정리 후 재시작
+        await stopFaceEmojiFilter();
+
+        const freshProducer = producersRef.current.get("camera");
+        if (!freshProducer?.replaceTrack) return;
+
+        // 원본(로컬) 비디오 트랙 확보
+        // stopFaceEmojiFilter 이후에는 localStreamRef/camera producer가 "진짜 카메라 track"을 갖고 있어야 함
+        const rawTrack =
+            localStreamRef.current?.getVideoTracks?.()?.find((t) => t.readyState === "live") ||
+            freshProducer.track;
+
+        if (!rawTrack) return;
+        faceFilterRawTrackRef.current = rawTrack;
+
+        // hidden video element (raw track 재생)
+        const v = document.createElement("video");
+        v.autoplay = true;
+        v.playsInline = true;
+        v.muted = true;
+        // FaceDetector 구현에 따라 "표시 크기" 기준으로 좌표가 나오는 경우가 있어 1x1은 피함
+        v.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:640px;height:480px;opacity:0;pointer-events:none;";
+        document.body.appendChild(v);
+        faceFilterVideoElRef.current = v;
+        v.srcObject = new MediaStream([rawTrack]);
+        try { await v.play(); } catch { }
+
+        // 메타데이터(실제 해상도) 로드 대기 - 타임아웃을 늘려 안정화
+        await new Promise((resolve) => {
+            const checkReady = () => {
+                if (v.videoWidth > 0 && v.videoHeight > 0 && v.readyState >= 2) {
+                    resolve();
+                    return true;
+                }
+                return false;
+            };
+
+            if (checkReady()) return;
+
+            const onLoaded = () => {
+                v.removeEventListener("loadedmetadata", onLoaded);
+                v.removeEventListener("canplay", onLoaded);
+                // 메타데이터 로드 후에도 한번 더 체크
+                if (!checkReady()) {
+                    setTimeout(resolve, 100); // 짧은 대기 후 진행
+                }
+            };
+            v.addEventListener("loadedmetadata", onLoaded);
+            v.addEventListener("canplay", onLoaded);
+            setTimeout(resolve, 2000); // 타임아웃 2초로 증가
+        });
+
+        // 캔버스 준비
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const w = v.videoWidth || 640;
+        const h = v.videoHeight || 480;
+        canvas.width = w;
+        canvas.height = h;
+        faceFilterCanvasRef.current = canvas;
+
+        // FaceDetector(브라우저 지원 시) 또는 MediaPipe(tasks-vision) 준비
+        let detectorState = null;
+        if (typeof window !== "undefined" && "FaceDetector" in window) {
+            try {
+                const native = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+                detectorState = { kind: "native", detector: native };
+            } catch { }
+        }
+
+        // 🔥 Chrome 데스크탑 등에서 FaceDetector 미지원인 경우 MediaPipe로 폴백
+        if (!detectorState) {
+            try {
+                const { FaceDetector: MpFaceDetector, FilesetResolver } = await import("@mediapipe/tasks-vision");
+                const vision = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
+                );
+
+                const mp = await MpFaceDetector.createFromOptions(vision, {
+                    baseOptions: {
+                        // 모델은 CDN에서 로드 (네트워크 필요)
+                        modelAssetPath:
+                            "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+                        delegate: "CPU",
+                    },
+                    runningMode: "VIDEO",
+                    minDetectionConfidence: 0.5,
+                });
+
+                detectorState = { kind: "mediapipe", detector: mp };
+            } catch (e) {
+                console.warn("[face-emoji] detector init failed:", e);
+            }
+        }
+
+        faceDetectorRef.current = detectorState;
+
+        // 캔버스 스트림 생성
+        const outStream = canvas.captureStream(15);
+        const outTrack = outStream.getVideoTracks()[0];
+        faceFilterOutStreamRef.current = outStream;
+        faceFilterOutTrackRef.current = outTrack;
+
+        // 송출 트랙 교체 (상대도 이 이모지 얼굴로 보임)
+        try {
+            await freshProducer.replaceTrack({ track: outTrack });
+        } catch {
+            // replaceTrack 실패하면 필터 중단
+            try { outTrack?.stop?.(); } catch { }
+            return;
+        }
+
+        // 내 화면도 동일하게 보이도록 로컬 스트림을 (오디오 + outTrack)으로 변경
+        const prevAudio = localStreamRef.current
+            ?.getAudioTracks()
+            .filter((t) => t.readyState === "live") ?? [];
+        const merged = new MediaStream([...prevAudio, outTrack]);
+        localStreamRef.current = merged;
+        setLocalStream(merged);
+
+        faceFilterActiveRef.current = true;
+
+        // 렌더 루프
+        const draw = async () => {
+            if (!faceFilterActiveRef.current) return;
+
+            // 비디오 프레임
+            try {
+                ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            } catch {
+                faceFilterRafRef.current = requestAnimationFrame(draw);
+                return;
+            }
+
+            // 얼굴 감지(지원 시) - 150ms throttle
+            const now = Date.now();
+            const det = faceDetectorRef.current;
+            if (det && now - lastDetectAtRef.current > 150) {
+                lastDetectAtRef.current = now;
+                if (det.kind === "native") {
+                    det.detector.detect(v)
+                        .then((faces) => {
+                            const f = faces?.[0];
+                            const bb = f?.boundingBox;
+                            if (bb) {
+                                // DOMRectReadOnly → plain object로 저장
+                                lastFaceBoxRef.current = { x: bb.x, y: bb.y, width: bb.width, height: bb.height };
+                            } else {
+                                lastFaceBoxRef.current = null;
+                            }
+                        })
+                        .catch(() => { });
+                } else if (det.kind === "mediapipe") {
+                    try {
+                        const res = det.detector.detectForVideo(v, performance.now());
+                        const first = res?.detections?.[0];
+                        const bb = first?.boundingBox;
+                        if (bb) {
+                            lastFaceBoxRef.current = {
+                                x: bb.originX,
+                                y: bb.originY,
+                                width: bb.width,
+                                height: bb.height,
+                            };
+                        } else {
+                            lastFaceBoxRef.current = null;
+                        }
+                    } catch { }
+                }
+            }
+
+            // 이모지 오버레이 (얼굴이 있을 때만)
+            const currentEmoji = faceEmojiRef.current;
+            const box = lastFaceBoxRef.current;
+            if (box && currentEmoji) {
+                // FaceDetector boundingBox가 video 좌표계라고 가정하고 canvas로 스케일링
+                const scaleX = canvas.width / (v.videoWidth || canvas.width);
+                const scaleY = canvas.height / (v.videoHeight || canvas.height);
+
+                const cx = (box.x + box.width / 2) * scaleX;
+                const cy = (box.y + box.height / 2) * scaleY;
+                const size = Math.max(64, Math.min(260, Math.floor(box.width * 1.2 * scaleX)));
+
+                ctx.save();
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+                ctx.fillText(currentEmoji, cx, cy);
+                ctx.restore();
+            }
+
+            faceFilterRafRef.current = requestAnimationFrame(draw);
+        };
+
+        draw();
+    }, [stopFaceEmojiFilter]);
+
+    useEffect(() => {
         console.log("[PERMISSION]", {
             micPermission,
             camPermission,
@@ -718,7 +1517,7 @@ function MeetingPage() {
         if (!video) return;
 
         if (!document.pictureInPictureElement) {
-            video.requestPictureInPicture().catch(() => {});
+            video.requestPictureInPicture().catch(() => { });
         }
 
     }, []);
@@ -1573,10 +2372,10 @@ function MeetingPage() {
     const canReopenPip = () => {
         const video = mainVideoRef.current;
         if (!video) return false;
-    
+
         const stream = video.srcObject;
         const track = stream?.getVideoTracks?.()[0];
-    
+
         return !!track && track.readyState === "live";
     };
 
@@ -1592,19 +2391,23 @@ function MeetingPage() {
     useEffect(() => {
         // startMeeting은 MeetingRouteBridge / startLocalMedia에서 roomId·subjectId와 함께 호출됨
         return () => {
+            // 🔥 언마운트 시 얼굴 필터 정리
+            stopFaceEmojiFilter().catch(() => { });
+            stopAvatarFilter().catch(() => { });
+
             // ❗ 언마운트 시에만 종료 (숨김일 땐 호출 안 됨)
             endMeeting();
         };
-    }, [endMeeting]);
+    }, [endMeeting, stopFaceEmojiFilter, stopAvatarFilter]);
 
     useEffect(() => {
         const handler = () => {
             const video = document.querySelector("video[data-main-video]");
             if (video) {
-                requestBrowserPip(video).catch(() => {});
+                requestBrowserPip(video).catch(() => { });
             }
         };
-    
+
         window.addEventListener("meeting:request-pip", handler);
         return () =>
             window.removeEventListener("meeting:request-pip", handler);
@@ -1612,20 +2415,20 @@ function MeetingPage() {
 
     useEffect(() => {
         let lastPip = false;
-    
+
         const interval = setInterval(() => {
             const nowPip = !!document.pictureInPictureElement;
-    
+
             // PiP → 일반 화면으로 전환된 순간
             if (lastPip && !nowPip) {
                 window.dispatchEvent(
                     new CustomEvent("pip:exited")
                 );
             }
-    
+
             lastPip = nowPip;
         }, 300);
-    
+
         return () => clearInterval(interval);
     }, []);
 
@@ -1634,23 +2437,23 @@ function MeetingPage() {
             const video = mainVideoRef.current;
             if (!video) return;
             if (!document.pictureInPictureElement) return;
-    
+
             const stream = video.srcObject;
             const track = stream?.getVideoTracks?.()[0];
-    
+
             const videoGone =
                 !stream ||
                 !track ||
                 track.readyState !== "live";
-    
+
             if (videoGone) {
-                document.exitPictureInPicture().catch(() => {});
+                document.exitPictureInPicture().catch(() => { });
                 window.dispatchEvent(
                     new CustomEvent("pip:auto-closed-by-camera-off")
                 );
             }
         }, 300);
-    
+
         return () => clearInterval(interval);
     }, []);
 
@@ -2268,7 +3071,7 @@ function MeetingPage() {
                             const lastUpdate = p.lastUpdate || 0;
                             const timeSinceUpdate = Date.now() - lastUpdate;
                             if (timeSinceUpdate < 30000) {
-                                console.log(`⏰ [TIME PROTECTED] ${p.name} (${peerId}) updated ${Math.round(timeSinceUpdate/1000)}s ago.`);
+                                console.log(`⏰ [TIME PROTECTED] ${p.name} (${peerId}) updated ${Math.round(timeSinceUpdate / 1000)}s ago.`);
                                 return true;
                             }
 
@@ -2891,7 +3694,7 @@ function MeetingPage() {
     const _sv = streamVersion;
 
     return (
-        
+
         <div className="meeting-page">
             <div className="meet-layout">
                 <main className="meet-main">
@@ -2958,16 +3761,62 @@ function MeetingPage() {
                                     =============================== */}
                                     {isFullscreen && (
                                         <>
-                                            {/* 🎭 전체화면 이모지 팝업 */}
+                                            {/* 😀 얼굴 이모지 선택 팝업 */}
                                             {showReactions && (
                                                 <div className="fullscreen-reaction-popup">
-                                                    {reactionEmojis.map((emoji) => (
+                                                    <button
+                                                        className="reaction-btn"
+                                                        onClick={() => {
+                                                            setFaceMode("");
+                                                            faceModeRef.current = "";
+                                                            setFaceEmoji("");
+                                                            faceEmojiRef.current = "";
+                                                            stopFaceEmojiFilter().catch(() => { });
+                                                            stopAvatarFilter().catch(() => { });
+                                                            setShowReactions(false);
+                                                            setToastMessage("얼굴 필터가 해제되었습니다.");
+                                                            setShowToast(true);
+                                                        }}
+                                                    >
+                                                        ❌
+                                                    </button>
+                                                    <button
+                                                        className="reaction-btn"
+                                                        onClick={async () => {
+                                                            setFaceMode("avatar");
+                                                            faceModeRef.current = "avatar";
+                                                            setFaceEmoji("");
+                                                            faceEmojiRef.current = "";
+                                                            setShowReactions(false);
+                                                            if (!producersRef.current.get("camera")) {
+                                                                await turnOnCamera();
+                                                            }
+                                                            await startAvatarFilter();
+                                                            setToastMessage("3D 아바타 필터가 적용되었습니다.");
+                                                            setShowToast(true);
+                                                        }}
+                                                        title="3D 아바타"
+                                                    >
+                                                        👤
+                                                    </button>
+                                                    {faceEmojis.map((emoji) => (
                                                         <button
                                                             key={emoji}
-                                                            onClick={() => handleReaction(emoji)}
+                                                            onClick={async () => {
+                                                                setFaceMode("emoji");
+                                                                faceModeRef.current = "emoji";
+                                                                setFaceEmoji(emoji);
+                                                                faceEmojiRef.current = emoji;
+                                                                setShowReactions(false);
+                                                                // 카메라가 꺼져있으면 켠 뒤 적용
+                                                                if (!producersRef.current.get("camera")) {
+                                                                    await turnOnCamera();
+                                                                }
+                                                                await startFaceEmojiFilter(emoji);
+                                                                setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
+                                                                setShowToast(true);
+                                                            }}
                                                             className="reaction-btn"
-                                                            disabled={!!myReaction}
-                                                            style={myReaction ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                                         >
                                                             {emoji}
                                                         </button>
@@ -3091,7 +3940,7 @@ function MeetingPage() {
                                                     />
                                                 )}
                                                 <ButtonControl
-                                                    label="반응"
+                                                    label="얼굴"
                                                     icon={Smile}
                                                     active={showReactions}
                                                     onClick={() => setShowReactions(!showReactions)}
@@ -3242,16 +4091,61 @@ function MeetingPage() {
 
                                         {/* 전체화면 전용 UI */}
                                         <>
-                                            {/* 이모지 팝업 */}
+                                            {/* 😀 얼굴 이모지 선택 팝업 */}
                                             {showReactions && (
                                                 <div className="grid-fullscreen-reaction-popup">
-                                                    {reactionEmojis.map((emoji) => (
+                                                    <button
+                                                        className="reaction-btn"
+                                                        onClick={() => {
+                                                            setFaceMode("");
+                                                            faceModeRef.current = "";
+                                                            setFaceEmoji("");
+                                                            faceEmojiRef.current = "";
+                                                            stopFaceEmojiFilter().catch(() => { });
+                                                            stopAvatarFilter().catch(() => { });
+                                                            setShowReactions(false);
+                                                            setToastMessage("얼굴 필터가 해제되었습니다.");
+                                                            setShowToast(true);
+                                                        }}
+                                                    >
+                                                        ❌
+                                                    </button>
+                                                    <button
+                                                        className="reaction-btn"
+                                                        onClick={async () => {
+                                                            setFaceMode("avatar");
+                                                            faceModeRef.current = "avatar";
+                                                            setFaceEmoji("");
+                                                            faceEmojiRef.current = "";
+                                                            setShowReactions(false);
+                                                            if (!producersRef.current.get("camera")) {
+                                                                await turnOnCamera();
+                                                            }
+                                                            await startAvatarFilter();
+                                                            setToastMessage("3D 아바타 필터가 적용되었습니다.");
+                                                            setShowToast(true);
+                                                        }}
+                                                        title="3D 아바타"
+                                                    >
+                                                        👤
+                                                    </button>
+                                                    {faceEmojis.map((emoji) => (
                                                         <button
                                                             key={emoji}
-                                                            onClick={() => handleReaction(emoji)}
+                                                            onClick={async () => {
+                                                                setFaceMode("emoji");
+                                                                faceModeRef.current = "emoji";
+                                                                setFaceEmoji(emoji);
+                                                                faceEmojiRef.current = emoji;
+                                                                setShowReactions(false);
+                                                                if (!producersRef.current.get("camera")) {
+                                                                    await turnOnCamera();
+                                                                }
+                                                                await startFaceEmojiFilter(emoji);
+                                                                setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
+                                                                setShowToast(true);
+                                                            }}
                                                             className="reaction-btn"
-                                                            disabled={!!myReaction}
-                                                            style={myReaction ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                                                         >
                                                             {emoji}
                                                         </button>
@@ -3348,7 +4242,7 @@ function MeetingPage() {
                                                         onClick={() => (isScreenSharing ? stopScreenShare() : startScreenShare())}
                                                     />
                                                 )}
-                                                <ButtonControl label="반응" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
+                                                <ButtonControl label="얼굴" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
                                                 <ButtonControl label="채팅" icon={MessageSquare} active={sidebarOpen && sidebarView === "chat"} onClick={() => toggleSidebar("chat")} />
                                                 <ButtonControl label="참여자" icon={Users} active={sidebarOpen && sidebarView === "participants"} onClick={() => toggleSidebar("participants")} />
                                                 <div className="divider" />
@@ -3435,13 +4329,58 @@ function MeetingPage() {
                     <div className="meet-controls-container">
                         {showReactions && (
                             <div className="reaction-popup glass-panel">
-                                {reactionEmojis.map((emoji) => (
+                                <button
+                                    className="reaction-btn"
+                                    onClick={() => {
+                                        setFaceMode("");
+                                        faceModeRef.current = "";
+                                        setFaceEmoji("");
+                                        faceEmojiRef.current = "";
+                                        stopFaceEmojiFilter().catch(() => { });
+                                        stopAvatarFilter().catch(() => { });
+                                        setShowReactions(false);
+                                        setToastMessage("얼굴 필터가 해제되었습니다.");
+                                        setShowToast(true);
+                                    }}
+                                >
+                                    ❌
+                                </button>
+                                <button
+                                    className="reaction-btn"
+                                    onClick={async () => {
+                                        setFaceMode("avatar");
+                                        faceModeRef.current = "avatar";
+                                        setFaceEmoji("");
+                                        faceEmojiRef.current = "";
+                                        setShowReactions(false);
+                                        if (!producersRef.current.get("camera")) {
+                                            await turnOnCamera();
+                                        }
+                                        await startAvatarFilter();
+                                        setToastMessage("3D 아바타 필터가 적용되었습니다.");
+                                        setShowToast(true);
+                                    }}
+                                    title="3D 아바타"
+                                >
+                                    👤
+                                </button>
+                                {faceEmojis.map((emoji) => (
                                     <button
                                         key={emoji}
-                                        onClick={() => handleReaction(emoji)}
+                                        onClick={async () => {
+                                            setFaceMode("emoji");
+                                            faceModeRef.current = "emoji";
+                                            setFaceEmoji(emoji);
+                                            faceEmojiRef.current = emoji;
+                                            setShowReactions(false);
+                                            if (!producersRef.current.get("camera")) {
+                                                await turnOnCamera();
+                                            }
+                                            await startFaceEmojiFilter(emoji);
+                                            setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
+                                            setShowToast(true);
+                                        }}
                                         className="reaction-btn"
-                                        disabled={!!myReaction}
-                                        style={myReaction ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                                     >
                                         {emoji}
                                     </button>
@@ -3478,7 +4417,7 @@ function MeetingPage() {
                                         }
                                     }} />
                             )}
-                            <ButtonControl label="반응" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
+                            <ButtonControl label="얼굴" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
                             <ButtonControl label="채팅" active={sidebarOpen && sidebarView === "chat"} icon={MessageSquare} onClick={() => toggleSidebar("chat")} />
                             <ButtonControl label="참여자" active={sidebarOpen && sidebarView === "participants"} icon={Users} onClick={() => toggleSidebar("participants")} />
                             <div className="divider"></div>
@@ -3564,7 +4503,7 @@ function MeetingPage() {
                     </div>
                 </aside>
             </div>
-            
+
             <Toast
                 message={toastMessage}
                 visible={showToast}
