@@ -5,7 +5,7 @@
 
 <mapper namespace="com.example.demo.roomcreate.RoomCreateMapper">
 
-    <!-- ✅ 방 생성 -->
+    <!-- 방 생성 -->
     <insert id="insertRoom">
         INSERT INTO room (
             room_id,
@@ -43,7 +43,7 @@
     </insert>
 
 
-    <!-- ✅ 전체 방 조회 -->
+    <!-- 전체 방 조회 -->
     <select id="findAllRooms"
             resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
@@ -67,7 +67,7 @@
     </select>
 
 
-    <!-- ✅ 방 상세 조회 -->
+    <!-- 방 상세 조회 -->
     <select id="findRoomById"
             resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
@@ -91,7 +91,7 @@
     </select>
 
 
-    <!-- ✅ 방 수정 -->
+    <!-- 방 수정 -->
     <update id="updateRoom">
         UPDATE room
         SET

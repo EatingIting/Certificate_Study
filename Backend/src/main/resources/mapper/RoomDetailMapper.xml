@@ -15,7 +15,7 @@
             r.gender,
             r.max_participants AS maxParticipants,
 
-            -- ✅ 현재 참여 인원 (방장 포함)
+            -- 현재 참여 인원 (방장 포함)
             (
                 SELECT COUNT(*) + 1
                 FROM room_join_request rjr

@@ -29,6 +29,7 @@ public class MyPageController {
             @RequestParam String name,
             @RequestParam String nickname,
             @RequestParam String birthDate,
+            @RequestParam String gender,
             @RequestParam(required = false) String introduction,
             @RequestParam(required = false) MultipartFile profileImage
     ) {
@@ -39,6 +40,7 @@ public class MyPageController {
                 name,
                 nickname,
                 birthDate,
+                gender,
                 introduction,
                 profileImage
         );
@@ -85,4 +87,6 @@ public class MyPageController {
                 myPageService.getCompletedStudies(email)
         );
     }
+
+
 }

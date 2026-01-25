@@ -37,15 +37,19 @@ const Auth = () => {
         try {
             const res = await login(form.email, form.password);
 
-            localStorage.setItem("userId", res.data.userId);
-            localStorage.setItem("nickname", res.data.nickname);
-            localStorage.setItem("accessToken", res.data.token);
+            sessionStorage.setItem("userId", res.data.userId);
+            sessionStorage.setItem("nickname", res.data.nickname);
+            sessionStorage.setItem("accessToken", res.data.token);
 
             alert("로그인 성공");
             navigate("/");
         } catch {
             alert("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
+    };
+
+    const handleOAuthLogin = (provider) => {
+        window.location.href = `http://localhost:8080/oauth2/authorization/${provider}`;
     };
 
     return (
@@ -65,13 +69,24 @@ const Auth = () => {
                             </div>
 
                             <div className="button-group">
-                                <button className="social-btn kakao">
+                                <button
+                                    className="social-btn kakao"
+                                    onClick={() => handleOAuthLogin("kakao")}
+                                >
                                     카카오로 시작하기
                                 </button>
-                                <button className="social-btn naver">
+
+                                <button
+                                    className="social-btn naver"
+                                    onClick={() => handleOAuthLogin("naver")}
+                                >
                                     네이버로 시작하기
                                 </button>
-                                <button className="social-btn google">
+
+                                <button
+                                    className="social-btn google"
+                                    onClick={() => handleOAuthLogin("google")}
+                                >
                                     구글로 시작하기
                                 </button>
                             </div>

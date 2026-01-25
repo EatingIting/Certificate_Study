@@ -22,7 +22,8 @@ const MyPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
+    const token = sessionStorage.getItem("accessToken");
+
     if (!token) {
       alert("로그인이 필요한 페이지입니다.");
       navigate("/auth");
@@ -36,7 +37,7 @@ const MyPage = () => {
 
   const fetchProfile = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
+      const token = sessionStorage.getItem("accessToken");
 
       const res = await axios.get("/api/mypage/me", {
         headers: {
@@ -52,7 +53,7 @@ const MyPage = () => {
 
   const fetchStudies = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
+      const token = sessionStorage.getItem("accessToken");
 
       const joinedRes = await axios.get(
           "/api/mypage/me/studies/joined",
@@ -87,12 +88,13 @@ const MyPage = () => {
 
   const saveEdit = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
+      const token = sessionStorage.getItem("accessToken");
 
       const formData = new FormData();
       formData.append("name", draft.name);
       formData.append("nickname", draft.nickname);
       formData.append("birthDate", draft.birthDate);
+      formData.append("gender", draft.gender);
       formData.append("introduction", draft.introduction);
 
       if (draft.profileImg instanceof File) {
@@ -135,7 +137,7 @@ const MyPage = () => {
     if (!ok) return;
 
     try {
-      const token = localStorage.getItem("accessToken");
+      const token = sessionStorage.getItem("accessToken");
 
       await axios.delete("/api/mypage/me", {
         headers: {
@@ -231,7 +233,14 @@ const MyPage = () => {
                   </div>
                   <div className="kv">
                     <span className="k">성별</span>
-                    <span className="v">{profile.gender}</span>
+                    <span className="v">
+                      {profile.gender === "MALE"
+                          ? "남성"
+                          : profile.gender === "FEMALE"
+                              ? "여성"
+                              : ""}
+                    </span>
+
                   </div>
                   <div className="kv kv-bio">
                     <span className="k">자기소개</span>
@@ -360,7 +369,12 @@ const MyPage = () => {
                   <div className="form-grid">
                     <label className="field">
                       <span>이름</span>
-                      <input value={draft.name} disabled />
+                        <input
+                            value={draft.name}
+                            onChange={(e) =>
+                                setDraft({ ...draft, name: e.target.value })
+                            }
+                        />
                     </label>
 
                     <label className="field">
@@ -380,16 +394,30 @@ const MyPage = () => {
 
                     <label className="field">
                       <span>생년월일</span>
-                      <input value={draft.birthDate} disabled />
+                      <input
+                          type="date"
+                          value={draft.birthDate?.slice(0, 10) || ""}
+                          onChange={(e) =>
+                              setDraft({ ...draft, birthDate: e.target.value })
+                          }
+                      />
                     </label>
+
 
                     <label className="field">
                       <span>성별</span>
-                      <select value={draft.gender} disabled>
-                        <option value="남">남</option>
-                        <option value="여">여</option>
+                      <select
+                          value={draft.gender}
+                          onChange={(e) =>
+                              setDraft({ ...draft, gender: e.target.value })
+                          }
+                      >
+                        <option value="MALE">남</option>
+                        <option value="FEMALE">여</option>
                       </select>
                     </label>
+
+
 
                     <label className="field field-full">
                       <span>자기소개</span>

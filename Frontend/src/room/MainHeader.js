@@ -14,7 +14,7 @@ const MainHeader = () => {
     const [searchText, setSearchText] = useState("");
 
     useEffect(() => {
-        setNickname(localStorage.getItem("nickname"));
+        setNickname(sessionStorage.getItem("nickname"));
     }, [pathname]);
 
     // 바깥 클릭 시 드롭다운 닫기
@@ -29,11 +29,15 @@ const MainHeader = () => {
     }, []);
 
     const handleLogout = () => {
-        localStorage.clear();
+        sessionStorage.clear();
         setNickname(null);
         setIsOpen(false);
+
+        alert("로그아웃 되었습니다.");
+
         navigate("/");
     };
+
 
     return (
         <div className="page">

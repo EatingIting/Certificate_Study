@@ -6,9 +6,8 @@ const MainSideBar = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const isLoggedIn = Boolean(localStorage.getItem("accessToken"));
+    const isLoggedIn = Boolean(sessionStorage.getItem("accessToken"));
 
-    // ✅ active 판별 분리
     const isExact = (path) => location.pathname === path;
     const isParentActive = (path) =>
         location.pathname === path || location.pathname.startsWith(path + "/");

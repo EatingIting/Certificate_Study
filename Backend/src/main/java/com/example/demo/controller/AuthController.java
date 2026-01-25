@@ -5,6 +5,7 @@ import com.example.demo.auth.AuthVO;
 import com.example.demo.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -19,7 +20,6 @@ public class AuthController {
 
     @GetMapping("/check-email")
     public Map<String, Boolean> checkEmail(@RequestParam String email) {
-        System.out.println("check-email 호출됨: " + email);
 
         boolean available = authService.isEmailAvailable(email);
 
@@ -50,5 +50,22 @@ public class AuthController {
     public ResponseEntity<?> signup(@RequestBody AuthVO vo) {
         authService.signup(vo);
         return ResponseEntity.ok().build();
+    }
+
+    // ✅ OAuth 로그인 후 nickname 가져오는 API
+    @GetMapping("/me")
+    public ResponseEntity<?> getMyInfo(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        AuthVO user = authService.findByEmail(email);
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "userId", user.getUserId(),
+                        "email", user.getEmail(),
+                        "nickname", user.getNickname()
+                )
+        );
     }
 }

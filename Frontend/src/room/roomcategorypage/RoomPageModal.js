@@ -24,7 +24,7 @@ const RoomPageModal = ({ open, onClose, study }) => {
   const [genderLoading, setGenderLoading] = useState(true);
 
   const getEmailFromToken = () => {
-    const token = localStorage.getItem("accessToken");
+    const token = sessionStorage.getItem("accessToken");
     if (!token) return null;
 
     const payload = token.split(".")[1];

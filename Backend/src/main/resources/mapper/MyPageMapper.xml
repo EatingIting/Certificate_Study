@@ -18,10 +18,12 @@
         SET name = #{name},
             nickname = #{nickname},
             birth_date = #{birthDate},
+            gender = #{gender},
             introduction = #{introduction},
             profile_img = #{profileImg}
         WHERE email = #{userId}
     </update>
+
 
     <!-- 회원 탈퇴 -->
     <delete id="deleteByEmail">
@@ -36,7 +38,7 @@
         WHERE email = #{email}
     </select>
 
-    <!-- ✅ 진행중 스터디 -->
+    <!-- 진행중 스터디 -->
     <select id="getJoinedStudies" resultType="com.example.demo.mypage.MyStudyVO">
 
         <!-- 방장이 만든 진행중 -->
@@ -67,7 +69,7 @@
 
     </select>
 
-    <!-- ✅ 완료된 스터디 -->
+    <!-- 완료된 스터디 -->
     <select id="getCompletedStudies" resultType="com.example.demo.mypage.MyStudyVO">
 
         <!-- 방장이 만든 종료 -->

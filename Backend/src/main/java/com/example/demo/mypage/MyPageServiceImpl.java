@@ -31,6 +31,7 @@ public class MyPageServiceImpl implements MyPageService {
             String name,
             String nickname,
             String birthDate,
+            String gender,
             String introduction,
             MultipartFile profileImage
     ) {
@@ -61,6 +62,7 @@ public class MyPageServiceImpl implements MyPageService {
                 name,
                 nickname,
                 LocalDate.parse(birthDate),
+                gender,
                 introduction,
                 profileImgPath
         );

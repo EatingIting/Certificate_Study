@@ -1,5 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
 import Auth from "./auth/Auth";
+import SignUp from "./auth/SignUp";
+
+import OAuthSuccess from "./auth/OAuthSuccess";
+import OAuthFail from "./auth/OAuthFail";
+
 import Create from "./room/roomcategorypage/Create";
 import Main from "./mainpage/Main";
 import MyApplications from "./room/roomcategorypage/MyApplications";
@@ -8,21 +14,30 @@ import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
 import MainHeader from "./room/MainHeader";
 import RoomPage from "./room/roomcategorypage/RoomPage";
-import SignUp from "./auth/SignUp";
 import MyPage from "./room/roomcategorypage/MyPage";
 
 function App() {
     return (
         <BrowserRouter>
             <Routes>
+                {/* 로그인/회원가입 */}
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/signup" element={<SignUp />} />
+
+                {/* OAuth 결과 처리 */}
+                <Route path="/oauth-success" element={<OAuthSuccess />} />
+                <Route path="/oauth-fail" element={<OAuthFail />} />
+
+                {/* 화상회의 */}
                 <Route path="/meeting/:roomId" element={<MeetingPage />} />
-                <Route path="/lms/:subjectId/*" element={<LMSSubject />}/>
-                {/* 임시*/}
+
+                {/* LMS */}
+                <Route path="/lms/:subjectId/*" element={<LMSSubject />} />
+
+                {/* 메인 공통 헤더 */}
                 <Route element={<MainHeader />}>
-                    <Route path="/room" element={<RoomPage />} />
                     <Route path="/" element={<Main />} />
+                    <Route path="/room" element={<RoomPage />} />
                     <Route path="/room/mypage" element={<MyPage />} />
                     <Route path="/room/my-applications" element={<MyApplications />} />
                     <Route path="/room/create" element={<Create />} />

@@ -13,6 +13,7 @@ public interface MyPageService {
             String name,
             String nickname,
             String birthDate,
+            String gender,
             String introduction,
             MultipartFile profileImage
     );
