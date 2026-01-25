@@ -19,6 +19,8 @@ import Calendar from "./calendar/Calendar";
 import StudyMembers from "./study-members/StudyMembers"
 import StudyLeave from "./study-leave/StudyLeave"
 
+import RoomMyPage from "./room-my-page/RoomMyPage"
+
 import "./LMSSubject.css";
 
 function LMSSubject() {
@@ -66,6 +68,8 @@ function LMSSubject() {
 
                         <Route path="study/members" element={<StudyMembers />}  />
                         <Route path="study/leave" element={<StudyLeave />} />
+
+                        <Route path="mypage" element={<RoomMyPage />} />
 
                         {/* ✅ 없는 경로는 (상대경로) 대시보드로 */}
                         <Route path="*" element={<Navigate to="dashboard" replace />} />

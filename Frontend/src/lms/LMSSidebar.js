@@ -304,13 +304,13 @@ let LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                         <ul className="submenu">
                             <li
                                 className={`submenu-item ${activeMenu === "profile/me" ? "active" : ""}`}
-                                onClick={() => goChild("profile", "profile/me", "profile?tab=me")}
+                                onClick={() => goChild("profile", "profile/me", "mypage?tab=me")}
                             >
                                 내정보
                             </li>
                             <li
                                 className={`submenu-item ${activeMenu === "profile/settings" ? "active" : ""}`}
-                                onClick={() => goChild("profile", "profile/settings", "profile?tab=settings")}
+                                onClick={() => goChild("profile", "profile/settings", "mypage?tab=settings")}
                             >
                                 계정 설정
                             </li>

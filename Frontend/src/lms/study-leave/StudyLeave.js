@@ -6,7 +6,7 @@ function StudyLeave() {
     let navigate = useNavigate();
 
     // ✅ (임시) 내 역할 - 백엔드 붙이면 교체
-    let myRole = "OWNER"; // "OWNER" | "MEMBER"
+    let myRole = "MEMBER"; // "OWNER" | "MEMBER"
     let isMember = myRole === "MEMBER";
 
     // ✅ (임시) 현재 스터디 이름 (백엔드 붙이면 subjectId로 조회해서 가져오면 됨)

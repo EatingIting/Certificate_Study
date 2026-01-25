@@ -9,13 +9,14 @@
 
     display: flex;
     justify-content: center;
+    padding-bottom: 16px;
 }
 
 /* 큰 흰 박스(폭 제한) */
 .slCard {
     width: 100%;
-    max-width: 1120px;
-    min-height: calc(100vh - 48px);
+    max-width: 900px;
+    min-height: auto;
 
     border-radius: 5px;
     background: #fff;
@@ -23,7 +24,6 @@
 
     padding: 28px;
 }
-
 /* 제목 */
 .slHead {
     margin-bottom: 18px;

@@ -799,3 +799,7 @@
 .calBtnGhost {
     background: #fff;
 }
+
+.fc .fc-daygrid-day-top {
+    flex-direction: row;
+}
