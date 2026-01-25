@@ -798,12 +798,133 @@ function MeetingPage() {
         let frameCount = 0;
         let producerCreated = false;
 
+        // 🔥 배경 제거용 캔버스 및 세그멘터 초기화
+        let bgFrameCanvas = null;
+        let bgFrameCtx = null;
+
+        const ensureBgSegmenterForPipeline = () => {
+            const cur = faceBgSegmenterRef.current;
+            if (cur?.segmenter || cur?.loading) return;
+            const loading = (async () => {
+                try {
+                    const { ImageSegmenter, FilesetResolver } = await import("@mediapipe/tasks-vision");
+                    const vision = await FilesetResolver.forVisionTasks(
+                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
+                    );
+                    const segmenter = await ImageSegmenter.createFromOptions(vision, {
+                        baseOptions: {
+                            modelAssetPath:
+                                "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite",
+                            delegate: "CPU",
+                        },
+                        runningMode: "VIDEO",
+                        outputCategoryMask: true,
+                    });
+                    return segmenter;
+                } catch (e) {
+                    console.warn("[turnOnCamera bg-remove] segmenter init failed:", e);
+                    return null;
+                }
+            })();
+            faceBgSegmenterRef.current = { loading };
+            loading.then((seg) => {
+                if (!seg) {
+                    faceBgSegmenterRef.current = null;
+                    return;
+                }
+                faceBgSegmenterRef.current = { segmenter: seg };
+                console.log("[turnOnCamera] bg segmenter loaded");
+            });
+        };
+
         const drawLoop = async () => {
             if (!canvasPipelineActiveRef.current) return;
 
+            // 🔥 배경 제거 모드 체크
+            const wantBgRemove = !!bgRemoveRef.current;
+            if (wantBgRemove) ensureBgSegmenterForPipeline();
+
             // 비디오 프레임을 캔버스에 그리기
             try {
-                ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                if (!wantBgRemove) {
+                    // 기본: 원본 비디오 그대로
+                    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                } else {
+                    // 🔥 배경 제거 모드
+                    // 1) 프레임 캔버스 준비
+                    if (!bgFrameCanvas) {
+                        bgFrameCanvas = document.createElement("canvas");
+                        bgFrameCanvas.width = canvas.width;
+                        bgFrameCanvas.height = canvas.height;
+                        bgFrameCtx = bgFrameCanvas.getContext("2d");
+                    }
+
+                    // 2) 프레임 캔버스에 비디오 그리기
+                    if (bgFrameCtx) {
+                        bgFrameCtx.globalCompositeOperation = "source-over";
+                        bgFrameCtx.clearRect(0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
+                        bgFrameCtx.drawImage(v, 0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
+                    }
+
+                    // 3) 세그멘테이션 마스크 업데이트 (90ms 쓰로틀)
+                    const seg = faceBgSegmenterRef.current?.segmenter;
+                    const nowMs = performance.now();
+                    if (seg && nowMs - faceBgLastInferAtRef.current > 90) {
+                        faceBgLastInferAtRef.current = nowMs;
+                        try {
+                            const res = seg.segmentForVideo(v, nowMs);
+                            const mask = res?.categoryMask;
+                            if (mask) {
+                                const maskW = mask.width ?? 0;
+                                const maskH = mask.height ?? 0;
+                                const dataU8 = mask.getAsUint8Array?.();
+                                if (dataU8 && maskW && maskH && dataU8.length >= maskW * maskH) {
+                                    let maskCanvas = faceBgMaskCanvasRef.current;
+                                    if (!maskCanvas) {
+                                        maskCanvas = document.createElement("canvas");
+                                        faceBgMaskCanvasRef.current = maskCanvas;
+                                    }
+                                    if (maskCanvas.width !== maskW || maskCanvas.height !== maskH) {
+                                        maskCanvas.width = maskW;
+                                        maskCanvas.height = maskH;
+                                    }
+                                    const mctx = maskCanvas.getContext("2d");
+                                    if (mctx) {
+                                        const img = mctx.createImageData(maskW, maskH);
+                                        // selfie_segmenter: 0=person(사람), 1+=background(배경)
+                                        for (let i = 0; i < maskW * maskH; i++) {
+                                            const isPerson = dataU8[i] === 0;
+                                            const o = i * 4;
+                                            img.data[o] = 255;
+                                            img.data[o + 1] = 255;
+                                            img.data[o + 2] = 255;
+                                            img.data[o + 3] = isPerson ? 255 : 0;
+                                        }
+                                        mctx.putImageData(img, 0, 0);
+                                    }
+                                }
+                            }
+                        } catch { }
+                    }
+
+                    // 4) 마스크 적용 및 최종 출력
+                    const maskCanvas = faceBgMaskCanvasRef.current;
+                    if (maskCanvas && bgFrameCtx) {
+                        bgFrameCtx.globalCompositeOperation = "destination-in";
+                        bgFrameCtx.drawImage(maskCanvas, 0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
+                        bgFrameCtx.globalCompositeOperation = "source-over";
+
+                        // 흰색 배경 + 사람만
+                        ctx.save();
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(bgFrameCanvas, 0, 0, canvas.width, canvas.height);
+                        ctx.restore();
+                    } else {
+                        // 마스크 로딩 중: 원본 비디오 표시
+                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                    }
+                }
             } catch {
                 canvasPipelineRafRef.current = requestAnimationFrame(drawLoop);
                 return;
@@ -1830,14 +1951,17 @@ function MeetingPage() {
                         frameCtx.globalCompositeOperation = "destination-in";
                         frameCtx.drawImage(maskCanvas, 0, 0, frameCanvas.width, frameCanvas.height);
                         frameCtx.globalCompositeOperation = "source-over";
-                    }
 
-                    // 4) 최종 출력: 배경 흰색 + 사람만
-                    ctx.save();
-                    ctx.fillStyle = "#ffffff";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(frameCanvas, 0, 0, canvas.width, canvas.height);
-                    ctx.restore();
+                        // 4) 최종 출력: 배경 흰색 + 사람만
+                        ctx.save();
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(frameCanvas, 0, 0, canvas.width, canvas.height);
+                        ctx.restore();
+                    } else {
+                        // 🔥 마스크가 아직 로드되지 않았으면 원본 비디오 그대로 표시
+                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                    }
                 }
             } catch {
                 faceFilterRafRef.current = requestAnimationFrame(draw);
@@ -4251,26 +4375,15 @@ function MeetingPage() {
                                                         className={`reaction-btn ${bgRemove ? "active" : ""}`}
                                                         onClick={async () => {
                                                             const next = !bgRemoveRef.current;
-                                                            setFaceMode("emoji");
-                                                            faceModeRef.current = "emoji";
-                                                            setFaceEmoji("");
-                                                            faceEmojiRef.current = "";
                                                             setBgRemove(next);
                                                             bgRemoveRef.current = next;
                                                             setShowReactions(false);
-                                                            // 🔥 canvasPipeline이 활성화되어 있지 않으면 먼저 turnOnCamera 호출
+                                                            // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
+                                                            // (drawLoop에서 bgRemoveRef.current를 체크하여 배경 제거 처리)
                                                             if (!canvasPipelineActiveRef.current) {
                                                                 await turnOnCamera();
                                                             }
-                                                            // 배경제거는 startFaceEmojiFilter로 처리
-                                                            if (next) {
-                                                                await startFaceEmojiFilter("");
-                                                                setToastMessage("배경이 제거되었습니다.");
-                                                            } else {
-                                                                // ✅ 파이프라인은 유지(패스스루)하고 배경제거만 해제
-                                                                await startFaceEmojiFilter("");
-                                                                setToastMessage("배경 제거가 해제되었습니다.");
-                                                            }
+                                                            setToastMessage(next ? "배경이 제거되었습니다." : "배경 제거가 해제되었습니다.");
                                                             setShowToast(true);
                                                         }}
                                                         title="배경 지우기"
@@ -4285,11 +4398,8 @@ function MeetingPage() {
                                                                 faceModeRef.current = "emoji";
                                                                 setFaceEmoji(emoji);
                                                                 faceEmojiRef.current = emoji;
-                                                                setBgRemove(false);
-                                                                bgRemoveRef.current = false;
                                                                 setShowReactions(false);
                                                                 // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera로 시작
-                                                                // (startLocalMedia로 시작된 경우 canvas pipeline이 없음)
                                                                 if (!canvasPipelineActiveRef.current) {
                                                                     await turnOnCamera();
                                                                 }
@@ -4595,26 +4705,14 @@ function MeetingPage() {
                                                         className={`reaction-btn ${bgRemove ? "active" : ""}`}
                                                         onClick={async () => {
                                                             const next = !bgRemoveRef.current;
-                                                            setFaceMode("emoji");
-                                                            faceModeRef.current = "emoji";
-                                                            setFaceEmoji("");
-                                                            faceEmojiRef.current = "";
                                                             setBgRemove(next);
                                                             bgRemoveRef.current = next;
                                                             setShowReactions(false);
-                                                            // 🔥 canvasPipeline이 활성화되어 있지 않으면 먼저 turnOnCamera 호출
+                                                            // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
                                                             if (!canvasPipelineActiveRef.current) {
                                                                 await turnOnCamera();
                                                             }
-                                                            // 배경제거는 startFaceEmojiFilter로 처리
-                                                            if (next) {
-                                                                await startFaceEmojiFilter("");
-                                                                setToastMessage("배경이 제거되었습니다.");
-                                                            } else {
-                                                                // ✅ 파이프라인은 유지(패스스루)하고 배경제거만 해제
-                                                                await startFaceEmojiFilter("");
-                                                                setToastMessage("배경 제거가 해제되었습니다.");
-                                                            }
+                                                            setToastMessage(next ? "배경이 제거되었습니다." : "배경 제거가 해제되었습니다.");
                                                             setShowToast(true);
                                                         }}
                                                         title="배경 지우기"
@@ -4629,8 +4727,6 @@ function MeetingPage() {
                                                                 faceModeRef.current = "emoji";
                                                                 setFaceEmoji(emoji);
                                                                 faceEmojiRef.current = emoji;
-                                                                setBgRemove(false);
-                                                                bgRemoveRef.current = false;
                                                                 setShowReactions(false);
                                                                 // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera로 시작
                                                                 if (!canvasPipelineActiveRef.current) {
@@ -4844,26 +4940,14 @@ function MeetingPage() {
                                     className={`reaction-btn ${bgRemove ? "active" : ""}`}
                                     onClick={async () => {
                                         const next = !bgRemoveRef.current;
-                                        setFaceMode("emoji");
-                                        faceModeRef.current = "emoji";
-                                        setFaceEmoji("");
-                                        faceEmojiRef.current = "";
                                         setBgRemove(next);
                                         bgRemoveRef.current = next;
                                         setShowReactions(false);
-                                        // 🔥 canvasPipeline이 활성화되어 있지 않으면 먼저 turnOnCamera 호출
+                                        // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
                                         if (!canvasPipelineActiveRef.current) {
                                             await turnOnCamera();
                                         }
-                                        // 배경제거는 startFaceEmojiFilter로 처리
-                                        if (next) {
-                                            await startFaceEmojiFilter("");
-                                            setToastMessage("배경이 제거되었습니다.");
-                                        } else {
-                                            // ✅ 파이프라인은 유지(패스스루)하고 배경제거만 해제
-                                            await startFaceEmojiFilter("");
-                                            setToastMessage("배경 제거가 해제되었습니다.");
-                                        }
+                                        setToastMessage(next ? "배경이 제거되었습니다." : "배경 제거가 해제되었습니다.");
                                         setShowToast(true);
                                     }}
                                     title="배경 지우기"
