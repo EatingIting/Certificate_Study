@@ -1245,6 +1245,44 @@ function MeetingPage() {
         } catch { }
     }, [faceEmoji, faceMode, bgRemove]);
 
+    // 🔥 F5 새로고침 후 저장된 이모지/배경제거 상태 자동 복원
+    const hasMountedRef = useRef(false);
+    useEffect(() => {
+        if (hasMountedRef.current) return;
+        hasMountedRef.current = true;
+
+        // 저장된 이모지 또는 배경제거 상태가 있으면 자동 적용
+        const savedEmoji = faceEmojiRef.current;
+        const savedBgRemove = bgRemoveRef.current;
+
+        if (savedEmoji || savedBgRemove) {
+            // 로컬 스트림이 준비될 때까지 대기 후 canvasPipeline 시작
+            const checkAndApply = async () => {
+                // 로컬 스트림이 준비될 때까지 대기 (최대 15초)
+                let waited = 0;
+                while (!localStreamRef.current && waited < 15000) {
+                    await new Promise(r => setTimeout(r, 300));
+                    waited += 300;
+                }
+
+                // 추가 대기 (producer 생성 등)
+                await new Promise(r => setTimeout(r, 1000));
+
+                // canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
+                if (!canvasPipelineActiveRef.current) {
+                    console.log("[Auto-restore] Applying saved emoji/bgRemove state:", { savedEmoji, savedBgRemove });
+                    try {
+                        await turnOnCamera();
+                    } catch (e) {
+                        console.warn("[Auto-restore] turnOnCamera failed:", e);
+                    }
+                }
+            };
+            checkAndApply().catch((e) => console.warn("[Auto-restore] error:", e));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const enqueueFaceEmojiOp = useCallback((op) => {
         const next = faceEmojiOpRef.current.then(op, op);
         // queue가 에러로 끊기지 않게 swallow
@@ -2972,8 +3010,26 @@ function MeetingPage() {
     useEffect(() => {
         const init = async () => {
             await startLocalMedia();
+
+            // 🔥 저장된 이모지/배경제거 상태가 있으면 canvasPipeline으로 전환
+            const savedEmoji = faceEmojiRef.current;
+            const savedBgRemove = bgRemoveRef.current;
+            if (savedEmoji || savedBgRemove) {
+                console.log("[Init] Detected saved emoji/bgRemove, switching to canvasPipeline");
+                // 약간의 대기 후 turnOnCamera 호출
+                setTimeout(async () => {
+                    if (!canvasPipelineActiveRef.current) {
+                        try {
+                            await turnOnCamera();
+                        } catch (e) {
+                            console.warn("[Init] turnOnCamera for saved state failed:", e);
+                        }
+                    }
+                }, 500);
+            }
         };
         init();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
