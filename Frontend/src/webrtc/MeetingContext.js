@@ -30,43 +30,16 @@ export const MeetingProvider = ({ children }) => {
     const requestBrowserPip = async (videoEl) => {
         if (!videoEl) {
             console.warn("[PiP] 비디오 요소가 없습니다.");
-            return;
+            return false;
         }
         if (document.pictureInPictureElement) {
             console.log("[PiP] 이미 PiP 모드입니다.");
-            return;
+            return true;
         }
 
-        // ✅ 비디오 메타데이터가 로드될 때까지 대기
-        if (videoEl.readyState < 1) { // HAVE_NOTHING (0) → HAVE_METADATA (1) 이상 필요
-            console.log("[PiP] 비디오 메타데이터 로드 대기 중...");
-            
-            try {
-                await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        reject(new Error("비디오 메타데이터 로드 타임아웃"));
-                    }, 5000); // 5초 타임아웃
-
-                    const onLoadedMetadata = () => {
-                        clearTimeout(timeout);
-                        videoEl.removeEventListener("loadedmetadata", onLoadedMetadata);
-                        resolve();
-                    };
-
-                    videoEl.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
-                    
-                    // 이미 로드되어 있으면 즉시 resolve
-                    if (videoEl.readyState >= 1) {
-                        clearTimeout(timeout);
-                        resolve();
-                    }
-                });
-            } catch (err) {
-                console.error("[PiP] 비디오 메타데이터 로드 실패:", err);
-                return; // 에러 발생 시 PiP 요청 중단
-            }
-        }
-
+        // 🔥 User gesture 컨텍스트 유지를 위해 즉시 PiP 요청
+        // metadata 대기 없이 바로 시도 (대부분의 경우 이미 로드되어 있음)
+        
         const handleLeavePiP = () => {
             console.log("[PiP] leavepictureinpicture");
 
@@ -85,12 +58,21 @@ export const MeetingProvider = ({ children }) => {
         );
 
         try {
+            // 🔥 즉시 PiP 요청 (user gesture 보존)
             await videoEl.requestPictureInPicture();
             setIsPipMode(true);
             console.log("[PiP] PiP 모드 활성화됨");
+            return true;
         } catch (error) {
             console.error("[PiP] PiP 요청 실패:", error);
-            // 에러 발생 시 사용자에게 알리지 않고 조용히 실패 처리
+            document.removeEventListener("leavepictureinpicture", handleLeavePiP);
+            
+            // readyState가 부족하면 메타데이터 로드 후 재시도 (이벤트 기반으로)
+            if (videoEl.readyState < 1) {
+                console.log("[PiP] 메타데이터 부족 - 이벤트 기반 재시도 대기");
+                // 이 경우는 user gesture가 이미 손실됨, 나중에 다시 시도해야 함
+            }
+            return false;
         }
     };
 

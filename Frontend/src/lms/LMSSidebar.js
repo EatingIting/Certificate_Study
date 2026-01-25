@@ -8,7 +8,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const { subjectId } = useParams();
 
     // ✅ 회의 상태 (PiP 트리거용)
-    const { isInMeeting, isPipMode, roomId } = useMeeting();
+    const { isInMeeting, isPipMode, roomId, requestBrowserPip } = useMeeting();
 
     // ✅ 초기값: 전부 열림
     const [openKeys, setOpenKeys] = useState([
@@ -24,9 +24,9 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const activeMenu = activeMenuProp ?? localActiveMenu;
     const setActiveMenu = setActiveMenuProp ?? setLocalActiveMenu;
 
-    const requestPipIfMeeting = useCallback(() => {
+    // 🔥 직접 PiP 요청 (user gesture 컨텍스트 유지를 위해 이벤트 대신 직접 호출)
+    const requestPipIfMeeting = useCallback(async () => {
         // roomId가 있으면 회의 중으로 간주 (isInMeeting이 false여도)
-        // ✅ 수정: pip.roomId 키 사용 (MeetingContext와 일치)
         const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("pip.roomId");
         
         if (!hasActiveMeeting) {
@@ -34,12 +34,26 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        console.log("[LMSSidebar] PiP 요청 이벤트 발생");
-        // ✅ 오직 "의도"만 전달
-        window.dispatchEvent(
-            new CustomEvent("meeting:request-pip")
-        );
-    }, [isInMeeting, isPipMode, roomId]);
+        // 이미 PiP 모드면 스킵
+        if (document.pictureInPictureElement) {
+            console.log("[LMSSidebar] 이미 PiP 모드임");
+            return;
+        }
+
+        const video = document.querySelector("video[data-main-video]");
+        if (!video) {
+            console.log("[LMSSidebar] video 요소를 찾을 수 없음");
+            return;
+        }
+
+        console.log("[LMSSidebar] PiP 직접 요청");
+        try {
+            await requestBrowserPip(video);
+            console.log("[LMSSidebar] PiP 활성화 성공");
+        } catch (e) {
+            console.warn("[LMSSidebar] PiP 요청 실패:", e);
+        }
+    }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
     // ===============================
     // 메인메뉴 클릭: 이동 X, 펼침/접힘만
@@ -53,7 +67,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     // ===============================
     // 하위 메뉴 클릭: 이동 + PiP
     // ===============================
-    const goChild = (parentKey, activeKey, path) => {
+    const goChild = async (parentKey, activeKey, path) => {
         setActiveMenu(activeKey);
 
         // 하위 눌렀을 때 해당 그룹은 열린 상태 유지
@@ -67,10 +81,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             detail: { path: `/lms/${subjectId}/${path}` }
         }));
 
-        // 🔥 회의 중이면 자동 PiP (PiP가 이미 활성화되어 있으면 다시 요청하지 않음)
-        if (!document.pictureInPictureElement) {
-            requestPipIfMeeting();
-        }
+        // 🔥 회의 중이면 자동 PiP (user gesture 컨텍스트에서 직접 호출)
+        await requestPipIfMeeting();
 
         navigate(`/lms/${subjectId}/${path}`);
     };
@@ -78,7 +90,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     // ===============================
     // 대시보드 단일 메뉴 이동
     // ===============================
-    const goDashboard = () => {
+    const goDashboard = async () => {
         setActiveMenu("dashboard");
 
         // 사이드바 클릭 이벤트 발생 (PiP 복귀 방지용)
@@ -86,8 +98,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             detail: { path: `/lms/${subjectId}/dashboard` }
         }));
 
-        // 🔥 회의 중이면 자동 PiP
-        requestPipIfMeeting();
+        // 🔥 회의 중이면 자동 PiP (user gesture 컨텍스트에서 직접 호출)
+        await requestPipIfMeeting();
 
         navigate(`/lms/${subjectId}/dashboard`);
     };
