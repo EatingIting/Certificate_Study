@@ -25,15 +25,10 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
                                         Authentication authentication)
             throws IOException {
 
-        System.out.println("✅ OAuthHandler 실행됨!!!");
-
         OAuth2User oauthUser = (OAuth2User) authentication.getPrincipal();
 
         String email = oauthUser.getAttribute("email");
         String nickname = oauthUser.getAttribute("nickname");
-
-        System.out.println("email = " + email);
-        System.out.println("nickname = " + nickname);
 
         String token = jwtTokenProvider.createAccessToken(email);
 

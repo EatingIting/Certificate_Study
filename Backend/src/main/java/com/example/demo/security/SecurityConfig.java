@@ -23,11 +23,11 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final OAuthHandler oAuthHandler;
-    private final OAuth2UserService oAuth2UserService; // ✅ 추가
+    private final OAuth2UserService oAuth2UserService;
 
     public SecurityConfig(JwtTokenProvider jwtTokenProvider,
                           OAuthHandler oAuthHandler,
-                          OAuth2UserService oAuth2UserService) { // ✅ 추가
+                          OAuth2UserService oAuth2UserService) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.oAuthHandler = oAuthHandler;
         this.oAuth2UserService = oAuth2UserService;
@@ -72,7 +72,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                // ✅ OAuth 로그인 시 이메일 가져오도록 설정
+                // OAuth 로그인 시 이메일 가져오도록 설정
                 .oauth2Login(oauth -> oauth
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(oAuth2UserService)

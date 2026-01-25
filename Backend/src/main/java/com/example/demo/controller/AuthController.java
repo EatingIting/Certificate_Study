@@ -52,7 +52,7 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-    // ✅ OAuth 로그인 후 nickname 가져오는 API
+    // OAuth 로그인 후 nickname 가져오는 API
     @GetMapping("/me")
     public ResponseEntity<?> getMyInfo(Authentication authentication) {
 
