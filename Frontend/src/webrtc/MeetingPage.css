@@ -685,6 +685,21 @@ body {
 /* =========================================
    전체화면 사이드바 (채팅/참여자)
    ========================================= */
+
+/* 🔥 전체화면에서 사이드바 열릴 때 메인 스테이지 부드럽게 밀기 */
+.main-stage {
+  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-stage.sidebar-open {
+  margin-right: 360px;
+}
+
+/* 🔥 전체화면에서 main-video-area도 함께 transition */
+.main-stage.sidebar-open .main-video-area {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .fullscreen-sidebar {
   position: absolute;
   top: 0;
@@ -2042,4 +2057,5 @@ body.fullscreen-active .meet-sidebar {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
 
