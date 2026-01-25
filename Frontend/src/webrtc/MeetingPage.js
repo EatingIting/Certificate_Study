@@ -1487,13 +1487,22 @@ function MeetingPage() {
 
                 const cx = (box.x + box.width / 2) * scaleX;
                 const cy = (box.y + box.height / 2) * scaleY;
-                const size = Math.max(64, Math.min(260, Math.floor(box.width * 1.2 * scaleX)));
+                // 🔥 얼굴 전체(머리/턱 포함)를 더 넓게 덮도록 확대
+                // - 가로/세로 중 큰 값을 기준으로 폰트 크기 결정
+                // - 너무 작/큰 경우 clamp
+                // - 머리카락이 보이지 않도록 약간 위로 올려서 그리기
+                const scaledW = box.width * scaleX;
+                const scaledH = box.height * scaleY;
+                const base = Math.max(scaledW, scaledH);
+                const maxSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.95);
+                const size = Math.max(96, Math.min(maxSize, Math.floor(base * 2.2)));
+                const drawY = cy - scaledH * 0.18;
 
                 ctx.save();
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-                ctx.fillText(currentEmoji, cx, cy);
+                ctx.fillText(currentEmoji, cx, drawY);
                 ctx.restore();
             }
 
