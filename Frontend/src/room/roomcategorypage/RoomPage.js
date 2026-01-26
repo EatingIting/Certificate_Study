@@ -187,6 +187,19 @@ const RoomPage = () => {
         return `D-${diff}`;
     };
 
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const openId = params.get("open");
+
+        if (openId) {
+            api.get(`/rooms/${openId}`).then((res) => {
+                setSelectedRoom(res.data);
+                setOpenModal(true);
+            });
+        }
+    }, [location.search]);
+
+
     const openDetail = async (room) => {
         const res = await api.get(`/rooms/${room.roomId}`);
         setSelectedRoom(res.data);
@@ -196,7 +209,9 @@ const RoomPage = () => {
     const closeModal = () => {
         setOpenModal(false);
         setSelectedRoom(null);
+        navigate("/room", { replace: true });
     };
+
 
     return (
         <div className="recruit-wrap">

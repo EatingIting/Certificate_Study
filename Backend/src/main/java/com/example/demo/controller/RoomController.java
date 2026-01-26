@@ -26,4 +26,10 @@ public class RoomController {
     public RoomDetailVO getRoomDetail(@PathVariable String roomId) {
         return roomDetailService.getRoomDetail(roomId);
     }
+
+    @DeleteMapping("/{roomId}")
+    public void deleteRoom(@PathVariable String roomId) {
+        roomListService.deleteRoom(roomId);
+    }
 }
+

@@ -8,9 +8,6 @@ const MyPage = () => {
 
     const [editOpen, setEditOpen] = useState(false);
 
-    const [certInput, setCertInput] = useState("");
-    const [certs, setCerts] = useState(["정보처리기사", "토익", "SQLD"]);
-
     const [joinedStudies, setJoinedStudies] = useState([]);
 
     const [completedStudies, setCompletedStudies] = useState([]);
@@ -18,6 +15,17 @@ const MyPage = () => {
     const [draft, setDraft] = useState(null);
 
     const [previewImage, setPreviewImage] = useState("");
+
+    const [allCategories, setAllCategories] = useState([]);
+    const [mainCategories, setMainCategories] = useState([]);
+    const [midCategories, setMidCategories] = useState([]);
+    const [subCategories, setSubCategories] = useState([]);
+
+    const [selectedMain, setSelectedMain] = useState(null);
+    const [selectedMid, setSelectedMid] = useState(null);
+    const [selectedSub, setSelectedSub] = useState(null);
+
+    const [interestCategories, setInterestCategories] = useState([]);
 
     const navigate = useNavigate();
 
@@ -33,6 +41,17 @@ const MyPage = () => {
     useEffect(() => {
         fetchProfile();
         fetchStudies();
+
+        axios.get("/api/category").then((res) => setAllCategories(res.data));
+        axios.get("/api/category/main").then((res) => setMainCategories(res.data));
+
+        const token = sessionStorage.getItem("accessToken");
+
+        axios
+            .get("/api/mypage/interests", {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            .then((res) => setInterestCategories(res.data));
     }, []);
 
     const fetchProfile = async () => {
@@ -91,6 +110,11 @@ const MyPage = () => {
     };
 
     const saveEdit = async () => {
+        if (interestCategories.length === 0) {
+            alert("관심 자격증은 최소 1개 이상 등록해야 합니다.");
+            return;
+        }
+
         try {
             const token = sessionStorage.getItem("accessToken");
 
@@ -121,19 +145,72 @@ const MyPage = () => {
         }
     };
 
-    const addCert = () => {
-        const v = certInput.trim();
-        if (!v) return;
-        if (certs.includes(v)) {
-            setCertInput("");
-            return;
-        }
-        setCerts((prev) => [v, ...prev]);
-        setCertInput("");
+
+    const handleMainChange = (e) => {
+        const id = Number(e.target.value) || null;
+        setSelectedMain(id);
+        setSelectedMid(null);
+        setSelectedSub(null);
+        setMidCategories([]);
+        setSubCategories([]);
+
+        if (!id) return;
+
+        setMidCategories(
+            allCategories.filter((c) => c.level === 2 && c.parentId === id)
+        );
     };
 
-    const removeCert = (name) => {
-        setCerts((prev) => prev.filter((c) => c !== name));
+    const handleMidChange = (e) => {
+        const id = Number(e.target.value) || null;
+        setSelectedMid(id);
+        setSelectedSub(null);
+        setSubCategories([]);
+
+        if (!id) return;
+
+        setSubCategories(
+            allCategories.filter((c) => c.level === 3 && c.parentId === id)
+        );
+    };
+
+    const addCategory = async () => {
+        const token = sessionStorage.getItem("accessToken");
+
+        const categoryId = selectedSub ?? selectedMid;
+
+        if (!categoryId) {
+            alert("카테고리를 선택해주세요.");
+            return;
+        }
+
+        if (interestCategories.includes(categoryId)) {
+            alert("이미 등록된 관심 자격증입니다.");
+            return;
+        }
+
+        if (interestCategories.length >= 4) {
+            alert("최대 4개까지 가능합니다.");
+            return;
+        }
+
+        const updated = [...interestCategories, categoryId];
+        setInterestCategories(updated);
+
+        await axios.put("/api/mypage/interests", updated, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    };
+
+    const removeCategory = async (id) => {
+        const token = sessionStorage.getItem("accessToken");
+
+        const updated = interestCategories.filter((c) => c !== id);
+        setInterestCategories(updated);
+
+        await axios.put("/api/mypage/interests", updated, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
     };
 
     const withdraw = async () => {
@@ -167,7 +244,6 @@ const MyPage = () => {
         setDraft({ ...draft, profileImg: file });
     };
 
-    // 날짜 yyyy년 mm월 dd일 변환
     const formatDate = (dateStr) => {
         if (!dateStr) return "";
 
@@ -238,12 +314,12 @@ const MyPage = () => {
                                 <div className="kv">
                                     <span className="k">성별</span>
                                     <span className="v">
-                    {profile.gender === "MALE"
-                        ? "남성"
-                        : profile.gender === "FEMALE"
-                            ? "여성"
-                            : ""}
-                  </span>
+                                        {profile.gender === "MALE"
+                                            ? "남성"
+                                            : profile.gender === "FEMALE"
+                                                ? "여성"
+                                                : ""}
+                                    </span>
                                 </div>
 
                                 <div className="kv kv-bio">
@@ -257,42 +333,75 @@ const MyPage = () => {
 
                 <section className="section">
                     <div className="section-head">
-                        <h3>관심 자격증</h3>
+                        <h3>관심 자격증 (최대 4개)</h3>
+                    </div>
 
-                        <div className="cert-actions">
-                            <div className="cert-input">
-                                <input
-                                    value={certInput}
-                                    onChange={(e) => setCertInput(e.target.value)}
-                                    placeholder="자격증명 입력 (예: 정보처리기사)"
-                                    onKeyDown={(e) => e.key === "Enter" && addCert()}
-                                />
-                                <button className="btn btn-soft" onClick={addCert}>
-                                    + 추가
-                                </button>
-                            </div>
-                        </div>
+                    <div className="interest-row">
+                        <select value={selectedMain ?? ""} onChange={handleMainChange}>
+                            <option value="">대분류</option>
+                            {mainCategories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+
+                        <select
+                            value={selectedMid ?? ""}
+                            onChange={handleMidChange}
+                            disabled={!selectedMain}
+                        >
+                            <option value="">중분류</option>
+                            {midCategories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+
+                        <select
+                            value={selectedSub ?? ""}
+                            onChange={(e) =>
+                                setSelectedSub(Number(e.target.value) || null)
+                            }
+                            disabled={!selectedMid || subCategories.length === 0}
+                        >
+                            <option value="">소분류</option>
+                            {subCategories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+
+                        <button className="btn btn-soft" onClick={addCategory}>
+                            + 추가
+                        </button>
                     </div>
 
                     <div className="chip-row">
-                        {certs.length === 0 ? (
+                        {interestCategories.length === 0 ? (
                             <div className="empty">등록된 관심 자격증이 없어요.</div>
                         ) : (
-                            certs.map((c) => (
-                                <span className="chip" key={c}>
-                  {c}
-                                    <button
-                                        className="chip-x"
-                                        onClick={() => removeCert(c)}
-                                        aria-label="remove"
-                                    >
-                    ×
-                  </button>
-                </span>
-                            ))
+                            interestCategories.map((id) => {
+                                const category = allCategories.find((c) => c.id === id);
+
+                                return (
+                                    <span className="chip" key={id}>
+                        {category?.name}
+                                        <button
+                                            className="chip-x"
+                                            onClick={() => removeCategory(id)}
+                                        >
+                            ×
+                        </button>
+                    </span>
+                                );
+                            })
                         )}
                     </div>
                 </section>
+
 
                 <section className="section">
                     <div className="section-head">
@@ -441,6 +550,7 @@ const MyPage = () => {
 
                                     <div className="profile-upload">
                                         <img
+                                            className="preview-img"
                                             src={previewImage}
                                             alt="preview"
                                             onError={(e) => {

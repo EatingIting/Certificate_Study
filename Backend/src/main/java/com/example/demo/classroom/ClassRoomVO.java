@@ -13,4 +13,6 @@ public class ClassRoomVO {
     private String title;
     private String date;
     private String roomImg;
+    private String hostUserEmail;
+    private Integer isHost;
 }

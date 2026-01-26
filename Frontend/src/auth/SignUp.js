@@ -1,10 +1,15 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import "./Auth.css";
 import { checkEmail, signup } from "../api/api";
+import api from "../api/api";
 
 const Signup = () => {
     const navigate = useNavigate();
+
+    const [params] = useSearchParams();
+    const oauthEmail = params.get("email");
+    const oauthProvider = params.get("provider");
 
     const [form, setForm] = useState({
         email: "",
@@ -31,11 +36,33 @@ const Signup = () => {
     const [selectedMid, setSelectedMid] = useState(null);
     const [selectedSub, setSelectedSub] = useState(null);
 
-    const [certs, setCerts] = useState(["정보처리기사", "토익", "SQLD"]);
+    const [interestCategories, setInterestCategories] = useState([]);
 
-    const removeCert = (certToRemove) => {
-        setCerts((prev) => prev.filter((c) => c !== certToRemove));
-    };
+    useEffect(() => {
+        api.get("/category").then((res) => setAllCategories(res.data));
+        api.get("/category/main").then((res) => setMainCategories(res.data));
+    }, []);
+
+    useEffect(() => {
+        if (oauthEmail) {
+            setForm((prev) => ({
+                ...prev,
+                email: oauthEmail,
+            }));
+
+            setEmailChecked(true);
+
+            if (oauthProvider === "kakao") {
+                setEmailMessage("카카오 로그인 이메일입니다.");
+            } else if (oauthProvider === "naver") {
+                setEmailMessage("네이버 로그인 이메일입니다.");
+            } else if (oauthProvider === "google") {
+                setEmailMessage("구글 로그인 이메일입니다.");
+            } else {
+                setEmailMessage("OAuth 로그인 이메일입니다.");
+            }
+        }
+    }, [oauthEmail, oauthProvider]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -155,6 +182,27 @@ const Signup = () => {
         );
     };
 
+    const addCategory = () => {
+        const categoryId = selectedSub ?? selectedMid;
+
+        if (!categoryId) {
+            alert("카테고리를 선택해주세요.");
+            return;
+        }
+
+        if (interestCategories.includes(categoryId)) {
+            alert("이미 추가된 관심 자격증입니다.");
+            return;
+        }
+
+        if (interestCategories.length >= 4) {
+            alert("관심 자격증은 최대 4개까지 가능합니다.");
+            return;
+        }
+
+        setInterestCategories([...interestCategories, categoryId]);
+    };
+
     const handleSignup = async () => {
         if (!validateSignup()) return;
 
@@ -172,6 +220,7 @@ const Signup = () => {
                 birthDate: form.birthDate,
                 gender: form.gender,
                 introduction: form.introduction || null,
+                interestCategoryIds: interestCategories,
             });
             alert("회원가입이 완료되었습니다.");
             navigate("/auth");
@@ -185,7 +234,6 @@ const Signup = () => {
             <div className="login-container">
                 <h2>회원가입</h2>
 
-                {/* 이메일 */}
                 <div className="email-check-group">
                     <input
                         type="email"
@@ -193,15 +241,18 @@ const Signup = () => {
                         placeholder="이메일"
                         value={form.email}
                         onChange={handleChange}
+                        disabled={!!oauthEmail}
                         className="modal-input"
                     />
-                    <button
-                        type="button"
-                        className="email-check-btn"
-                        onClick={checkEmailDuplicate}
-                    >
-                        중복확인
-                    </button>
+                    {!oauthEmail && (
+                        <button
+                            type="button"
+                            className="email-check-btn"
+                            onClick={checkEmailDuplicate}
+                        >
+                            중복확인
+                        </button>
+                    )}
                 </div>
 
                 {emailMessage && (
@@ -210,7 +261,6 @@ const Signup = () => {
                     </p>
                 )}
 
-                {/* 비밀번호 */}
                 <input
                     type="password"
                     name="password"
@@ -229,11 +279,8 @@ const Signup = () => {
                     className="modal-input"
                 />
 
-                {passwordError && (
-                    <p className="input-error">{passwordError}</p>
-                )}
+                {passwordError && <p className="input-error">{passwordError}</p>}
 
-                {/* 이름 / 닉네임 */}
                 <input
                     type="text"
                     name="name"
@@ -252,7 +299,6 @@ const Signup = () => {
                     className="modal-input"
                 />
 
-                {/* 생년월일 */}
                 <p className="signup-section-label">생년월일</p>
                 <input
                     type="date"
@@ -262,7 +308,6 @@ const Signup = () => {
                     className="modal-input"
                 />
 
-                {/* 성별 */}
                 <div className="gender-group">
                     <span className="gender-label">성별</span>
 
@@ -288,7 +333,6 @@ const Signup = () => {
                         여성
                     </label>
                 </div>
-
 
                 <p className="signup-section-label">관심 자격증 (최대 4개)</p>
 
@@ -316,7 +360,9 @@ const Signup = () => {
 
                 <select
                     value={selectedSub ?? ""}
-                    onChange={(e) => setSelectedSub(Number(e.target.value) || null)}
+                    onChange={(e) =>
+                        setSelectedSub(Number(e.target.value) || null)
+                    }
                     disabled={!selectedMid || subCategories.length === 0}
                 >
                     <option value="">소분류 선택 (선택)</option>
@@ -327,35 +373,49 @@ const Signup = () => {
                     ))}
                 </select>
 
+                <button type="button" onClick={addCategory}>
+                    관심 자격증 추가
+                </button>
+
                 <div className="chip-row">
-                    {certs.length === 0 ? (
-                        <div className="empty">등록된 관심 자격증이 없어요.</div>
+                    {interestCategories.length === 0 ? (
+                        <div className="empty">
+                            등록된 관심 자격증이 없어요.
+                        </div>
                     ) : (
-                        certs.map((c) => (
-                            <span className="chip" key={c}>
-                  {c}
-                                <button
-                                    className="chip-x"
-                                    onClick={() => removeCert(c)}
-                                    aria-label="remove"
-                                >
-                    ×
-                  </button>
-                </span>
-                        ))
+                        interestCategories.map((id) => {
+                            const category = allCategories.find(
+                                (c) => c.id === id
+                            );
+
+                            return (
+                                <span className="chip" key={id}>
+                                    {category?.name}
+                                    <button
+                                        className="chip-x"
+                                        onClick={() =>
+                                            setInterestCategories(
+                                                interestCategories.filter(
+                                                    (c) => c !== id
+                                                )
+                                            )
+                                        }
+                                    >
+                                        ×
+                                    </button>
+                                </span>
+                            );
+                        })
                     )}
                 </div>
 
-                {/* 약관 */}
                 <div className="terms-group">
                     <label className="terms-checkbox">
                         <input
                             className="terms-checkbox-input"
                             type="checkbox"
                             checked={agreeTerms}
-                            onChange={(e) =>
-                                setAgreeTerms(e.target.checked)
-                            }
+                            onChange={(e) => setAgreeTerms(e.target.checked)}
                         />
                         <span className="agree-text">
                             회원 가입 및 회원 관리 등의 목적으로 이메일,
@@ -372,7 +432,8 @@ const Signup = () => {
                     회원가입
                 </button>
 
-                <p className="modal-switch"> 이미 계정이 있으신가요?
+                <p className="modal-switch">
+                    이미 계정이 있으신가요?
                     <span onClick={() => navigate("/auth")}>로그인</span>
                 </p>
             </div>
