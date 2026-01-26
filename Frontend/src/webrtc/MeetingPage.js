@@ -9,6 +9,7 @@ import * as mediasoupClient from "mediasoup-client";
 import "./MeetingPage.css";
 import { useMeeting } from "./MeetingContext";
 import Toast from "../toast/Toast";
+import { getHostnameWithPort, getWsProtocol } from "../utils/backendUrl";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
@@ -613,7 +614,7 @@ function MeetingPage({ portalRoomId }) {
         if (now - (faceDetectorLastAttemptAtRef.current || 0) < 2000) return null;
         faceDetectorLastAttemptAtRef.current = now;
 
-        const loading = (async () => {
+        const rawLoading = (async () => {
             // 1) Native FaceDetector(지원 시) 우선
             if (typeof window !== "undefined" && "FaceDetector" in window) {
                 try {
@@ -636,13 +637,20 @@ function MeetingPage({ portalRoomId }) {
                     },
                     runningMode: "VIDEO",
                     // ✅ 기본 0.5는 빡세서 종종 못 잡음 → 완화
-                    minDetectionConfidence: 0.35,
+                    minDetectionConfidence: 0.5,
                 });
                 return { kind: "mediapipe", detector: mp };
             } catch {
                 return null;
             }
         })();
+
+        // ✅ 모델 로딩이 길어져도 drawLoop가 "잠기는" 현상 방지(타임아웃)
+        const TIMEOUT_MS = 6000;
+        const loading = Promise.race([
+            rawLoading,
+            new Promise((resolve) => setTimeout(() => resolve(null), TIMEOUT_MS)),
+        ]);
 
         faceDetectorLoadingRef.current = loading;
         const result = await loading.catch(() => null);
@@ -1053,39 +1061,7 @@ function MeetingPage({ portalRoomId }) {
             producer = null;
         }
 
-        // 7) 🔥 FaceDetector 초기화 (draw 루프 시작 BEFORE!)
-        //    카메라 켜진 상태에서 이모지 클릭 시 즉시 얼굴 감지가 되도록
-        if (!faceDetectorRef.current) {
-            if (typeof window !== "undefined" && "FaceDetector" in window) {
-                try {
-                    // ✅ 정확도 우선(이모지 트래킹 안정)
-                    const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
-                    faceDetectorRef.current = { kind: "native", detector: native };
-                    console.log("[turnOnCamera] Native FaceDetector initialized");
-                } catch { }
-            }
-            if (!faceDetectorRef.current) {
-                try {
-                    const { FaceDetector: MpFaceDetector, FilesetResolver } = await import("@mediapipe/tasks-vision");
-                    const vision = await FilesetResolver.forVisionTasks(
-                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
-                    );
-                    const mp = await MpFaceDetector.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath:
-                                "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
-                            delegate: "CPU",
-                        },
-                        runningMode: "VIDEO",
-                        minDetectionConfidence: 0.35,
-                    });
-                    faceDetectorRef.current = { kind: "mediapipe", detector: mp };
-                    console.log("[turnOnCamera] MediaPipe FaceDetector initialized");
-                } catch (e) {
-                    console.warn("[turnOnCamera] face detector init failed:", e);
-                }
-            }
-        }
+        // 7) ✅ FaceDetector는 drawLoop에서 필요할 때만 ensureFaceDetector()로 로딩(초기/자동복원 멈춤 방지)
 
         // 8) Draw 루프 시작 (producer 생성 전에 캔버스에 프레임 그리기)
         canvasPipelineActiveRef.current = true;
@@ -1095,6 +1071,23 @@ function MeetingPage({ portalRoomId }) {
         // 🔥 배경 제거용 캔버스 및 세그멘터 초기화
         let bgFrameCanvas = null;
         let bgFrameCtx = null;
+
+        // ✅ 세그멘테이션 입력은 다운스케일(원본 해상도 그대로 넣으면 CPU 급증/멈춤 유발)
+        let bgSegInputCanvas = null;
+        let bgSegInputCtx = null;
+        const getBgSegInput = (videoW, videoH) => {
+            const MAX_W = 256;
+            const vw = Number(videoW) || 0;
+            const vh = Number(videoH) || 0;
+            const w = vw > 0 ? Math.min(MAX_W, vw) : MAX_W;
+            const h = vw > 0 && vh > 0 ? Math.max(1, Math.round(w * (vh / vw))) : 144;
+
+            if (!bgSegInputCanvas) bgSegInputCanvas = document.createElement("canvas");
+            if (bgSegInputCanvas.width !== w) bgSegInputCanvas.width = w;
+            if (bgSegInputCanvas.height !== h) bgSegInputCanvas.height = h;
+            if (!bgSegInputCtx) bgSegInputCtx = bgSegInputCanvas.getContext("2d", { willReadFrequently: true });
+            return { canvas: bgSegInputCanvas, ctx: bgSegInputCtx, w, h };
+        };
 
         const ensureBgSegmenterForPipeline = () => {
             const cur = faceBgSegmenterRef.current;
@@ -1140,13 +1133,16 @@ function MeetingPage({ portalRoomId }) {
         const drawLoop = async () => {
             if (!canvasPipelineActiveRef.current) return;
 
+            // ✅ drawLoop 전역 스코프에서 참조되는 값들(스코프 오류 방지)
+            const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
+            const wantBgRemove = !!bgRemoveRef.current;
+            const wantEmojiForFrame = !!faceEmojiRef.current && faceModeRef.current === "emoji";
+
             // 🔥 최소한 원본 프레임은 항상 그리기 (에러나도 검은화면 방지)
             let drewFrame = false;
 
             try {
                 // 🔥 배경 제거 모드 체크
-                const wantBgRemove = !!bgRemoveRef.current;
-                const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
                 if (wantBgRemove && warmupDone) ensureBgSegmenterForPipeline();
 
                 // 비디오 프레임을 캔버스에 그리기
@@ -1178,7 +1174,12 @@ function MeetingPage({ portalRoomId }) {
                     if (seg && nowMs - faceBgLastInferAtRef.current > 140) {
                         faceBgLastInferAtRef.current = nowMs;
                         try {
-                            const res = seg.segmentForVideo(v, nowMs);
+                            const vw = v.videoWidth || canvas.width;
+                            const vh = v.videoHeight || canvas.height;
+                            const segInput = getBgSegInput(vw, vh);
+                            if (!segInput?.ctx) throw new Error("no seg input ctx");
+                            segInput.ctx.drawImage(v, 0, 0, segInput.w, segInput.h);
+                            const res = seg.segmentForVideo(segInput.canvas, nowMs);
                             const mask = res?.categoryMask;
                             if (mask) {
                                 const maskW = mask.width ?? 0;
@@ -1273,7 +1274,7 @@ function MeetingPage({ portalRoomId }) {
                     if (!Number.isFinite(targetBox.x) || !Number.isFinite(targetBox.y) || !Number.isFinite(targetBox.size)) {
                         smoothedFaceBoxRef.current = null;
                     } else {
-                        const smoothFactor = 0.6;
+                        const smoothFactor = 0.75;
                         const prev = smoothedFaceBoxRef.current;
                         smoothedFaceBoxRef.current = prev
                             ? {
@@ -1307,7 +1308,7 @@ function MeetingPage({ portalRoomId }) {
                 }
 
                 const nowMs = Date.now();
-                if (wantEmoji && warmupDone && faceDetectorRef.current && nowMs - lastDetectAtRef.current > 90) {
+                if (wantEmoji && warmupDone && faceDetectorRef.current && nowMs - lastDetectAtRef.current > 50) {
                     lastDetectAtRef.current = nowMs;
 
                     if (!faceDetectInFlightRef.current) {
@@ -1315,6 +1316,13 @@ function MeetingPage({ portalRoomId }) {
                         const seq = ++faceDetectSeqRef.current;
                         const vw = v.videoWidth || canvas.width;
                         const vh = v.videoHeight || canvas.height;
+                        const DETECT_TIMEOUT_MS = 900;
+                        const timeoutId = setTimeout(() => {
+                            // ✅ 로딩/탐지가 너무 오래 걸리면 잠금 해제(이모지 "멈춤" 방지)
+                            if (seq === faceDetectSeqRef.current) {
+                                faceDetectInFlightRef.current = false;
+                            }
+                        }, DETECT_TIMEOUT_MS);
 
                         Promise.resolve(runFaceDetectOnce(v, vw, vh))
                             .then((normalized) => {
@@ -1334,8 +1342,11 @@ function MeetingPage({ portalRoomId }) {
                                 }
                             })
                             .finally(() => {
-                                // 다른 seq가 이미 시작됐어도 in-flight은 풀어준다(정지 방지)
-                                faceDetectInFlightRef.current = false;
+                                clearTimeout(timeoutId);
+                                // ✅ 다른 seq가 이미 시작됐으면 풀지 않는다(새 탐지 in-flight 보호)
+                                if (seq === faceDetectSeqRef.current) {
+                                    faceDetectInFlightRef.current = false;
+                                }
                             });
                     }
                 }
@@ -1362,8 +1373,7 @@ function MeetingPage({ portalRoomId }) {
             }
 
             // 🔥 setTimeout 사용 (백그라운드에서도 실행됨)
-            const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
-            const nextInterval = (wantBgRemove || wantEmoji) ? FILTER_INTERVAL : BASE_INTERVAL;
+            const nextInterval = (wantBgRemove || wantEmojiForFrame) ? FILTER_INTERVAL : BASE_INTERVAL;
             canvasPipelineRafRef.current = setTimeout(drawLoop, nextInterval);
         };
 
@@ -1382,35 +1392,8 @@ function MeetingPage({ portalRoomId }) {
         setCamOn(true);
         localStorage.setItem("camOn", "true");
 
-        // 9) FaceDetector 초기화 (이모지용)
-        if (!faceDetectorRef.current) {
-            if (typeof window !== "undefined" && "FaceDetector" in window) {
-                try {
-                    const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
-                    faceDetectorRef.current = { kind: "native", detector: native };
-                } catch { }
-            }
-            if (!faceDetectorRef.current) {
-                try {
-                    const { FaceDetector: MpFaceDetector, FilesetResolver } = await import("@mediapipe/tasks-vision");
-                    const vision = await FilesetResolver.forVisionTasks(
-                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
-                    );
-                    const mp = await MpFaceDetector.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath:
-                                "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
-                            delegate: "CPU",
-                        },
-                        runningMode: "VIDEO",
-                        minDetectionConfidence: 0.35,
-                    });
-                    faceDetectorRef.current = { kind: "mediapipe", detector: mp };
-                } catch (e) {
-                    console.warn("[turnOnCamera] face detector init failed:", e);
-                }
-            }
-        }
+        // 9) FaceDetector 초기화 (이모지용) - 이미 위에서 비동기로 로딩 중이므로 여기서는 스킵
+        // 🔥 ensureFaceDetector()가 필요할 때 백그라운드에서 로딩됨
 
         // ⭐ 서버에 상태 전파
         wsRef.current?.send(JSON.stringify({
@@ -2256,7 +2239,7 @@ function MeetingPage({ portalRoomId }) {
                         delegate: "CPU",
                     },
                     runningMode: "VIDEO",
-                    minDetectionConfidence: 0.35,
+                    minDetectionConfidence: 0.5,
                 });
 
                 detectorState = { kind: "mediapipe", detector: mp };
@@ -2403,7 +2386,7 @@ function MeetingPage({ portalRoomId }) {
             }
 
             const det = faceDetectorRef.current;
-            if (wantEmojiForDetect && warmupDone && det && now - lastDetectAtRef.current > 90) {
+            if (wantEmojiForDetect && warmupDone && det && now - lastDetectAtRef.current > 50) {
                 lastDetectAtRef.current = now;
 
                 if (!faceDetectInFlightRef.current) {
@@ -2458,7 +2441,7 @@ function MeetingPage({ portalRoomId }) {
                 if (!Number.isFinite(targetBox.x) || !Number.isFinite(targetBox.y) || !Number.isFinite(targetBox.size)) {
                     smoothedFaceBoxRef.current = null;
                 } else {
-                    const smoothFactor = 0.6;
+                    const smoothFactor = 0.75;
                     const prev = smoothedFaceBoxRef.current;
                     smoothedFaceBoxRef.current = prev
                         ? {
@@ -4043,9 +4026,10 @@ function MeetingPage({ portalRoomId }) {
             // ✅ https ? wss : ws
             // ✅ nginx 리버스 프록시를 통해 연결 (포트 생략 → 443/80 기본 포트 사용)
             // ✅ 같은 URL이면 같은 방: WebSocket roomId는 URL의 roomId를 그대로 사용
-            const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+            const protocol = getWsProtocol();
+            const host = getHostnameWithPort(); // ✅ hostname(IP) + (있으면) port
             const wsRoomId = roomId;
-            const wsUrl = `${protocol}://${window.location.host}/ws/room/${wsRoomId}` +
+            const wsUrl = `${protocol}://${host}/ws/room/${wsRoomId}` +
                 `?userId=${encodeURIComponent(userId)}` +
                 `&userName=${encodeURIComponent(userName)}` +
                 `&muted=${!micOnRef.current}` +
@@ -4438,7 +4422,7 @@ function MeetingPage({ portalRoomId }) {
 
         // ✅ 요청하신 형태: https ? wss : ws
         // ✅ window.location.hostname(=IP/도메인)로 4000(SFU) 직접 연결
-        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const protocol = getWsProtocol();
         const sfuWs = new WebSocket(`${protocol}://${window.location.hostname}:4000/sfu/`);
         sfuWsRef.current = sfuWs;
 

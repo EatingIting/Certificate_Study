@@ -33,6 +33,10 @@ const Signup = () => {
 
     const [certs, setCerts] = useState(["정보처리기사", "토익", "SQLD"]);
 
+    const removeCert = (certToRemove) => {
+        setCerts((prev) => prev.filter((c) => c !== certToRemove));
+    };
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));

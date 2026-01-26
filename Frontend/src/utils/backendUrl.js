@@ -13,7 +13,11 @@ export function getBackendOrigin() {
         return envOrigin.replace(/\/+$/, "");
     }
 
-    // 기본은 같은 호스트의 8080 (Spring)로 가정
+    // ✅ https 접속 시: nginx 프록시를 통해 같은 호스트로 요청 (포트 없음)
+    // ✅ http 접속 시: 직접 백엔드 8080 포트로 요청
+    if (window.location.protocol === "https:") {
+        return `https://${window.location.hostname}`;
+    }
     return `http://${window.location.hostname}:8080`;
 }
 
@@ -22,14 +26,29 @@ export function getWsProtocol() {
     return window.location.protocol === "https:" ? "wss" : "ws";
 }
 
+export function getHostnameWithPort() {
+    // ✅ 요청사항:
+    // - https로 접속하면 포트를 붙이지 않음 (nginx 443/기본 포트)
+    // - http로 접속하면 포트를 유지 (개발 3000 등)
+    if (window.location.protocol === "https:") {
+        return window.location.hostname;
+    }
+    const port = window.location.port;
+    return `${window.location.hostname}${port ? `:${port}` : ""}`;
+}
+
 export function getWsBackendOrigin(port = 8080) {
     const envOrigin = process.env.REACT_APP_BACKEND_WS_ORIGIN;
     if (envOrigin && typeof envOrigin === "string") {
         return envOrigin.replace(/\/+$/, "");
     }
 
-    // ✅ window.location.hostname 으로 현재 접속 IP/도메인 사용
-    return `${getWsProtocol()}://${window.location.hostname}:${port}`;
+    // ✅ https 접속 시: nginx 프록시를 통해 wss로 연결 (포트 없음)
+    // ✅ http 접속 시: 직접 백엔드 포트로 ws 연결
+    if (window.location.protocol === "https:") {
+        return `wss://${window.location.hostname}`;
+    }
+    return `ws://${window.location.hostname}:${port}`;
 }
 
 export function toBackendUrl(pathOrUrl) {

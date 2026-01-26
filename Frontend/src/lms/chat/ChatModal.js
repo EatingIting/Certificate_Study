@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './ChatModal.css';
-import { getWsProtocol } from "../../utils/backendUrl";
+import { getHostnameWithPort, getWsProtocol } from "../../utils/backendUrl";
 
 // 🔹 상수 설정
 const STICKER_LIST = ["👌", "👍", "🎉", "😭", "🔥", "🤔"];
@@ -114,8 +114,9 @@ const ChatModal = ({ roomId }) => {
     // - 개발: setupProxy가 백엔드(ws)로 프록시
     // - 배포: nginx가 /ws를 백엔드 8080으로 프록시
     const protocol = getWsProtocol();
+    const host = getHostnameWithPort(); // ✅ hostname(IP) + (있으면) port
     const socket = new WebSocket(
-        `${protocol}://${window.location.host}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(myInfo.userName)}`
+        `${protocol}://${host}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(myInfo.userName)}`
     );
 
     socket.onopen = () => console.log(`✅ [Room ${roomId}] 웹소켓 연결 성공!`);
