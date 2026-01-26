@@ -116,15 +116,17 @@ const RoomPageModal = ({ open, onClose, study }) => {
                 <div className="sr2-content">
                   {/* ===== 왼쪽 일러스트 ===== */}
                     <div className="sr2-illust">
-                        <img
-                            src={study.roomImg}
-                            alt="스터디 사진"
-                            className="sr2-study-img"
-                            onError={(e) => {
-                                e.target.src = "/default-study.png"; // 기본 이미지 (선택)
-                            }}
-                        />
+                        {study.roomImg && (
+                            <img
+                                src={study.roomImg.startsWith("http")
+                                    ? study.roomImg
+                                    : `http://localhost:8080${study.roomImg}`}
+                                alt="스터디 사진"
+                                className="sr2-study-img"
+                            />
+                        )}
                     </div>
+
 
 
                     {/* ===== 오른쪽 정보 ===== */}

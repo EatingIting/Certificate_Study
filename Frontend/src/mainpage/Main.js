@@ -28,9 +28,7 @@ function Main() {
     const fetchCategories = async () => {
         const res = await api.get("/category");
 
-        setCategories(
-            res.data.filter((c) => c.level === 1)
-        );
+        setCategories(res.data.filter((c) => c.level === 1));
     };
 
     const formatStartDate = (dateStr) => {
@@ -43,6 +41,14 @@ function Main() {
     const categoryNameMap = {
         "공무원·공공시험": "공공시험",
         "민간자격·실무능력": "민간자격",
+    };
+
+    const getImageUrl = (img) => {
+        if (!img) return "/기본이미지.jpg";
+
+        if (img.startsWith("http")) return img;
+
+        return `http://localhost:8080${img}`;
     };
 
     return (
@@ -73,9 +79,7 @@ function Main() {
                                 {(categoryNameMap[c.name] ?? c.name)[0]}
                             </div>
 
-                            <span>
-                                {categoryNameMap[c.name] ?? c.name}
-                            </span>
+                            <span>{categoryNameMap[c.name] ?? c.name}</span>
                         </div>
                     ))}
                 </div>
@@ -89,9 +93,12 @@ function Main() {
                         <div key={room.roomId} className="cardbox">
                             <div className="thumbnail">
                                 <img
-                                    src={`http://localhost:8080${room.roomImg}`}
+                                    src={getImageUrl(room.roomImg)}
                                     alt="스터디 썸네일"
                                     className="thumb-img"
+                                    onError={(e) => {
+                                        e.currentTarget.src = "/기본이미지.jpg";
+                                    }}
                                 />
                             </div>
 
