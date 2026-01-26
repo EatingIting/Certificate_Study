@@ -16,10 +16,16 @@ import Calendar from "./calendar/Calendar";
 import MeetingPage from "../webrtc/MeetingPage";
 import MeetingPortal from "../webrtc/MeetingPagePortal";
 import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
+import StudyMembers from "./study-members/StudyMembers";
+import StudyLeave from "./study-leave/StudyLeave";
+
+import RoomMyPage from "./room-my-page/RoomMyPage";
 
 import "./LMSSubject.css";
 
 const LMSSubjectInner = () => {
+    const [activeMenu, setActiveMenu] = useState("dashboard");
+    const location = useLocation();
     const navigate = useNavigate();
     const { subjectId } = useParams();
 
@@ -394,10 +400,12 @@ const LMSSubjectInner = () => {
                         <Route path="board" element={<Board />} />
                         <Route path="calendar" element={<Calendar />} />
                         <Route path="MeetingRoom/:roomId" element={<MeetingPage />} />
-                        <Route
-                            path="*"
-                            element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />}
-                        />
+                        <Route path="*" element={<Navigate to={`/lms/${subjectId}/dashboard`} replace />} />
+
+                        <Route path="study/members" element={<StudyMembers />} setActiveMenu={setActiveMenu} />
+                        <Route path="study/leave" element={<StudyLeave />} setActiveMenu={setActiveMenu} />
+
+                        <Route path="mypage" element={<RoomMyPage />} setActiveMenu={setActiveMenu} />
                     </Routes>
                 </main>
             </div>

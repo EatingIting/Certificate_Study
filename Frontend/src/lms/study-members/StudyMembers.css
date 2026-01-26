@@ -1,0 +1,300 @@
+.smPage {
+    padding: 24px;
+    background: #f6faf6;
+    min-height: 100vh;
+
+    /* ✅ 가운데 정렬 + 좌우 폭 제한 */
+    max-width: 980px;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* 상단 */
+.smHead {
+    margin-bottom: 16px;
+}
+
+.smTitleRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.pageTitle {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 900;
+    color: #111;
+}
+
+.pageSub {
+    margin: 8px 0 0;
+    color: #5a5a5a;
+    font-size: 13px;
+}
+
+.smBackBtn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 900;
+    color: #2c6b40;
+    padding: 6px 8px;
+    border-radius: 8px;
+}
+
+.smBackBtn:hover {
+    background: #f1faf3;
+}
+
+/* 카드 */
+.smCard {
+    background: #fff;
+    border-radius: 5px;
+    padding: 16px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    margin-bottom: 18px;
+}
+
+.smCardHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e7e7e7;
+}
+
+.smCardTitle {
+    font-size: 16px;
+    font-weight: 900;
+    color: #111;
+}
+
+.smCount {
+    font-size: 13px;
+    font-weight: 900;
+    color: #2c6b40;
+}
+
+.smTools {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.smSearch {
+    width: 240px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #e7e7e7;
+    outline: none;
+    font-size: 13px;
+    background: #fff;
+}
+
+.smSearch:focus {
+    border-color: #97c793;
+    box-shadow: 0 0 0 3px rgba(151, 199, 147, 0.25);
+}
+
+/* 테이블 */
+.smTable {
+    margin-top: 12px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #eaeaea;
+}
+
+.smRow {
+    display: grid;
+    grid-template-columns: 1.1fr 1.6fr 0.8fr 0.9fr 1.3fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 12px;
+    background: #fff;
+    border-top: 1px solid #f0f0f0;
+    font-size: 13px;
+    color: #222;
+}
+
+.smRowHead {
+    background: #f1faf3;
+    font-weight: 900;
+    border-top: none;
+}
+
+.smName {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-weight: 900;
+}
+
+.smEmail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #444;
+}
+
+.smDate {
+    color: #555;
+}
+
+.smActionsCol {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* 배지 */
+.smBadgeOwner {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 900;
+    background: #97c793;
+    color: #fff;
+}
+
+.smRoleBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.smRoleBadge.owner {
+    background: #e8f4ea;
+    color: #2c6b40;
+}
+
+.smRoleBadge.member {
+    background: #f4f4f4;
+    color: #444;
+}
+
+/* 액션 버튼 */
+.smGhostBtn {
+    border: 1px solid #dfe6df;
+    background: #fff;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-weight: 900;
+    font-size: 12px;
+    color: #2c6b40;
+}
+
+.smGhostBtn:hover {
+    background: #f1faf3;
+}
+
+.smGhostBtn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.smDangerBtn {
+    border: 1px solid #f0cccc;
+    background: #fff;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-weight: 900;
+    font-size: 12px;
+    color: #d23a3a;
+}
+
+.smDangerBtn:hover {
+    background: #fff2f2;
+}
+
+.smDangerBtn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+/* 빈 상태 */
+.smEmpty {
+    padding: 18px 12px;
+    font-size: 13px;
+    color: #666;
+    background: #fff;
+}
+
+.smFootNote {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #777;
+}
+
+/* 접근 불가 */
+.smGuard {
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #fff2f2;
+    border: 1px solid #f0cccc;
+    color: #b52a2a;
+    font-weight: 900;
+}
+
+/* 토스트 */
+.smToast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%);
+    background: rgba(17, 17, 17, 0.92);
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 900;
+    z-index: 9999;
+}
+
+@media (max-width: 900px) {
+    .smRow {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+      "name role"
+      "email date"
+      "actions actions";
+    }
+
+    .smRow > div:nth-child(1) {
+        grid-area: name;
+    }
+    .smRow > div:nth-child(2) {
+        grid-area: email;
+    }
+    .smRow > div:nth-child(3) {
+        grid-area: role;
+    }
+    .smRow > div:nth-child(4) {
+        grid-area: date;
+    }
+    .smRow > div:nth-child(5) {
+        grid-area: actions;
+        justify-content: flex-start;
+    }
+
+    .smSearch {
+        width: 170px;
+    }
+}
+
+.smRowCols3 {
+    grid-template-columns: 1.2fr 1.7fr 0.9fr 1.3fr;
+}
