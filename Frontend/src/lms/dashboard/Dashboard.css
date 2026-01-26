@@ -4,13 +4,13 @@
     min-height: 100vh;
 }
 
-/* ✅ “그리드대로” 위/아래 분리 */
+/* ✅ 그리드 레이아웃 */
 .dashboard-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     grid-template-areas:
-        "study attendance calendarTop"
-        "board assignment calendarBottom";
+    "study attendance calendarTop"
+    "board assignment calendarBottom";
     gap: 18px;
     align-items: stretch;
 }
@@ -71,11 +71,9 @@
     border: none;
     background: transparent;
     cursor: pointer;
-
     font-size: 13px;
     font-weight: 800;
     color: #2c6b40;
-
     padding: 6px 8px;
     border-radius: 8px;
     white-space: nowrap;
@@ -110,41 +108,67 @@
 .progress { width: 55%; height: 100%; background: #ffffff; border-radius: 999px; }
 .study-icon { font-size: 70px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.15)); }
 
-/* ===== 리스트 ===== */
-.table-list { list-style: none; padding: 0; margin: 12px 0 0; }
+/* ===== 리스트 (flex 기반) ===== */
+.table-list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    width: 100%;
+}
 
-.trow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+.trow{
+    display: flex;
     align-items: center;
     gap: 12px;
     border-radius: 10px;
     padding: 10px 12px;
     font-size: 13px;
     color: #222;
+    min-width: 0;
+    width: 100%;
 }
+
 .table-list .trow + .trow { margin-top: 8px; }
 
 .trow.plain { background: #fff; border: 1px solid #f0f0f0; }
 .trow.tinted { background: #f1faf3; }
 
-.tleft {
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
+.tleft{
+    flex: 1 1 0;         /* ✅ 남는 폭 계산 확실하게 */
+    display: flex;
+    align-items: center;
     gap: 10px;
     min-width: 0;
-    align-items: center;
-}
-.round { width: 72px; font-weight: 900; color: #2c6b40; white-space: nowrap; }
-.row-text { 
-    display: block;
-    min-width: 0; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-    white-space: nowrap; 
 }
 
-.tright { display: flex; justify-content: flex-end; align-items: center; }
+.round{
+    flex: 0 0 auto;
+    min-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 900;
+    color: #2c6b40;
+}
+
+.row-text{
+    flex: 1 1 0;
+    min-width: 1px;      /* ✅ 0 완전소멸 방지 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    text-align: left;
+}
+
+.tright{
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 0;
+}
+
 .status { font-weight: 700; font-size: 12px; white-space: nowrap; }
 .status.ok { color: #2e9a52; }
 
@@ -194,7 +218,6 @@
     overflow: hidden;
 }
 
-/* ✅ 전역 Calendar.css가 fc를 건드려도 대시보드에서 확실히 덮어쓰기 */
 .dashMiniCal .fc .fc-header-toolbar {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -228,7 +251,6 @@
     justify-content: flex-start;
 }
 
-/* ✅ 날짜 숫자(우리가 JS에서 "1일" -> "1"로 교정) */
 .dashMiniCal .fc .fc-daygrid-day-number {
     font-weight: 900;
     font-size: 12px;
@@ -246,7 +268,7 @@
 .dashDotWrap {
     position: absolute;
     left: 8px;
-    top: 22px; /* 숫자 아래 */
+    top: 22px;
     display: inline-flex;
     align-items: center;
     z-index: 5;
@@ -266,13 +288,11 @@
     left: 10px;
     min-width: 180px;
     max-width: 220px;
-
     background: #ffffff;
     border: 1px solid #e6eee1;
     border-radius: 10px;
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.10);
     padding: 10px 10px 8px;
-
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;
@@ -324,10 +344,10 @@
     .dashboard-grid {
         grid-template-columns: 1fr 1fr;
         grid-template-areas:
-            "study attendance"
-            "board assignment"
-            "calendarTop calendarTop"
-            "calendarBottom calendarBottom";
+      "study attendance"
+      "board assignment"
+      "calendarTop calendarTop"
+      "calendarBottom calendarBottom";
     }
 }
 
@@ -335,14 +355,13 @@
     .dashboard-grid {
         grid-template-columns: 1fr;
         grid-template-areas:
-            "study"
-            "attendance"
-            "board"
-            "assignment"
-            "calendarTop"
-            "calendarBottom";
+      "study"
+      "attendance"
+      "board"
+      "assignment"
+      "calendarTop"
+      "calendarBottom";
     }
-
     .progress-bar { width: 180px; }
 }
 
@@ -358,10 +377,63 @@
 
 .dashStudy {
     display: flex;
-    align-items: center;     /* ✅ 세로 가운데 */
-    justify-content: center; /* ✅ 가로 가운데 */
+    align-items: center;
+    justify-content: center;
 }
 
 .dashboard-grid > * {
     min-width: 0;
+}
+
+/* ✅ 전역(body) 툴팁 (Dashboard.js에서 생성) */
+.dashGlobalTip{
+    position: fixed;
+    z-index: 9999;
+    min-width: 180px;
+    max-width: 220px;
+    background: #ffffff;
+    border: 1px solid #e6eee1;
+    border-radius: 10px;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.10);
+    padding: 10px 10px 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+.dashGlobalTip.isOpen{
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* =========================
+   ✅ FINAL FIX (대시보드 스코프 한정 강제)
+   - 어떤 이유로든 row-text가 0 되면 여기서 최종적으로 잡힘
+========================= */
+.dashboard-container .table-list .trow{
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+.dashboard-container .table-list .tleft{
+    display: flex !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+.dashboard-container .table-list .row-text{
+    display: block !important;
+    flex: 1 1 0 !important;
+    min-width: 1px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #222 !important;
+}
+.dashboard-container .table-list .tright{
+    display: flex !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
 }
