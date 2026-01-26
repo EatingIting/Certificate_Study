@@ -80,11 +80,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         isLoading: false,
     };
 
-    const showVideoOffIcon = safeUser.cameraOff;
-
     const hasLiveVideoTrack = useMemo(() => {
         return stream?.getVideoTracks().some((t) => t.readyState === "live") ?? false;
     }, [stream]);
+
+    // ✅ "아이콘 타일"로 튀는 걸 방지:
+    // cameraOff 플래그가 일시적으로 잘못 들어와도, 실제 live video track이 있으면 비디오는 계속 보여준다.
+    // (아이콘은 "카메라 OFF + 실제로 영상 트랙이 없음"일 때만 표시)
+    const showVideoOffIcon = !isScreen && safeUser.cameraOff && !hasLiveVideoTrack;
 
     const canShowVideo = useMemo(() => {
         if (!stream) return false;
@@ -102,14 +105,13 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     }, [stream, isScreen, hasLiveVideoTrack, safeUser.isMe]);
 
     // ✅ 핵심: "실제로 video를 렌더링할지"를 별도로 결정
-    // - 카메라OFF면 절대 video 렌더링하지 않음 (상대방 흰타일 방지)
-    // - 화면공유는 cameraOff와 무관하게 렌더링
+    // - 화면공유는 videoTrack이 있으면 항상 렌더링
+    // - 카메라 영상은 "실제 live video track 존재"를 기준으로 렌더링 (cameraOff는 힌트일 뿐)
     const shouldRenderVideo = useMemo(() => {
         if (!stream) return false;
         if (isScreen) return stream.getVideoTracks().length > 0;
-        if (safeUser.cameraOff) return false;
         return canShowVideo;
-    }, [stream, isScreen, safeUser.cameraOff, canShowVideo]);
+    }, [stream, isScreen, canShowVideo]);
 
     // ✅ 오디오 레벨 감지(원격용)
     // - 상대방도 말할 때 speaking이 true가 되어 파란 테두리가 뜨도록
@@ -3870,8 +3872,14 @@ function MeetingPage({ portalRoomId }) {
                                 name: u.userName,
                                 joinAt: u.joinAt,
                                 isMe,
-                                muted: isMe ? !micOnRef.current : (u.muted ?? false),
-                                cameraOff: isMe ? !camOnRef.current : (u.cameraOff ?? true),
+                                // ✅ 서버가 muted/cameraOff를 "항상" 내려주지 않는 경우가 있어,
+                                // 값이 없으면 기존 값을 유지해야 아이콘 타일로 튀지 않음.
+                                muted: isMe
+                                    ? !micOnRef.current
+                                    : (typeof u.muted === "boolean" ? u.muted : (old?.muted ?? false)),
+                                cameraOff: isMe
+                                    ? !camOnRef.current
+                                    : (typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true)),
 
                                 stream: (shouldShowReconnecting && !keepMediaWhileOffline) ? null : currentStream,
                                 screenStream: (shouldShowReconnecting && !keepMediaWhileOffline) ? null : (old?.screenStream ?? null),

@@ -104,53 +104,66 @@ export const MeetingProvider = ({ children }) => {
     }, [ensurePipStableStream]);
 
     const findPortalMainStream = useCallback(() => {
-        // 🔥 1순위: meeting-root 내부의 main video
         const meetingRoot = document.getElementById("meeting-root");
-        let video = meetingRoot?.querySelector?.('video[data-main-video="main"]');
-        
-        // 🔥 2순위: 전역 main video
-        if (!video || !video.srcObject || !isStreamValidCheck(video.srcObject)) {
-            video = document.querySelector('video[data-main-video="main"]');
-        }
 
-        // 🔥 3순위: meeting-root 내부의 srcObject가 있는 모든 video
-        if (!video || !video.srcObject || !isStreamValidCheck(video.srcObject)) {
-            const allVideos = meetingRoot?.querySelectorAll('video') || [];
-            for (const v of allVideos) {
-                if (v.srcObject && isStreamValidCheck(v.srcObject)) {
-                    video = v;
-                    break;
-                }
+        const pickFirstValid = (root, selector) => {
+            const nodes = root?.querySelectorAll?.(selector) || [];
+            for (const v of nodes) {
+                if (v?.srcObject && isStreamValidCheck(v.srcObject)) return v;
             }
+            return null;
+        };
+
+        // ✅ PiP는 "화면공유 > 메인 > 그 외" 우선순위로 선택
+        // - 상대가 화면공유 중이면 공유 화면이 PiP에 보여야 함
+        let video =
+            pickFirstValid(meetingRoot, '.video-tile:not(.me) video.video-element.screen') ||
+            pickFirstValid(meetingRoot, 'video.video-element.screen') ||
+            pickFirstValid(meetingRoot, 'video[data-main-video="main"]') ||
+            pickFirstValid(meetingRoot, 'video.video-element') ||
+            pickFirstValid(meetingRoot, 'video');
+
+        // meeting-root에서 못 찾으면 전역에서 재시도 (Portal이 아직 없거나, DOM 순서 이슈 대비)
+        if (!video) {
+            video =
+                pickFirstValid(document, '.video-tile:not(.me) video.video-element.screen') ||
+                pickFirstValid(document, 'video.video-element.screen') ||
+                pickFirstValid(document, 'video[data-main-video="main"]') ||
+                pickFirstValid(document, 'video.video-element') ||
+                pickFirstValid(document, 'video');
         }
 
         if (video?.srcObject && isStreamValidCheck(video.srcObject)) {
             const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
             return { stream: video.srcObject, peerName };
         }
+
         return null;
     }, [isStreamValidCheck]);
 
     // 🔥 DOM에서 유효한 스트림 찾기 (개선된 버전)
     const findValidStreamFromDOM = useCallback(() => {
-        // 1. data-main-video="main" 속성을 가진 video 찾기
-        let video = document.querySelector('video[data-main-video="main"]');
-        
-        // 2. 해당 video의 스트림이 유효한지 확인
+        const pickFirstValid = (root, selector) => {
+            const nodes = root?.querySelectorAll?.(selector) || [];
+            for (const v of nodes) {
+                if (v?.srcObject && isStreamValidCheck(v.srcObject)) return v;
+            }
+            return null;
+        };
+
+        // ✅ 화면공유 우선
+        const video =
+            pickFirstValid(document, '.video-tile:not(.me) video.video-element.screen') ||
+            pickFirstValid(document, 'video.video-element.screen') ||
+            pickFirstValid(document, 'video[data-main-video="main"]') ||
+            pickFirstValid(document, 'video.video-element') ||
+            pickFirstValid(document, 'video');
+
         if (video?.srcObject && isStreamValidCheck(video.srcObject)) {
             const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
             return { stream: video.srcObject, peerName };
         }
-        
-        // 3. 모든 video 요소 확인 (srcObject가 있고 유효한 track이 있는 것)
-        const allVideos = document.querySelectorAll('video');
-        for (const v of allVideos) {
-            if (v.srcObject && isStreamValidCheck(v.srcObject)) {
-                const peerName = v.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
-                return { stream: v.srcObject, peerName };
-            }
-        }
-        
+
         return null;
     }, [isStreamValidCheck]);
 

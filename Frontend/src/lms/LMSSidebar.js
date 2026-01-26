@@ -108,23 +108,31 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        // 🔥 video 요소 찾기 (여러 방식 시도)
-        let video = document.querySelector('video[data-main-video="main"]');
-        
-        // isMain이 없으면 srcObject가 있는 첫 번째 video 찾기
-        if (!video) {
-            console.log('[LMSSidebar] data-main-video="main" 없음, 다른 video 요소 찾기');
-            const allVideos = document.querySelectorAll('video');
-            console.log(`[LMSSidebar] 발견된 video 요소 수: ${allVideos.length}`);
-            
-            for (const v of allVideos) {
-                if (v.srcObject && v.srcObject.getVideoTracks().length > 0) {
-                    video = v;
-                    console.log('[LMSSidebar] srcObject 있는 video 발견');
-                    break;
-                }
+        // 🔥 video 요소 찾기 (화면공유 우선 → 메인 → 그 외)
+        const isValidVideoEl = (v) => {
+            const s = v?.srcObject;
+            const tracks = s?.getVideoTracks?.() ?? [];
+            return !!v && !!s && tracks.length > 0 && tracks.some((t) => t.readyState === "live");
+        };
+
+        const pickFirstValid = (selector) => {
+            const nodes = document.querySelectorAll(selector);
+            for (const v of nodes) {
+                if (isValidVideoEl(v)) return v;
             }
-        }
+            return null;
+        };
+
+        // 1) 상대 화면공유 우선 (상대방이 화면공유 중이면 PiP는 공유 화면이 최우선)
+        // 2) 그 다음: 어떤 화면공유든
+        // 3) 그 다음: 메인 비디오
+        // 4) 마지막: 유효한 아무 비디오
+        const video =
+            pickFirstValid('.video-tile:not(.me) video.video-element.screen') ||
+            pickFirstValid('video.video-element.screen') ||
+            pickFirstValid('video[data-main-video="main"]') ||
+            pickFirstValid('video.video-element') ||
+            pickFirstValid('video');
         
         if (!video) {
             console.log('[LMSSidebar] 유효한 video 요소를 찾을 수 없음');
