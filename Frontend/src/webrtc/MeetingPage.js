@@ -19,6 +19,21 @@ import {
 
 // --- Components ---
 
+// ✅ 공유 AudioContext (타일마다 새로 만들면 렉/리소스 증가)
+let _sharedAudioCtx = null;
+function getSharedAudioContext() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return null;
+
+    if (!_sharedAudioCtx || _sharedAudioCtx.state === "closed") {
+        _sharedAudioCtx = new AudioContext();
+    }
+    if (_sharedAudioCtx.state === "suspended") {
+        _sharedAudioCtx.resume().catch(() => { });
+    }
+    return _sharedAudioCtx;
+}
+
 const ButtonControl = ({ active, danger, disabled, icon: Icon, onClick, label }) => (
     <button
         onClick={onClick}
@@ -55,7 +70,6 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     };
 
     const [isSpeakingLocally, setIsSpeakingLocally] = useState(false);
-    const [isVideoTrackMuted, setIsVideoTrackMuted] = useState(true);
 
     const safeUser = user ?? {
         name: "대기 중",
@@ -82,10 +96,10 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         // 오래 유지될 수 있어 muted 여부로 숨기지 않는다.
         if (safeUser.isMe) return hasLiveVideoTrack;
 
-        // 원격 카메라 영상은 트랙 상태 기반
-        if (isVideoTrackMuted) return false;
+        // ✅ 원격 카메라 영상은 "live track 존재"만으로 판단
+        // (receiver track은 일시적으로 mute 될 수 있으니 mute/enable로 숨기지 않음)
         return hasLiveVideoTrack;
-    }, [stream, isScreen, hasLiveVideoTrack, isVideoTrackMuted, safeUser.isMe]);
+    }, [stream, isScreen, hasLiveVideoTrack, safeUser.isMe]);
 
     // ✅ 핵심: "실제로 video를 렌더링할지"를 별도로 결정
     // - 카메라OFF면 절대 video 렌더링하지 않음 (상대방 흰타일 방지)
@@ -97,78 +111,119 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         return canShowVideo;
     }, [stream, isScreen, safeUser.cameraOff, canShowVideo]);
 
-    // 오디오 레벨 감지
-    /* useEffect(() => {
-        if (!stream) return;
-        const audioTrack = stream.getAudioTracks()[0];
-        if (!audioTrack) return;
-
-        let audioContext;
-        let analyser;
-        let animationId;
-
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioContext = new AudioContext();
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 256;
-
-            const source = audioContext.createMediaStreamSource(stream);
-            source.connect(analyser);
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            const checkVolume = () => {
-                analyser.getByteFrequencyData(dataArray);
-                const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-                setIsSpeakingLocally(avg > 15);
-                animationId = requestAnimationFrame(checkVolume);
-            };
-
-            checkVolume();
-        } catch {
-        }
-
-        return () => {
-            if (animationId) cancelAnimationFrame(animationId);
-            if (audioContext?.state !== "closed") audioContext.close();
-        };
-    }, [stream]); */
-
-    // 비디오 트랙 상태 감지
+    // ✅ 오디오 레벨 감지(원격용)
+    // - 상대방도 말할 때 speaking이 true가 되어 파란 테두리가 뜨도록
+    // - AudioContext는 공유 + 샘플링은 저주파(120ms)로 렉 최소화
     useEffect(() => {
-        const videoTrack = stream?.getVideoTracks()[0];
-        if (!videoTrack) {
-            setIsVideoTrackMuted(true);
+        if (!stream) {
+            setIsSpeakingLocally(false);
             return;
         }
 
-        const checkState = () => {
-            const muted = !videoTrack.enabled || videoTrack.muted || videoTrack.readyState === "ended";
-            setIsVideoTrackMuted(muted);
-        };
+        // 나는 기존 로컬 분석/상태로 처리 (중복 분석 방지)
+        if (safeUser.isMe) return;
 
-        // 🔥 stream이 변경되면 즉시 상태 체크 (초기화)
-        checkState();
+        // 서버에서 muted=true면 speaking 표시 안 함 (불필요한 분석도 스킵)
+        if (safeUser.muted) {
+            setIsSpeakingLocally(false);
+            return;
+        }
 
-        videoTrack.addEventListener("mute", checkState);
-        videoTrack.addEventListener("unmute", checkState);
-        videoTrack.addEventListener("ended", checkState);
+        const audioTrack =
+            stream.getAudioTracks().find((t) => t.readyState === "live") || null;
+        if (!audioTrack) {
+            setIsSpeakingLocally(false);
+            return;
+        }
 
-        // 🔥 트랙이 live 상태가 될 때까지 짧은 간격으로 체크
-        const quickCheck = setInterval(checkState, 100);
-        setTimeout(() => clearInterval(quickCheck), 2000); // 2초 후 빠른 체크 중지
+        const ctx = getSharedAudioContext();
+        if (!ctx) return;
 
-        const interval = setInterval(checkState, 1000);
+        // 한 stream을 여러 source로 붙일 때 이슈가 날 수 있어 track-only stream 사용
+        const trackOnlyStream = new MediaStream([audioTrack]);
+
+        let source = null;
+        let analyser = null;
+        let timer = null;
+        let offTimer = null;
+
+        try {
+            analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            source = ctx.createMediaStreamSource(trackOnlyStream);
+            source.connect(analyser);
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            let last = false; // 현재 speaking 상태
+            let onStable = 0;
+            let ema = 0; // exponential moving average for smoothing
+
+            // 튜닝 파라미터(뚝뚝 끊김 방지)
+            const EMA_ALPHA = 0.25;   // 0~1 (클수록 반응 빠름)
+            const ON_TH = 20;         // 켜질 임계값
+            const OFF_TH = 14;        // 꺼질 임계값(히스테리시스)
+            const HOLD_OFF_MS = 650;  // 말 멈춤 직후 유지(ms)
+
+            timer = setInterval(() => {
+                try {
+                    analyser.getByteFrequencyData(dataArray);
+                } catch {
+                    return;
+                }
+
+                const avg = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length;
+                // EMA로 부드럽게(짧은 무음/변동에 덜 흔들림)
+                ema = ema === 0 ? avg : (ema * (1 - EMA_ALPHA) + avg * EMA_ALPHA);
+
+                // 히스테리시스: 켤 때/끌 때 임계값 분리
+                const aboveOn = ema > ON_TH;
+                const belowOff = ema < OFF_TH;
+
+                if (aboveOn) {
+                    // speaking ON: 빠르게 켜기 + OFF hold 타이머 취소
+                    if (offTimer) {
+                        clearTimeout(offTimer);
+                        offTimer = null;
+                    }
+                    if (!last) {
+                        onStable += 1;
+                        if (onStable >= 2) {
+                            last = true;
+                            onStable = 0;
+                            setIsSpeakingLocally(true);
+                        }
+                    } else {
+                        onStable = 0;
+                    }
+                    return;
+                }
+
+                // below threshold (or between ON/OFF band)
+                onStable = 0;
+                if (!last) return;
+
+                // speaking OFF: OFF_TH 아래로 내려갔을 때만 hold 후 끄기
+                if (belowOff && !offTimer) {
+                    offTimer = setTimeout(() => {
+                        last = false;
+                        offTimer = null;
+                        setIsSpeakingLocally(false);
+                    }, HOLD_OFF_MS);
+                }
+            }, 120);
+        } catch {
+            setIsSpeakingLocally(false);
+            return;
+        }
 
         return () => {
-            videoTrack.removeEventListener("mute", checkState);
-            videoTrack.removeEventListener("unmute", checkState);
-            videoTrack.removeEventListener("ended", checkState);
-            clearInterval(quickCheck);
-            clearInterval(interval);
+            if (timer) clearInterval(timer);
+            if (offTimer) clearTimeout(offTimer);
+            try { source?.disconnect?.(); } catch { }
+            try { analyser?.disconnect?.(); } catch { }
+            setIsSpeakingLocally(false);
         };
-    }, [stream, safeUser.cameraOff, isScreen]);
+    }, [stream, safeUser.isMe, safeUser.muted]);
 
     // 🔥 stream 참조를 추적하여 변경 감지 강화
     const streamIdRef = useRef(null);
@@ -216,7 +271,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
 
     return (
-        <div className={`video-tile ${isMain ? "main" : ""} ${isSpeaking ? "speaking" : ""}`}>
+        <div className={`video-tile ${isMain ? "main" : ""} ${safeUser.isMe ? "me" : ""} ${isSpeaking ? "speaking" : ""}`}>
             {/* ✅ roomReconnecting이 false면 접속 중 스피너도 표시 안 함 */}
             {roomReconnecting && (isJoining && !safeUser.isMe) && (
                 <div className="reconnecting-overlay">
@@ -285,7 +340,7 @@ function MeetingPage({ portalRoomId }) {
     const params = useParams();
     const navigate = useNavigate();
     const loggedRef = useRef(false);
-    
+
     // URL params 또는 portal prop에서 roomId/subjectId 가져오기
     const roomId = params.roomId || portalRoomId || sessionStorage.getItem("pip.roomId");
     const subjectId = params.subjectId || sessionStorage.getItem("pip.subjectId");
@@ -1160,70 +1215,93 @@ function MeetingPage({ portalRoomId }) {
     };
 
     const handleHangup = () => {
-        // ✅ 통화종료 버튼으로 나가는 것임을 표시 (beforeunload에서 LEAVE 전송하도록)
+        // ✅ 통화종료 버튼으로 나가는 것임을 표시
         isLeavingRef.current = true;
 
-        // ✅ LEAVE를 먼저 보내서 다른 참가자에게 즉시 퇴장 알림
-        wsRef.current?.send(
-            JSON.stringify({
-                type: "LEAVE",
-            })
-        );
-
-        alert("채팅이 종료되었습니다.");
-
+        // ✅ 0) 상태 전파 (카메라/마이크 끄기)
         try {
-            // 0) 얼굴 필터 정리
-            stopFaceEmojiFilter().catch(() => { });
-            stopAvatarFilter().catch(() => { });
-
-            // 1) 로컬 미디어 정리
-            if (localStreamRef.current) {
-                localStreamRef.current.getTracks().forEach((t) => t.stop());
-                localStreamRef.current = null;
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: "USER_STATE_CHANGE",
+                    userId,
+                    changes: { cameraOff: true, muted: true },
+                }));
             }
-            setLocalStream(null);
+        } catch { }
 
-            // 2) WebSocket 정리
-            try { wsRef.current?.close(); } catch { }
-            wsRef.current = null;
+        // ✅ 1) LEAVE 전송 (2회 전송으로 확실히 유도)
+        try {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                const leaveMsg = JSON.stringify({ type: "LEAVE" });
+                wsRef.current.send(leaveMsg);
+                setTimeout(() => {
+                    if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        try { wsRef.current.send(leaveMsg); } catch { }
+                    }
+                }, 50);
+            }
+        } catch { }
 
-            try { sfuWsRef.current?.close(); } catch { }
-            sfuWsRef.current = null;
-
-            // 3) mediasoup transport/device 정리
-            try { sendTransportRef.current?.close(); } catch { }
-            sendTransportRef.current = null;
-
-            try { recvTransportRef.current?.close(); } catch { }
-            recvTransportRef.current = null;
-            setRecvTransportReady(false);
-
-            try { sfuDeviceRef.current?.close?.(); } catch { }
-            sfuDeviceRef.current = null;
-
-            // 4) 오디오 엘리먼트 정리
-            audioElsRef.current?.forEach((a) => {
-                try { a.srcObject = null; } catch { }
+        // ✅ 2) SFU leave 전송
+        try {
+            safeSfuSend({
+                action: "leave",
+                requestId: safeUUID(),
+                data: { roomId, peerId: userId },
             });
-            audioElsRef.current?.clear?.();
+        } catch { }
 
-            // 5) 상태 초기화(원하면)
-            setParticipants([]);
-            setMessages([]);
-            setActiveSpeakerId(null);
-            setRoomReconnecting(false);
+        // ✅ 3) 500ms 후 전체 정리 및 페이지 이동
+        // (alert 이전에 정리 루프를 시작하지만, UI 블로킹 방지를 위해 setTimeout 사용)
+        setTimeout(() => {
+            try {
+                // 얼굴 필터 정리
+                stopFaceEmojiFilter().catch(() => { });
+                stopAvatarFilter().catch(() => { });
 
-            // 6) MeetingContext 회의 종료
-            if (endMeeting) endMeeting();
-        } finally {
-            // 7) 페이지 이동 (브라우저 종료 대신)
-            if (subjectId) {
-                navigate(`/lms/${subjectId}/dashboard`, { replace: true });
-            } else {
+                // SFU 트랜스포트/프로듀서 강제 종료
+                try {
+                    producersRef.current.forEach(p => p.close());
+                    producersRef.current.clear();
+                    sendTransportRef.current?.close();
+                    recvTransportRef.current?.close();
+                } catch { }
+
+                // 로컬 미디어 정리
+                if (localStreamRef.current) {
+                    localStreamRef.current.getTracks().forEach((t) => t.stop());
+                    localStreamRef.current = null;
+                }
+                setLocalStream(null);
+
+                // WebSocket 정리 (충분한 시간 경과 후)
+                try { wsRef.current?.close(); } catch { }
+                wsRef.current = null;
+
+                try { sfuWsRef.current?.close(); } catch { }
+                sfuWsRef.current = null;
+
+                // 상태 초기화
+                setParticipants([]);
+                setMessages([]);
+                if (endMeeting) endMeeting();
+
+                // 페이지 이동
+                if (subjectId) {
+                    navigate(`/lms/${subjectId}/dashboard`, { replace: true });
+                } else {
+                    navigate("/lmsMain", { replace: true });
+                }
+            } catch (e) {
+                console.warn("[handleHangup] Cleanup failed:", e);
+                // 강제 이동
                 navigate("/lmsMain", { replace: true });
             }
-        }
+        }, 400);
+
+        // alert은 사용자에게 알림을 주는 용도로만 사용 (가장 마지막에 띄우거나 생략 가능)
+        // 여기서는 기존 alert 유지를 위해 배치
+        alert("채팅이 종료되었습니다.");
     };
 
     const isIOSDevice = () => {
@@ -2199,10 +2277,10 @@ function MeetingPage({ portalRoomId }) {
             // 🔥 MeetingContext의 requestBrowserPip 사용 (polling 포함)
             const stream = video.srcObject;
             const peerName = mainUser?.name || "참가자";
-            
+
             console.log("[PiP] MeetingContext requestBrowserPip 호출");
             const success = await requestBrowserPip(video, stream, peerName);
-            
+
             if (!success) {
                 // fallback: 직접 요청
                 console.log("[PiP] fallback: 직접 requestPictureInPicture 호출");
@@ -3103,7 +3181,7 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             // ❗ PIP 모드일 때는 endMeeting 호출하지 않음 (polling 유지)
             const isInPipMode = !!document.pictureInPictureElement ||
-                                sessionStorage.getItem("pip.roomId");
+                sessionStorage.getItem("pip.roomId");
 
             if (isInPipMode) {
                 // 🔥 사이드바 자동 PiP 진입(라우트 이동) 시 여기로 들어옴
@@ -3387,38 +3465,83 @@ function MeetingPage({ portalRoomId }) {
             console.log("[MeetingPage] PIP에서 나가기 이벤트 수신");
             isLeavingRef.current = true;
 
-            // LEAVE 메시지 전송
+            // ✅ 0) 카메라가 켜져있다면 즉시 상태 전파 (타일 검게 변하는 현상 방지)
             try {
-                wsRef.current?.send(JSON.stringify({ type: "LEAVE" }));
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({
+                        type: "USER_STATE_CHANGE",
+                        userId,
+                        changes: { cameraOff: true, muted: true },
+                    }));
+                }
             } catch { }
 
-            // 리소스 정리
+            // ✅ 1) SFU 로컬 정리 가속: Producer들을 즉시 닫아 상대방 Consumer들이 즉시 종료되게 함
             try {
-                if (localStreamRef.current) {
-                    localStreamRef.current.getTracks().forEach((t) => t.stop());
-                    localStreamRef.current = null;
+                producersRef.current.forEach((p) => {
+                    try { p.close(); } catch { }
+                    if (p.appData?.type) {
+                        safeSfuSend({ action: "closeProducer", data: { producerId: p.id } });
+                    }
+                });
+                producersRef.current.clear();
+            } catch { }
+
+            // ✅ 2) LEAVE를 "확실히" 여러 번 보낸다 (패킷 유실/타이밍 대비)
+            try {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    const leaveMsg = JSON.stringify({ type: "LEAVE" });
+                    wsRef.current.send(leaveMsg);
+                    setTimeout(() => {
+                        if (wsRef.current?.readyState === WebSocket.OPEN) {
+                            wsRef.current.send(leaveMsg);
+                        }
+                    }, 50);
                 }
-                setLocalStream(null);
+            } catch { }
 
-                try { wsRef.current?.close(); } catch { }
-                wsRef.current = null;
+            // ✅ 3) SFU에도 leave를 보낸다
+            try {
+                safeSfuSend({
+                    action: "leave",
+                    requestId: safeUUID(),
+                    data: { roomId, peerId: userId },
+                });
+            } catch { }
 
-                try { sfuWsRef.current?.close(); } catch { }
-                sfuWsRef.current = null;
+            // ✅ 4) 충분히 기다린 뒤 소켓 close 및 미디어 중지 (send 버퍼 flush 시간 확보)
+            setTimeout(() => {
+                try {
+                    // 미디어 트랙 중지
+                    if (localStreamRef.current) {
+                        localStreamRef.current.getTracks().forEach((t) => {
+                            try { t.stop(); } catch { }
+                        });
+                        localStreamRef.current = null;
+                    }
+                    setLocalStream(null);
 
-                try { sendTransportRef.current?.close(); } catch { }
-                sendTransportRef.current = null;
-                try { recvTransportRef.current?.close(); } catch { }
-                recvTransportRef.current = null;
+                    // 소켓 및 트랜스포트 정리
+                    try { wsRef.current?.close(); } catch { }
+                    wsRef.current = null;
 
-                try { sfuDeviceRef.current?.close?.(); } catch { }
-                sfuDeviceRef.current = null;
+                    try { sfuWsRef.current?.close(); } catch { }
+                    sfuWsRef.current = null;
 
-                setParticipants([]);
-                setMessages([]);
-            } catch (e) {
-                console.warn("[MeetingPage] PIP 나가기 정리 중 오류:", e);
-            }
+                    try { sendTransportRef.current?.close(); } catch { }
+                    sendTransportRef.current = null;
+                    try { recvTransportRef.current?.close(); } catch { }
+                    recvTransportRef.current = null;
+
+                    try { sfuDeviceRef.current?.close?.(); } catch { }
+                    sfuDeviceRef.current = null;
+
+                    setParticipants([]);
+                    setMessages([]);
+                } catch (e) {
+                    console.warn("[MeetingPage] PIP 나가기 정리 중 오류:", e);
+                }
+            }, 300); // 200ms -> 300ms로 약간 증가
         };
 
         window.addEventListener("meeting:leave-from-pip", handleLeaveFromPip);
@@ -3426,7 +3549,7 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             window.removeEventListener("meeting:leave-from-pip", handleLeaveFromPip);
         };
-    }, []);
+    }, [roomId, userId]);
 
     /* useEffect(() => {
         const video = mainVideoRef.current;
@@ -3738,6 +3861,10 @@ function MeetingPage({ portalRoomId }) {
                             // PIP 복귀 시 페이지 새로고침으로 인해 online 상태가 잠시 false일 수 있음
                             const shouldShowReconnecting = !isMe && isOffline && !recentlyCompleted && !hasFinishedInitialSyncRef.current && !!old;
 
+                            // ✅ 서버 online 플래그가 일시적으로 false로 튀더라도,
+                            // SFU/브라우저 쪽 미디어 스트림이 살아있으면 stream을 null로 만들지 않는다.
+                            const keepMediaWhileOffline = !!currentStream;
+
                             const baseUser = {
                                 id: peerId,
                                 name: u.userName,
@@ -3746,9 +3873,9 @@ function MeetingPage({ portalRoomId }) {
                                 muted: isMe ? !micOnRef.current : (u.muted ?? false),
                                 cameraOff: isMe ? !camOnRef.current : (u.cameraOff ?? true),
 
-                                stream: shouldShowReconnecting ? null : currentStream,
-                                screenStream: (shouldShowReconnecting ? null : old?.screenStream) ?? null,
-                                isScreenSharing: shouldShowReconnecting ? false : (old?.isScreenSharing ?? false),
+                                stream: (shouldShowReconnecting && !keepMediaWhileOffline) ? null : currentStream,
+                                screenStream: (shouldShowReconnecting && !keepMediaWhileOffline) ? null : (old?.screenStream ?? null),
+                                isScreenSharing: (shouldShowReconnecting && !keepMediaWhileOffline) ? false : (old?.isScreenSharing ?? false),
 
                                 reaction: old?.reaction ?? null,
                                 speaking: old?.speaking ?? false,
@@ -3792,34 +3919,29 @@ function MeetingPage({ portalRoomId }) {
                             // 1) 나 자신은 절대 삭제 안 함
                             if (p.isMe) return true;
 
-                            // 2) 재접속 중이면 유지
-                            if (reconnectHistoryRef.current.has(peerId) || p.isReconnecting) {
-                                console.log(`👻 [GHOST RETAINED] ${p.name} (${peerId}) - Reconnecting logic`);
-                                return true;
-                            }
-
-                            // 3) ✅ [핵심 추가] 오디오/비디오 Consumer가 하나라도 살아있으면 절대 삭제하지 않음
-                            const hasActiveConsumer = Array.from(consumersRef.current.values()).some(
+                            // ✅ 미디어가 살아있으면 보호
+                            const hasAnyActiveConsumer = Array.from(consumersRef.current.values()).some(
                                 (c) => String(c.appData?.peerId) === peerId && !c.closed
                             );
+                            const hasPeerStream = peerStreamsRef.current.has(peerId);
 
-                            if (hasActiveConsumer) {
-                                console.log(`🛡️ [CONSUMER PROTECTED] ${p.name} (${peerId}) missing from server list but has active consumers.`);
-                                return true;
+                            // 2) 재접속 로직에 걸려있더라도 "미디어가 하나도 없으면" 즉시 제거 (유령 방지)
+                            if (reconnectHistoryRef.current.has(peerId) || p.isReconnecting) {
+                                if (hasAnyActiveConsumer || hasPeerStream) {
+                                    console.log(`👻 [GHOST RETAINED] ${p.name} (${peerId}) - reconnecting with media`);
+                                    return true;
+                                }
+                                console.log(`💥 [GHOST DROP] ${p.name} (${peerId}) - reconnecting but no media, removing`);
+                                return false;
                             }
 
-                            // 4) ✅ [강화] peerStreamsRef에 스트림이 있으면 보호
-                            const hasPeerStream = peerStreamsRef.current.has(peerId);
+                            // 3) Consumer/Stream이 남아있으면 보호
+                            if (hasAnyActiveConsumer) {
+                                console.log(`🛡️ [CONSUMER PROTECTED] ${p.name} (${peerId}) missing from server list but has consumers.`);
+                                return true;
+                            }
                             if (hasPeerStream) {
                                 console.log(`🔒 [STREAM PROTECTED] ${p.name} (${peerId}) has active peer stream.`);
-                                return true;
-                            }
-
-                            // 5) ✅ [강화] 최근 30초 내 업데이트된 사용자 보호
-                            const lastUpdate = p.lastUpdate || 0;
-                            const timeSinceUpdate = Date.now() - lastUpdate;
-                            if (timeSinceUpdate < 30000) {
-                                console.log(`⏰ [TIME PROTECTED] ${p.name} (${peerId}) updated ${Math.round(timeSinceUpdate / 1000)}s ago.`);
                                 return true;
                             }
 
@@ -4223,53 +4345,25 @@ function MeetingPage({ portalRoomId }) {
                 const { peerId } = msg.data || {};
                 if (!peerId) return;
 
-                console.log(`[SFU] peerLeft received for ${peerId}. Starting grace period.`);
+                console.log(`[SFU] peerLeft received for ${peerId}. Removing immediately.`);
 
-                // 1. 재접속 이력에 추가 (USERS_UPDATE에서 이 사람을 삭제하지 않도록 보호)
-                reconnectHistoryRef.current.add(peerId);
-
-                // 2. 미디어 스트림 정리 (메모리 누수 방지)
-                clearPeerStreamOnly(peerId);
+                // ✅ peerLeft는 "실제 퇴장"으로 간주하고 즉시 제거 (재접속 유예 없음)
+                for (const [key, c] of consumersRef.current.entries()) {
+                    if (String(c?.appData?.peerId) === String(peerId)) {
+                        try { c.close(); } catch { }
+                        consumersRef.current.delete(key);
+                    }
+                }
+                peerStreamsRef.current.delete(String(peerId));
                 bumpStreamVersion();
 
-                // 3. 기존에 돌고 있던 삭제 타이머가 있다면 취소 (타이머 리셋 효과)
-                if (reconnectTimeoutRef.current.has(peerId)) {
-                    clearTimeout(reconnectTimeoutRef.current.get(peerId));
+                setParticipants(prev => prev.filter(p => String(p.id) !== String(peerId)));
+
+                reconnectHistoryRef.current.delete(String(peerId));
+                if (reconnectTimeoutRef.current.has(String(peerId))) {
+                    clearTimeout(reconnectTimeoutRef.current.get(String(peerId)));
+                    reconnectTimeoutRef.current.delete(String(peerId));
                 }
-
-                // ✅ 4. [30초 유예] 30초 뒤에도 복귀하지 않으면 그때 삭제
-                const timer = setTimeout(() => {
-                    setParticipants(prev => {
-                        // 현재 시점에서도 여전히 이 peerId가 있다면 삭제
-                        // (만약 복귀했다면 reconnectHistoryRef에서 제거되었을 것임)
-                        const stillOffline = reconnectHistoryRef.current.has(peerId);
-
-                        // 🔥 추가 보호: consumer가 살아있으면 삭제하지 않음
-                        const hasActiveConsumer = Array.from(consumersRef.current.values()).some(
-                            (c) => String(c.appData?.peerId) === peerId && !c.closed
-                        );
-
-                        if (hasActiveConsumer) {
-                            console.log(`🛡️ [TIMEOUT PROTECTED] Peer ${peerId} still has active consumers. Keeping.`);
-                            reconnectHistoryRef.current.delete(peerId);
-                            reconnectTimeoutRef.current.delete(peerId);
-                            return prev;
-                        }
-
-                        if (stillOffline) {
-                            console.log(`💀 [REMOVE] Peer ${peerId} timed out after 30s. Removing from UI.`);
-                            return prev.filter(p => String(p.id) !== String(peerId));
-                        }
-                        return prev;
-                    });
-
-                    // 5. 메모리 정리
-                    reconnectHistoryRef.current.delete(peerId);
-                    reconnectTimeoutRef.current.delete(peerId);
-
-                }, 30000); // 🔥 30초 대기 (10초에서 증가)
-
-                reconnectTimeoutRef.current.set(peerId, timer);
                 return;
             }
         };
