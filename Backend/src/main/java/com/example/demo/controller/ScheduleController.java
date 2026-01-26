@@ -13,9 +13,10 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("api/schedules")
+// TODO: ScheduleServiceImpl이 완성되면 주석 해제
+// @RestController
+ @RequiredArgsConstructor
+ @RequestMapping("api/schedules")
 public class ScheduleController {
 
     private final ScheduleService scheduleService;

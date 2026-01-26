@@ -281,24 +281,30 @@ function safeUUID() {
 
 // --- Main App Component ---
 
-function MeetingPage() {
-    const { subjectId, roomId } = useParams();
+function MeetingPage({ portalRoomId }) {
+    const params = useParams();
     const navigate = useNavigate();
     const loggedRef = useRef(false);
+    
+    // URL params 또는 portal prop에서 roomId/subjectId 가져오기
+    const roomId = params.roomId || portalRoomId || sessionStorage.getItem("pip.roomId");
+    const subjectId = params.subjectId || sessionStorage.getItem("pip.subjectId");
 
     useEffect(() => {
         if (!roomId) return;
         if (loggedRef.current) return;
 
-        console.log("[CLIENT] roomId from URL =", roomId);
+        console.log("[CLIENT] roomId =", roomId, "(from:", params.roomId ? "URL" : "portal/session", ")");
         loggedRef.current = true;
-    }, [roomId]);
+    }, [roomId, params.roomId]);
 
     const {
         startMeeting,
         endMeeting,
         saveMeetingState,
         requestBrowserPip,
+        isPipMode,
+        isBrowserPipMode,
     } = useMeeting();
 
     useEffect(() => {
@@ -2190,11 +2196,22 @@ function MeetingPage() {
                 });
             }
 
-            video.requestPictureInPicture().catch((e) => {
-                console.warn("[PiP] requestPictureInPicture failed:", e);
-            });
+            // 🔥 MeetingContext의 requestBrowserPip 사용 (polling 포함)
+            const stream = video.srcObject;
+            const peerName = mainUser?.name || "참가자";
+            
+            console.log("[PiP] MeetingContext requestBrowserPip 호출");
+            const success = await requestBrowserPip(video, stream, peerName);
+            
+            if (!success) {
+                // fallback: 직접 요청
+                console.log("[PiP] fallback: 직접 requestPictureInPicture 호출");
+                video.requestPictureInPicture().catch((e) => {
+                    console.warn("[PiP] requestPictureInPicture failed:", e);
+                });
+            }
         }
-    }, []);
+    }, [requestBrowserPip, mainUser]);
 
     // --- Local media ---
     const startLocalMedia = async () => {
@@ -3089,6 +3106,15 @@ function MeetingPage() {
             stopFaceEmojiFilter().catch(() => { });
             stopAvatarFilter().catch(() => { });
 
+            // ❗ PIP 모드일 때는 endMeeting 호출하지 않음 (polling 유지)
+            const isInPipMode = !!document.pictureInPictureElement ||
+                                sessionStorage.getItem("pip.roomId");
+
+            if (isInPipMode) {
+                console.log("[MeetingPage] PIP 모드 - endMeeting 스킵");
+                return;
+            }
+
             // ❗ 언마운트 시에만 종료 (숨김일 땐 호출 안 됨)
             endMeeting();
         };
@@ -3351,6 +3377,53 @@ function MeetingPage() {
 
         return () => {
             window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, []);
+
+    // 🔥 커스텀 PIP에서 나가기 이벤트 처리
+    useEffect(() => {
+        const handleLeaveFromPip = () => {
+            console.log("[MeetingPage] PIP에서 나가기 이벤트 수신");
+            isLeavingRef.current = true;
+
+            // LEAVE 메시지 전송
+            try {
+                wsRef.current?.send(JSON.stringify({ type: "LEAVE" }));
+            } catch { }
+
+            // 리소스 정리
+            try {
+                if (localStreamRef.current) {
+                    localStreamRef.current.getTracks().forEach((t) => t.stop());
+                    localStreamRef.current = null;
+                }
+                setLocalStream(null);
+
+                try { wsRef.current?.close(); } catch { }
+                wsRef.current = null;
+
+                try { sfuWsRef.current?.close(); } catch { }
+                sfuWsRef.current = null;
+
+                try { sendTransportRef.current?.close(); } catch { }
+                sendTransportRef.current = null;
+                try { recvTransportRef.current?.close(); } catch { }
+                recvTransportRef.current = null;
+
+                try { sfuDeviceRef.current?.close?.(); } catch { }
+                sfuDeviceRef.current = null;
+
+                setParticipants([]);
+                setMessages([]);
+            } catch (e) {
+                console.warn("[MeetingPage] PIP 나가기 정리 중 오류:", e);
+            }
+        };
+
+        window.addEventListener("meeting:leave-from-pip", handleLeaveFromPip);
+
+        return () => {
+            window.removeEventListener("meeting:leave-from-pip", handleLeaveFromPip);
         };
     }, []);
 
