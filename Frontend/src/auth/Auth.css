@@ -6,7 +6,20 @@ html, body {
     font-family: 'Pretendard Variable', sans-serif;
 }
 
+.onsil-logo {
+    width: 200px;
+    height: 200px;
+    cursor: pointer;
+}
+
 .login-wrapper {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.signup-wrapper {
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -29,7 +42,7 @@ html, body {
     margin-bottom: 32px;
 }
 
-.logo {
+.auth-logo {
     font-size: 36px;
     font-weight: 800;
     color: #a5dea0;
@@ -309,4 +322,50 @@ html, body {
     color: #2e7d32;
     font-size: 12px;
     margin: 4px 0 8px;
+}
+
+.terms-group {
+    margin: 12px 0;
+}
+
+.terms-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.terms-checkbox-input {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #d1d5db;
+    position: relative;
+    margin-top: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.terms-checkbox-input:checked {
+    background-color: #97c793;
+    border-color: #97c793;
+}
+
+.terms-checkbox-input:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.agree-text {
+    text-align: left;
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.4;
 }

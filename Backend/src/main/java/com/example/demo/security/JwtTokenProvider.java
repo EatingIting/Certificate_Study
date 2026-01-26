@@ -30,11 +30,11 @@ public class JwtTokenProvider {
         this.expirationMs = expirationMs;
     }
 
-    public String createAccessToken(String userId) {
+    public String createAccessToken(String email) {
         Date now = new Date();
 
         return Jwts.builder()
-                .setSubject(userId)
+                .setSubject(email)
                 .setIssuedAt(now)
                 .setExpiration(new Date(now.getTime() + expirationMs))
                 .signWith(key)
@@ -58,10 +58,10 @@ public class JwtTokenProvider {
                 .parseClaimsJws(token)
                 .getBody();
 
-        String userId = claims.getSubject();
+        String email = claims.getSubject();
 
         return new UsernamePasswordAuthenticationToken(
-                userId,                          // principal
+                email,
                 null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER"))
         );

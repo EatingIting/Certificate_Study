@@ -5,54 +5,108 @@
 
 <mapper namespace="com.example.demo.roomcreate.RoomCreateMapper">
 
+    <!-- 방 생성 -->
     <insert id="insertRoom">
         INSERT INTO room (
-        room_id,
-        host_user_id,
-        title,
-        content,
-        capacity,
-        max_participants,
-        status,
-        cat_id
-        ) VALUES (
-        #{roomId},
-        #{hostUserId},
-        #{title},
-        #{content},
-        #{capacity},
-        #{maxParticipants},
-        #{status},
-        #{categoryId}
-        )
-    </insert>
-
-    <select id="findAllRooms" resultType="com.example.demo.roomcreate.RoomCreateVO">
-        SELECT
-            room_id           AS roomId,
+            room_id,
+            host_user_email,
             title,
             content,
-            capacity,
-            max_participants  AS maxParticipants,
+            gender,
+            max_participants,
             status,
-            created_at        AS createdAt,
-            cat_id            AS categoryId
+            categoryId,
+            start_date,
+            exam_date,
+            deadline,
+            ended_at,
+            hostUserNickname,
+            room_img,
+            created_at
+        ) VALUES (
+                     #{roomId},
+                     #{hostUserEmail},
+                     #{title},
+                     #{content},
+                     #{gender},
+                     #{maxParticipants},
+                     'OPEN',
+                     #{categoryId},
+                     #{startDate},
+                     #{examDate},
+                     #{deadline},
+                     #{endDate},
+                     #{hostUserNickname},
+                     #{roomImg},
+                     NOW()
+                 )
+    </insert>
+
+
+    <!-- 전체 방 조회 -->
+    <select id="findAllRooms"
+            resultType="com.example.demo.roomcreate.RoomCreateVO">
+        SELECT
+            room_id            AS roomId,
+            host_user_email    AS hostUserEmail,
+            hostUserNickname,
+            title,
+            content,
+            gender,
+            max_participants   AS maxParticipants,
+            status,
+            categoryId,
+            start_date         AS startDate,
+            ended_at           AS endDate,
+            exam_date          AS examDate,
+            deadline,
+            room_img           AS roomImg,
+            created_at         AS createdAt
         FROM room
         ORDER BY created_at DESC
     </select>
 
-    <select id="findRoomById" resultType="com.example.demo.roomcreate.RoomCreateVO">
+
+    <!-- 방 상세 조회 -->
+    <select id="findRoomById"
+            resultType="com.example.demo.roomcreate.RoomCreateVO">
         SELECT
-            room_id           AS roomId,
+            room_id            AS roomId,
+            host_user_email    AS hostUserEmail,
+            hostUserNickname,
             title,
             content,
-            capacity,
-            max_participants  AS maxParticipants,
+            gender,
+            max_participants   AS maxParticipants,
             status,
-            created_at        AS createdAt,
-            cat_id            AS categoryId
+            categoryId,
+            start_date         AS startDate,
+            ended_at           AS endDate,
+            exam_date          AS examDate,
+            deadline,
+            room_img           AS roomImg,
+            created_at         AS createdAt
         FROM room
         WHERE room_id = #{roomId}
     </select>
+
+
+    <!-- 방 수정 -->
+    <update id="updateRoom">
+        UPDATE room
+        SET
+            title = #{title},
+            content = #{content},
+            gender = #{gender},
+            max_participants = #{maxParticipants},
+            categoryId = #{categoryId},
+            start_date = #{startDate},
+            ended_at = #{endDate},
+            exam_date = #{examDate},
+            deadline = #{deadline},
+            hostUserNickname = #{hostUserNickname},
+            room_img = #{roomImg}
+        WHERE room_id = #{roomId}
+    </update>
 
 </mapper>

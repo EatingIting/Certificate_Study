@@ -1,31 +1,52 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import RoomPage from "./roomcategorypage/RoomPage";
-import MyPage from "./roomcategorypage/MyPage";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
 import Auth from "./auth/Auth";
-import Create from "./roomcreate/Create";
+import SignUp from "./auth/SignUp";
+
+import OAuthSuccess from "./auth/OAuthSuccess";
+import OAuthFail from "./auth/OAuthFail";
+
+import Create from "./room/roomcategorypage/Create";
 import Main from "./mainpage/Main";
-import MyApplications from "./roomcategorypage/MyApplications";
+import MyApplications from "./room/roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
 import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
 import { MeetingProvider } from "./webrtc/MeetingContext";
+import MainHeader from "./room/MainHeader";
+import RoomPage from "./room/roomcategorypage/RoomPage";
+import MyPage from "./room/roomcategorypage/MyPage";
 
 function App() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<Main />} />
+                {/* 로그인/회원가입 */}
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/roompage" element={<RoomPage />} />
-                <Route path="/mypage" element={<MyPage />} />
-                <Route path="/create" element={<Create />} />
-                <Route path="/my-applications" element={<MyApplications />} />
-                {/* <Route path="/meeting/:roomId" element={<MeetingProvider> <MeetingPage /> </MeetingProvider>} /> */}
-                {/* <Route path="MeetingRoom/:roomId" element={<MeetingPage />} /> */}
-                <Route path="/lmsMain" element={<LMSMain />} />
+                <Route path="/signup" element={<SignUp />} />
+
+                {/* OAuth 결과 처리 */}
+                <Route path="/oauth-success" element={<OAuthSuccess />} />
+                <Route path="/oauth-fail" element={<OAuthFail />} />
+
+                {/* 화상회의 */}
+                <Route path="/meeting/:roomId" element={<MeetingPage />} />
+
+                {/* LMS */}
                 <Route path="/lms/:subjectId/*" element={<LMSSubject />} />
+
+                {/* 메인 공통 헤더 */}
+                <Route element={<MainHeader />}>
+                    <Route path="/" element={<Main />} />
+                    <Route path="/room" element={<RoomPage />} />
+                    <Route path="/room/mypage" element={<MyPage />} />
+                    <Route path="/room/my-applications" element={<MyApplications />} />
+                    <Route path="/room/create" element={<Create />} />
+                    <Route path="/room/mystudy" element={<LMSMain />} />
+                </Route>
             </Routes>
         </BrowserRouter>
     );
 }
+
 export default App;
