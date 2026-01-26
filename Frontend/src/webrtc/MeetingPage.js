@@ -3280,14 +3280,28 @@ function MeetingPage({ portalRoomId }) {
                 // 1. 참가자 상태 업데이트
                 if (Array.isArray(peers) && peers.length > 0) {
                     peers.forEach(peer => {
-                        // 🔥 이 값이 “진실”
+                        // ✅ room:sync payload는 환경에 따라 micOn/cameraOn 필드가 없을 수 있음.
+                        // 값이 undefined인데도 "!peer.cameraOn"처럼 계산하면 카메라 OFF로 오판 → 스트림 삭제 → 아바타 타일 튐.
+                        const hasMicOn = typeof peer.micOn === "boolean";
+                        const hasCameraOn = typeof peer.cameraOn === "boolean";
+                        const hasMuted = typeof peer.muted === "boolean";
+                        const hasCameraOff = typeof peer.cameraOff === "boolean";
+
+                        const mutedFromPeer = hasMicOn
+                            ? !peer.micOn
+                            : (hasMuted ? peer.muted : undefined);
+
+                        const cameraOffFromPeer = hasCameraOn
+                            ? !peer.cameraOn
+                            : (hasCameraOff ? peer.cameraOff : undefined);
+
                         setParticipants(prev =>
                             prev.map(p =>
                                 String(p.id) === String(peer.peerId)
                                     ? {
                                         ...p,
-                                        muted: !peer.micOn,
-                                        cameraOff: !peer.cameraOn,
+                                        ...(typeof mutedFromPeer === "boolean" ? { muted: mutedFromPeer } : {}),
+                                        ...(typeof cameraOffFromPeer === "boolean" ? { cameraOff: cameraOffFromPeer } : {}),
                                         isReconnecting: false,
                                         isLoading: false,
                                     }
@@ -3296,10 +3310,13 @@ function MeetingPage({ portalRoomId }) {
                         );
 
                         // ❗ producer 없으면 절대 consume 시도 X
-                        if (!peer.cameraOn) {
+                        // cameraOn/cameraOff 정보가 "명확히" 꺼짐일 때만 consumer 제거
+                        const cameraIsOff = (hasCameraOn && peer.cameraOn === false) || (hasCameraOff && peer.cameraOff === true);
+                        if (cameraIsOff) {
                             removeVideoConsumer(peer.peerId);
                         }
-                        if (!peer.micOn) {
+                        const micIsOff = (hasMicOn && peer.micOn === false) || (hasMuted && peer.muted === true);
+                        if (micIsOff) {
                             removeAudioConsumer(peer.peerId);
                         }
                     });
