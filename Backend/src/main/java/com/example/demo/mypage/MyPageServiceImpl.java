@@ -1,14 +1,13 @@
 package com.example.demo.mypage;
 
+import com.example.demo.s3.S3Uploader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -16,9 +15,7 @@ import java.util.UUID;
 public class MyPageServiceImpl implements MyPageService {
 
     private final MyPageMapper myPageMapper;
-
-    private static final String UPLOAD_DIR =
-            "C:/upload/profile/";
+    private final S3Uploader s3Uploader;
 
     @Override
     public MyPageVO getMyPage(String userId) {
@@ -35,25 +32,14 @@ public class MyPageServiceImpl implements MyPageService {
             String introduction,
             MultipartFile profileImage
     ) {
-        String profileImgPath = null;
+
+        String profileImgUrl = null;
 
         if (profileImage != null && !profileImage.isEmpty()) {
             try {
-                File dir = new File(UPLOAD_DIR);
-                if (!dir.exists()) {
-                    dir.mkdirs();
-                }
-
-                String fileName =
-                        UUID.randomUUID() + "_" + profileImage.getOriginalFilename();
-
-                File target = new File(dir, fileName);
-                profileImage.transferTo(target);
-
-                profileImgPath = "/uploads/profile/" + fileName;
-
+                profileImgUrl = s3Uploader.upload(profileImage);
             } catch (Exception e) {
-                throw new RuntimeException("프로필 이미지 저장 실패", e);
+                throw new RuntimeException("프로필 이미지 업로드 실패", e);
             }
         }
 
@@ -64,7 +50,7 @@ public class MyPageServiceImpl implements MyPageService {
                 LocalDate.parse(birthDate),
                 gender,
                 introduction,
-                profileImgPath
+                profileImgUrl
         );
     }
 
@@ -73,7 +59,6 @@ public class MyPageServiceImpl implements MyPageService {
         myPageMapper.deleteByEmail(email);
     }
 
-    // 성별 조회 추가
     @Override
     public String getGender(String email) {
         return myPageMapper.getGender(email);
