@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation, useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 import LMSHeader from "./LMSHeader";
 import LMSSidebar from "./LMSSidebar";
@@ -101,7 +101,10 @@ function LMSSubjectInner() {
     let [activeMenu, setActiveMenu] = useState("dashboard");
     let [toastMessage, setToastMessage] = useState("");
     let [toastVisible, setToastVisible] = useState(false);
-    
+    // 🔥 커스텀 PiP에서 "나가기" 클릭 시, UI는 즉시 숨기고 정리는 약간 지연(LEAVE 전송 보장)
+    const [pipClosing, setPipClosing] = useState(false);
+    const pipLeaveTimerRef = useRef(null);
+
     let location = useLocation();
     let navigate = useNavigate();
     let { subjectId } = useParams();
@@ -148,17 +151,39 @@ function LMSSubjectInner() {
     // 커스텀 PIP에서 회의 나가기
     const handlePipLeave = useCallback(() => {
         console.log("[CustomPiP] 회의 나가기");
-        
+
         // LEAVE 이벤트 발생 (MeetingPage에서 처리)
         window.dispatchEvent(new CustomEvent("meeting:leave-from-pip"));
-        
-        stopCustomPip();
-        endMeeting();
 
-        // 세션 정리
-        sessionStorage.removeItem("pip.roomId");
-        sessionStorage.removeItem("pip.subjectId");
+        // ✅ UI는 즉시 숨김 (사용자 체감 즉시 반응)
+        setPipClosing(true);
+
+        // ✅ 소켓으로 LEAVE가 전달될 시간을 조금 준 뒤 정리/언마운트
+        if (pipLeaveTimerRef.current) {
+            clearTimeout(pipLeaveTimerRef.current);
+        }
+        pipLeaveTimerRef.current = setTimeout(() => {
+            stopCustomPip();
+            endMeeting();
+
+            // 세션 정리
+            sessionStorage.removeItem("pip.roomId");
+            sessionStorage.removeItem("pip.subjectId");
+
+            setPipClosing(false);
+            pipLeaveTimerRef.current = null;
+        }, 600); // 350ms -> 600ms로 증가 (MeetingPage 정리 시간 확보)
     }, [stopCustomPip, endMeeting]);
+
+    // cleanup
+    useEffect(() => {
+        return () => {
+            if (pipLeaveTimerRef.current) {
+                clearTimeout(pipLeaveTimerRef.current);
+                pipLeaveTimerRef.current = null;
+            }
+        };
+    }, []);
 
     /* =========================
        Sidebar 이동 시 (PIP는 LMSSidebar에서 처리)
@@ -216,7 +241,7 @@ function LMSSubjectInner() {
 
                         <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 
-                        <Route path="study/members" element={<StudyMembers />}  />
+                        <Route path="study/members" element={<StudyMembers />} />
                         <Route path="study/leave" element={<StudyLeave />} />
 
                         <Route path="mypage" element={<RoomMyPage />} />
@@ -238,7 +263,7 @@ function LMSSubjectInner() {
             />
 
             {/* 커스텀 PIP (브라우저 PIP가 아닐 때만 표시) */}
-            {customPipData && !isBrowserPipMode && (
+            {customPipData && !isBrowserPipMode && !pipClosing && (
                 <FloatingPip
                     stream={customPipData.stream}
                     peerName={customPipData.peerName}
@@ -248,7 +273,10 @@ function LMSSubjectInner() {
                 />
             )}
 
-            <ChatModal />
+            {/* 현재 경로가 'MeetingRoom/' 을 포함하지 않을 때만 렌더링 */}
+            {!location.pathname.includes("/MeetingRoom/") && (
+                <ChatModal roomId={subjectId} />
+            )}
         </>
     );
 }
