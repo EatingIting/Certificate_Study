@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+// Dashboard.js
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./Dashboard.css";
 
@@ -85,13 +86,68 @@ function Dashboard({ setActiveMenu }) {
         return filtered;
     }, [upcomingSchedules, activeMonth]);
 
-    // ✅ 점 + 툴팁(안정 버전): 기본 날짜는 살리고, "1일"만 "1"로 교정
+    // =========================
+    // ✅ "전역(body)" 툴팁: overflow/레이어 문제로 잘리는 것 방지
+    // =========================
+    function getGlobalTipEl() {
+        let el = document.getElementById("dashGlobalTip");
+        if (el) return el;
+
+        el = document.createElement("div");
+        el.id = "dashGlobalTip";
+        el.className = "dashGlobalTip";
+        document.body.appendChild(el);
+        return el;
+    }
+
+    function closeGlobalTip() {
+        let el = document.getElementById("dashGlobalTip");
+        if (!el) return;
+        el.classList.remove("isOpen");
+    }
+
+    function placeGlobalTip(el, anchorRect) {
+        let pad = 10;
+
+        // display가 none이면 offset 계산이 0 나올 수 있어서, 먼저 열고 계산하는 흐름을 가정
+        let w = el.offsetWidth || 220;
+        let h = el.offsetHeight || 120;
+
+        // 기본: 칸 오른쪽 아래
+        let left = anchorRect.left + 12;
+        let top = anchorRect.top + 28;
+
+        // 오른쪽 밖이면 왼쪽으로
+        if (left + w + pad > window.innerWidth) {
+            left = anchorRect.right - w - 12;
+        }
+        // 아래 밖이면 위로
+        if (top + h + pad > window.innerHeight) {
+            top = anchorRect.top - h - 12;
+        }
+
+        // 너무 왼쪽/위로 가면 보정
+        if (left < pad) left = pad;
+        if (top < pad) top = pad;
+
+        el.style.left = `${Math.round(left)}px`;
+        el.style.top = `${Math.round(top)}px`;
+    }
+
+    useEffect(() => {
+        // 페이지 벗어나거나 리렌더 시 툴팁 남아있으면 닫기
+        return () => {
+            closeGlobalTip();
+        };
+    }, []);
+
+    // ✅ 점 + 전역툴팁: 달력 셀에는 dot만 붙이고, 툴팁은 body에 띄움
     let dayCellDidMount = (info) => {
-        // 2) 이전 렌더에서 남아있는 점 제거(중복 방지)
+        // 1) 이전 렌더에서 남아있는 점 제거(중복 방지)
         let old = info.el.querySelector(".dashDotWrap");
         if (old) old.remove();
 
-        // 3) 해당 날짜 일정이 있으면 dot + tip
+        // 2) 해당 날짜 일정이 있으면 dot + hover
         let y = info.date.getFullYear();
         let m = String(info.date.getMonth() + 1).padStart(2, "0");
         let d = String(info.date.getDate()).padStart(2, "0");
@@ -103,6 +159,7 @@ function Dashboard({ setActiveMenu }) {
         let top = info.el.querySelector(".fc-daygrid-day-top");
         if (!top) return;
 
+        // dot만 표시
         let wrap = document.createElement("div");
         wrap.className = "dashDotWrap";
 
@@ -110,35 +167,45 @@ function Dashboard({ setActiveMenu }) {
         dot.className = "dashDot";
         wrap.appendChild(dot);
 
-        let tip = document.createElement("div");
-        tip.className = "dashTip";
-        tip.innerHTML = `
-            <div class="dashTipTitle">${m}.${d} 일정</div>
-            ${items.slice(0, 6).map((it) => `<div class="dashTipItem">• ${it.title}</div>`).join("")}
-            ${items.length > 6 ? `<div class="dashTipMore">+ ${items.length - 6}개 더 있음</div>` : ""}
-        `;
-        wrap.appendChild(tip);
+        top.appendChild(wrap);
 
-        // ✅ hover 대상: 점(wrap) 말고 "그 날짜 칸 전체"
+        // ✅ hover 대상: "그 날짜 칸 전체"
         let hoverTarget =
             info.el.querySelector(".fc-daygrid-day-frame") ||
             info.el;
 
-        // 기존 리스너(중복 방지용)
+        // 기존 리스너 제거(중복 방지용)
         if (hoverTarget._dashEnter) hoverTarget.removeEventListener("mouseenter", hoverTarget._dashEnter);
         if (hoverTarget._dashLeave) hoverTarget.removeEventListener("mouseleave", hoverTarget._dashLeave);
 
-        let onEnter = () => wrap.classList.add("isOpen");
-        let onLeave = () => wrap.classList.remove("isOpen");
+        let onEnter = () => {
+            let globalTip = getGlobalTipEl();
+
+            globalTip.innerHTML = `
+                <div class="dashTipTitle">${m}.${d} 일정</div>
+                ${items
+                .slice(0, 6)
+                .map((it) => `<div class="dashTipItem">• ${it.title}</div>`)
+                .join("")}
+                ${items.length > 6 ? `<div class="dashTipMore">+ ${items.length - 6}개 더 있음</div>` : ""}
+            `;
+
+            // 먼저 보여서 크기 계산 가능하게
+            globalTip.classList.add("isOpen");
+
+            let rect = hoverTarget.getBoundingClientRect();
+            placeGlobalTip(globalTip, rect);
+        };
+
+        let onLeave = () => {
+            closeGlobalTip();
+        };
 
         hoverTarget.addEventListener("mouseenter", onEnter);
         hoverTarget.addEventListener("mouseleave", onLeave);
 
-        // 다시 렌더될 때 제거할 수 있도록 참조 저장
         hoverTarget._dashEnter = onEnter;
         hoverTarget._dashLeave = onLeave;
-
-        top.appendChild(wrap);
     };
 
     return (
@@ -230,7 +297,13 @@ function Dashboard({ setActiveMenu }) {
                 <div className="card dashCalendarTop">
                     <div className="card-header line">
                         <span className="card-title">달력</span>
-                        {/* ✅ 전체보기 버튼 없음 */}
+                        <button
+                            type="button"
+                            className="card-linkBtn"
+                            onClick={() => go("calendar")}
+                        >
+                            일정으로 이동 →
+                        </button>
                     </div>
 
                     <div className="dashMiniCal">
@@ -252,8 +325,8 @@ function Dashboard({ setActiveMenu }) {
                             dayCellContent={(arg) => {
                                 return (
                                     <span className="dashDayNum">
-                                      {arg.date.getDate()}
-                                  </span>
+                                        {arg.date.getDate()}
+                                    </span>
                                 );
                             }}
                             dayCellDidMount={dayCellDidMount}
