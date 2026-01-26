@@ -116,15 +116,21 @@ const RoomPageModal = ({ open, onClose, study }) => {
             {step === 1 ? (
                 <div className="sr2-content">
                   {/* ===== 왼쪽 일러스트 ===== */}
-                  <div className="sr2-illust">
-                    <img
-                        src={toBackendUrl(study.roomImg)}
-                        alt="스터디 사진"
-                        className="sr2-study-img"
-                    />
-                  </div>
+                    <div className="sr2-illust">
+                        {study.roomImg && (
+                            <img
+                                src={study.roomImg.startsWith("http")
+                                    ? study.roomImg
+                                    : `http://localhost:8080${study.roomImg}`}
+                                alt="스터디 사진"
+                                className="sr2-study-img"
+                            />
+                        )}
+                    </div>
 
-                  {/* ===== 오른쪽 정보 ===== */}
+
+
+                    {/* ===== 오른쪽 정보 ===== */}
                   <div className="sr2-info">
                     <div className="sr2-row">
                       <div className="sr2-k">스터디명</div>

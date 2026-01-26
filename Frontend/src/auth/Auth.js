@@ -59,7 +59,6 @@ const Auth = () => {
             <div className="login-wrapper">
                 <div className="login-container">
                     {!showEmailLogin ? (
-                        /* ===== 1️⃣ OAuth 시작 화면 ===== */
                         <>
                             <div className="logo-area">
                                 <img src={logo} alt="온실 로고" onClick={() => navigate("/")} className="onsil-logo"/>
@@ -101,7 +100,6 @@ const Auth = () => {
                             </button>
                         </>
                     ) : (
-                        /* ===== 2️⃣ 이메일 로그인 화면 ===== */
                         <>
                             <h3 className="modal-title">이메일 로그인</h3>
 

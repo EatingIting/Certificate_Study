@@ -22,6 +22,17 @@ const Signup = () => {
     const [agreeTerms, setAgreeTerms] = useState(false);
     const [passwordError, setPasswordError] = useState("");
 
+    const [allCategories, setAllCategories] = useState([]);
+    const [mainCategories, setMainCategories] = useState([]);
+    const [midCategories, setMidCategories] = useState([]);
+    const [subCategories, setSubCategories] = useState([]);
+
+    const [selectedMain, setSelectedMain] = useState(null);
+    const [selectedMid, setSelectedMid] = useState(null);
+    const [selectedSub, setSelectedSub] = useState(null);
+
+    const [certs, setCerts] = useState(["정보처리기사", "토익", "SQLD"]);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
@@ -110,6 +121,34 @@ const Signup = () => {
         }
 
         return true;
+    };
+
+    const handleMainChange = (e) => {
+        const id = Number(e.target.value) || null;
+        setSelectedMain(id);
+        setSelectedMid(null);
+        setSelectedSub(null);
+        setMidCategories([]);
+        setSubCategories([]);
+
+        if (!id) return;
+
+        setMidCategories(
+            allCategories.filter((c) => c.level === 2 && c.parentId === id)
+        );
+    };
+
+    const handleMidChange = (e) => {
+        const id = Number(e.target.value) || null;
+        setSelectedMid(id);
+        setSelectedSub(null);
+        setSubCategories([]);
+
+        if (!id) return;
+
+        setSubCategories(
+            allCategories.filter((c) => c.level === 3 && c.parentId === id)
+        );
     };
 
     const handleSignup = async () => {
@@ -210,6 +249,7 @@ const Signup = () => {
                 />
 
                 {/* 생년월일 */}
+                <p className="signup-section-label">생년월일</p>
                 <input
                     type="date"
                     name="birthDate"
@@ -243,6 +283,63 @@ const Signup = () => {
                         />
                         여성
                     </label>
+                </div>
+
+
+                <p className="signup-section-label">관심 자격증 (최대 4개)</p>
+
+                <select value={selectedMain ?? ""} onChange={handleMainChange}>
+                    <option value="">대분류 선택</option>
+                    {mainCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.name}
+                        </option>
+                    ))}
+                </select>
+
+                <select
+                    value={selectedMid ?? ""}
+                    onChange={handleMidChange}
+                    disabled={!selectedMain}
+                >
+                    <option value="">중분류 선택</option>
+                    {midCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.name}
+                        </option>
+                    ))}
+                </select>
+
+                <select
+                    value={selectedSub ?? ""}
+                    onChange={(e) => setSelectedSub(Number(e.target.value) || null)}
+                    disabled={!selectedMid || subCategories.length === 0}
+                >
+                    <option value="">소분류 선택 (선택)</option>
+                    {subCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.name}
+                        </option>
+                    ))}
+                </select>
+
+                <div className="chip-row">
+                    {certs.length === 0 ? (
+                        <div className="empty">등록된 관심 자격증이 없어요.</div>
+                    ) : (
+                        certs.map((c) => (
+                            <span className="chip" key={c}>
+                  {c}
+                                <button
+                                    className="chip-x"
+                                    onClick={() => removeCert(c)}
+                                    aria-label="remove"
+                                >
+                    ×
+                  </button>
+                </span>
+                        ))
+                    )}
                 </div>
 
                 {/* 약관 */}

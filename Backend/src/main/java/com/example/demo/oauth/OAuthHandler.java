@@ -1,6 +1,6 @@
-package com.example.demo.security;
+package com.example.demo.oauth;
 
-import com.example.demo.auth.AuthService;
+import com.example.demo.jwt.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -28,7 +28,6 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
         OAuth2User oauthUser = (OAuth2User) authentication.getPrincipal();
 
         String email = oauthUser.getAttribute("email");
-        String nickname = oauthUser.getAttribute("nickname");
 
         String token = jwtTokenProvider.createAccessToken(email);
 
@@ -37,7 +36,4 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
                         + "?token=" + token
         );
     }
-
-
-
 }
