@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import "./LMSMain.css";
+import { toBackendUrl } from "../utils/backendUrl";
 
 const ClassCard = ({ data }) => {
     const navigate = useNavigate();
@@ -11,7 +12,7 @@ const ClassCard = ({ data }) => {
             <img
                 src={
                     data.roomImg
-                        ? `http://localhost:8080${data.roomImg}`
+                        ? toBackendUrl(data.roomImg)
                         : "/default.png"
                 }
                 alt={data.title}
@@ -23,7 +24,15 @@ const ClassCard = ({ data }) => {
                 <div className="card-date">{data.date}</div>
                 <button
                     className="enter-btn"
-                    onClick={() => navigate(`/lms/${data.roomId}`)}
+                    onClick={() => {
+                        // ✅ URL에 roomId(UUID) 사용 → /lms/UUID/...
+                        // ✅ subjectId(숫자)도 세션에 저장 (백엔드 참조용)
+                        if (data?.roomId) {
+                            sessionStorage.setItem("lms.activeRoomId", data.roomId);
+                            sessionStorage.setItem("lms.activeSubjectId", String(data.subjectId ?? ""));
+                        }
+                        navigate(`/lms/${data.roomId}`);
+                    }}
                 >
                     클래스룸 들어가기
                 </button>

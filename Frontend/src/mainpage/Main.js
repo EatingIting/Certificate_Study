@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import heroImg from "./메인메인.png";
+import { toBackendUrl } from "../utils/backendUrl";
 
 function Main() {
     const navigate = useNavigate();
@@ -89,7 +90,7 @@ function Main() {
                         <div key={room.roomId} className="cardbox">
                             <div className="thumbnail">
                                 <img
-                                    src={`http://localhost:8080${room.roomImg}`}
+                                    src={toBackendUrl(room.roomImg)}
                                     alt="스터디 썸네일"
                                     className="thumb-img"
                                 />

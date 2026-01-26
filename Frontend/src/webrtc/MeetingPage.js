@@ -72,6 +72,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const [isSpeakingLocally, setIsSpeakingLocally] = useState(false);
 
     const safeUser = user ?? {
+        id: "",
         name: "대기 중",
         isMe: false,
         muted: true,
@@ -292,8 +293,15 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     // pip 모드 여부 확인 (렌더링 시점)
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
 
+    const peerId = safeUser?.id != null ? String(safeUser.id) : "";
+    const peerName = safeUser?.name != null ? String(safeUser.name) : "";
+
     return (
-        <div className={`video-tile ${isMain ? "main" : ""} ${safeUser.isMe ? "me" : ""} ${isSpeaking ? "speaking" : ""}`}>
+        <div
+            className={`video-tile ${isMain ? "main" : ""} ${safeUser.isMe ? "me" : ""} ${isSpeaking ? "speaking" : ""}`}
+            data-peer-id={peerId}
+            data-peer-name={peerName}
+        >
             {/* ✅ roomReconnecting이 false면 접속 중 스피너도 표시 안 함 */}
             {roomReconnecting && (isJoining && !safeUser.isMe) && (
                 <div className="reconnecting-overlay">
@@ -317,6 +325,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                     playsInline
                     muted
                     data-main-video={isMain ? "main" : "tile"}
+                    data-peer-id={peerId}
+                    data-peer-name={peerName}
                     className={`video-element ${isScreen ? "screen" : ""}`}
                     style={{
                         display: shouldRenderVideo ? "block" : "none"
@@ -451,7 +461,8 @@ function MeetingPage({ portalRoomId }) {
     // 🔥 얼굴 이모지 필터
     const [faceEmoji, setFaceEmoji] = useState(() => {
         try {
-            return sessionStorage.getItem("faceEmoji") || "";
+            // ✅ 얼굴 이모지/모드는 "다음 접속에도 유지"해야 하므로 localStorage 우선
+            return localStorage.getItem("faceEmoji") || sessionStorage.getItem("faceEmoji") || "";
         } catch {
             return "";
         }
@@ -460,7 +471,7 @@ function MeetingPage({ portalRoomId }) {
     // 🔥 얼굴 필터 모드: "", "emoji", "avatar"
     const [faceMode, setFaceMode] = useState(() => {
         try {
-            return sessionStorage.getItem("faceMode") || "";
+            return localStorage.getItem("faceMode") || sessionStorage.getItem("faceMode") || "";
         } catch {
             return "";
         }
@@ -535,9 +546,180 @@ function MeetingPage({ portalRoomId }) {
     const faceFilterRawTrackRef = useRef(null);
     const faceDetectorRef = useRef(null);
     const lastFaceBoxRef = useRef(null);
+    const smoothedFaceBoxRef = useRef(null);  // 🔥 이모지 떨림 방지용 smoothed 위치
     const lastDetectAtRef = useRef(0);
+    const lastFaceBoxAtRef = useRef(0);       // ✅ 마지막으로 "유효한 얼굴 박스"를 갱신한 시각(ms)
+    const faceDetectorLoadingRef = useRef(null);
+    const faceDetectorLastAttemptAtRef = useRef(0);
+    const faceDetectInFlightRef = useRef(false);
+    const faceDetectSeqRef = useRef(0);
+    const faceDetectCanvasRef = useRef(null);
+    const faceDetectCtxRef = useRef(null);
     // ✅ 얼굴 이모지 필터 start/stop 레이스 방지용 오퍼레이션 큐
     const faceEmojiOpRef = useRef(Promise.resolve());
+
+    // ✅ 얼굴 bbox 정규화/검증
+    // - 일부 환경에서 bbox가 0~1 정규화 값으로 들어오는 경우가 있어 픽셀로 보정
+    // - 너무 엄격하게 막으면 "배경 제거는 되는데 이모지가 안 뜨는" 현상이 발생할 수 있어 완화
+    const normalizeFaceBox = (box, videoW, videoH) => {
+        if (!box) return null;
+        let x = Number(box.x);
+        let y = Number(box.y);
+        let w = Number(box.width);
+        let h = Number(box.height);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) return null;
+        if (w <= 0 || h <= 0) return null;
+
+        const vw = Number(videoW) || 0;
+        const vh = Number(videoH) || 0;
+
+        // normalized(0~1)로 들어오는 케이스 보정
+        const looksNormalized = vw > 0 && vh > 0 && w <= 1.5 && h <= 1.5;
+        if (looksNormalized) {
+            x = x * vw;
+            y = y * vh;
+            w = w * vw;
+            h = h * vh;
+        }
+
+        // 최소 크기(너무 작은 값은 노이즈)
+        if (w < 8 || h < 8) return null;
+
+        if (vw > 0 && vh > 0) {
+            // 살짝 벗어나는 값은 클램프(엄격한 reject로 이모지가 아예 안 뜨는 현상 방지)
+            const margin = 8;
+            x = Math.max(-margin, Math.min(vw + margin, x));
+            y = Math.max(-margin, Math.min(vh + margin, y));
+            w = Math.max(0, Math.min(vw - x, w));
+            h = Math.max(0, Math.min(vh - y, h));
+            if (w < 8 || h < 8) return null;
+        }
+
+        return { x, y, width: w, height: h };
+    };
+
+    const isValidFaceBox = (box, videoW, videoH) => {
+        return !!normalizeFaceBox(box, videoW, videoH);
+    };
+
+    // ✅ 얼굴 탐지기 초기화(재시도 포함)
+    const ensureFaceDetector = useCallback(async () => {
+        if (faceDetectorRef.current) return faceDetectorRef.current;
+        if (faceDetectorLoadingRef.current) return null;
+
+        const now = Date.now();
+        // 너무 자주 재시도하면 렉/네트워크 부담 → 2초 쿨다운
+        if (now - (faceDetectorLastAttemptAtRef.current || 0) < 2000) return null;
+        faceDetectorLastAttemptAtRef.current = now;
+
+        const loading = (async () => {
+            // 1) Native FaceDetector(지원 시) 우선
+            if (typeof window !== "undefined" && "FaceDetector" in window) {
+                try {
+                    const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
+                    return { kind: "native", detector: native };
+                } catch { }
+            }
+
+            // 2) MediaPipe(tasks-vision) 폴백
+            try {
+                const { FaceDetector: MpFaceDetector, FilesetResolver } = await import("@mediapipe/tasks-vision");
+                const vision = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
+                );
+                const mp = await MpFaceDetector.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath:
+                            "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+                        delegate: "CPU",
+                    },
+                    runningMode: "VIDEO",
+                    // ✅ 기본 0.5는 빡세서 종종 못 잡음 → 완화
+                    minDetectionConfidence: 0.35,
+                });
+                return { kind: "mediapipe", detector: mp };
+            } catch {
+                return null;
+            }
+        })();
+
+        faceDetectorLoadingRef.current = loading;
+        const result = await loading.catch(() => null);
+        faceDetectorLoadingRef.current = null;
+
+        if (result && !faceDetectorRef.current) {
+            faceDetectorRef.current = result;
+        }
+        return result;
+    }, []);
+
+    const getFaceDetectCanvas = (videoW, videoH) => {
+        // ✅ 얼굴 탐지는 다운스케일해서 가볍게(배경제거/렌더링과 병행 시 안정성↑)
+        const MAX_W = 320;
+        const vw = Number(videoW) || 0;
+        const vh = Number(videoH) || 0;
+        const w = vw > 0 ? Math.min(MAX_W, vw) : MAX_W;
+        const h = vw > 0 && vh > 0 ? Math.max(1, Math.round(w * (vh / vw))) : 240;
+
+        let c = faceDetectCanvasRef.current;
+        if (!c) {
+            c = document.createElement("canvas");
+            faceDetectCanvasRef.current = c;
+        }
+        if (c.width !== w) c.width = w;
+        if (c.height !== h) c.height = h;
+
+        let ctx = faceDetectCtxRef.current;
+        if (!ctx) {
+            ctx = c.getContext("2d", { willReadFrequently: true });
+            faceDetectCtxRef.current = ctx;
+        }
+        return { canvas: c, ctx, detectW: w, detectH: h };
+    };
+
+    const runFaceDetectOnce = useCallback(async (videoEl, videoW, videoH) => {
+        const det = faceDetectorRef.current || await ensureFaceDetector();
+        if (!det) return null;
+
+        const { canvas: c, ctx, detectW, detectH } = getFaceDetectCanvas(videoW, videoH);
+        if (!ctx) return null;
+
+        try {
+            // 다운스케일 프레임 생성
+            ctx.drawImage(videoEl, 0, 0, detectW, detectH);
+        } catch {
+            return null;
+        }
+
+        // detect 결과 bbox는 detect canvas 좌표계 → 원본(videoW/videoH)로 스케일업
+        const sx = (Number(videoW) || 1) / detectW;
+        const sy = (Number(videoH) || 1) / detectH;
+
+        try {
+            if (det.kind === "native") {
+                const faces = await det.detector.detect(c).catch(() => null);
+                const bb = faces?.[0]?.boundingBox;
+                if (!bb) return null;
+                const candidate = { x: bb.x * sx, y: bb.y * sy, width: bb.width * sx, height: bb.height * sy };
+                return normalizeFaceBox(candidate, videoW, videoH);
+            }
+
+            if (det.kind === "mediapipe") {
+                const res = det.detector.detectForVideo(c, performance.now());
+                const bb = res?.detections?.[0]?.boundingBox;
+                if (!bb) return null;
+                const candidate = {
+                    x: (bb.originX ?? bb.x ?? 0) * sx,
+                    y: (bb.originY ?? bb.y ?? 0) * sy,
+                    width: (bb.width ?? 0) * sx,
+                    height: (bb.height ?? 0) * sy,
+                };
+                return normalizeFaceBox(candidate, videoW, videoH);
+            }
+        } catch { }
+
+        return null;
+    }, [ensureFaceDetector]);
 
     // 🔥 항상 canvas 파이프라인 사용 (처음부터 producer는 canvas track을 사용)
     const canvasPipelineActiveRef = useRef(false);
@@ -874,7 +1056,8 @@ function MeetingPage({ portalRoomId }) {
         if (!faceDetectorRef.current) {
             if (typeof window !== "undefined" && "FaceDetector" in window) {
                 try {
-                    const native = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+                    // ✅ 정확도 우선(이모지 트래킹 안정)
+                    const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
                     faceDetectorRef.current = { kind: "native", detector: native };
                     console.log("[turnOnCamera] Native FaceDetector initialized");
                 } catch { }
@@ -892,7 +1075,7 @@ function MeetingPage({ portalRoomId }) {
                             delegate: "CPU",
                         },
                         runningMode: "VIDEO",
-                        minDetectionConfidence: 0.5,
+                        minDetectionConfidence: 0.35,
                     });
                     faceDetectorRef.current = { kind: "mediapipe", detector: mp };
                     console.log("[turnOnCamera] MediaPipe FaceDetector initialized");
@@ -986,7 +1169,8 @@ function MeetingPage({ portalRoomId }) {
                     // 3) 세그멘테이션 마스크 업데이트 (90ms 쓰로틀)
                     const seg = faceBgSegmenterRef.current?.segmenter;
                     const nowMs = performance.now();
-                    if (seg && nowMs - faceBgLastInferAtRef.current > 90) {
+                    // ✅ 너무 자주 돌리면 얼굴탐지/렌더가 밀릴 수 있음 → 약간 완화
+                    if (seg && nowMs - faceBgLastInferAtRef.current > 140) {
                         faceBgLastInferAtRef.current = nowMs;
                         try {
                             const res = seg.segmentForVideo(v, nowMs);
@@ -1054,48 +1238,99 @@ function MeetingPage({ portalRoomId }) {
                 }
             }
 
-            // 🔥 이모지 오버레이 (faceEmoji가 설정되어 있고 얼굴이 감지된 경우만)
+            // 🔥 이모지 오버레이
+            // ✅ "얼굴이 인식될 때만" 그리고 "유효한 bbox + 최근 탐지"일 때만 표시
             try {
                 const emoji = faceEmojiRef.current;
+                const wantEmoji = !!emoji && faceModeRef.current === "emoji";
                 const box = lastFaceBoxRef.current;
-                // 얼굴이 감지된 경우에만 이모지 그리기
-                if (emoji && faceModeRef.current === "emoji" && box) {
+                const videoW = v.videoWidth || canvas.width;
+                const videoH = v.videoHeight || canvas.height;
+                // ✅ bgRemove(세그멘테이션)와 같이 켤 때 탐지가 느려질 수 있어 최근성 기준을 완화
+                const isRecent = lastFaceBoxAtRef.current && (Date.now() - lastFaceBoxAtRef.current < 1200);
+                const normalizedBox = normalizeFaceBox(box, videoW, videoH);
+                const canDraw = wantEmoji && !!normalizedBox && isRecent;
+
+                if (!canDraw) {
+                    // ✅ 얼굴 인식 실패/불안정 시: 가운데에 뜨는 현상 방지(스무딩 좌표 리셋)
+                    smoothedFaceBoxRef.current = null;
+                } else {
                     const scaleX = canvas.width / (v.videoWidth || canvas.width);
                     const scaleY = canvas.height / (v.videoHeight || canvas.height);
-                    const cx = (box.x + box.width / 2) * scaleX;
-                    let cy = (box.y + box.height / 2) * scaleY;
-                    const scaledW = box.width * scaleX;
-                    const scaledH = box.height * scaleY;
-                    const base = Math.max(scaledW, scaledH);
-                    const maxSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.98);
-                    const size = Math.max(120, Math.min(maxSize, Math.floor(base * 2.8)));
-                    cy = cy - scaledH * 0.25; // 머리까지 덮도록 위로
 
-                    ctx.save();
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-                    ctx.fillText(emoji, cx, cy);
-                    ctx.restore();
+                    const targetBox = {
+                        x: (normalizedBox.x + normalizedBox.width / 2) * scaleX,
+                        y: (normalizedBox.y + normalizedBox.height / 2) * scaleY - (normalizedBox.height * scaleY * 0.25),
+                        size: Math.max(normalizedBox.width * scaleX, normalizedBox.height * scaleY)
+                    };
+
+                    // targetBox가 비정상이면 표시 안 함
+                    if (!Number.isFinite(targetBox.x) || !Number.isFinite(targetBox.y) || !Number.isFinite(targetBox.size)) {
+                        smoothedFaceBoxRef.current = null;
+                    } else {
+                        const smoothFactor = 0.6;
+                        const prev = smoothedFaceBoxRef.current;
+                        smoothedFaceBoxRef.current = prev
+                            ? {
+                                x: prev.x + (targetBox.x - prev.x) * smoothFactor,
+                                y: prev.y + (targetBox.y - prev.y) * smoothFactor,
+                                size: prev.size + (targetBox.size - prev.size) * smoothFactor
+                            }
+                            : targetBox;
+
+                        const smoothed = smoothedFaceBoxRef.current;
+                        const maxSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.98);
+                        const size = Math.max(120, Math.min(maxSize, Math.floor(smoothed.size * 2.8)));
+
+                        ctx.save();
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+                        ctx.fillText(emoji, smoothed.x, smoothed.y);
+                        ctx.restore();
+                    }
                 }
             } catch { }
 
-            // 얼굴 감지 (150ms throttle)
+            // 얼굴 감지 (throttle + in-flight lock + 최신 결과만 반영)
             try {
-                if (faceDetectorRef.current && Date.now() - lastDetectAtRef.current > 150) {
-                    lastDetectAtRef.current = Date.now();
-                    const det = faceDetectorRef.current;
-                    if (det.kind === "native") {
-                        det.detector.detect(v)
-                            .then((faces) => {
-                                const bb = faces?.[0]?.boundingBox;
-                                lastFaceBoxRef.current = bb ? { x: bb.x, y: bb.y, width: bb.width, height: bb.height } : null;
+                const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
+                if (wantEmoji && !faceDetectorRef.current) {
+                    // 초기 로딩 실패/지연 대비: 백그라운드에서 재시도
+                    ensureFaceDetector().catch(() => { });
+                }
+
+                const nowMs = Date.now();
+                if (wantEmoji && faceDetectorRef.current && nowMs - lastDetectAtRef.current > 90) {
+                    lastDetectAtRef.current = nowMs;
+
+                    if (!faceDetectInFlightRef.current) {
+                        faceDetectInFlightRef.current = true;
+                        const seq = ++faceDetectSeqRef.current;
+                        const vw = v.videoWidth || canvas.width;
+                        const vh = v.videoHeight || canvas.height;
+
+                        Promise.resolve(runFaceDetectOnce(v, vw, vh))
+                            .then((normalized) => {
+                                // 최신 요청만 반영(늦게 도착한 결과로 "멈춤" 방지)
+                                if (seq !== faceDetectSeqRef.current) return;
+
+                                if (normalized) {
+                                    lastFaceBoxRef.current = normalized;
+                                    lastFaceBoxAtRef.current = Date.now();
+                                } else {
+                                    // 짧은 미스는 바로 끊지 않음
+                                    if (!lastFaceBoxAtRef.current || Date.now() - lastFaceBoxAtRef.current > 900) {
+                                        lastFaceBoxRef.current = null;
+                                        lastFaceBoxAtRef.current = 0;
+                                        smoothedFaceBoxRef.current = null;
+                                    }
+                                }
                             })
-                            .catch(() => { });
-                    } else if (det.kind === "mediapipe") {
-                        const res = det.detector.detectForVideo(v, performance.now());
-                        const bb = res?.detections?.[0]?.boundingBox;
-                        lastFaceBoxRef.current = bb ? { x: bb.originX, y: bb.originY, width: bb.width, height: bb.height } : null;
+                            .finally(() => {
+                                // 다른 seq가 이미 시작됐어도 in-flight은 풀어준다(정지 방지)
+                                faceDetectInFlightRef.current = false;
+                            });
                     }
                 }
             } catch { }
@@ -1143,7 +1378,7 @@ function MeetingPage({ portalRoomId }) {
         if (!faceDetectorRef.current) {
             if (typeof window !== "undefined" && "FaceDetector" in window) {
                 try {
-                    const native = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+                    const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
                     faceDetectorRef.current = { kind: "native", detector: native };
                 } catch { }
             }
@@ -1160,7 +1395,7 @@ function MeetingPage({ portalRoomId }) {
                             delegate: "CPU",
                         },
                         runningMode: "VIDEO",
-                        minDetectionConfidence: 0.5,
+                        minDetectionConfidence: 0.35,
                     });
                     faceDetectorRef.current = { kind: "mediapipe", detector: mp };
                 } catch (e) {
@@ -1376,12 +1611,14 @@ function MeetingPage({ portalRoomId }) {
         faceModeRef.current = faceMode;
         bgRemoveRef.current = bgRemove;
         try {
-            if (faceEmoji) sessionStorage.setItem("faceEmoji", faceEmoji);
-            else sessionStorage.removeItem("faceEmoji");
+            // ✅ 이모지/모드는 localStorage에 저장(다음 접속에도 유지)
+            if (faceEmoji) localStorage.setItem("faceEmoji", faceEmoji);
+            else localStorage.removeItem("faceEmoji");
 
-            if (faceMode) sessionStorage.setItem("faceMode", faceMode);
-            else sessionStorage.removeItem("faceMode");
+            if (faceMode) localStorage.setItem("faceMode", faceMode);
+            else localStorage.removeItem("faceMode");
 
+            // bgRemove는 기존 동작 유지(세션 단위)
             sessionStorage.setItem("faceBgRemove", String(bgRemove));
         } catch { }
     }, [faceEmoji, faceMode, bgRemove]);
@@ -1988,7 +2225,7 @@ function MeetingPage({ portalRoomId }) {
         let detectorState = null;
         if (typeof window !== "undefined" && "FaceDetector" in window) {
             try {
-                const native = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+                const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
                 detectorState = { kind: "native", detector: native };
             } catch { }
         }
@@ -2009,7 +2246,7 @@ function MeetingPage({ portalRoomId }) {
                         delegate: "CPU",
                     },
                     runningMode: "VIDEO",
-                    minDetectionConfidence: 0.5,
+                    minDetectionConfidence: 0.35,
                 });
 
                 detectorState = { kind: "mediapipe", detector: mp };
@@ -2086,7 +2323,7 @@ function MeetingPage({ portalRoomId }) {
                     // 2) 세그멘테이션 마스크 업데이트(쓰로틀)
                     const seg = faceBgSegmenterRef.current?.segmenter;
                     const nowMs = performance.now();
-                    if (seg && nowMs - faceBgLastInferAtRef.current > 90) {
+                    if (seg && nowMs - faceBgLastInferAtRef.current > 140) {
                         faceBgLastInferAtRef.current = nowMs;
                         try {
                             const res = seg.segmentForVideo(v, nowMs);
@@ -2147,64 +2384,90 @@ function MeetingPage({ portalRoomId }) {
                 return;
             }
 
-            // 얼굴 감지(지원 시) - 150ms throttle
+            // 얼굴 감지(지원 시) - throttle + in-flight lock + 최신 결과만 반영
             const now = Date.now();
+            const wantEmojiForDetect = !!faceEmojiRef.current && faceModeRef.current === "emoji";
+            if (wantEmojiForDetect && !faceDetectorRef.current) {
+                ensureFaceDetector().catch(() => { });
+            }
+
             const det = faceDetectorRef.current;
-            if (det && now - lastDetectAtRef.current > 150) {
+            if (wantEmojiForDetect && det && now - lastDetectAtRef.current > 90) {
                 lastDetectAtRef.current = now;
-                if (det.kind === "native") {
-                    det.detector.detect(v)
-                        .then((faces) => {
-                            const f = faces?.[0];
-                            const bb = f?.boundingBox;
-                            if (bb) {
-                                // DOMRectReadOnly → plain object로 저장
-                                lastFaceBoxRef.current = { x: bb.x, y: bb.y, width: bb.width, height: bb.height };
+
+                if (!faceDetectInFlightRef.current) {
+                    faceDetectInFlightRef.current = true;
+                    const seq = ++faceDetectSeqRef.current;
+                    const vw = v.videoWidth || canvas.width;
+                    const vh = v.videoHeight || canvas.height;
+
+                    Promise.resolve(runFaceDetectOnce(v, vw, vh))
+                        .then((normalized) => {
+                            if (seq !== faceDetectSeqRef.current) return;
+                            if (normalized) {
+                                lastFaceBoxRef.current = normalized;
+                                lastFaceBoxAtRef.current = Date.now();
                             } else {
-                                lastFaceBoxRef.current = null;
+                                if (!lastFaceBoxAtRef.current || Date.now() - lastFaceBoxAtRef.current > 900) {
+                                    lastFaceBoxRef.current = null;
+                                    lastFaceBoxAtRef.current = 0;
+                                    smoothedFaceBoxRef.current = null;
+                                }
                             }
                         })
-                        .catch(() => { });
-                } else if (det.kind === "mediapipe") {
-                    try {
-                        const res = det.detector.detectForVideo(v, performance.now());
-                        const first = res?.detections?.[0];
-                        const bb = first?.boundingBox;
-                        if (bb) {
-                            lastFaceBoxRef.current = {
-                                x: bb.originX,
-                                y: bb.originY,
-                                width: bb.width,
-                                height: bb.height,
-                            };
-                        } else {
-                            lastFaceBoxRef.current = null;
-                        }
-                    } catch { }
+                        .finally(() => {
+                            faceDetectInFlightRef.current = false;
+                        });
                 }
             }
 
-            // 이모지 오버레이 (얼굴이 감지된 경우에만)
+            // 이모지 오버레이
+            // ✅ 얼굴이 인식되지 않으면 절대 그리지 않는다(가운데 뜨는 현상 방지)
             const currentEmoji = faceEmojiRef.current;
+            const wantEmoji = !!currentEmoji && faceModeRef.current === "emoji";
             const box = lastFaceBoxRef.current;
-            if (currentEmoji && box) {
+            const videoW = v.videoWidth || canvas.width;
+            const videoH = v.videoHeight || canvas.height;
+            const isRecent = lastFaceBoxAtRef.current && (Date.now() - lastFaceBoxAtRef.current < 1200);
+            const normalizedBox = normalizeFaceBox(box, videoW, videoH);
+            const canDraw = wantEmoji && !!normalizedBox && isRecent;
+
+            if (!canDraw) {
+                smoothedFaceBoxRef.current = null;
+            } else {
                 const scaleX = canvas.width / (v.videoWidth || canvas.width);
                 const scaleY = canvas.height / (v.videoHeight || canvas.height);
-                const cx = (box.x + box.width / 2) * scaleX;
-                let cy = (box.y + box.height / 2) * scaleY;
-                const scaledW = box.width * scaleX;
-                const scaledH = box.height * scaleY;
-                const base = Math.max(scaledW, scaledH);
-                const maxSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.98);
-                const size = Math.max(120, Math.min(maxSize, Math.floor(base * 2.8)));
-                cy = cy - scaledH * 0.25; // 머리까지 덮도록 위로
 
-                ctx.save();
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-                ctx.fillText(currentEmoji, cx, cy);
-                ctx.restore();
+                const targetBox = {
+                    x: (normalizedBox.x + normalizedBox.width / 2) * scaleX,
+                    y: (normalizedBox.y + normalizedBox.height / 2) * scaleY - (normalizedBox.height * scaleY * 0.25),
+                    size: Math.max(normalizedBox.width * scaleX, normalizedBox.height * scaleY)
+                };
+
+                if (!Number.isFinite(targetBox.x) || !Number.isFinite(targetBox.y) || !Number.isFinite(targetBox.size)) {
+                    smoothedFaceBoxRef.current = null;
+                } else {
+                    const smoothFactor = 0.6;
+                    const prev = smoothedFaceBoxRef.current;
+                    smoothedFaceBoxRef.current = prev
+                        ? {
+                            x: prev.x + (targetBox.x - prev.x) * smoothFactor,
+                            y: prev.y + (targetBox.y - prev.y) * smoothFactor,
+                            size: prev.size + (targetBox.size - prev.size) * smoothFactor
+                        }
+                        : targetBox;
+
+                    const smoothed = smoothedFaceBoxRef.current;
+                    const maxSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.98);
+                    const size = Math.max(120, Math.min(maxSize, Math.floor(smoothed.size * 2.8)));
+
+                    ctx.save();
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+                    ctx.fillText(currentEmoji, smoothed.x, smoothed.y);
+                    ctx.restore();
+                }
             }
 
             // 🔥 첫 프레임이 그려진 후 새 producer 생성 (keyframe 보장, 검은 화면 방지)
@@ -2299,9 +2562,10 @@ function MeetingPage({ portalRoomId }) {
             // 🔥 MeetingContext의 requestBrowserPip 사용 (polling 포함)
             const stream = video.srcObject;
             const peerName = mainUser?.name || "참가자";
+            const peerId = mainUser?.id != null ? String(mainUser.id) : "";
 
             console.log("[PiP] MeetingContext requestBrowserPip 호출");
-            const success = await requestBrowserPip(video, stream, peerName);
+            const success = await requestBrowserPip(video, stream, peerName, peerId);
 
             if (!success) {
                 // fallback: 직접 요청
@@ -3765,8 +4029,12 @@ function MeetingPage({ portalRoomId }) {
                 wsRef.current = null;
             }
 
-            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-            const wsUrl = `${protocol}//${window.location.host}/ws/room/${roomId}` +
+            // ✅ https ? wss : ws
+            // ✅ nginx 리버스 프록시를 통해 연결 (포트 생략 → 443/80 기본 포트 사용)
+            // ✅ 같은 URL이면 같은 방: WebSocket roomId는 URL의 roomId를 그대로 사용
+            const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+            const wsRoomId = roomId;
+            const wsUrl = `${protocol}://${window.location.host}/ws/room/${wsRoomId}` +
                 `?userId=${encodeURIComponent(userId)}` +
                 `&userName=${encodeURIComponent(userName)}` +
                 `&muted=${!micOnRef.current}` +
@@ -4055,6 +4323,14 @@ function MeetingPage({ portalRoomId }) {
                     try {
                         if (data?.changes && data.changes.cameraOff === true) {
                             removeVideoConsumer(String(data.userId));
+
+                            // ✅ PiP에서 "카메라 OFF"를 정확히 감지하기 위해 전역 이벤트 발행
+                            // (DOM/트랙 기반 판정은 초기 진입 시 레이스로 오판 가능)
+                            try {
+                                window.dispatchEvent(new CustomEvent("meeting:peer-camera-off", {
+                                    detail: { peerId: String(data.userId) }
+                                }));
+                            } catch { }
                         }
                     } catch { }
 
@@ -4149,8 +4425,10 @@ function MeetingPage({ portalRoomId }) {
         hasFinishedInitialSyncRef.current = false;
         setRoomReconnecting(true);
 
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const sfuWs = new WebSocket(`${protocol}//${window.location.host}/sfu/`);
+        // ✅ 요청하신 형태: https ? wss : ws
+        // ✅ window.location.hostname(=IP/도메인)로 4000(SFU) 직접 연결
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const sfuWs = new WebSocket(`${protocol}://${window.location.hostname}:4000/sfu/`);
         sfuWsRef.current = sfuWs;
 
         const drainPending = async () => {
@@ -4168,10 +4446,12 @@ function MeetingPage({ portalRoomId }) {
         };
 
         sfuWs.onopen = () => {
+            // ✅ 같은 URL이면 같은 방: SFU roomId도 URL의 roomId를 그대로 사용
+            const sfuRoomId = roomId;
             safeSfuSend({
                 action: "join",
                 requestId: safeUUID(),
-                data: { roomId, peerId: userId },
+                data: { roomId: sfuRoomId, peerId: userId },
             });
         };
 
