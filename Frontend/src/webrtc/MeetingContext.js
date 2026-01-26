@@ -23,6 +23,8 @@ export const MeetingProvider = ({ children }) => {
     
     // 🔥 브라우저 PIP용 숨겨진 video element ref
     const pipVideoRef = useRef(null);
+    // 🔥 PiP video의 srcObject는 고정(stable)하고 track만 교체
+    const pipStableStreamRef = useRef(null);
 
     const startMeeting = useCallback((roomId, subjectId) => {
         setRoomId(roomId);
@@ -57,8 +59,77 @@ export const MeetingProvider = ({ children }) => {
     const isStreamValidCheck = useCallback((s) => {
         if (!s) return false;
         const tracks = s.getVideoTracks();
-        return tracks.length > 0 && tracks.some(t => t.readyState === "live" && t.enabled);
+        // enabled는 브라우저/clone 상황에서 false가 될 수 있어 제외(검은화면 방지)
+        return tracks.length > 0 && tracks.some(t => t.readyState === "live");
     }, []);
+
+    const ensurePipStableStream = useCallback(() => {
+        if (!pipStableStreamRef.current) {
+            pipStableStreamRef.current = new MediaStream();
+        }
+        return pipStableStreamRef.current;
+    }, []);
+
+    const syncPipStableStreamFrom = useCallback((srcStream) => {
+        if (!srcStream) return null;
+        const dst = ensurePipStableStream();
+
+        // 🔥 소스 스트림의 트랙 ID들 수집
+        const srcTrackIds = new Set(srcStream.getTracks().map(t => t.id));
+        const dstTrackIds = new Set(dst.getTracks().map(t => t.id));
+
+        // 🔥 이미 동일한 트랙이면 교체 불필요 (안정성 향상)
+        const sameTrackIds = [...srcTrackIds].every(id => dstTrackIds.has(id)) &&
+                             [...dstTrackIds].every(id => srcTrackIds.has(id));
+        if (sameTrackIds && dst.getTracks().length > 0) {
+            return dst;
+        }
+
+        // 기존 트랙 제거
+        dst.getTracks().forEach((t) => {
+            try { dst.removeTrack(t); } catch { }
+        });
+
+        // 🔥 새 트랙 추가 (원본 트랙 직접 사용 - clone하면 별도 트랙이 되어 동기화 문제 발생)
+        srcStream.getTracks().forEach((t) => {
+            try {
+                // 🔥 이미 dst에 있는 트랙인지 확인 후 추가
+                if (!dst.getTracks().find(existing => existing.id === t.id)) {
+                    dst.addTrack(t);
+                }
+            } catch { }
+        });
+
+        return dst;
+    }, [ensurePipStableStream]);
+
+    const findPortalMainStream = useCallback(() => {
+        // 🔥 1순위: meeting-root 내부의 main video
+        const meetingRoot = document.getElementById("meeting-root");
+        let video = meetingRoot?.querySelector?.('video[data-main-video="main"]');
+        
+        // 🔥 2순위: 전역 main video
+        if (!video || !video.srcObject || !isStreamValidCheck(video.srcObject)) {
+            video = document.querySelector('video[data-main-video="main"]');
+        }
+
+        // 🔥 3순위: meeting-root 내부의 srcObject가 있는 모든 video
+        if (!video || !video.srcObject || !isStreamValidCheck(video.srcObject)) {
+            const allVideos = meetingRoot?.querySelectorAll('video') || [];
+            for (const v of allVideos) {
+                if (v.srcObject && isStreamValidCheck(v.srcObject)) {
+                    video = v;
+                    break;
+                }
+            }
+        }
+
+        if (video?.srcObject && isStreamValidCheck(video.srcObject)) {
+            const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
+            return { stream: video.srcObject, peerName };
+        }
+        return null;
+    }, [isStreamValidCheck]);
 
     // 🔥 DOM에서 유효한 스트림 찾기 (개선된 버전)
     const findValidStreamFromDOM = useCallback(() => {
@@ -94,6 +165,31 @@ export const MeetingProvider = ({ children }) => {
 
         console.log("[MeetingContext] ✅ 브라우저 PIP 종료 감지");
 
+        // 🔥 회의방 내부(/MeetingRoom/)에서 PIP 종료 시 → 커스텀 PIP 없이 바로 종료
+        const currentPath = window.location.pathname;
+        if (currentPath.includes("/MeetingRoom/")) {
+            console.log("[MeetingContext] 회의방 내부에서 PIP 종료 - 커스텀 PIP 없이 종료");
+            
+            // 폴링 정리
+            if (pipPollingRef.current) {
+                clearInterval(pipPollingRef.current);
+                pipPollingRef.current = null;
+            }
+            
+            setIsBrowserPipMode(false);
+            setIsPipMode(false);
+            setCustomPipData(null);
+            pendingPipDataRef.current = null;
+            
+            // 숨겨진 video 정리
+            if (pipVideoRef.current) {
+                pipVideoRef.current.srcObject = null;
+            }
+            
+            isTransitioningRef.current = false;
+            return;
+        }
+
         // 폴링 정리
         if (pipPollingRef.current) {
             clearInterval(pipPollingRef.current);
@@ -102,7 +198,18 @@ export const MeetingProvider = ({ children }) => {
 
         setIsBrowserPipMode(false);
 
-        // 🔥 1순위: 숨겨진 PIP video의 스트림 (브라우저 PIP에서 사용하던 스트림)
+        // 🔥 1순위: 현재 Portal의 main video 스트림 (재연결/교체된 최신 트랙 확보)
+        const portalMain = findPortalMainStream();
+        if (portalMain?.stream && isStreamValidCheck(portalMain.stream)) {
+            console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (Portal main 스트림)");
+            setCustomPipData({ stream: portalMain.stream, peerName: portalMain.peerName });
+            setIsPipMode(true);
+            pendingPipDataRef.current = { stream: portalMain.stream, peerName: portalMain.peerName };
+            setTimeout(() => { isTransitioningRef.current = false; }, 100);
+            return;
+        }
+
+        // 🔥 2순위: 숨겨진 PIP video의 stable 스트림 (브라우저 PIP에서 사용하던 스트림)
         const hiddenVideoStream = pipVideoRef.current?.srcObject;
         const isHiddenStreamValid = isStreamValidCheck(hiddenVideoStream);
         console.log("[MeetingContext] 숨겨진 video 스트림 유효성:", isHiddenStreamValid);
@@ -117,7 +224,7 @@ export const MeetingProvider = ({ children }) => {
             return;
         }
 
-        // 🔥 2순위: pending 스트림 (clone된 스트림)
+        // 🔥 3순위: pending 스트림
         const pending = pendingPipDataRef.current;
         const isPendingValid = isStreamValidCheck(pending?.stream);
         console.log("[MeetingContext] pending 스트림 유효성:", isPendingValid);
@@ -130,7 +237,7 @@ export const MeetingProvider = ({ children }) => {
             return;
         }
 
-        // 🔥 3순위: DOM에서 스트림 찾기
+        // 🔥 4순위: DOM에서 스트림 찾기
         const domStream = findValidStreamFromDOM();
         console.log("[MeetingContext] DOM에서 찾은 스트림:", domStream ? "있음" : "없음");
 
@@ -150,13 +257,23 @@ export const MeetingProvider = ({ children }) => {
         // MeetingPage에 스트림 요청 이벤트 발생
         window.dispatchEvent(new CustomEvent("pip:request-stream"));
 
-        // MeetingPortal 렌더링 대기 후 다시 찾기
-        setTimeout(() => {
+        // 🔥 재시도 함수 (여러 번 시도)
+        const retryFindStream = (attempt = 1, maxAttempts = 5) => {
             // 다시 숨겨진 video 확인
             const retryHiddenStream = pipVideoRef.current?.srcObject;
             if (isStreamValidCheck(retryHiddenStream)) {
                 console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (재시도 - 숨겨진 video)");
                 setCustomPipData({ stream: retryHiddenStream, peerName: pending?.peerName || "참가자" });
+                isTransitioningRef.current = false;
+                return;
+            }
+
+            // 🔥 Portal main stream 다시 확인
+            const retryPortal = findPortalMainStream();
+            if (retryPortal?.stream && isStreamValidCheck(retryPortal.stream)) {
+                console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (재시도 - Portal)");
+                setCustomPipData({ stream: retryPortal.stream, peerName: retryPortal.peerName });
+                pendingPipDataRef.current = retryPortal;
                 isTransitioningRef.current = false;
                 return;
             }
@@ -167,14 +284,25 @@ export const MeetingProvider = ({ children }) => {
                 console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (재시도 - DOM)");
                 setCustomPipData({ stream: retryStream.stream, peerName: retryStream.peerName });
                 pendingPipDataRef.current = retryStream;
-            } else {
-                console.log("[MeetingContext] ❌ 스트림을 찾을 수 없음");
-                setCustomPipData({ stream: null, peerName: pending?.peerName || "참가자" });
+                isTransitioningRef.current = false;
+                return;
             }
-            
+
+            // 🔥 아직 스트림을 못 찾았고 재시도 횟수 남았으면 다시 시도
+            if (attempt < maxAttempts) {
+                console.log(`[MeetingContext] 스트림 찾기 재시도 (${attempt}/${maxAttempts})`);
+                setTimeout(() => retryFindStream(attempt + 1, maxAttempts), 200);
+                return;
+            }
+
+            console.log("[MeetingContext] ❌ 스트림을 찾을 수 없음 (모든 재시도 실패)");
+            setCustomPipData({ stream: null, peerName: pending?.peerName || "참가자" });
             isTransitioningRef.current = false;
-        }, 300);
-    }, [findValidStreamFromDOM, isStreamValidCheck]);
+        };
+
+        // MeetingPortal 렌더링 대기 후 재시도 시작
+        setTimeout(() => retryFindStream(), 300);
+    }, [findPortalMainStream, findValidStreamFromDOM, isStreamValidCheck]);
 
     // 브라우저 PIP 요청 (🔥 숨겨진 video 사용하여 페이지 이동 시에도 PIP 유지)
     const requestBrowserPip = useCallback(async (videoEl, stream, peerName) => {
@@ -187,9 +315,9 @@ export const MeetingProvider = ({ children }) => {
             return true;
         }
 
-        // 🔥 스트림을 clone하여 숨겨진 video에 연결 (페이지 이동해도 유지)
-        const clonedStream = stream.clone();
-        pendingPipDataRef.current = { stream: clonedStream, peerName };
+        // 🔥 PiP video는 stable stream을 사용하고, track만 교체
+        const stable = syncPipStableStreamFrom(stream);
+        pendingPipDataRef.current = { stream: stable || stream, peerName };
 
         // 숨겨진 video element 사용
         const pipVideo = pipVideoRef.current;
@@ -209,9 +337,15 @@ export const MeetingProvider = ({ children }) => {
         }
 
         try {
-            // 숨겨진 video에 clone된 스트림 연결
-            pipVideo.srcObject = clonedStream;
-            await pipVideo.play().catch(() => {});
+            // 숨겨진 video에는 stable stream을 고정으로 연결
+            const stableStream = ensurePipStableStream();
+            if (pipVideo.srcObject !== stableStream) {
+                pipVideo.srcObject = stableStream;
+            }
+            // user-gesture 컨텍스트에서만 1회 play 시도
+            if (pipVideo.paused) {
+                await pipVideo.play().catch(() => {});
+            }
             
             // video가 재생 가능한 상태인지 확인
             if (pipVideo.readyState < 2) {
@@ -250,7 +384,7 @@ export const MeetingProvider = ({ children }) => {
                 return false;
             }
         }
-    }, []);
+    }, [ensurePipStableStream, syncPipStableStreamFrom]);
 
     // 🔥 Polling 시작 함수 분리 (스트림 동기화 포함)
     const startPolling = useCallback(() => {
@@ -266,22 +400,14 @@ export const MeetingProvider = ({ children }) => {
 
             // 🔥 브라우저 PIP가 있을 때: MeetingPortal의 스트림을 숨겨진 video에 동기화
             if (hasPip && pipVideoRef.current) {
-                // DOM에서 MeetingPortal의 video 찾기
-                const portalVideo = document.querySelector('video[data-main-video="main"]');
-                if (portalVideo?.srcObject && isStreamValidCheck(portalVideo.srcObject)) {
-                    const currentPipStream = pipVideoRef.current.srcObject;
-                    const portalStream = portalVideo.srcObject;
-                    
-                    // 스트림이 다르면 동기화 (새 스트림으로 업데이트)
-                    if (currentPipStream !== portalStream) {
-                        console.log("[MeetingContext] 🔄 숨겨진 video 스트림 동기화");
-                        pipVideoRef.current.srcObject = portalStream;
-                        pipVideoRef.current.play().catch(() => {});
-                        pendingPipDataRef.current = {
-                            stream: portalStream,
-                            peerName: pendingPipDataRef.current?.peerName || "참가자"
-                        };
-                    }
+                // Portal의 main stream을 stable stream에 "트랙 교체" 방식으로 동기화 (srcObject 교체 금지)
+                const portalMain = findPortalMainStream();
+                if (portalMain?.stream && isStreamValidCheck(portalMain.stream)) {
+                    syncPipStableStreamFrom(portalMain.stream);
+                    pendingPipDataRef.current = {
+                        stream: ensurePipStableStream(),
+                        peerName: pendingPipDataRef.current?.peerName || portalMain.peerName || "참가자",
+                    };
                 }
             }
 
@@ -291,7 +417,7 @@ export const MeetingProvider = ({ children }) => {
                 switchToCustomPip();
             }
         }, 200);
-    }, [switchToCustomPip, isStreamValidCheck]);
+    }, [ensurePipStableStream, findPortalMainStream, isStreamValidCheck, switchToCustomPip, syncPipStableStreamFrom]);
 
     // 커스텀 PIP 시작
     const startCustomPip = useCallback((stream, peerName = "참가자") => {

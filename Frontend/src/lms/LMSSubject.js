@@ -34,11 +34,40 @@ const MeetingPortalHidden = ({ show }) => {
     useEffect(() => {
         const meetingRoot = document.getElementById("meeting-root");
         if (meetingRoot) {
-            meetingRoot.style.display = show ? "none" : "";
+            if (show) {
+                // 🔥 display:none 금지 (비디오/트랙이 멈출 수 있음) → 화면 밖으로 숨김
+                meetingRoot.style.display = "block";
+                meetingRoot.style.position = "fixed";
+                meetingRoot.style.left = "-10000px";
+                meetingRoot.style.top = "-10000px";
+                meetingRoot.style.width = "1px";
+                meetingRoot.style.height = "1px";
+                meetingRoot.style.opacity = "0";
+                meetingRoot.style.pointerEvents = "none";
+                meetingRoot.style.zIndex = "-1";
+            } else {
+                meetingRoot.style.display = "";
+                meetingRoot.style.position = "";
+                meetingRoot.style.left = "";
+                meetingRoot.style.top = "";
+                meetingRoot.style.width = "";
+                meetingRoot.style.height = "";
+                meetingRoot.style.opacity = "";
+                meetingRoot.style.pointerEvents = "";
+                meetingRoot.style.zIndex = "";
+            }
         }
         return () => {
             if (meetingRoot) {
                 meetingRoot.style.display = "";
+                meetingRoot.style.position = "";
+                meetingRoot.style.left = "";
+                meetingRoot.style.top = "";
+                meetingRoot.style.width = "";
+                meetingRoot.style.height = "";
+                meetingRoot.style.opacity = "";
+                meetingRoot.style.pointerEvents = "";
+                meetingRoot.style.zIndex = "";
             }
         };
     }, [show]);

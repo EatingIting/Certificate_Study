@@ -10,14 +10,14 @@ const FloatingPip = ({
 }) => {
     const containerRef = useRef(null);
     const videoRef = useRef(null);
-    
+
     // 드래그 상태
     const [position, setPosition] = useState({ x: null, y: null });
     const [isDragging, setIsDragging] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0 });
     const positionRef = useRef({ x: 0, y: 0 });
-    
+
     // 🔥 스트림 모니터링용 ref
     const streamCheckIntervalRef = useRef(null);
     const lastValidStreamRef = useRef(null);
@@ -34,25 +34,26 @@ const FloatingPip = ({
         }
     }, [position.x]);
 
-    // 🔥 스트림 유효성 검사 함수
+    // 🔥 스트림 유효성 검사 함수 (enabled 체크 제거 - clone/PIP 스트림에서 false일 수 있음)
     const isStreamValid = useCallback((s) => {
         if (!s) return false;
         const tracks = s.getVideoTracks();
-        return tracks.length > 0 && tracks.some(t => t.readyState === "live" && t.enabled);
+        // 🔥 readyState만 체크 (enabled는 브라우저/clone 상황에서 false가 될 수 있음)
+        return tracks.length > 0 && tracks.some(t => t.readyState === "live");
     }, []);
 
     // 🔥 DOM에서 유효한 스트림 찾기
     const findValidStreamFromDOM = useCallback(() => {
         // 1. data-main-video="main" 속성을 가진 video 찾기
         let video = document.querySelector('video[data-main-video="main"]');
-        
+
         // 2. 없으면 srcObject가 있는 video 찾기 (자기 자신 제외)
         if (!video || !video.srcObject) {
             const allVideos = document.querySelectorAll('video');
             for (const v of allVideos) {
                 // FloatingPip의 video는 제외
                 if (v === videoRef.current) continue;
-                
+
                 if (v.srcObject) {
                     const tracks = v.srcObject.getVideoTracks();
                     if (tracks.length > 0 && tracks.some(t => t.readyState === "live")) {
@@ -62,12 +63,12 @@ const FloatingPip = ({
                 }
             }
         }
-        
+
         if (video?.srcObject) {
             const newPeerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || peerName;
             return { stream: video.srcObject, peerName: newPeerName };
         }
-        
+
         return null;
     }, [peerName]);
 
@@ -87,11 +88,10 @@ const FloatingPip = ({
                 muted: t.muted
             })));
 
-            // 🔥 스트림 clone 사용 (원본 스트림 영향 방지)
-            const clonedStream = stream.clone ? stream.clone() : stream;
-            videoRef.current.srcObject = clonedStream;
+            // 🔥 stream을 그대로 사용 (track 교체/동기화 시 검은화면 방지)
+            videoRef.current.srcObject = stream;
             lastValidStreamRef.current = stream;
-            
+
             videoRef.current.play()
                 .then(() => console.log("[FloatingPip] ✅ 비디오 재생 성공"))
                 .catch((err) => console.error("[FloatingPip] ❌ 비디오 재생 실패:", err));
@@ -112,20 +112,19 @@ const FloatingPip = ({
             if (!video) return;
 
             const currentStream = video.srcObject;
-            
+
             // 스트림이 무효한지 확인
             if (!isStreamValid(currentStream)) {
                 console.log("[FloatingPip] ⚠️ 스트림 무효 감지, 새 스트림 찾기 시도");
-                
+
                 // DOM에서 유효한 스트림 찾기
                 const found = findValidStreamFromDOM();
                 if (found && isStreamValid(found.stream)) {
                     console.log("[FloatingPip] ✅ 새 스트림 발견, 재연결");
-                    const clonedStream = found.stream.clone ? found.stream.clone() : found.stream;
-                    video.srcObject = clonedStream;
+                    video.srcObject = found.stream;
                     lastValidStreamRef.current = found.stream;
-                    video.play().catch(() => {});
-                    
+                    video.play().catch(() => { });
+
                     // 부모에게 알림 (선택적)
                     if (onStreamInvalid) {
                         onStreamInvalid(found.stream, found.peerName);
@@ -166,7 +165,7 @@ const FloatingPip = ({
     const handleMouseDown = useCallback((e) => {
         // 버튼 클릭은 드래그로 처리하지 않음
         if (e.target.closest('.pip-btn')) return;
-        
+
         setIsDragging(true);
         dragStartRef.current = { x: e.clientX, y: e.clientY };
         positionRef.current = { ...position };
@@ -176,21 +175,21 @@ const FloatingPip = ({
     // 드래그 중
     const handleMouseMove = useCallback((e) => {
         if (!isDragging) return;
-        
+
         const dx = e.clientX - dragStartRef.current.x;
         const dy = e.clientY - dragStartRef.current.y;
-        
+
         let newX = positionRef.current.x + dx;
         let newY = positionRef.current.y + dy;
-        
+
         // 화면 밖으로 나가지 않도록 제한
         const padding = 10;
         const width = 300;
         const height = 180;
-        
+
         newX = Math.max(padding, Math.min(window.innerWidth - width - padding, newX));
         newY = Math.max(padding, Math.min(window.innerHeight - height - padding, newY));
-        
+
         setPosition({ x: newX, y: newY });
     }, [isDragging]);
 
@@ -214,7 +213,7 @@ const FloatingPip = ({
     // 터치 이벤트 (모바일)
     const handleTouchStart = useCallback((e) => {
         if (e.target.closest('.pip-btn')) return;
-        
+
         const touch = e.touches[0];
         setIsDragging(true);
         dragStartRef.current = { x: touch.clientX, y: touch.clientY };
@@ -223,21 +222,21 @@ const FloatingPip = ({
 
     const handleTouchMove = useCallback((e) => {
         if (!isDragging) return;
-        
+
         const touch = e.touches[0];
         const dx = touch.clientX - dragStartRef.current.x;
         const dy = touch.clientY - dragStartRef.current.y;
-        
+
         let newX = positionRef.current.x + dx;
         let newY = positionRef.current.y + dy;
-        
+
         const padding = 10;
         const width = 300;
         const height = 180;
-        
+
         newX = Math.max(padding, Math.min(window.innerWidth - width - padding, newX));
         newY = Math.max(padding, Math.min(window.innerHeight - height - padding, newY));
-        
+
         setPosition({ x: newX, y: newY });
     }, [isDragging]);
 
@@ -248,12 +247,12 @@ const FloatingPip = ({
     // 🔥 스트림이 없을 때 마운트 직후 자동으로 스트림 찾기
     useEffect(() => {
         if (!isInitialized) return;
-        
+
         // 스트림이 이미 있고 유효하면 스킵
         if (stream && isStreamValid(stream)) return;
-        
+
         console.log("[FloatingPip] ⚠️ 초기 스트림 없음, DOM에서 자동 탐색");
-        
+
         // 약간의 딜레이 후 찾기 (React 렌더링 대기)
         const timeoutId = setTimeout(() => {
             const found = findValidStreamFromDOM();
@@ -263,14 +262,14 @@ const FloatingPip = ({
                 if (videoRef.current) {
                     videoRef.current.srcObject = clonedStream;
                     lastValidStreamRef.current = found.stream;
-                    videoRef.current.play().catch(() => {});
+                    videoRef.current.play().catch(() => { });
                 }
                 if (onStreamInvalid) {
                     onStreamInvalid(found.stream, found.peerName);
                 }
             }
         }, 100);
-        
+
         return () => clearTimeout(timeoutId);
     }, [isInitialized, stream, isStreamValid, findValidStreamFromDOM, onStreamInvalid]);
 
