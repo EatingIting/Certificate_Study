@@ -3365,7 +3365,7 @@ function MeetingPage() {
             isLeavingRef.current = false;
 
             navigate(
-                `/lms/${subjectId}/Meetingroom/${roomId}`,
+                `/lms/${subjectId}/MeetingRoom/${roomId}`,
                 { replace: true }
             );
         };
