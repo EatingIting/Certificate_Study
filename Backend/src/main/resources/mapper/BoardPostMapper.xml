@@ -5,17 +5,7 @@
 
 <mapper namespace="com.example.demo.board.mapper.BoardPostMapper">
 
-<<<<<<< HEAD
     <resultMap id="PostMap" type="com.example.demo.board.vo.BoardPostVO">
-        <id property="postId" column="post_id"/>
-        <result property="roomId" column="room_id"/>
-        <result property="userId" column="user_id"/>
-        <result property="category" column="category"/>
-        <result property="title" column="title"/>
-        <result property="content" column="content"/>
-        <result property="isPinned" column="is_pinned"/>
-=======
-    <resultMap id="PostMap" type="BoardPostVO">
         <id     property="postId"    column="post_id"/>
         <result property="roomId"    column="room_id"/>
         <result property="userId"    column="user_id"/>
@@ -23,7 +13,6 @@
         <result property="title"     column="title"/>
         <result property="content"   column="content"/>
         <result property="isPinned"  column="is_pinned"/>
->>>>>>> eb8597d9d27d6688f310447bc6c636ca57ecc35a
         <result property="viewCount" column="view_count"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -81,10 +70,9 @@
         WHERE post_id = #{postId}
           AND deleted_at IS NULL
     </update>
-<<<<<<< HEAD
-=======
 
-    <insert id="insertPost" parameterType="BoardPostVO"
+    <insert id="insertPost"
+            parameterType="com.example.demo.board.vo.BoardPostVO"
             useGeneratedKeys="true" keyProperty="postId" keyColumn="post_id">
         INSERT INTO board_posts (
         room_id, user_id, category, title, content, is_pinned, view_count
@@ -98,7 +86,7 @@
         )
     </insert>
 
-    <update id="updatePost" parameterType="BoardPostVO">
+    <update id="updatePost" parameterType="com.example.demo.board.vo.BoardPostVO">
         UPDATE board_posts
         SET
             category = #{category},
@@ -125,5 +113,4 @@
           AND deleted_at IS NULL
     </update>
 
->>>>>>> eb8597d9d27d6688f310447bc6c636ca57ecc35a
 </mapper>
