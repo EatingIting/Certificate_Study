@@ -555,6 +555,7 @@ function MeetingPage({ portalRoomId }) {
     const faceDetectSeqRef = useRef(0);
     const faceDetectCanvasRef = useRef(null);
     const faceDetectCtxRef = useRef(null);
+    const pipelineWarmupUntilRef = useRef(0);
     // ✅ 얼굴 이모지 필터 start/stop 레이스 방지용 오퍼레이션 큐
     const faceEmojiOpRef = useRef(Promise.resolve());
 
@@ -1037,7 +1038,8 @@ function MeetingPage({ portalRoomId }) {
         canvasPipelineCanvasRef.current = canvas;
 
         // 5) Canvas에서 track 캡처 (이것이 producer에 연결될 track)
-        const outStream = canvas.captureStream(30);
+        // ✅ 필터(배경제거/이모지) 자동복원 시 과부하 방지: 기본은 15fps로 시작
+        const outStream = canvas.captureStream(15);
         const outTrack = outStream.getVideoTracks()[0];
         canvasPipelineOutTrackRef.current = outTrack;
 
@@ -1131,7 +1133,9 @@ function MeetingPage({ portalRoomId }) {
 
         // 🔥 핵심: setTimeout 사용 (requestAnimationFrame은 탭이 백그라운드로 가면 멈춤)
         // 탭이 백그라운드여도 canvas에 계속 프레임을 그려야 PiP가 검은화면이 안됨
-        const FRAME_INTERVAL = 33; // ~30fps
+        // ✅ 필터가 켜져있을 때는 15fps로 낮춰서 렉/멈춤 방지
+        const BASE_INTERVAL = 33;  // ~30fps
+        const FILTER_INTERVAL = 66; // ~15fps
 
         const drawLoop = async () => {
             if (!canvasPipelineActiveRef.current) return;
@@ -1142,7 +1146,8 @@ function MeetingPage({ portalRoomId }) {
             try {
                 // 🔥 배경 제거 모드 체크
                 const wantBgRemove = !!bgRemoveRef.current;
-                if (wantBgRemove) ensureBgSegmenterForPipeline();
+                const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
+                if (wantBgRemove && warmupDone) ensureBgSegmenterForPipeline();
 
                 // 비디오 프레임을 캔버스에 그리기
                 if (!wantBgRemove) {
@@ -1295,13 +1300,14 @@ function MeetingPage({ portalRoomId }) {
             // 얼굴 감지 (throttle + in-flight lock + 최신 결과만 반영)
             try {
                 const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
-                if (wantEmoji && !faceDetectorRef.current) {
+                const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
+                if (wantEmoji && warmupDone && !faceDetectorRef.current) {
                     // 초기 로딩 실패/지연 대비: 백그라운드에서 재시도
                     ensureFaceDetector().catch(() => { });
                 }
 
                 const nowMs = Date.now();
-                if (wantEmoji && faceDetectorRef.current && nowMs - lastDetectAtRef.current > 90) {
+                if (wantEmoji && warmupDone && faceDetectorRef.current && nowMs - lastDetectAtRef.current > 90) {
                     lastDetectAtRef.current = nowMs;
 
                     if (!faceDetectInFlightRef.current) {
@@ -1356,7 +1362,9 @@ function MeetingPage({ portalRoomId }) {
             }
 
             // 🔥 setTimeout 사용 (백그라운드에서도 실행됨)
-            canvasPipelineRafRef.current = setTimeout(drawLoop, FRAME_INTERVAL);
+            const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
+            const nextInterval = (wantBgRemove || wantEmoji) ? FILTER_INTERVAL : BASE_INTERVAL;
+            canvasPipelineRafRef.current = setTimeout(drawLoop, nextInterval);
         };
 
         // Draw 루프 시작
@@ -1650,6 +1658,8 @@ function MeetingPage({ portalRoomId }) {
                 if (!canvasPipelineActiveRef.current) {
                     console.log("[Auto-restore] Applying saved emoji/bgRemove state:", { savedEmoji, savedBgRemove });
                     try {
+                        // ✅ 자동 복원 직후는 모델 로딩/컴파일로 UI가 멈출 수 있어 워밍업 시간을 둔다
+                        pipelineWarmupUntilRef.current = Date.now() + 2000;
                         await turnOnCamera();
                     } catch (e) {
                         console.warn("[Auto-restore] turnOnCamera failed:", e);
@@ -2387,12 +2397,13 @@ function MeetingPage({ portalRoomId }) {
             // 얼굴 감지(지원 시) - throttle + in-flight lock + 최신 결과만 반영
             const now = Date.now();
             const wantEmojiForDetect = !!faceEmojiRef.current && faceModeRef.current === "emoji";
-            if (wantEmojiForDetect && !faceDetectorRef.current) {
+            const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
+            if (wantEmojiForDetect && warmupDone && !faceDetectorRef.current) {
                 ensureFaceDetector().catch(() => { });
             }
 
             const det = faceDetectorRef.current;
-            if (wantEmojiForDetect && det && now - lastDetectAtRef.current > 90) {
+            if (wantEmojiForDetect && warmupDone && det && now - lastDetectAtRef.current > 90) {
                 lastDetectAtRef.current = now;
 
                 if (!faceDetectInFlightRef.current) {
