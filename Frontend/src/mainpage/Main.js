@@ -45,7 +45,7 @@ function Main() {
     };
 
     const getImageUrl = (img) => {
-        if (!img) return "/기본이미지.jpg";
+        if (!img) return "/default.jpg";
 
         if (img.startsWith("http")) return img;
 
@@ -98,7 +98,7 @@ function Main() {
                                     alt="스터디 썸네일"
                                     className="thumb-img"
                                     onError={(e) => {
-                                        e.currentTarget.src = "/기본이미지.jpg";
+                                        e.currentTarget.src = "/default.jpg";
                                     }}
                                 />
                             </div>
