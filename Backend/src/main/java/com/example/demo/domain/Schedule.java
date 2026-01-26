@@ -1,6 +1,6 @@
 package com.example.demo.domain;
 
-import com.example.demo.dto.ScheduleType;
+import com.example.demo.dto.schedule.ScheduleType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
