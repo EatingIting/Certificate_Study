@@ -12,16 +12,18 @@ import java.sql.Timestamp;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Alias("BoardCommentVO")
-public class BoardCommentVO {
+@Alias("BoardPostAttachmentVO")
+public class BoardPostAttachmentVO {
 
-    private Long commentId;
+    private Long attachmentId;
     private Long postId;
-    private String userId;
 
-    private String content;
+    private String originalName;
+    private String fileKey;     // nullable
+    private String url;
+
+    private Long sizeBytes;     // bigint unsigned
+    private String mimeType;    // nullable
 
     private Timestamp createdAt;
-    private Timestamp updatedAt;
-    private Timestamp deletedAt;
 }

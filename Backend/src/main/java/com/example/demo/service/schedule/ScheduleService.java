@@ -1,4 +1,4 @@
-package com.example.demo.service;
+package com.example.demo.service.schedule;
 
 import com.example.demo.dto.ScheduleCreateRequest;
 import com.example.demo.dto.ScheduleResponse;

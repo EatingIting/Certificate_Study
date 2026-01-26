@@ -1,6 +1,6 @@
 package com.example.demo.board.mapper;
 
-import com.example.demo.board.vo.BoardAttachmentVO;
+import com.example.demo.board.vo.BoardPostAttachmentVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Result;
@@ -12,6 +12,7 @@ import java.util.List;
 @Mapper
 public interface BoardAttachmentMapper {
 
+<<<<<<< HEAD
     @Select("SELECT * FROM board_attachments WHERE post_id = #{postId} ORDER BY attachment_id ASC")
     @Results({
         @Result(property = "attachmentId", column = "attachment_id", id = true),
@@ -25,3 +26,11 @@ public interface BoardAttachmentMapper {
     })
     List<BoardAttachmentVO> selectByPostId(@Param("postId") Long postId);
 }
+=======
+    List<BoardPostAttachmentVO> selectByPostId(@Param("postId") long postId);
+
+    int insert(BoardPostAttachmentVO attachment);
+
+    int deleteByPostId(@Param("postId") long postId);
+}
+>>>>>>> eb8597d9d27d6688f310447bc6c636ca57ecc35a

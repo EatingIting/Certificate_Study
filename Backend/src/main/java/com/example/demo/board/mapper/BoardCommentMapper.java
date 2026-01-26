@@ -12,15 +12,20 @@ import java.util.List;
 @Mapper
 public interface BoardCommentMapper {
 
-    @Select("SELECT * FROM board_comments WHERE post_id = #{postId} AND deleted_at IS NULL ORDER BY comment_id ASC")
-    @Results({
-        @Result(property = "commentId", column = "comment_id", id = true),
-        @Result(property = "postId", column = "post_id"),
-        @Result(property = "userId", column = "user_id"),
-        @Result(property = "content", column = "content"),
-        @Result(property = "createdAt", column = "created_at"),
-        @Result(property = "updatedAt", column = "updated_at"),
-        @Result(property = "deletedAt", column = "deleted_at")
-    })
-    List<BoardCommentVO> selectByPostId(@Param("postId") Long postId);
+    List<BoardCommentVO> selectByPostId(
+            @Param("postId") long postId
+    );
+
+    int insert(BoardCommentVO comment);
+
+    int updateContent(
+            @Param("commentId") long commentId,
+            @Param("userId") String userId,
+            @Param("content") String content
+    );
+
+    int softDelete(
+            @Param("commentId") long commentId,
+            @Param("userId") String userId
+    );
 }

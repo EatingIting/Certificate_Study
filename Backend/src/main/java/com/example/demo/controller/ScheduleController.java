@@ -3,14 +3,13 @@ package com.example.demo.controller;
 import com.example.demo.dto.ScheduleCreateRequest;
 import com.example.demo.dto.ScheduleResponse;
 import com.example.demo.dto.ScheduleUpdateRequest;
-import com.example.demo.service.ScheduleService;
+import com.example.demo.service.schedule.ScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 
