@@ -2,72 +2,112 @@ package com.example.demo.controller;
 
 import com.example.demo.application.ApplicationService;
 import com.example.demo.application.ApplicationVO;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/applications")
 public class ApplicationController {
 
     private final ApplicationService applicationService;
 
-    public ApplicationController(ApplicationService applicationService) {
-        this.applicationService = applicationService;
-    }
 
+    // 신청하기
     @PostMapping
     public void applyToRoom(
-            @AuthenticationPrincipal String requestUserId,
+            Authentication authentication,
             @RequestBody ApplicationVO applicationVO
     ) {
-        applicationService.applyToRoom(
-                requestUserId,
-                applicationVO.getRoomId(),
-                applicationVO.getApplyMessage()
-        );
+        if (authentication == null) {
+            throw new RuntimeException("인증 정보가 없습니다.");
+        }
+
+        try {
+            applicationService.applyToRoom(
+                    authentication.getName(),
+                    applicationVO.getRequestUserNickname(),
+                    applicationVO.getRoomId(),
+                    applicationVO.getApplyMessage()
+            );
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    e.getMessage()
+            );
+        }
     }
 
-    // ===============================
-    // 신청 받은 스터디 (방장 기준)
-    // ===============================
+
+    // 신청 받은 목록
     @GetMapping("/received")
     public List<ApplicationVO> getReceivedApplications(
-            @AuthenticationPrincipal String ownerUserId
+            Authentication authentication
     ) {
-        return applicationService.getReceivedApplications(ownerUserId);
+        if (authentication == null) {
+            throw new RuntimeException("인증 정보가 없습니다.");
+        }
+
+        return applicationService.getReceivedApplications(authentication.getName());
     }
 
-    // ===============================
-    // 내가 신청한 스터디 (신청자 기준)
-    // ===============================
+
+    // 내가 신청한 목록
     @GetMapping("/sent")
     public List<ApplicationVO> getSentApplications(
-            @AuthenticationPrincipal String requestUserId
+            Authentication authentication
     ) {
-        return applicationService.getSentApplications(requestUserId);
+        if (authentication == null) {
+            throw new RuntimeException("인증 정보가 없습니다.");
+        }
+
+        return applicationService.getSentApplications(authentication.getName());
     }
 
-    // ===============================
+
     // 승인
-    // ===============================
     @PostMapping("/{joinId}/approve")
     public void approveApplication(
             @PathVariable String joinId,
-            @AuthenticationPrincipal String ownerUserId
+            Authentication authentication
     ) {
-        applicationService.approveApplication(joinId, ownerUserId);
+        if (authentication == null) {
+            throw new RuntimeException("인증 정보가 없습니다.");
+        }
+
+        try {
+            applicationService.approveApplication(
+                    joinId,
+                    authentication.getName()
+            );
+
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    e.getMessage()
+            );
+        }
     }
 
-    // ===============================
+
     // 거절
-    // ===============================
     @PostMapping("/{joinId}/reject")
     public void rejectApplication(
             @PathVariable String joinId,
-            @AuthenticationPrincipal String ownerUserId
+            Authentication authentication
     ) {
-        applicationService.rejectApplication(joinId, ownerUserId);
+        if (authentication == null) {
+            throw new RuntimeException("인증 정보가 없습니다.");
+        }
+
+        applicationService.rejectApplication(
+                joinId,
+                authentication.getName()
+        );
     }
 }

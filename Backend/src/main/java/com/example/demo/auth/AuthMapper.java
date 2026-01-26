@@ -10,4 +10,5 @@ public interface AuthMapper {
     void insertUser(AuthVO authVO);
 
     AuthVO findByEmail(String email);
+
 }

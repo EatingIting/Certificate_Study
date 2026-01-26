@@ -9,16 +9,16 @@
     <insert id="insert">
         INSERT INTO room_join_request (
             join_id,
-            request_user_id,
-            owner_user_id,
+            request_user_email,
+            host_user_email,
             room_id,
             status,
             apply_message
         )
         VALUES (
                    UUID(),
-                   #{requestUserId},
-                   #{ownerUserId},
+                   #{requestUserEmail},
+                   #{hostUserEmail},
                    #{roomId},
                    '신청중',
                    #{applyMessage}
@@ -26,30 +26,36 @@
     </insert>
 
     <!-- 내가 신청한 스터디 -->
-    <select id="selectSent" resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
+    <select id="selectSent"
+            resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
         SELECT
-            rjr.join_id        AS joinId,
-            r.title            AS studyTitle,
-            u.nickname         AS nickname,
+            rjr.join_id   AS joinId,
+            r.title       AS studyTitle,
+            u.nickname    AS nickname,
             rjr.status
         FROM room_join_request rjr
-                 JOIN rooms r ON rjr.room_id = r.room_id
-                 JOIN users u ON rjr.owner_user_id = u.user_id
-        WHERE rjr.request_user_id = #{requestUserId}
+                 JOIN rooms r
+                      ON rjr.room_id = r.room_id
+                 JOIN users u
+                      ON rjr.host_user_email = u.email
+        WHERE rjr.request_user_email = #{requestUserEmail}
         ORDER BY rjr.requested_at DESC
     </select>
 
     <!-- 내가 받은 신청 -->
-    <select id="selectReceived" resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
+    <select id="selectReceived"
+            resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
         SELECT
-            rjr.join_id        AS joinId,
-            r.title            AS studyTitle,
-            u.nickname         AS nickname,
+            rjr.join_id   AS joinId,
+            r.title       AS studyTitle,
+            u.nickname    AS nickname,
             rjr.status
         FROM room_join_request rjr
-                 JOIN rooms r ON rjr.room_id = r.room_id
-                 JOIN users u ON rjr.request_user_id = u.user_id
-        WHERE rjr.owner_user_id = #{ownerUserId}
+                 JOIN rooms r
+                      ON rjr.room_id = r.room_id
+                 JOIN users u
+                      ON rjr.request_user_email = u.email
+        WHERE rjr.host_user_email = #{hostUserEmail}
         ORDER BY rjr.requested_at DESC
     </select>
 
