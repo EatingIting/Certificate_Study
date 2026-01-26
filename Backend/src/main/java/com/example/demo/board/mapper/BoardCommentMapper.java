@@ -9,5 +9,20 @@ import java.util.List;
 @Mapper
 public interface BoardCommentMapper {
 
-    List<BoardCommentVO> selectByPostId(@Param("postId") Long postId);
+    List<BoardCommentVO> selectByPostId(
+            @Param("postId") long postId
+    );
+
+    int insert(BoardCommentVO comment);
+
+    int updateContent(
+            @Param("commentId") long commentId,
+            @Param("userId") String userId,
+            @Param("content") String content
+    );
+
+    int softDelete(
+            @Param("commentId") long commentId,
+            @Param("userId") String userId
+    );
 }

@@ -1,29 +1,33 @@
 package com.example.demo.board.vo;
 
-import com.example.demo.dto.BoardCategory;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.apache.ibatis.type.Alias;
 
-import java.time.LocalDateTime;
+import java.sql.Timestamp;
 
-@Getter
-@Setter
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Alias("BoardPostVO")
 public class BoardPostVO {
 
     private Long postId;
+    private String roomId;      // char(36)
+    private String userId;      // char(36)
 
-    private String roomId; // char(36)
-    private String userId; // char(36)
+    private String category;    // NOTICE, GENERAL, QNA, RESOURCE
 
-    private BoardCategory category;
+    private String title;       // varchar(200)
+    private String content;     // mediumtext
 
-    private String title;
-    private String content;
+    private Boolean isPinned;   // tinyint(1)
+    private Integer viewCount;  // int unsigned
 
-    private boolean isPinned;
-    private long viewCount;
-
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
-    private LocalDateTime deletedAt;
+    private Timestamp createdAt;
+    private Timestamp updatedAt;
+    private Timestamp deletedAt;
 }
