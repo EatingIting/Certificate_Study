@@ -1,12 +1,10 @@
 package com.example.demo.roomcreate;
 
+import com.example.demo.s3.S3Uploader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,6 +14,7 @@ import java.util.UUID;
 public class RoomCreateImpl implements RoomCreateService {
 
     private final RoomCreateMapper mapper;
+    private final S3Uploader s3Uploader;
 
     @Override
     public void insertRoom(RoomCreateRequest request, String userEmail) {
@@ -40,31 +39,20 @@ public class RoomCreateImpl implements RoomCreateService {
         vo.setExamDate(request.getExamDate());
         vo.setDeadline(request.getDeadline());
 
-        // ✅ 이미지 저장
         if (request.getImage() != null && !request.getImage().isEmpty()) {
 
-            String fileName = UUID.randomUUID() + "_" +
-                    request.getImage().getOriginalFilename();
-
-            // ✅ WebConfig와 동일한 경로로 저장해야 함
-            Path savePath = Paths.get("C:/upload/" + fileName);
-
             try {
-                Files.createDirectories(savePath.getParent());
-                request.getImage().transferTo(savePath.toFile());
+                String imageUrl = s3Uploader.upload(request.getImage());
+                vo.setRoomImg(imageUrl);
+
             } catch (Exception e) {
-                throw new RuntimeException("이미지 저장 실패");
+                e.printStackTrace();
+                throw new RuntimeException("S3 이미지 업로드 실패: " + e.getMessage());
             }
-
-            // DB에는 접근 경로 저장
-            vo.setRoomImg("/upload/" + fileName);
         }
-
 
         mapper.insertRoom(vo);
     }
-
-
 
     @Override
     public List<RoomCreateVO> getRooms() {
@@ -92,10 +80,9 @@ public class RoomCreateImpl implements RoomCreateService {
         }
 
         RoomCreateVO vo = new RoomCreateVO();
-
         vo.setRoomId(roomId);
-        vo.setHostUserNickname(request.getHostUserNickname());
 
+        vo.setHostUserNickname(request.getHostUserNickname());
         vo.setTitle(request.getTitle());
         vo.setContent(request.getContent());
 
@@ -109,30 +96,21 @@ public class RoomCreateImpl implements RoomCreateService {
         vo.setExamDate(request.getExamDate());
         vo.setDeadline(request.getDeadline());
 
-        /* ✅ 이미지 수정 처리 */
-        String roomImg = existing.getRoomImg(); // 기존 이미지 유지
+        String roomImg = existing.getRoomImg();
 
         if (request.getImage() != null && !request.getImage().isEmpty()) {
 
-            String fileName = UUID.randomUUID() + "_" +
-                    request.getImage().getOriginalFilename();
-
-            Path savePath = Paths.get("C:/upload/" + fileName);
-
             try {
-                Files.createDirectories(savePath.getParent());
-                request.getImage().transferTo(savePath.toFile());
-            } catch (Exception e) {
-                throw new RuntimeException("이미지 수정 실패");
-            }
+                roomImg = s3Uploader.upload(request.getImage());
 
-            roomImg = "/upload/" + fileName;
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException("S3 이미지 수정 실패: " + e.getMessage());
+            }
         }
 
         vo.setRoomImg(roomImg);
 
         mapper.updateRoom(vo);
     }
-
-
 }

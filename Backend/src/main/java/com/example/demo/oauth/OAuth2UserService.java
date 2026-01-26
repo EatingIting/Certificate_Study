@@ -1,4 +1,4 @@
-package oauth;
+package com.example.demo.oauth;
 
 import com.example.demo.auth.AuthMapper;
 import com.example.demo.auth.AuthVO;
@@ -82,5 +82,4 @@ public class OAuth2UserService extends DefaultOAuth2UserService {
                 "email"
         );
     }
-
 }

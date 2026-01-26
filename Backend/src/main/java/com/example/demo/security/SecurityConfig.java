@@ -1,5 +1,9 @@
 package com.example.demo.security;
 
+import com.example.demo.jwt.JwtAuthFilter;
+import com.example.demo.jwt.JwtTokenProvider;
+import com.example.demo.oauth.OAuthHandler;
+import com.example.demo.oauth.OAuth2UserService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
