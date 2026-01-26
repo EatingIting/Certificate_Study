@@ -1,4 +1,4 @@
-package com.example.demo.security;
+package oauth;
 
 import com.example.demo.auth.AuthMapper;
 import com.example.demo.auth.AuthVO;

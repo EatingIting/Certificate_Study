@@ -122,7 +122,7 @@ const CreateRoom = () => {
         let categoryId = editStudy.categoryId;
 
         if (editStudy.roomImg) {
-            setPreviewUrl(`http://localhost:8080${editStudy.roomImg}`);
+            setPreviewUrl(editStudy.roomImg);
         }
 
         if (!categoryId) {
@@ -137,9 +137,6 @@ const CreateRoom = () => {
         setEditCategoryId(categoryId);
     }, [isEditMode, allCategories, editStudy]);
 
-    /* ===========================
-       ✅ categoryId 기반 main/mid/sub 선택
-    =========================== */
     useEffect(() => {
         if (!editCategoryId) return;
 
@@ -164,9 +161,6 @@ const CreateRoom = () => {
         }
     }, [editCategoryId]);
 
-    /* ===========================
-       ✅ main 선택되면 mid 목록 자동 로딩
-    =========================== */
     useEffect(() => {
         if (!selectedMain) return;
 
@@ -175,9 +169,6 @@ const CreateRoom = () => {
         );
     }, [selectedMain]);
 
-    /* ===========================
-       ✅ mid 선택되면 sub 목록 자동 로딩
-    =========================== */
     useEffect(() => {
         if (!selectedMid) return;
 
@@ -199,7 +190,6 @@ const CreateRoom = () => {
             return;
         }
 
-        /* ✅ FormData 생성 */
         const formData = new FormData();
 
         Object.entries(form).forEach(([key, value]) => {
@@ -208,7 +198,6 @@ const CreateRoom = () => {
 
         formData.append("categoryId", categoryId);
 
-        /* ✅ 이미지 포함 */
         if (studyImage) {
             formData.append("image", studyImage);
         }
@@ -265,7 +254,6 @@ const CreateRoom = () => {
                     onChange={handleChange}
                 />
 
-                {/* ✅ 스터디 사진 첨부 */}
                 <div className="study-image-upload">
                     <p className="section-label">스터디 사진 첨부</p>
 

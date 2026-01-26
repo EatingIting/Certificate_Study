@@ -7,14 +7,16 @@ const ClassCard = ({ data }) => {
     return (
         <div className="class-card">
 
-            {/* ✅ 이미지 출력 */}
             <img
                 src={
                     data.roomImg
-                        ? `http://localhost:8080${data.roomImg}`
+                        ? data.roomImg
                         : "/default.png"
                 }
                 alt={data.title}
+                onError={(e) => {
+                    e.target.src = "/default.png";
+                }}
             />
 
             <div className="card-body">
