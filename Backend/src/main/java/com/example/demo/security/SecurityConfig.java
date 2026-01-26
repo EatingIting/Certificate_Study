@@ -69,6 +69,10 @@ public class SecurityConfig {
                                 "/api/rooms/**"
                         ).permitAll()
 
+                        //웹소켓 경로
+                        .requestMatchers("/ws/**")
+                        .permitAll()
+
                         .anyRequest().authenticated()
                 )
 
