@@ -11,6 +11,8 @@ public class RoomListVO {
     private String title;
     private String nickname;
 
+    private String hostUserEmail;
+
     private String midCategoryName;
     private String subCategoryName;
 

@@ -1,5 +1,6 @@
 package com.example.demo.auth;
 
+import com.example.demo.userinterestcategory.UserInterestCategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -12,11 +13,13 @@ public class AuthServiceImpl implements AuthService {
 
     private final AuthMapper authMapper;
     private final PasswordEncoder passwordEncoder;
+    private final UserInterestCategoryService interestService;
 
     @Override
     public boolean isEmailAvailable(String email) {
         return authMapper.countByEmail(email) == 0;
     }
+
 
     @Override
     public void signup(AuthVO authVO) {
@@ -25,10 +28,17 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
 
+        // 1. user 저장
         authVO.setUserId(UUID.randomUUID().toString());
         authVO.setPassword(passwordEncoder.encode(authVO.getPassword()));
 
         authMapper.insertUser(authVO);
+
+        // 2. 관심카테고리 저장
+        interestService.saveInterestCategories(
+                authVO.getUserId(),
+                authVO.getInterestCategoryIds()
+        );
     }
 
     @Override
@@ -85,5 +95,6 @@ public class AuthServiceImpl implements AuthService {
     public AuthVO findByEmail(String email) {
         return authMapper.findByEmail(email);
     }
+
 
 }

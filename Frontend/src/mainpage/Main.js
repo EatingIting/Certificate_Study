@@ -86,7 +86,7 @@ function Main() {
                 </div>
             </section>
 
-            <section className="study sample-container">
+            <section className="study-sample-container">
                 <h2>지금 모집 중인 화상 스터디</h2>
 
                 <div className="study-list">
@@ -107,7 +107,7 @@ function Main() {
                                 {room.subCategoryName ?? room.midCategoryName}
                             </span>
 
-                            <h3>{room.title}</h3>
+                            <h5>{room.title}</h5>
 
                             <p>{formatStartDate(room.startDate)}</p>
 
