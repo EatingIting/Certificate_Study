@@ -1,14 +1,15 @@
 import "./LMSSidebar.css";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useState, useCallback, useEffect } from "react";
 import { useMeeting } from "../webrtc/MeetingContext";
 
 const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuProp }) => {
     const navigate = useNavigate();
     const { subjectId } = useParams();
+    let location = useLocation();
 
     // ✅ 회의 상태 (PiP 트리거용)
-    const { isInMeeting, isPipMode, roomId } = useMeeting();
+    const { isInMeeting, isPipMode, roomId, requestBrowserPip } = useMeeting();
 
     // ✅ 초기값: 전부 열림
     let [openKeys, setOpenKeys] = useState([
@@ -89,10 +90,12 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const activeMenu = activeMenuProp ?? localActiveMenu;
     const setActiveMenu = setActiveMenuProp ?? setLocalActiveMenu;
 
-    // 🔥 Canvas PiP 요청 (LMSSubject에서 처리)
-    const requestPipIfMeeting = useCallback(() => {
+    // 🔥 브라우저 PiP 요청 (사이드바 클릭 시 자동 활성화)
+    const requestPipIfMeeting = useCallback(async () => {
         // roomId가 있으면 회의 중으로 간주 (isInMeeting이 false여도)
         const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("pip.roomId");
+        
+        console.log("[LMSSidebar] requestPipIfMeeting 호출", { isInMeeting, isPipMode, roomId, hasActiveMeeting });
         
         if (!hasActiveMeeting) {
             console.log("[LMSSidebar] 회의 중이 아니므로 PiP 요청 안 함");
@@ -101,25 +104,45 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
         // 이미 PiP 모드면 스킵
         if (document.pictureInPictureElement) {
-            console.log("[LMSSidebar] 이미 PiP 모드임");
+            console.log("[LMSSidebar] 이미 브라우저 PiP 모드임");
             return;
         }
 
-        const video = document.querySelector('video[data-main-video="main"]');
+        // 🔥 video 요소 찾기 (여러 방식 시도)
+        let video = document.querySelector('video[data-main-video="main"]');
+        
+        // isMain이 없으면 srcObject가 있는 첫 번째 video 찾기
         if (!video) {
-            console.log('[LMSSidebar] video[data-main-video="main"] 요소를 찾을 수 없음');
+            console.log('[LMSSidebar] data-main-video="main" 없음, 다른 video 요소 찾기');
+            const allVideos = document.querySelectorAll('video');
+            console.log(`[LMSSidebar] 발견된 video 요소 수: ${allVideos.length}`);
+            
+            for (const v of allVideos) {
+                if (v.srcObject && v.srcObject.getVideoTracks().length > 0) {
+                    video = v;
+                    console.log('[LMSSidebar] srcObject 있는 video 발견');
+                    break;
+                }
+            }
+        }
+        
+        if (!video) {
+            console.log('[LMSSidebar] 유효한 video 요소를 찾을 수 없음');
             return;
         }
 
-        // 🔥 Canvas PiP 요청 이벤트 발생 (LMSSubject에서 처리)
-        console.log("[LMSSidebar] Canvas PiP 요청 이벤트 발생");
-        window.dispatchEvent(new CustomEvent("meeting:request-canvas-pip", {
-            detail: {
-                video,
-                peerName: video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자"
-            }
-        }));
-    }, [isInMeeting, isPipMode, roomId]);
+        // 🔥 브라우저 PiP 요청 (MeetingContext에서 처리)
+        const stream = video.srcObject;
+        if (!stream) {
+            console.log('[LMSSidebar] video.srcObject가 없음');
+            return;
+        }
+        
+        const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
+        
+        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName });
+        await requestBrowserPip(video, stream, peerName);
+    }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
     // ===============================
     // 메인메뉴 클릭: 이동 X, 펼침/접힘만
