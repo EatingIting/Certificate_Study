@@ -2,14 +2,10 @@ package com.example.demo.controller;
 
 import com.example.demo.roomcreate.RoomCreateRequest;
 import com.example.demo.roomcreate.RoomCreateService;
-import com.example.demo.roomcreate.RoomCreateVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/rooms")
@@ -18,28 +14,22 @@ public class RoomCreateController {
 
     private final RoomCreateService roomService;
 
-    @PostMapping
+    @PostMapping(consumes = "multipart/form-data")
     public ResponseEntity<Void> createRoom(
-            @RequestBody RoomCreateRequest request,
-            @AuthenticationPrincipal String userId
+            @ModelAttribute RoomCreateRequest request,
+            Authentication authentication
     ) {
-        if (userId == null || userId.equals("anonymousUser")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        roomService.createRoom(request, userId);
+        roomService.insertRoom(request, authentication.getName());
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping
-    public ResponseEntity<List<RoomCreateVO>> getRooms() {
-        return ResponseEntity.ok(roomService.getRooms());
-    }
-
-    @GetMapping("/{roomId}")
-    public ResponseEntity<RoomCreateVO> getRoomDetail(
-            @PathVariable String roomId
+    @PutMapping(value = "/{roomId}", consumes = "multipart/form-data")
+    public ResponseEntity<Void> updateRoom(
+            @PathVariable String roomId,
+            @ModelAttribute RoomCreateRequest request,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(roomService.getRoomDetail(roomId));
+        roomService.updateRoom(roomId, request, authentication.getName());
+        return ResponseEntity.ok().build();
     }
 }

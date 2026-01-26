@@ -1,158 +1,107 @@
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import {
+    createContext,
+    useContext,
+    useRef,
+    useState,
+    useCallback,
+} from "react";
 
 const MeetingContext = createContext(null);
 
-export const useMeeting = () => {
-    const context = useContext(MeetingContext);
-    if (!context) {
-        throw new Error("useMeeting must be used within MeetingProvider");
-    }
-    return context;
-};
-
 export const MeetingProvider = ({ children }) => {
-    // 회의 활성 상태
     const [isInMeeting, setIsInMeeting] = useState(false);
     const [isPipMode, setIsPipMode] = useState(false);
     const [roomId, setRoomId] = useState(null);
-    const [subjectId, setSubjectId] = useState(null);
-    const [meetingUrl, setMeetingUrl] = useState(null);  // 회의 페이지 URL 저장
 
-    // 미디어 상태 (PiP 전환 시에도 유지)
-    const [micOn, setMicOn] = useState(true);
-    const [camOn, setCamOn] = useState(true);
-
-    // 스트림 및 연결 정보 (복원용)
-    const meetingStateRef = useRef({
-        localStream: null,
-        participants: [],
-        device: null,
-        sendTransport: null,
-        recvTransport: null,
-        producers: { audio: null, video: null },
-        consumers: new Map(),
-    });
-
-    // PIP 모드에서 유지된 연결을 정리하는 함수
-    const cleanupFunctionRef = useRef(null);
-
-    // 회의 시작
-    const startMeeting = useCallback((newRoomId, newSubjectId, url) => {
+    const startMeeting = useCallback((roomId, subjectId) => {
+        setRoomId(roomId);
         setIsInMeeting(true);
-        setIsPipMode(false);
-        setRoomId(newRoomId);
-        setSubjectId(newSubjectId);
-        // URL이 제공되면 저장, 아니면 현재 경로 사용
-        setMeetingUrl(url || window.location.pathname);
+    
+        sessionStorage.setItem("pip.roomId", roomId);
+        sessionStorage.setItem("pip.subjectId", subjectId);
     }, []);
 
-    // PiP 모드로 전환 (다른 페이지 이동 시)
-    const enterPipMode = useCallback(() => {
-        if (isInMeeting) {
-            setIsPipMode(true);
+    const endMeeting = useCallback(() => {
+        setRoomId(null);
+        setIsInMeeting(false);
+        setIsPipMode(false);
+    }, []);
+
+    const requestBrowserPip = async (videoEl) => {
+        if (!videoEl) {
+            console.warn("[PiP] 비디오 요소가 없습니다.");
+            return false;
         }
-    }, [isInMeeting]);
+        if (document.pictureInPictureElement) {
+            console.log("[PiP] 이미 PiP 모드입니다.");
+            return true;
+        }
 
-    // PiP에서 회의로 복귀
-    const exitPipMode = useCallback(() => {
-        setIsPipMode(false);
-    }, []);
+        // 🔥 User gesture 컨텍스트 유지를 위해 즉시 PiP 요청
+        // metadata 대기 없이 바로 시도 (대부분의 경우 이미 로드되어 있음)
+        
+        const handleLeavePiP = () => {
+            console.log("[PiP] leavepictureinpicture");
 
-    const requestPipIfPossible = async () => {
-        if (document.pictureInPictureElement) return;
+            setIsPipMode(false);
 
-        const video = document.querySelector("video");
-        if (!video) return;
+            // 🔥 오직 이벤트만 발행
+            window.dispatchEvent(
+                new CustomEvent("meeting:pip-exit")
+            );
+        };
+
+        document.addEventListener(
+            "leavepictureinpicture",
+            handleLeavePiP,
+            { once: true }
+        );
 
         try {
-            await video.requestPictureInPicture();
-        } catch (e) {
-            console.warn("[PiP] request failed", e);
+            // 🔥 즉시 PiP 요청 (user gesture 보존)
+            await videoEl.requestPictureInPicture();
+            setIsPipMode(true);
+            console.log("[PiP] PiP 모드 활성화됨");
+            return true;
+        } catch (error) {
+            console.error("[PiP] PiP 요청 실패:", error);
+            document.removeEventListener("leavepictureinpicture", handleLeavePiP);
+            
+            // readyState가 부족하면 메타데이터 로드 후 재시도 (이벤트 기반으로)
+            if (videoEl.readyState < 1) {
+                console.log("[PiP] 메타데이터 부족 - 이벤트 기반 재시도 대기");
+                // 이 경우는 user gesture가 이미 손실됨, 나중에 다시 시도해야 함
+            }
+            return false;
         }
     };
 
-    // 회의 종료
-    const endMeeting = useCallback(() => {
-        // 스트림 정리
-        if (meetingStateRef.current.localStream) {
-            meetingStateRef.current.localStream.getTracks().forEach((track) => {
-                track.stop();
-            });
+    const exitBrowserPip = async () => {
+        if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture().catch(() => {});
         }
-
-        setIsInMeeting(false);
-        setIsPipMode(false);
-        setRoomId(null);
-        setSubjectId(null);
-        setMeetingUrl(null);
-        setMicOn(true);
-        setCamOn(true);
-        meetingStateRef.current = {
-            localStream: null,
-            participants: [],
-            device: null,
-            sendTransport: null,
-            recvTransport: null,
-            producers: { audio: null, video: null },
-            consumers: new Map(),
-        };
-    }, []);
-
-    // 미디어 상태 저장 (MeetingPage에서 호출)
-    const saveMeetingState = useCallback((state) => {
-        meetingStateRef.current = { ...meetingStateRef.current, ...state };
-    }, []);
-
-    // 미디어 상태 불러오기
-    const getMeetingState = useCallback(() => {
-        return meetingStateRef.current;
-    }, []);
-
-    // cleanup 함수 저장
-    const saveCleanupFunction = useCallback((fn) => {
-        cleanupFunctionRef.current = fn;
-    }, []);
-
-    // cleanup 함수 실행 (PIP 복귀 시 사용)
-    const executeCleanup = useCallback(() => {
-        if (cleanupFunctionRef.current) {
-            console.log("[MeetingContext] Executing saved cleanup function");
-            cleanupFunctionRef.current();
-            cleanupFunctionRef.current = null;
-        }
-    }, []);
-
-    const value = {
-        // 상태
-        isInMeeting,
-        isPipMode,
-        roomId,
-        subjectId,
-        meetingUrl,
-        micOn,
-        camOn,
-
-        // 상태 변경
-        setMicOn,
-        setCamOn,
-
-        // 액션
-        startMeeting,
-        enterPipMode,
-        exitPipMode,
-        endMeeting,
-        saveMeetingState,
-        getMeetingState,
-        saveCleanupFunction,
-        executeCleanup,
-        requestPipIfPossible,
     };
 
     return (
-        <MeetingContext.Provider value={value}>
+        <MeetingContext.Provider
+            value={{
+                isInMeeting,
+                isPipMode,
+                roomId,
+                startMeeting,
+                endMeeting,
+                requestBrowserPip,
+            }}
+        >
             {children}
         </MeetingContext.Provider>
     );
 };
 
-export default MeetingContext;
+export const useMeeting = () => {
+    const ctx = useContext(MeetingContext);
+    if (!ctx) {
+        throw new Error("useMeeting must be used within MeetingProvider");
+    }
+    return ctx;
+};

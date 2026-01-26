@@ -1,66 +1,115 @@
 import "./Main.css";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../api/api";
+import heroImg from "./메인메인.png";
 
 function Main() {
     const navigate = useNavigate();
-    
+
+    const [rooms, setRooms] = useState([]);
+    const [categories, setCategories] = useState([]);
+
+    useEffect(() => {
+        fetchRooms();
+        fetchCategories();
+    }, []);
+
+    const fetchRooms = async () => {
+        const res = await api.get("/rooms");
+
+        setRooms(
+            [...res.data]
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .slice(0, 4)
+        );
+    };
+
+    const fetchCategories = async () => {
+        const res = await api.get("/category");
+
+        setCategories(
+            res.data.filter((c) => c.level === 1)
+        );
+    };
+
+    const formatStartDate = (dateStr) => {
+        if (!dateStr) return "";
+
+        const [y, m, d] = dateStr.split("-");
+        return `${y}년 ${m}월 ${d}일 시작`;
+    };
+
+    const categoryNameMap = {
+        "공무원·공공시험": "공공시험",
+        "민간자격·실무능력": "민간자격",
+    };
+
     return (
         <div className="page">
-            {/* Header */}
-            <header className="header">
-                <div className="logo">ONSIL</div>
-
-                <nav className="nav">
-                    <span onClick={() => navigate("/roompage")}>스터디 찾기</span>
-                    <span>자격증</span>
-                    <span>커뮤니티</span>
-                    <span>내 학습</span>
-                </nav>
-
-                <div className="header-actions">
-                    <button className="login-btn" onClick={() => navigate("/auth")}>로그인</button>
-                    <button className="create-btn">스터디 만들기</button>
-                </div>
-            </header>
-
-            {/* Hero */}
-            <section className="hero">
+            <section
+                className="hero sample-container"
+                style={{ "--hero-img": `url(${heroImg})` }}
+            >
                 <h1>
                     함께라서 끝까지 가는 <br />
                     화상 스터디 플랫폼
                 </h1>
                 <p>자격증 · 취업 · 개발 스터디를 실시간 화상으로</p>
-
-                <div className="search-box">
-                    <input placeholder="어떤 스터디를 찾고 있나요? (ex. 정보처리기사)" />
-                    <button>스터디 검색</button>
-                </div>
             </section>
 
-            {/* Category */}
-            <section className="mainpage-category">
+            <section className="main-category sample-container">
                 <h2>스터디 카테고리</h2>
-                <div className="main-category-list">
-                    {["자격증", "취업", "어학", "자기계발"].map((c) => (
-                        <div key={c} className="main-category-item">
-                            <div className="circle">{c[0]}</div>
-                            <span>{c}</span>
+
+                <div className="main-list">
+                    {categories.map((c) => (
+                        <div
+                            key={c.id}
+                            className="main-item"
+                            onClick={() => navigate(`/room?cat=${c.name}`)}
+                            style={{ cursor: "pointer" }}
+                        >
+                            <div className="circle">
+                                {(categoryNameMap[c.name] ?? c.name)[0]}
+                            </div>
+
+                            <span>
+                                {categoryNameMap[c.name] ?? c.name}
+                            </span>
                         </div>
                     ))}
                 </div>
             </section>
 
-            {/* Study List */}
-            <section className="study">
+            <section className="study sample-container">
                 <h2>지금 모집 중인 화상 스터디</h2>
+
                 <div className="study-list">
-                    {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="study-card">
-                            <div className="thumbnail" />
-                            <span className="tag">화상 스터디</span>
-                            <h3>정보처리기사 실전반</h3>
-                            <p>주 3회 · 최대 10명 </p>
-                            <button>자세히 보기</button>
+                    {rooms.map((room) => (
+                        <div key={room.roomId} className="cardbox">
+                            <div className="thumbnail">
+                                <img
+                                    src={`http://localhost:8080${room.roomImg}`}
+                                    alt="스터디 썸네일"
+                                    className="thumb-img"
+                                />
+                            </div>
+
+                            <span className="main-tag">
+                                {room.subCategoryName ?? room.midCategoryName}
+                            </span>
+
+                            <h3>{room.title}</h3>
+
+                            <p>{formatStartDate(room.startDate)}</p>
+
+                            <button
+                                onClick={() =>
+                                    navigate(`/room?open=${room.roomId}`)
+                                }
+                            >
+                                자세히 보기
+                            </button>
                         </div>
                     ))}
                 </div>

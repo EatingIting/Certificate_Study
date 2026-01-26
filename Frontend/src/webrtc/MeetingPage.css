@@ -1,18 +1,25 @@
-/* =========================================
-   Modern Light Theme (Standard CSS)
-   ========================================= */
-
 :root {
-  --bg-color: #f9fafb;
+  /* Background */
+  --bg-color: #f6faf3;
   --panel-bg: #ffffff;
-  --text-primary: #111827;
+
+  /* Text */
+  --text-primary: #1f2937;
   --text-secondary: #6b7280;
-  --brand-color: #4f46e5;
-  --brand-light: #e0e7ff;
-  --brand-dark: #4338ca;
-  --border-color: #e5e7eb;
+
+  /* Brand (LMS 핵심 컬러) */
+  --brand-color: #97c793;
+  --brand-light: #eef6f0;
+  --brand-dark: #86b984;
+
+  /* Border / Divider */
+  --border-color: #e6eee1;
+
+  /* Status */
   --danger-color: #ef4444;
   --success-color: #22c55e;
+
+  /* Shadow */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
@@ -27,6 +34,14 @@ body {
 }
 
 /* --- Layout --- */
+/* Portal로 렌더링될 때만 fixed 오버레이 */
+#meeting-root > .meeting-page {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+}
+
 .meet-layout {
   display: flex;
   height: 100vh;
@@ -322,7 +337,7 @@ body {
 }
 
 .pip-btn:hover {
-  background: rgba(79, 70, 229, 0.9);
+  background: rgba(151, 199, 147, 0.95);
   transform: scale(1.08);
   box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
 }
@@ -671,6 +686,21 @@ body {
 /* =========================================
    전체화면 사이드바 (채팅/참여자)
    ========================================= */
+
+/* 🔥 전체화면에서 사이드바 열릴 때 메인 스테이지 부드럽게 밀기 */
+.main-stage {
+  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-stage.sidebar-open {
+  margin-right: 360px;
+}
+
+/* 🔥 전체화면에서 main-video-area도 함께 transition */
+.main-stage.sidebar-open .main-video-area {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .fullscreen-sidebar {
   position: absolute;
   top: 0;
@@ -814,8 +844,9 @@ body {
   flex-shrink: 0;
   display: flex;
   gap: 1rem;
-  overflow-x: auto;
-  overflow-y: visible;
+
+  overflow: hidden;
+
   padding: 12px 2px 0.5rem 2px;
   margin-top: 1rem;
 }
@@ -1546,6 +1577,12 @@ body {
   pointer-events: none;
 }
 
+.video-element.pip-black-screen {
+  background-color: #000000 !important;
+  background: #000000 !important;
+  object-fit: cover;
+}
+
 .stream-label {
   margin-top: 1rem;
   font-size: 1.125rem;
@@ -1662,7 +1699,7 @@ body {
 }
 
 .user-avatar.placeholder {
-  background: linear-gradient(135deg, var(--brand-light), #c7d2fe);
+  background: linear-gradient(135deg, #eef6f0, #cfe8d6);
   color: var(--brand-color);
   display: flex;
   align-items: center;
@@ -1698,7 +1735,7 @@ body {
 
 .spinner {
     animation: spin 1s linear infinite;
-    color: #3b82f6; /* 파란색 포인트 */
+    color: var(--brand-color);
 }
 
 @keyframes spin {
@@ -2021,4 +2058,5 @@ body.fullscreen-active .meet-sidebar {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
 
