@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.assignment.mapper.AssignmentMapper">
+
+    <!-- 1) 과제 목록: 내 제출 여부로 status 만들기 -->
+    <select id="selectAssignmentsByRoom" resultType="map">
+        SELECT
+            a.assignment_id AS assignmentId,
+            a.title         AS title,
+            a.due_at        AS dueAt,
+            a.created_by_email AS authorEmail,
+            CASE
+                WHEN s.submission_id IS NULL THEN '제출 하기'
+                ELSE '제출 완료'
+                END AS status
+        FROM assignments a
+                 LEFT JOIN assignment_submissions s
+                           ON s.assignment_id = a.assignment_id
+                               AND s.user_id = #{userId}
+        WHERE a.room_id = #{roomId}
+        ORDER BY a.due_at ASC, a.assignment_id DESC
+    </select>
+
+
+    <!-- 2) 과제 생성 -->
+    <insert id="insertAssignment" parameterType="com.example.demo.assignment.vo.AssignmentVO" useGeneratedKeys="true" keyProperty="assignmentId">
+        INSERT INTO assignments (room_id, title, description, due_at, created_by_email)
+        VALUES (#{roomId}, #{title}, #{description}, #{dueAt}, #{createdByEmail})
+    </insert>
+
+    <!-- 3) 제출: (assignment_id, user_email) UNIQUE라서 중복제출이면 UPDATE -->
+    <insert id="upsertSubmission" parameterType="com.example.demo.assignment.vo.AssignmentSubmissionVO">
+        INSERT INTO assignment_submissions
+        (assignment_id, user_id, submit_title, memo, file_name, file_url, file_size)
+        VALUES
+            (#{assignmentId}, #{userId}, #{submitTitle}, #{memo}, #{fileName}, #{fileUrl}, #{fileSize})
+            ON DUPLICATE KEY UPDATE
+                                 submit_title = VALUES(submit_title),
+                                 memo        = VALUES(memo),
+                                 file_name   = VALUES(file_name),
+                                 file_url    = VALUES(file_url),
+                                 file_size   = VALUES(file_size),
+                                 submitted_at = CURRENT_TIMESTAMP
+    </insert>
+
+</mapper>
