@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.demo.board.mapper.BoardPostMapper">
 
-    <resultMap id="PostMap" type="com.example.demo.board.vo.BoardPostVo">
+    <resultMap id="PostMap" type="com.example.demo.board.vo.BoardPostVO">
         <id property="postId" column="post_id"/>
         <result property="roomId" column="room_id"/>
         <result property="userId" column="user_id"/>
@@ -58,19 +58,4 @@
         WHERE post_id = #{postId}
           AND deleted_at IS NULL
     </update>
-
-    <select id="selectByPostId" resultMap="AttachmentMap">
-        SELECT *
-        FROM board_attachments
-        WHERE post_id = #{postId}
-        ORDER BY attachment_id ASC
-    </select>
-
-    <select id="selectByPostId" resultMap="CommentMap">
-        SELECT *
-        FROM board_comments
-        WHERE post_id = #{postId}
-          AND deleted_at IS NULL
-        ORDER BY comment_id ASC
-    </select>
 </mapper>
