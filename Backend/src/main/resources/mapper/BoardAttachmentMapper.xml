@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.board.mapper.BoardAttachmentMapper">
+
+    <resultMap id="AttachmentMap" type="BoardPostAttachmentVO">
+        <id     property="attachmentId" column="attachment_id"/>
+        <result property="postId"       column="post_id"/>
+        <result property="originalName" column="original_name"/>
+        <result property="fileKey"      column="file_key"/>
+        <result property="url"          column="url"/>
+        <result property="sizeBytes"    column="size_bytes"/>
+        <result property="mimeType"     column="mime_type"/>
+        <result property="createdAt"    column="created_at"/>
+    </resultMap>
+
+    <select id="selectByPostId" resultMap="AttachmentMap">
+        SELECT
+            attachment_id, post_id, original_name, file_key, url,
+            size_bytes, mime_type, created_at
+        FROM board_post_attachments
+        WHERE post_id = #{postId}
+        ORDER BY attachment_id ASC
+    </select>
+
+    <insert id="insert" parameterType="BoardPostAttachmentVO"
+            useGeneratedKeys="true" keyProperty="attachmentId" keyColumn="attachment_id">
+        INSERT INTO board_post_attachments (
+        post_id, original_name, file_key, url, size_bytes, mime_type
+        ) VALUES (
+        #{postId}, #{originalName}, #{fileKey}, #{url},
+        <choose>
+            <when test="sizeBytes != null">#{sizeBytes}</when>
+            <otherwise>0</otherwise>
+        </choose>,
+        #{mimeType}
+        )
+    </insert>
+
+    <delete id="deleteByPostId">
+        DELETE FROM board_post_attachments
+        WHERE post_id = #{postId}
+    </delete>
+
+</mapper>

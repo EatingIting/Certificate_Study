@@ -1,7 +1,6 @@
 package com.example.demo.board.mapper;
 
 import com.example.demo.board.vo.BoardPostVO;
-import com.example.demo.dto.BoardCategory;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,18 +9,38 @@ import java.util.List;
 @Mapper
 public interface BoardPostMapper {
 
-    List<BoardPostVO> selectList(
+    List<BoardPostVO> selectPostList(
             @Param("roomId") String roomId,
-            @Param("category") BoardCategory category,
-            @Param("size") int size,
-            @Param("cursor") Long cursor
+            @Param("category") String category,
+            @Param("keyword") String keyword,
+            @Param("offset") int offset,
+            @Param("size") int size
     );
 
-    long countComments(@Param("postId") Long postId);
+    int countPostList(
+            @Param("roomId") String roomId,
+            @Param("category") String category,
+            @Param("keyword") String keyword
+    );
 
-    long countAttachments(@Param("postId") Long postId);
+    BoardPostVO selectPostById(
+            @Param("postId") long postId
+    );
 
-    BoardPostVO selectById(@Param("postId") Long postId);
+    int incrementViewCount(@Param("postId") long postId);
 
-    int increaseViewCount(@Param("postId") Long postId);
+    int insertPost(BoardPostVO post);
+
+    int updatePost(BoardPostVO post);
+
+    int softDeletePost(
+            @Param("postId") long postId,
+            @Param("userId") String userId
+    );
+
+    int updatePinned(
+            @Param("postId") long postId,
+            @Param("userId") String userId,
+            @Param("isPinned") boolean isPinned
+    );
 }
