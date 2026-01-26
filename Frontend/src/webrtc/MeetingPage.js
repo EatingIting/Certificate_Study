@@ -3008,11 +3008,10 @@ function MeetingPage({ portalRoomId }) {
         }
 
         // 2. MediaStream 즉시 제거 (중요)
+        // ⚠️ 원격 track에 stop()을 호출하면 PiP 포함 모든 재생이 'ended'로 굳어버릴 수 있음
+        // (receiver track은 stop() 호출 대상이 아님)
         const prevStream = peerStreamsRef.current.get(peerId);
-        if (prevStream) {
-            prevStream.getTracks().forEach((t) => t.stop());
-            peerStreamsRef.current.delete(peerId);
-        }
+        if (prevStream) peerStreamsRef.current.delete(peerId);
 
         // 3. React 상태 즉시 반영
         setParticipants((prev) =>
@@ -3102,18 +3101,20 @@ function MeetingPage({ portalRoomId }) {
     useEffect(() => {
         // startMeeting은 MeetingRouteBridge / startLocalMedia에서 roomId·subjectId와 함께 호출됨
         return () => {
-            // 🔥 언마운트 시 얼굴 필터 정리
-            stopFaceEmojiFilter().catch(() => { });
-            stopAvatarFilter().catch(() => { });
-
             // ❗ PIP 모드일 때는 endMeeting 호출하지 않음 (polling 유지)
             const isInPipMode = !!document.pictureInPictureElement ||
                                 sessionStorage.getItem("pip.roomId");
 
             if (isInPipMode) {
-                console.log("[MeetingPage] PIP 모드 - endMeeting 스킵");
+                // 🔥 사이드바 자동 PiP 진입(라우트 이동) 시 여기로 들어옴
+                // 이때 필터/트랙 정리를 해버리면 producer track이 끊기면서 PiP가 마지막 프레임에서 멈출 수 있음
+                console.log("[MeetingPage] PIP 모드 - cleanup/endMeeting 모두 스킵");
                 return;
             }
+
+            // 🔥 언마운트 시 얼굴 필터 정리 (PIP가 아닐 때만)
+            stopFaceEmojiFilter().catch(() => { });
+            stopAvatarFilter().catch(() => { });
 
             // ❗ 언마운트 시에만 종료 (숨김일 땐 호출 안 됨)
             endMeeting();
@@ -4475,20 +4476,23 @@ function MeetingPage({ portalRoomId }) {
                             <div className="layout-speaker">
                                 <div className={`main-stage ${isFullscreen && sidebarOpen ? "sidebar-open" : ""}`} ref={mainStageRef}>
                                     <div className="main-video-area">
-                                        <VideoTile
-                                            user={mainUser}
-                                            isMain
-                                            stream={mainStream}
-                                            roomReconnecting={roomReconnecting}
-                                            isScreen={isMainScreenShare}
-                                            reaction={mainUser?.reaction}
-                                            videoRef={mainVideoRef}
-                                        />
-
-                                        {document.pictureInPictureElement && (
-                                            <div className="pip-mode-banner">
-                                                PiP 모드 이용중
+                                        {/* 🔥 PIP 모드일 때 검은 배경 + 배너, 아닐 때 VideoTile */}
+                                        {isBrowserPipMode ? (
+                                            <div className="pip-mode-overlay">
+                                                <div className="pip-mode-banner">
+                                                    PiP 모드 이용중
+                                                </div>
                                             </div>
+                                        ) : (
+                                            <VideoTile
+                                                user={mainUser}
+                                                isMain
+                                                stream={mainStream}
+                                                roomReconnecting={roomReconnecting}
+                                                isScreen={isMainScreenShare}
+                                                reaction={mainUser?.reaction}
+                                                videoRef={mainVideoRef}
+                                            />
                                         )}
                                         <button
                                             className="pip-btn"
@@ -4496,7 +4500,7 @@ function MeetingPage({ portalRoomId }) {
                                             title="PiP"
                                             type="button"
                                         >
-                                            <PictureInPicture2 size={18} />
+                                            <PictureInPicture2 size={22} />
                                         </button>
                                         <button className="fullscreen-btn" onClick={handleFullscreen} title={isFullscreen ? "전체화면 종료" : "전체화면"}>
                                             {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
