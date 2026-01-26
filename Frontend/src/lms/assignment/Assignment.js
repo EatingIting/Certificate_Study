@@ -1,25 +1,18 @@
 import {useEffect, useState} from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useParams } from "react-router-dom";
 import { useRef } from "react";
+import api from "../../api/api";
+
 import "./Assignment.css";
 
 const Assignment = () => {
-    const [assignments, setAssignments] = useState([
-        {
-            id: "2025-1-30",
-            title: "2025기출 #1~#30 풀기",
-            dueDate: "2026-01-20",
-            author: "김민수",
-            status: "제출 완료",
-        },
-        {
-            id: "2025-31-60",
-            title: "2025기출 #31~#60 풀기",
-            dueDate: "2026-01-27",
-            author: "김민수",
-            status: "제출 하기",
-        },
-    ]);
+    const [assignments, setAssignments] = useState([]);
+    const { subjectId } = useParams();
+    const roomId = subjectId;
+    const userId = sessionStorage.getItem("userId");
+
+
+
 
     // ===== 제출 모달 =====
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -81,6 +74,33 @@ const Assignment = () => {
         closeCreateModal();
         alert("과제가 생성되었습니다! (데모)");
     };
+
+    const fetchAssignments = async () => {
+        try {
+            const res = await api.get(`/rooms/${roomId}/assignments`, {
+            params: { userId },
+            });
+
+            const mapped = (res.data || []).map((x) => ({
+            id: x.assignmentId,
+            title: x.title,
+            dueDate: x.dueAt ? x.dueAt.slice(0, 10) : "미정",
+            author: x.authorEmail,
+            status: x.status,
+            }));
+
+            setAssignments(mapped);
+        } catch (e) {
+            console.error(e);
+            alert("과제 목록 불러오기 실패");
+        }
+        };
+
+        useEffect(() => {
+        if (!roomId || !userId) return;
+        fetchAssignments();
+        }, [roomId, userId]);
+
 
     const [sp] = useSearchParams();
 
