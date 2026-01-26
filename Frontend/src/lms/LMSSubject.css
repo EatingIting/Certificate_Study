@@ -12,3 +12,17 @@
     flex: 1;
     padding: 32px;
 }
+
+/* 미팅 페이지일 때 패딩 최소화 및 스크롤 허용 */
+.subject-content:has(.meet-layout) {
+    padding: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* MeetingPage 컨테이너가 subject-content 내부에 맞게 조정 */
+.subject-content > div:has(.meet-layout) {
+    width: 100%;
+    height: 100%;
+}

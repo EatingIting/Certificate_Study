@@ -1,8 +1,10 @@
 import "./LMSSidebar.css";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState } from "react";
+import { useMeeting } from "../webrtc/MeetingContext";
 
 const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
+    const { requestPipIfPossible } = useMeeting();
     const navigate = useNavigate();
     const { subjectId } = useParams();
 
@@ -17,19 +19,26 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
 
     // ✅ 메인메뉴 클릭: 이동 X, 펼침/접힘만
     const toggleParent = (key) => {
-        setOpenKeys((prev) =>
-            prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-        );
+      setOpenKeys((prev) =>
+        prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+      );
+    };
+
+    const navigateWithPip = async (path) => {
+      if (isInMeeting) {
+        await requestPipIfPossible();
+      }
+      navigate(path);
     };
 
     // ✅ 하위 메뉴 클릭: 이동(페이지+쿼리)
     const goChild = (parentKey, activeKey, path) => {
-        setActiveMenu(activeKey);
+      setActiveMenu(activeKey);
+      setOpenKeys((prev) =>
+          prev.includes(parentKey) ? prev : [...prev, parentKey]
+      );
 
-        // 하위 눌렀을 때 해당 그룹은 열린 상태 유지
-        setOpenKeys((prev) => (prev.includes(parentKey) ? prev : [...prev, parentKey]));
-
-        navigate(`/lms/${subjectId}/${path}`);
+      navigate(`/lms/${subjectId}/${path}`);
     };
 
     return (
@@ -41,7 +50,7 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                         className={`menu-item menu-single ${activeMenu === "dashboard" ? "active" : ""}`}
                         onClick={() => {
                             setActiveMenu("dashboard");
-                            navigate(`/lms/${subjectId}/dashboard`);
+                            navigateWithPip(`/lms/${subjectId}/dashboard`);
                         }}
                         role="button"
                         tabIndex={0}
@@ -215,7 +224,13 @@ const LMSSidebar = ({ activeMenu, setActiveMenu }) => {
                 </ul>
             </div>
 
-            <button className="meeting-btn" type="button" onClick={() => navigate("/meeting")}>
+            <button 
+            className="meeting-btn" 
+            type="button" 
+            onClick={() => {
+                navigate(`/lms/${subjectId}/meeting/${subjectId}`);
+            }}
+            >
                 화상 채팅방 입장하기
             </button>
         </aside>

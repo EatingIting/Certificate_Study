@@ -344,13 +344,6 @@
 }
 
 
-.card.clickable:hover {
-    /* 아무것도 안 함 */
-} 
-
-
-
-
 /* 키보드 접근성(탭 이동) */
 .card.clickable:focus-visible {
     box-shadow: 0 0 0 3px rgba(100, 104, 183, 0.35);

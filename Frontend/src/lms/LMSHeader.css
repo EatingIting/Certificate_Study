@@ -1,6 +1,6 @@
 .lms-header {
-    min-height: 56px;
-    padding: 8px 24px; /* 위아래 여유 */
+    height: 64px;
+    padding: 0 24px;
     background-color: #f6faf3;
     border-bottom: 1px solid #e6eee1;
 
@@ -11,20 +11,6 @@
     box-sizing: border-box;
 }
 
-.lms-header-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    line-height: 1.1;
-}
-
-.lms-header-text p {
-    margin: 0;
-    font-size: 13px;
-    color: #666;
-    line-height: 1.1;
-}
-
 /* 왼쪽 */
 .lms-header-left {
     display: flex;
@@ -33,17 +19,39 @@
 }
 
 .logo-box {
-    width: 20px;
-    height: 20px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
     background-color: #97c793;
-    border-radius: 4px;
+    border-radius: 6px;
+    flex-shrink: 0;
 }
 
-.title {
-    font-size: 15px;
+.lms-header-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+}
+
+.lms-header-text .title {
+    font-size: 16px;
     font-weight: 600;
     color: #1f2937;
-    line-height: 1.1;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+}
+
+.lms-header-text p {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+    white-space: nowrap;
 }
 
 /* 오른쪽 */
