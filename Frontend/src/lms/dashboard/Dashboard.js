@@ -1,10 +1,13 @@
 import "./Dashboard.css";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 const Dashboard = ({ setActiveMenu }) => {
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [badgeCount, setBadgeCount] = useState(0);
 
     const navigate = useNavigate();
-    const { subjectId } = useParams();
+    const { subjectId } = useParams(); // URL이 /lms/:subjectId/dashboard 구조면 사용 가능
 
     const go = (menu) => {
         setActiveMenu(menu);

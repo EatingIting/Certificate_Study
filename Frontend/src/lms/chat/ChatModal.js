@@ -6,9 +6,9 @@ const STICKER_LIST = ["👌", "👍", "🎉", "😭", "🔥", "🤔"];
 
 /**
  * ChatModal 컴포넌트
- * - 기능: 실시간 채팅(WebSocket), AI 튜터 대화, 스티커 전송
- * - 특징: 드래그 가능한 플로팅 버튼 및 모달 창 (화면 밖 이탈 방지 적용)
- * - 중요: 상위 컴포넌트(LMSSubject)로부터 roomId를 받아 방을 구분함
+ * - 기능: 실시간 채팅(WebSocket), AI 튜터, DB 대화 내용 불러오기
+ * - 특징: 드래그 가능, 화면 이탈 방지, roomId 기반 방 분리
+ * - 상태: 현재는 테스트용 임시 ID 사용 중 (로그인 기능 병합 후 주석 해제 필요)
  */
 const ChatModal = ({ roomId }) => {
   // =================================================================
@@ -27,8 +27,8 @@ const ChatModal = ({ roomId }) => {
   const [userList, setUserList] = useState([]);        // 접속자 목록
   const [customNicknames, setCustomNicknames] = useState({}); // 사용자 별명
 
-  // 메시지 목록 (일반 / AI 분리)
-  const [chatMessages, setChatMessages] = useState([]);
+  // 메시지 목록
+  const [chatMessages, setChatMessages] = useState([]); // DB + 실시간 메시지
   const [aiMessages, setAiMessages] = useState([{
     userId: 'AI_BOT',
     userName: 'AI 튜터',
@@ -36,172 +36,195 @@ const ChatModal = ({ roomId }) => {
     isAiResponse: true
   }]);
 
-  // 📍 위치 및 드래그 관련 상태
-  // 초기값: 화면 오른쪽 아래 (여유 공간 100px)
+  // 📍 위치 및 드래그 상태 (초기값: 우측 하단)
   const [position, setPosition] = useState({ 
     x: window.innerWidth - 100, 
     y: window.innerHeight - 100 
   });
-  
-  // 📍 드래그 판별용 Refs (렌더링 없이 값만 저장)
-  const isDragging = useRef(false);   // 현재 드래그 중인가?
-  const dragStart = useRef({ x: 0, y: 0 }); // 드래그 시작 시 마우스 오프셋
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
 
-  // 기타 Refs
+  // Refs
   const ws = useRef(null);        // 웹소켓 객체
   const scrollRef = useRef(null); // 스크롤 자동 이동용
 
   // =================================================================
-  // 2. 초기화 및 유틸
+  // 2. 사용자 정보 설정 (Real User 매핑)
   // =================================================================
-
-  // 현재 모드에 따른 메시지 소스 선택
-  const currentMessages = isAiMode ? aiMessages : chatMessages;
-
-  // 내 정보 생성 (임시 랜덤 ID)
   const myInfo = useMemo(() => {
+    // 🚧 [TODO] 로그인 기능 병합 후 아래 주석을 풀어주세요!
+    // const storedUser = JSON.parse(localStorage.getItem("user"));
+    // if (storedUser) {
+    //    return { 
+    //        userId: storedUser.userId || storedUser.user_id, 
+    //        userName: storedUser.nickname || storedUser.name 
+    //    };
+    // }
+
+    // 👇 (현재 상태) 로그인 전이므로 임시 랜덤 ID 사용
     const randomId = Math.floor(Math.random() * 1000);
     return { userId: `user_${randomId}`, userName: `익명_${randomId}` };
   }, []);
 
+  const currentMessages = isAiMode ? aiMessages : chatMessages;
+
   // =================================================================
-  // 3. 웹소켓 연결 (useEffect)
+  // 3. [DB 연동] 지난 대화 내용 불러오기
   // =================================================================
   useEffect(() => {
-    // roomId가 없으면 연결하지 않음 (방어 코드)
+    // 방이 열려있고 roomId가 있을 때만 실행
+    if (!isOpen || !roomId) return;
+
+    const fetchChatHistory = async () => {
+        try {
+            // 🚧 [TODO] 백엔드 API가 준비되면 주석 해제
+            // const res = await fetch(`/api/chat/rooms/${roomId}/messages`);
+            // const data = await res.json();
+            
+            // 👇 (임시) API 연결 전까지는 빈 배열로 둠
+            const data = []; 
+
+            // DB 컬럼(snake_case)을 프론트 변수(camelCase)로 변환
+            const dbMessages = data.map(msg => ({
+                userId: msg.user_id,          
+                userName: msg.nickname,       
+                message: msg.messagetext,     
+                isSticker: STICKER_LIST.includes(msg.messagetext),
+                created_at: msg.created_at    
+            }));
+            setChatMessages(dbMessages);
+        } catch (err) {
+            console.error("채팅 기록 불러오기 실패:", err);
+        }
+    };
+    fetchChatHistory();
+  }, [isOpen, roomId]);
+
+
+  // =================================================================
+  // 4. [WebSocket] 실시간 통신 연결
+  // =================================================================
+  useEffect(() => {
     if (!roomId) return;
 
-    console.log(`📡 채팅방 [${roomId}] 연결 시도...`);
+    console.log(`📡 [Room ${roomId}] 연결 시도...`);
 
-    // ✅ 고정된 상수(ROOM_ID) 대신 props로 받은 roomId를 사용해 동적으로 연결
+    // ✅ ws:// 사용 (로컬 개발 환경) + 우리 전용 주소 (/ws/chat)
     const socket = new WebSocket(
-        `wss://localhost:8080/ws/room/${roomId}?userId=${myInfo.userId}&userName=${myInfo.userName}`
+        `ws://localhost:8080/ws/chat/${roomId}?userId=${myInfo.userId}&userName=${myInfo.userName}`
     );
 
-    socket.onopen = () => console.log(`✅ [Room ${roomId}] 웹소켓 연결됨`);
+    socket.onopen = () => console.log(`✅ [Room ${roomId}] 웹소켓 연결 성공!`);
 
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         
-        // 💬 채팅 메시지 수신
-        if (data.type === "CHAT") {
+        // 💬 일반 대화 (TALK 타입)
+        if (data.type === "TALK") {
             setChatMessages(prev => [...prev, { 
                 userId: data.userId, 
+                userName: data.userName, // 보낸 사람 이름 표시
                 message: data.message, 
                 isSticker: STICKER_LIST.includes(data.message) 
             }]);
             
-            // 창이 닫혀있고 AI 모드가 아니면 배지 증가
+            // 창이 닫혀있으면 배지 카운트 증가
             if (!isOpen && !isAiMode) setUnreadCount(prev => prev + 1);
         
-        // 👥 접속자 목록 갱신
+        // 👥 접속자 목록 업데이트
         } else if (data.type === "USERS_UPDATE") {
             setUserList(data.users);
         }
     };
 
+    socket.onclose = () => console.log("❌ 웹소켓 연결 종료");
+
     ws.current = socket;
-    return () => socket.close(); // 언마운트 시 연결 종료
-    
-    // ⚠️ roomId가 바뀌면 소켓을 끊고 다시 연결해야 하므로 의존성 배열에 추가
+    return () => socket.close();
   }, [isOpen, isAiMode, myInfo.userId, myInfo.userName, roomId]);
 
-  // 자동 스크롤 (새 메시지 오면 맨 아래로)
+  // 자동 스크롤 (새 메시지 수신 시)
   useEffect(() => {
     if (isOpen && scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [currentMessages, isOpen]);
 
+
   // =================================================================
-  // 4. 🖱️ 드래그 앤 드롭 로직 (화면 이탈 방지 포함)
+  // 5. 드래그 앤 드롭 로직 (UI)
   // =================================================================
-  
-  // 드래그 시작
   const handleMouseDown = (e) => {
-    isDragging.current = false; // 일단은 클릭으로 간주
-    // 마우스 좌표와 현재 버튼 위치의 차이(offset)를 저장
-    dragStart.current = { 
-        x: e.clientX - position.x, 
-        y: e.clientY - position.y 
-    };
-    
-    // 전역 이벤트 등록
+    isDragging.current = false;
+    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // 드래그 중 (위치 업데이트)
   const handleMouseMove = (e) => {
-    isDragging.current = true; // 움직였으니 드래그 상태로 변경
-    
-    // 1. 새로운 예상 좌표 계산
+    isDragging.current = true;
     let newX = e.clientX - dragStart.current.x;
     let newY = e.clientY - dragStart.current.y;
-
-    // 2. ⛔ 화면 밖 이탈 방지 (Boundary Check)
-    const maxX = window.innerWidth - 70; // 버튼 크기 고려
+    // 화면 밖 이탈 방지
+    const maxX = window.innerWidth - 70; 
     const maxY = window.innerHeight - 70;
-
-    // 0보다 작으면 0으로, max보다 크면 max로 고정
-    newX = Math.min(Math.max(0, newX), maxX);
-    newY = Math.min(Math.max(0, newY), maxY);
-
-    setPosition({ x: newX, y: newY });
+    setPosition({ x: Math.min(Math.max(0, newX), maxX), y: Math.min(Math.max(0, newY), maxY) });
   };
 
-  // 드래그 종료
   const handleMouseUp = () => {
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  // =================================================================
-  // 5. 이벤트 핸들러 (UI 조작)
-  // =================================================================
 
-  // 채팅창 열기/닫기 (드래그 중이면 실행 안 함)
+  // =================================================================
+  // 6. 이벤트 핸들러
+  // =================================================================
   const toggleChat = () => {
-    if (isDragging.current) return; // 드래그였다면 클릭 무시
-    
+    if (isDragging.current) return;
     if (!isOpen) setUnreadCount(0);
     setIsOpen(!isOpen);
-    
-    // 닫을 때 메뉴들도 같이 닫기
-    if (isOpen) { 
-        setIsMenuOpen(false); 
-        setShowStickerMenu(false); 
-    }
+    if (isOpen) { setIsMenuOpen(false); setShowStickerMenu(false); }
   };
 
-  // AI 모드 전환
   const toggleAiMode = () => {
     setIsAiMode(!isAiMode);
     setIsMenuOpen(false);
     setShowStickerMenu(false);
   };
 
-  // 메시지 전송
+  // ✅ 메시지 전송 핸들러
   const handleSend = (text = inputValue) => {
     if (!text.trim()) return;
 
     if (isAiMode) {
         // [AI 모드]
         setAiMessages(prev => [...prev, { userId: myInfo.userId, message: text, isAiResponse: false }]);
-        // (임시) AI 응답 시뮬레이션
         setTimeout(() => {
             setAiMessages(prev => [...prev, { userId: 'AI_BOT', userName: 'AI 튜터', message: `"${text}" 답변...`, isAiResponse: true }]);
         }, 1000);
     } else {
-        // [일반 채팅]
-        if (!ws.current) return;
-        ws.current.send(JSON.stringify({ type: "CHAT", message: text }));
+        // [일반 채팅] - 안전 장치 추가
+        if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+             console.error("❌ 웹소켓이 연결되지 않았습니다.");
+             return;
+        }
+
+        // 🛠️ 백엔드 DTO(ChatMessageDTO) 규격에 맞춰 전송
+        const messageData = {
+            type: "TALK",           // 백엔드 Enum 타입
+            roomId: roomId,         
+            userId: myInfo.userId,  
+            userName: myInfo.userName, 
+            message: text           
+        };
+
+        ws.current.send(JSON.stringify(messageData));
     }
     setInputValue("");
     setShowStickerMenu(false);
   };
 
-  // 기타 핸들러
   const sendSticker = (sticker) => handleSend(sticker);
   
   const editNickname = (targetId) => {
@@ -210,35 +233,24 @@ const ChatModal = ({ roomId }) => {
   };
   
   const getDisplayName = (user) => customNicknames[user.userId] || user.userName || user.userId;
-  
-  const handleBodyClick = () => { 
-      setIsMenuOpen(false); 
-      setShowStickerMenu(false); 
-  };
+  const handleBodyClick = () => { setIsMenuOpen(false); setShowStickerMenu(false); };
 
-  // =================================================================
-  // 6. 모달 위치 계산 (렌더링 직전)
-  // =================================================================
-  
-  // 📍 모달 창이 화면 위로 잘리는 것 방지 (최소 10px 아래)
+  // 모달 위치 계산 (화면 잘림 방지)
   const modalTop = Math.max(10, position.y - 480);
-  
-  // 📍 모달 창이 화면 오른쪽으로 잘리는 것 방지
   const modalLeft = Math.min(Math.max(10, position.x - 290), window.innerWidth - 370);
-
 
   // =================================================================
   // 7. 렌더링
   // =================================================================
   return (
     <>
-      {/* 🟢 1. 플로팅 버튼 */}
+      {/* 플로팅 버튼 */}
       {!isOpen && (
         <div 
             className={`chat-floating-btn ${isAiMode ? 'ai-mode' : ''}`} 
             onClick={toggleChat}
-            onMouseDown={handleMouseDown} // 드래그 시작
-            style={{ left: `${position.x}px`, top: `${position.y}px` }} // 동적 위치 적용
+            onMouseDown={handleMouseDown}
+            style={{ left: `${position.x}px`, top: `${position.y}px` }}
         >
             <img 
                 src="/chat-ai-icon.png" 
@@ -249,27 +261,21 @@ const ChatModal = ({ roomId }) => {
         </div>
       )}
 
-      {/* 🟢 2. 모달 창 본체 */}
+      {/* 모달 창 */}
       <div 
         className={`tc-wrapper ${isAiMode ? 'ai-mode' : ''}`} 
-        style={{ 
-            display: isOpen ? 'flex' : 'none',
-            left: `${modalLeft}px`, // 계산된 안전 좌표 적용
-            top: `${modalTop}px`   
-        }}
+        style={{ display: isOpen ? 'flex' : 'none', left: `${modalLeft}px`, top: `${modalTop}px` }}
       >
-        
-        {/* === 헤더 (드래그 손잡이 역할) === */}
+        {/* 헤더 */}
         <div 
             className={`tc-header ${isAiMode ? 'ai-mode' : ''}`}
-            onMouseDown={handleMouseDown} // 헤더를 잡고 드래그 가능
+            onMouseDown={handleMouseDown}
             style={{ cursor: 'move' }}
         >
           <div className="tc-title-row">
               <span className="tc-title">{isAiMode ? "🤖 AI 튜터" : "💬 스터디룸 채팅"}</span>
           </div>
           <div className="tc-icons">
-             {/* 🛑 stopPropagation: 버튼 클릭 시 드래그(부모 이벤트)가 발생하지 않게 막음 */}
              {!isAiMode && (
                 <span className="icon-btn" onClick={(e) => { e.stopPropagation(); setIsMenuOpen(!isMenuOpen); }}>☰</span>
              )}
@@ -280,7 +286,7 @@ const ChatModal = ({ roomId }) => {
           </div>
         </div>
 
-        {/* === 사이드바 === */}
+        {/* 사이드바 */}
         {isMenuOpen && !isAiMode && (
             <div className="tc-sidebar">
                 <div className="tc-sidebar-title">접속자 목록 ({userList.length})</div>
@@ -293,11 +299,11 @@ const ChatModal = ({ roomId }) => {
             </div>
         )}
         
-        {/* === 채팅 내용 === */}
+        {/* 채팅 내용 */}
         <div className={`tc-body ${isAiMode ? 'ai-mode' : ''}`} ref={scrollRef} onClick={handleBodyClick}>
           {currentMessages.map((msg, index) => {
             const isMe = isAiMode ? !msg.isAiResponse : msg.userId === myInfo.userId;
-            const displayName = isAiMode ? (msg.isAiResponse ? msg.userName : "나") : (customNicknames[msg.userId] || msg.userId);
+            const displayName = isAiMode ? (msg.isAiResponse ? msg.userName : "나") : (msg.userName || customNicknames[msg.userId] || msg.userId);
             return (
               <div key={index} className={`tc-msg-row ${isMe ? 'me' : 'other'}`}>
                 {!isMe && (
@@ -316,7 +322,7 @@ const ChatModal = ({ roomId }) => {
           })}
         </div>
 
-        {/* === 스티커 메뉴 === */}
+        {/* 스티커 메뉴 */}
         {showStickerMenu && !isAiMode && (
             <div className="sticker-menu-container">
                 {STICKER_LIST.map((sticker, idx) => (
@@ -325,7 +331,7 @@ const ChatModal = ({ roomId }) => {
             </div>
         )}
 
-        {/* === 입력창 === */}
+        {/* 입력창 */}
         <div className="tc-input-area">
           {!isAiMode && <button className={`tc-sticker-toggle-btn ${showStickerMenu ? 'active' : ''}`} onClick={() => setShowStickerMenu(!showStickerMenu)}>😊</button>}
           
@@ -339,7 +345,6 @@ const ChatModal = ({ roomId }) => {
           />
           <button className={`tc-send-btn ${isAiMode ? 'ai-mode' : ''}`} onClick={() => handleSend()}>전송</button>
         </div>
-
       </div>
     </>
   );
