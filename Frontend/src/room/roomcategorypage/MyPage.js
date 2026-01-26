@@ -75,7 +75,7 @@ const MyPage = () => {
     };
 
     const getImageUrl = (img) => {
-        if (!img) return "/기본이미지.jpg";
+        if (!img) return "/default.jpg";
 
         if (img.startsWith("http")) {
             return img;
@@ -444,7 +444,7 @@ const MyPage = () => {
                                             src={previewImage}
                                             alt="preview"
                                             onError={(e) => {
-                                                e.currentTarget.src = "/기본이미지.jpg";
+                                                e.currentTarget.src = "/default.jpg";
                                             }}
                                         />
 

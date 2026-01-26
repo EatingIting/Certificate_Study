@@ -9,9 +9,9 @@ const ClassCard = ({ data }) => {
     return (
         <div className="class-card">
             <img
-                src={data.roomImg || "/default.png"}
+                src={data.roomImg || "/default.jpg"}
                 alt={data.title}
-                onError={(e) => (e.target.src = "/default.png")}
+                onError={(e) => (e.target.src = "/default.jpg")}
             />
 
             <div className="card-body">
