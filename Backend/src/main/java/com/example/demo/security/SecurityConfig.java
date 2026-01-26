@@ -22,50 +22,62 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final OAuthHandler oAuthHandler;
+    private final OAuth2UserService oAuth2UserService;
 
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider) {
+    public SecurityConfig(JwtTokenProvider jwtTokenProvider,
+                          OAuthHandler oAuthHandler,
+                          OAuth2UserService oAuth2UserService) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.oAuthHandler = oAuthHandler;
+        this.oAuth2UserService = oAuth2UserService;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
+
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
                 .authorizeHttpRequests(auth -> auth
-                        // preflight
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 정적 리소스
+                        .requestMatchers("/oauth2/**", "/login/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/error").permitAll()
+
                         .requestMatchers(
                                 "/", "/index.html",
                                 "/static/**",
                                 "/*.css", "/*.js",
-                                "/*.png", "/*.jpg", "/*.jpeg", "/*.svg", "/*.ico",
+                                "/*.png", "/*.jpg", "/*.jpeg",
+                                "/*.svg", "/*.ico",
                                 "/assets/**",
                                 "/images/**",
-                                "/uploads/**"
+                                "/upload/**"
                         ).permitAll()
 
-                        // 인증 관련 API
                         .requestMatchers(
-                                "/ws/**",
-                                "/api/auth/**",
-                                "/api/users/**",
-                                "/api/main",
-                                "/api/books/image/**",
-                                "/api/category/**"
+                                "/api/users/login",
+                                "/api/users/signup",
+                                "/api/users/check-email",
+                                "/api/category/**",
+                                "/api/rooms/**"
                         ).permitAll()
-
-                        .requestMatchers(HttpMethod.GET, "/api/rooms/**").permitAll()
-
-                        .requestMatchers(HttpMethod.POST, "/api/rooms").authenticated()
 
                         .anyRequest().authenticated()
+                )
+
+                // OAuth 로그인 시 이메일 가져오도록 설정
+                .oauth2Login(oauth -> oauth
+                        .userInfoEndpoint(userInfo ->
+                                userInfo.userService(oAuth2UserService)
+                        )
+                        .successHandler(oAuthHandler)
                 )
 
                 .addFilterBefore(
@@ -80,11 +92,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "https://172.30.1.250",
-                "https://192.168.35.235"
-        ));
+
+        config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));
@@ -93,10 +102,11 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 
-    // 비밀번호 인코더
+    // 비밀번호 암호화
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
