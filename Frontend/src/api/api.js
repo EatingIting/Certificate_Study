@@ -2,7 +2,11 @@ import axios from "axios";
 
 
 const api = axios.create({
-    baseURL: "http://localhost:8080/api",
+    // 배포 환경(다른 PC에서 접속)에서 localhost 하드코딩을 피하기 위해
+    // 기본은 상대경로(/api)로 요청한다.
+    // - 개발: CRA dev server + setupProxy가 localhost:8080으로 프록시
+    // - 배포: 동일 오리진에서 /api를 백엔드로 라우팅(리버스 프록시 또는 Spring 정적서빙)
+    baseURL: process.env.REACT_APP_API_BASE_URL || "/api",
     headers: {
         "Content-Type": "application/json",
     },

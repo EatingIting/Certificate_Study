@@ -49,7 +49,9 @@ const Auth = () => {
     };
 
     const handleOAuthLogin = (provider) => {
-        window.location.href = `http://localhost:8080/oauth2/authorization/${provider}`;
+        // localhost 하드코딩 금지: dev에서는 setupProxy가 /oauth2를 백엔드로 프록시,
+        // 배포에서는 동일 오리진(리버스 프록시/백엔드 서빙) 기준으로 동작하도록 상대경로 사용
+        window.location.href = `/oauth2/authorization/${provider}`;
     };
 
     return (

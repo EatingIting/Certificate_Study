@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './ChatModal.css';
+import { getWsProtocol } from "../../utils/backendUrl";
 
 // 🔹 상수 설정
 const STICKER_LIST = ["👌", "👍", "🎉", "😭", "🔥", "🤔"];
@@ -109,9 +110,12 @@ const ChatModal = ({ roomId }) => {
 
     console.log(`📡 [Room ${roomId}] 연결 시도...`);
 
-    // ✅ ws:// 사용 (로컬 개발 환경) + 우리 전용 주소 (/ws/chat)
+    // ✅ nginx 리버스 프록시를 통해 연결 (포트 생략 → 443/80 기본 포트 사용)
+    // - 개발: setupProxy가 백엔드(ws)로 프록시
+    // - 배포: nginx가 /ws를 백엔드 8080으로 프록시
+    const protocol = getWsProtocol();
     const socket = new WebSocket(
-        `ws://localhost:8080/ws/chat/${roomId}?userId=${myInfo.userId}&userName=${myInfo.userName}`
+        `${protocol}://${window.location.host}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(myInfo.userName)}`
     );
 
     socket.onopen = () => console.log(`✅ [Room ${roomId}] 웹소켓 연결 성공!`);

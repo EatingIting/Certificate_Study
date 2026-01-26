@@ -8,7 +8,7 @@ const MyApplications = () => {
 
   // 로그인 체크
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
+    const token = sessionStorage.getItem("accessToken");
     if (!token) {
       alert("로그인이 필요한 페이지입니다.");
       navigate("/auth");

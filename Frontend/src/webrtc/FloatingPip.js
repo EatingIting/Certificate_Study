@@ -44,29 +44,42 @@ const FloatingPip = ({
 
     // 🔥 DOM에서 유효한 스트림 찾기
     const findValidStreamFromDOM = useCallback(() => {
-        // 1. data-main-video="main" 속성을 가진 video 찾기
-        let video = document.querySelector('video[data-main-video="main"]');
+        // ⚠️ 중요: 전역의 모든 video를 훑으면
+        // - 숨겨진 pip video
+        // - 로컬 카메라 전처리용 hidden video
+        // 등을 잡아버려 PiP가 엉뚱한 스트림(=생얼)로 바뀔 수 있음.
+        // 그래서 "회의 타일(video-tile) 내부의 video-element"만 대상으로 한다.
 
-        // 2. 없으면 srcObject가 있는 video 찾기 (자기 자신 제외)
-        if (!video || !video.srcObject) {
-            const allVideos = document.querySelectorAll('video');
-            for (const v of allVideos) {
-                // FloatingPip의 video는 제외
-                if (v === videoRef.current) continue;
-
-                if (v.srcObject) {
-                    const tracks = v.srcObject.getVideoTracks();
-                    if (tracks.length > 0 && tracks.some(t => t.readyState === "live")) {
-                        video = v;
-                        break;
-                    }
-                }
+        const pickFirstValid = (selector) => {
+            const nodes = document.querySelectorAll(selector);
+            for (const v of nodes) {
+                if (v === videoRef.current) continue; // FloatingPip 자신의 video 제외
+                if (!v?.srcObject) continue;
+                const tracks = v.srcObject.getVideoTracks();
+                if (tracks.length > 0 && tracks.some((t) => t.readyState === "live")) return v;
             }
-        }
+            return null;
+        };
+
+        // 1) 상대 화면공유 우선
+        let video =
+            pickFirstValid('.video-tile:not(.me) video.video-element.screen') ||
+            // 2) 메인 스테이지(발표자/선택된 타일)
+            pickFirstValid('video[data-main-video="main"]') ||
+            // 3) 상대 카메라
+            pickFirstValid('.video-tile:not(.me) video.video-element') ||
+            // 4) 최후: 타일 내부라면 누구든(로컬 포함)
+            pickFirstValid('.video-tile video.video-element');
 
         if (video?.srcObject) {
-            const newPeerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || peerName;
-            return { stream: video.srcObject, peerName: newPeerName };
+            const tile = video.closest(".video-tile");
+            const newPeerId = tile?.dataset?.peerId || video?.dataset?.peerId || "";
+            const newPeerName =
+                tile?.dataset?.peerName ||
+                video?.dataset?.peerName ||
+                tile?.querySelector(".stream-label")?.textContent ||
+                peerName;
+            return { stream: video.srcObject, peerName: newPeerName, peerId: newPeerId };
         }
 
         return null;
@@ -127,7 +140,7 @@ const FloatingPip = ({
 
                     // 부모에게 알림 (선택적)
                     if (onStreamInvalid) {
-                        onStreamInvalid(found.stream, found.peerName);
+                        onStreamInvalid(found.stream, found.peerName, found.peerId);
                     }
                 }
             }
@@ -265,7 +278,7 @@ const FloatingPip = ({
                     videoRef.current.play().catch(() => { });
                 }
                 if (onStreamInvalid) {
-                    onStreamInvalid(found.stream, found.peerName);
+                    onStreamInvalid(found.stream, found.peerName, found.peerId);
                 }
             }
         }, 100);

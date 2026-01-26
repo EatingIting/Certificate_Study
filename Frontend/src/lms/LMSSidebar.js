@@ -32,7 +32,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         let path = location.pathname;
         let search = location.search || "";
         let sp = new URLSearchParams(search);
-        let last = path.split("/").filter(Boolean).pop(); // dashboard, calendar, board ...
+        let last = path.split("/").filter(Boolean).pop();
 
         let nextActive = activeMenu;
 
@@ -63,8 +63,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             else nextActive = "board/all";
         }
 
-        // ✅ 스터디 관리 라우트 동기화 (추가)
-        // 예: /lms/1/study/members, /lms/1/study/leave
+        // 스터디 관리 라우트 동기화
         if (last === "members") nextActive = "study/members";
         if (last === "leave") nextActive = "study/leave";
 
@@ -123,51 +122,44 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return null;
         };
 
-        // 1) 상대 화면공유 우선 (상대방이 화면공유 중이면 PiP는 공유 화면이 최우선)
-        // 2) 그 다음: 어떤 화면공유든
-        // 3) 그 다음: 메인 비디오
-        // 4) 마지막: 유효한 아무 비디오
         const video =
             pickFirstValid('.video-tile:not(.me) video.video-element.screen') ||
-            pickFirstValid('video.video-element.screen') ||
             pickFirstValid('video[data-main-video="main"]') ||
-            pickFirstValid('video.video-element') ||
-            pickFirstValid('video');
+            pickFirstValid('.video-tile:not(.me) video.video-element') ||
+            pickFirstValid('.video-tile video.video-element');
         
         if (!video) {
             console.log('[LMSSidebar] 유효한 video 요소를 찾을 수 없음');
             return;
         }
 
-        // 🔥 브라우저 PiP 요청 (MeetingContext에서 처리)
         const stream = video.srcObject;
         if (!stream) {
             console.log('[LMSSidebar] video.srcObject가 없음');
             return;
         }
         
-        const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
+        const tile = video.closest(".video-tile");
+        const peerId = tile?.dataset?.peerId || video?.dataset?.peerId || "";
+        const peerName =
+            tile?.dataset?.peerName ||
+            video?.dataset?.peerName ||
+            tile?.querySelector(".stream-label")?.textContent ||
+            "참가자";
         
-        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName });
-        await requestBrowserPip(video, stream, peerName);
+        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName, peerId });
+        await requestBrowserPip(video, stream, peerName, peerId);
     }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
-    // ===============================
-    // 메인메뉴 클릭: 이동 X, 펼침/접힘만
-    // ===============================
     const toggleParent = (key) => {
         setOpenKeys((prev) =>
             prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
         );
     };
 
-    // ===============================
-    // 하위 메뉴 클릭: 이동 + PiP
-    // ===============================
     const goChild = async (parentKey, activeKey, path) => {
         setActiveMenu(activeKey);
 
-        // 하위 눌렀을 때 해당 그룹은 열린 상태 유지
         setOpenKeys((prev) =>
             prev.includes(parentKey) ? prev : [...prev, parentKey]
         );
@@ -178,15 +170,12 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             detail: { path: `/lms/${subjectId}/${path}` }
         }));
 
-        // 🔥 회의 중이면 자동 PiP (user gesture 컨텍스트에서 직접 호출)
+        // 회의 중이면 자동 PiP
         await requestPipIfMeeting();
 
         navigate(`/lms/${subjectId}/${path}`);
     };
 
-    // ===============================
-    // 대시보드 단일 메뉴 이동
-    // ===============================
     const goDashboard = async () => {
         setActiveMenu("dashboard");
 
@@ -195,7 +184,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             detail: { path: `/lms/${subjectId}/dashboard` }
         }));
 
-        // 🔥 회의 중이면 자동 PiP (user gesture 컨텍스트에서 직접 호출)
+        // 회의 중이면 자동 PiP
         await requestPipIfMeeting();
 
         navigate(`/lms/${subjectId}/dashboard`);
@@ -558,9 +547,10 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                 className="meeting-btn"
                 type="button"
                 onClick={() => {
-                    const roomId =
-                        Date.now().toString(36) +
-                        Math.random().toString(36).substring(2, 6);
+                    const roomId = subjectId;
+                    if (subjectId) {
+                        sessionStorage.setItem("lms.activeRoomId", subjectId);
+                    }
 
                     window.dispatchEvent(new Event("meeting:request-pip"));
 

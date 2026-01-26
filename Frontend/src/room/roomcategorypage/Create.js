@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import api from "../../api/api";
 import "./Create.css";
 import { useLocation, useNavigate } from "react-router-dom";
+import { toBackendUrl } from "../../utils/backendUrl";
 
 const CreateRoom = () => {
     const navigate = useNavigate();
@@ -122,7 +123,7 @@ const CreateRoom = () => {
         let categoryId = editStudy.categoryId;
 
         if (editStudy.roomImg) {
-            setPreviewUrl(`http://localhost:8080${editStudy.roomImg}`);
+            setPreviewUrl(toBackendUrl(editStudy.roomImg));
         }
 
         if (!categoryId) {

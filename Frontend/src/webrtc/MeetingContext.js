@@ -2,6 +2,7 @@ import {
     createContext,
     useContext,
     useState,
+    useEffect,
     useCallback,
     useRef,
 } from "react";
@@ -39,6 +40,54 @@ export const MeetingProvider = ({ children }) => {
 
     // 중복 전환 방지 플래그
     const isTransitioningRef = useRef(false);
+
+    // 🔥 PiP 대상(비디오) 사라짐 감지(카메라 OFF 등)용
+    const pipNoVideoSinceRef = useRef(null);
+    const customPipNoVideoSinceRef = useRef(null);
+
+    const emitToast = useCallback((message) => {
+        if (!message) return;
+        try {
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("ui:toast", { detail: message }));
+            }
+        } catch { }
+    }, []);
+
+    const hasLiveVideoTrack = useCallback((s) => {
+        try {
+            const tracks = s?.getVideoTracks?.() ?? [];
+            return tracks.length > 0 && tracks.some((t) => t.readyState === "live");
+        } catch {
+            return false;
+        }
+    }, []);
+
+    // ✅ PiP UI만 닫고(영상) 회의는 유지(오디오 계속)하는 종료
+    const closePipUiKeepMeeting = useCallback((reasonText) => {
+        // polling 정리 (자동 커스텀 PiP 전환 방지)
+        if (pipPollingRef.current) {
+            clearInterval(pipPollingRef.current);
+            pipPollingRef.current = null;
+        }
+
+        pipNoVideoSinceRef.current = null;
+        customPipNoVideoSinceRef.current = null;
+
+        // 커스텀 PiP UI 닫기
+        setCustomPipData(null);
+
+        // 브라우저 PiP 닫기
+        if (document.pictureInPictureElement) {
+            document.exitPictureInPicture().catch(() => { });
+        }
+        setIsBrowserPipMode(false);
+
+        // ✅ 회의는 계속 유지(음성 계속): isPipMode는 true 유지
+        setIsPipMode(true);
+
+        if (reasonText) emitToast(reasonText);
+    }, [emitToast]);
 
     const endMeeting = useCallback(() => {
         setRoomId(null);
@@ -103,6 +152,41 @@ export const MeetingProvider = ({ children }) => {
         return dst;
     }, [ensurePipStableStream]);
 
+    const getPeerMetaFromVideo = useCallback((videoEl) => {
+        try {
+            const tile = videoEl?.closest?.(".video-tile");
+            const peerId = tile?.dataset?.peerId || videoEl?.dataset?.peerId || "";
+            const peerName =
+                tile?.dataset?.peerName ||
+                videoEl?.dataset?.peerName ||
+                tile?.querySelector?.(".stream-label")?.textContent ||
+                "참가자";
+            return { peerId, peerName };
+        } catch {
+            return { peerId: "", peerName: "참가자" };
+        }
+    }, []);
+
+    const findPortalStreamForPeerId = useCallback((peerId) => {
+        if (!peerId) return null;
+
+        const meetingRoot = document.getElementById("meeting-root");
+        const roots = [meetingRoot, document].filter(Boolean);
+
+        for (const root of roots) {
+            const nodes = root?.querySelectorAll?.("video.video-element") || [];
+            for (const v of nodes) {
+                const id = v?.dataset?.peerId || v?.closest?.(".video-tile")?.dataset?.peerId || "";
+                if (String(id) !== String(peerId)) continue;
+                if (v?.srcObject && isStreamValidCheck(v.srcObject)) {
+                    const meta = getPeerMetaFromVideo(v);
+                    return { stream: v.srcObject, peerName: meta.peerName, peerId: meta.peerId };
+                }
+            }
+        }
+        return null;
+    }, [getPeerMetaFromVideo, isStreamValidCheck]);
+
     const findPortalMainStream = useCallback(() => {
         const meetingRoot = document.getElementById("meeting-root");
 
@@ -114,28 +198,32 @@ export const MeetingProvider = ({ children }) => {
             return null;
         };
 
-        // ✅ PiP는 "화면공유 > 메인 > 그 외" 우선순위로 선택
-        // - 상대가 화면공유 중이면 공유 화면이 PiP에 보여야 함
+        // ✅ PiP는 "화면공유(상대) > 메인(현재 선택) > 카메라(상대) > 그 외" 우선순위로 선택
+        // ⚠️ 핵심: document 전체의 모든 video를 잡으면 (숨겨진 pipVideo / 로컬 canvas용 hidden video 등)
+        //          엉뚱한 스트림으로 바뀌면서 얼굴 이모지 등이 '사라진 것처럼' 보일 수 있음.
+        //          그래서 `.video-tile` 내부의 `.video-element`로만 제한한다.
         let video =
+            // 1) 상대 화면공유 최우선
             pickFirstValid(meetingRoot, '.video-tile:not(.me) video.video-element.screen') ||
-            pickFirstValid(meetingRoot, 'video.video-element.screen') ||
+            // 2) 현재 메인 스테이지(발표자/선택된 타일)
             pickFirstValid(meetingRoot, 'video[data-main-video="main"]') ||
-            pickFirstValid(meetingRoot, 'video.video-element') ||
-            pickFirstValid(meetingRoot, 'video');
+            // 3) 상대 카메라(어떤 타일이든)
+            pickFirstValid(meetingRoot, '.video-tile:not(.me) video.video-element') ||
+            // 4) 최후: 타일 내부라면 누구든(로컬 포함)
+            pickFirstValid(meetingRoot, '.video-tile video.video-element');
 
         // meeting-root에서 못 찾으면 전역에서 재시도 (Portal이 아직 없거나, DOM 순서 이슈 대비)
         if (!video) {
             video =
                 pickFirstValid(document, '.video-tile:not(.me) video.video-element.screen') ||
-                pickFirstValid(document, 'video.video-element.screen') ||
                 pickFirstValid(document, 'video[data-main-video="main"]') ||
-                pickFirstValid(document, 'video.video-element') ||
-                pickFirstValid(document, 'video');
+                pickFirstValid(document, '.video-tile:not(.me) video.video-element') ||
+                pickFirstValid(document, '.video-tile video.video-element');
         }
 
         if (video?.srcObject && isStreamValidCheck(video.srcObject)) {
-            const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
-            return { stream: video.srcObject, peerName };
+            const meta = getPeerMetaFromVideo(video);
+            return { stream: video.srcObject, peerName: meta.peerName, peerId: meta.peerId };
         }
 
         return null;
@@ -151,17 +239,17 @@ export const MeetingProvider = ({ children }) => {
             return null;
         };
 
-        // ✅ 화면공유 우선
+        // ✅ 화면공유(상대) > 메인 > 카메라(상대) > 타일 내부 순
+        // (숨겨진 pipVideo/기타 video 요소는 제외)
         const video =
             pickFirstValid(document, '.video-tile:not(.me) video.video-element.screen') ||
-            pickFirstValid(document, 'video.video-element.screen') ||
             pickFirstValid(document, 'video[data-main-video="main"]') ||
-            pickFirstValid(document, 'video.video-element') ||
-            pickFirstValid(document, 'video');
+            pickFirstValid(document, '.video-tile:not(.me) video.video-element') ||
+            pickFirstValid(document, '.video-tile video.video-element');
 
         if (video?.srcObject && isStreamValidCheck(video.srcObject)) {
-            const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
-            return { stream: video.srcObject, peerName };
+            const meta = getPeerMetaFromVideo(video);
+            return { stream: video.srcObject, peerName: meta.peerName, peerId: meta.peerId };
         }
 
         return null;
@@ -215,9 +303,9 @@ export const MeetingProvider = ({ children }) => {
         const portalMain = findPortalMainStream();
         if (portalMain?.stream && isStreamValidCheck(portalMain.stream)) {
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (Portal main 스트림)");
-            setCustomPipData({ stream: portalMain.stream, peerName: portalMain.peerName });
+            setCustomPipData({ stream: portalMain.stream, peerName: portalMain.peerName, peerId: portalMain.peerId || "" });
             setIsPipMode(true);
-            pendingPipDataRef.current = { stream: portalMain.stream, peerName: portalMain.peerName };
+            pendingPipDataRef.current = { stream: portalMain.stream, peerName: portalMain.peerName, peerId: portalMain.peerId || "" };
             setTimeout(() => { isTransitioningRef.current = false; }, 100);
             return;
         }
@@ -230,9 +318,9 @@ export const MeetingProvider = ({ children }) => {
         if (isHiddenStreamValid) {
             const peerName = pendingPipDataRef.current?.peerName || "참가자";
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (숨겨진 video 스트림)");
-            setCustomPipData({ stream: hiddenVideoStream, peerName });
+            setCustomPipData({ stream: hiddenVideoStream, peerName, peerId: pendingPipDataRef.current?.peerId || "" });
             setIsPipMode(true);
-            pendingPipDataRef.current = { stream: hiddenVideoStream, peerName };
+            pendingPipDataRef.current = { stream: hiddenVideoStream, peerName, peerId: pendingPipDataRef.current?.peerId || "" };
             setTimeout(() => { isTransitioningRef.current = false; }, 100);
             return;
         }
@@ -244,7 +332,7 @@ export const MeetingProvider = ({ children }) => {
 
         if (pending && isPendingValid) {
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (pending 스트림)");
-            setCustomPipData({ stream: pending.stream, peerName: pending.peerName });
+            setCustomPipData({ stream: pending.stream, peerName: pending.peerName, peerId: pending.peerId || "" });
             setIsPipMode(true);
             setTimeout(() => { isTransitioningRef.current = false; }, 100);
             return;
@@ -256,7 +344,7 @@ export const MeetingProvider = ({ children }) => {
 
         if (domStream) {
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (DOM 스트림)");
-            setCustomPipData({ stream: domStream.stream, peerName: domStream.peerName });
+            setCustomPipData({ stream: domStream.stream, peerName: domStream.peerName, peerId: domStream.peerId || "" });
             setIsPipMode(true);
             pendingPipDataRef.current = domStream;
             setTimeout(() => { isTransitioningRef.current = false; }, 100);
@@ -318,7 +406,7 @@ export const MeetingProvider = ({ children }) => {
     }, [findPortalMainStream, findValidStreamFromDOM, isStreamValidCheck]);
 
     // 브라우저 PIP 요청 (🔥 숨겨진 video 사용하여 페이지 이동 시에도 PIP 유지)
-    const requestBrowserPip = useCallback(async (videoEl, stream, peerName) => {
+    const requestBrowserPip = useCallback(async (videoEl, stream, peerName, peerId) => {
         if (!stream) {
             console.warn("[MeetingContext] 스트림이 없습니다.");
             return false;
@@ -330,7 +418,9 @@ export const MeetingProvider = ({ children }) => {
 
         // 🔥 PiP video는 stable stream을 사용하고, track만 교체
         const stable = syncPipStableStreamFrom(stream);
-        pendingPipDataRef.current = { stream: stable || stream, peerName };
+        const safePeerId = peerId || getPeerMetaFromVideo(videoEl).peerId || "";
+        const safePeerName = peerName || getPeerMetaFromVideo(videoEl).peerName || "참가자";
+        pendingPipDataRef.current = { stream: stable || stream, peerName: safePeerName, peerId: safePeerId };
 
         // 숨겨진 video element 사용
         const pipVideo = pipVideoRef.current;
@@ -406,6 +496,7 @@ export const MeetingProvider = ({ children }) => {
         }
 
         console.log("🟢 Polling 시작 (200ms 간격)");
+        pipNoVideoSinceRef.current = null;
 
         pipPollingRef.current = setInterval(() => {
             const pipElement = document.pictureInPictureElement;
@@ -413,14 +504,41 @@ export const MeetingProvider = ({ children }) => {
 
             // 🔥 브라우저 PIP가 있을 때: MeetingPortal의 스트림을 숨겨진 video에 동기화
             if (hasPip && pipVideoRef.current) {
-                // Portal의 main stream을 stable stream에 "트랙 교체" 방식으로 동기화 (srcObject 교체 금지)
-                const portalMain = findPortalMainStream();
+                // ✅ "누구를 보고 있는지" 고정: 대상이 없어지면 다른 영상으로 갈아타지 말고 PiP를 종료한다.
+                const targetPeerId = pendingPipDataRef.current?.peerId || "";
+                const portalMain = targetPeerId
+                    ? findPortalStreamForPeerId(targetPeerId)
+                    : findPortalMainStream();
+
+                // ⚠️ targetPeerId를 못 찾는다고 즉시 "카메라 OFF"로 판단하면
+                // 첫 진입 시 MeetingPortalHidden 렌더링 타이밍 때문에 오판(=첫 PiP만 종료 Toast)될 수 있음.
+                // cameraOff는 MeetingPage에서 발행하는 "meeting:peer-camera-off" 이벤트로 확정한다.
+
+                // Portal의 스트림을 stable stream에 "트랙 교체" 방식으로 동기화 (srcObject 교체 금지)
                 if (portalMain?.stream && isStreamValidCheck(portalMain.stream)) {
                     syncPipStableStreamFrom(portalMain.stream);
                     pendingPipDataRef.current = {
                         stream: ensurePipStableStream(),
                         peerName: pendingPipDataRef.current?.peerName || portalMain.peerName || "참가자",
+                        peerId: pendingPipDataRef.current?.peerId || portalMain.peerId || "",
                     };
+                }
+
+                // ✅ PiP로 보고 있는 대상이 카메라를 끄면(=video track 사라짐) PiP만 종료 + 토스트
+                const stable = ensurePipStableStream();
+                const ok = hasLiveVideoTrack(stable);
+                if (!ok) {
+                    if (!pipNoVideoSinceRef.current) {
+                        pipNoVideoSinceRef.current = Date.now();
+                    }
+                    // 짧은 교체/재연결로 인한 순간 무효는 무시 (3초 디바운스)
+                    if (Date.now() - pipNoVideoSinceRef.current > 3000) {
+                        const who = pendingPipDataRef.current?.peerName || "참가자";
+                        closePipUiKeepMeeting(`${who}님이 카메라를 껐습니다. PiP를 종료합니다.`);
+                        return;
+                    }
+                } else {
+                    pipNoVideoSinceRef.current = null;
                 }
             }
 
@@ -430,12 +548,75 @@ export const MeetingProvider = ({ children }) => {
                 switchToCustomPip();
             }
         }, 200);
-    }, [ensurePipStableStream, findPortalMainStream, isStreamValidCheck, switchToCustomPip, syncPipStableStreamFrom]);
+    }, [
+        closePipUiKeepMeeting,
+        ensurePipStableStream,
+        findPortalMainStream,
+        findPortalStreamForPeerId,
+        hasLiveVideoTrack,
+        isStreamValidCheck,
+        switchToCustomPip,
+        syncPipStableStreamFrom,
+    ]);
+
+    // ✅ 서버 상태(USER_STATE_CHANGE cameraOff=true)로만 "카메라 OFF" 확정 → PiP 종료 + Toast
+    useEffect(() => {
+        const handler = (e) => {
+            const peerId = e?.detail?.peerId != null ? String(e.detail.peerId) : "";
+            if (!peerId) return;
+
+            // 브라우저 PiP에서 보고 있던 대상이면 종료
+            const target = pendingPipDataRef.current?.peerId != null ? String(pendingPipDataRef.current.peerId) : "";
+            if (isBrowserPipMode && target && peerId === target) {
+                const who = pendingPipDataRef.current?.peerName || "참가자";
+                closePipUiKeepMeeting(`${who}님이 카메라를 껐습니다. PiP를 종료합니다.`);
+                return;
+            }
+
+            // 커스텀 PiP에서 보고 있던 대상이면 종료
+            const customTarget = customPipData?.peerId != null ? String(customPipData.peerId) : "";
+            if (!isBrowserPipMode && customTarget && peerId === customTarget) {
+                const who = customPipData?.peerName || "참가자";
+                closePipUiKeepMeeting(`${who}님이 카메라를 껐습니다. PiP를 종료합니다.`);
+            }
+        };
+
+        window.addEventListener("meeting:peer-camera-off", handler);
+        return () => window.removeEventListener("meeting:peer-camera-off", handler);
+    }, [closePipUiKeepMeeting, customPipData, isBrowserPipMode]);
+
+    // ✅ 커스텀 PiP(플로팅)에서 보고 있는 대상이 카메라 OFF 되면: 커스텀 PiP만 닫고 회의는 유지(오디오 계속)
+    useEffect(() => {
+        if (!customPipData?.stream) {
+            customPipNoVideoSinceRef.current = null;
+            return;
+        }
+        if (isBrowserPipMode) return; // 브라우저 PiP 중에는 위 polling 로직이 처리
+
+        customPipNoVideoSinceRef.current = null;
+
+        const interval = setInterval(() => {
+            const ok = hasLiveVideoTrack(customPipData.stream);
+            if (!ok) {
+                if (!customPipNoVideoSinceRef.current) {
+                    customPipNoVideoSinceRef.current = Date.now();
+                }
+                if (Date.now() - customPipNoVideoSinceRef.current > 1200) {
+                    const who = customPipData?.peerName || "참가자";
+                    closePipUiKeepMeeting(`${who}님이 카메라를 껐습니다. PiP를 종료합니다.`);
+                }
+            } else {
+                customPipNoVideoSinceRef.current = null;
+            }
+        }, 250);
+
+        return () => clearInterval(interval);
+    }, [closePipUiKeepMeeting, customPipData, hasLiveVideoTrack, isBrowserPipMode]);
 
     // 커스텀 PIP 시작
-    const startCustomPip = useCallback((stream, peerName = "참가자") => {
-        console.log("[MeetingContext] 커스텀 PIP 시작", { peerName });
-        setCustomPipData({ stream, peerName });
+    const startCustomPip = useCallback((stream, peerName = "참가자", peerId = "") => {
+        console.log("[MeetingContext] 커스텀 PIP 시작", { peerName, peerId });
+        setCustomPipData({ stream, peerName, peerId });
         setIsPipMode(true);
     }, []);
 
@@ -454,10 +635,10 @@ export const MeetingProvider = ({ children }) => {
     }, []);
 
     // 🔥 커스텀 PIP 데이터 업데이트 (FloatingPip에서 새 스트림 찾았을 때 호출)
-    const updateCustomPipData = useCallback((stream, peerName) => {
-        console.log("[MeetingContext] 커스텀 PIP 데이터 업데이트", { peerName });
-        setCustomPipData({ stream, peerName });
-        pendingPipDataRef.current = { stream, peerName };
+    const updateCustomPipData = useCallback((stream, peerName, peerId) => {
+        console.log("[MeetingContext] 커스텀 PIP 데이터 업데이트", { peerName, peerId });
+        setCustomPipData({ stream, peerName, peerId: peerId || "" });
+        pendingPipDataRef.current = { stream, peerName, peerId: peerId || "" };
     }, []);
 
     // 브라우저 PIP 종료

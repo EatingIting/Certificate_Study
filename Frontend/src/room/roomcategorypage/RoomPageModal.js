@@ -2,6 +2,7 @@ import "./RoomPageModal.css";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/api";
+import { toBackendUrl } from "../../utils/backendUrl";
 
 const formatKoreanDate = (value) => {
   if (!value) return "미정";
@@ -117,7 +118,7 @@ const RoomPageModal = ({ open, onClose, study }) => {
                   {/* ===== 왼쪽 일러스트 ===== */}
                   <div className="sr2-illust">
                     <img
-                        src={`http://localhost:8080${study.roomImg}`}
+                        src={toBackendUrl(study.roomImg)}
                         alt="스터디 사진"
                         className="sr2-study-img"
                     />
