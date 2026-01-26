@@ -80,14 +80,33 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         isLoading: false,
     };
 
+    // ✅ 트랙 상태 변화(mute/ended)를 실시간으로 감지하기 위한 state
+    const [trackVersion, setTrackVersion] = useState(0);
+
     const hasLiveVideoTrack = useMemo(() => {
-        return stream?.getVideoTracks().some((t) => t.readyState === "live") ?? false;
+        return stream?.getVideoTracks().some((t) => t.readyState === "live" && !t.muted) ?? false;
+    }, [stream, trackVersion]);
+
+    useEffect(() => {
+        const track = stream?.getVideoTracks()[0];
+        if (!track) return;
+
+        const handleTrackChange = () => setTrackVersion(v => v + 1);
+
+        track.addEventListener("mute", handleTrackChange);
+        track.addEventListener("unmute", handleTrackChange);
+        track.addEventListener("ended", handleTrackChange);
+
+        return () => {
+            track.removeEventListener("mute", handleTrackChange);
+            track.removeEventListener("unmute", handleTrackChange);
+            track.removeEventListener("ended", handleTrackChange);
+        };
     }, [stream]);
 
-    // ✅ "아이콘 타일"로 튀는 걸 방지:
-    // cameraOff 플래그가 일시적으로 잘못 들어와도, 실제 live video track이 있으면 비디오는 계속 보여준다.
-    // (아이콘은 "카메라 OFF + 실제로 영상 트랙이 없음"일 때만 표시)
-    const showVideoOffIcon = !isScreen && safeUser.cameraOff && !hasLiveVideoTrack;
+    // ✅ 카메라 OFF면 아이콘/아바타 타일로 전환되어야 함
+    // (stream이 잠깐 살아있어도, 상태가 OFF면 "꺼짐"으로 표시하는 게 맞음)
+    const showVideoOffIcon = !isScreen && !!safeUser.cameraOff;
 
     const canShowVideo = useMemo(() => {
         if (!stream) return false;
@@ -106,12 +125,13 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     // ✅ 핵심: "실제로 video를 렌더링할지"를 별도로 결정
     // - 화면공유는 videoTrack이 있으면 항상 렌더링
-    // - 카메라 영상은 "실제 live video track 존재"를 기준으로 렌더링 (cameraOff는 힌트일 뿐)
+    // - 카메라 OFF면 (상대가 OFF한 경우) 무조건 video를 끄고 아바타 타일로 전환
     const shouldRenderVideo = useMemo(() => {
         if (!stream) return false;
         if (isScreen) return stream.getVideoTracks().length > 0;
+        if (safeUser.cameraOff) return false;
         return canShowVideo;
-    }, [stream, isScreen, canShowVideo]);
+    }, [stream, isScreen, safeUser.cameraOff, canShowVideo]);
 
     // ✅ 오디오 레벨 감지(원격용)
     // - 상대방도 말할 때 speaking이 true가 되어 파란 테두리가 뜨도록
@@ -2969,24 +2989,27 @@ function MeetingPage({ portalRoomId }) {
                                 };
                             }
 
-                            // 카메라 트랙 종료
-                            const cur = peerStreamsRef.current.get(peerId);
+                            // ✅ 카메라/오디오 consumer 종료 처리
+                            // - video 트랙이 종료되었다고 해서 곧바로 stream을 null로 만들지 않는다.
+                            //   (트랙 교체/재-produce 중에도 onended/producerclose가 발생할 수 있어 "아바타 타일"로 오래 머물 수 있음)
+                            // - 실제 cameraOff는 서버 상태(room:sync/USERS_UPDATE/USER_STATE_CHANGE)에서만 확정한다.
+                            const endedKind = consumer?.track?.kind;
+                            if (endedKind === "video") {
+                                return { ...p, lastUpdate: Date.now() };
+                            }
+
+                            // 오디오 트랙 종료: video는 유지하고 오디오만 제거
+                            const cur = peerStreamsRef.current.get(peerId) || p.stream;
                             if (!cur) {
-                                return { ...p, stream: null, lastUpdate: Date.now() };
+                                return { ...p, lastUpdate: Date.now() };
                             }
 
                             const aliveTracks = cur
                                 .getTracks()
-                                .filter(
-                                    (t) =>
-                                        t.readyState !== "ended" &&
-                                        t.id !== consumer?.track?.id
-                                );
+                                .filter((t) => t.readyState !== "ended" && t.id !== consumer?.track?.id);
 
-                            const rebuilt = aliveTracks.length ? new MediaStream(aliveTracks) : null;
-                            if (rebuilt) peerStreamsRef.current.set(peerId, rebuilt);
-                            else peerStreamsRef.current.delete(peerId);
-
+                            const rebuilt = aliveTracks.length ? new MediaStream(aliveTracks) : cur;
+                            try { peerStreamsRef.current.set(peerId, rebuilt); } catch { }
                             return { ...p, stream: rebuilt, lastUpdate: Date.now() };
                         })
                     );
@@ -4027,6 +4050,14 @@ function MeetingPage({ portalRoomId }) {
 
                 if (data.type === "USER_STATE_CHANGE") {
                     // console.log(`[WS] USER_STATE_CHANGE received:`, data.userId, data.changes);
+                    // ✅ cameraOff=true가 명시되면, 상대방 UI는 반드시 "카메라 꺼짐(아바타 타일)"로 전환되어야 함.
+                    // stream을 그대로 두면 마지막 프레임이 멈춘 채 남을 수 있으니 consumer/stream도 함께 정리한다.
+                    try {
+                        if (data?.changes && data.changes.cameraOff === true) {
+                            removeVideoConsumer(String(data.userId));
+                        }
+                    } catch { }
+
                     setParticipants((prev) =>
                         prev.map((p) => {
                             if (String(p.id) === String(data.userId)) {
@@ -4324,9 +4355,11 @@ function MeetingPage({ portalRoomId }) {
                 const { producerId, peerId, appData } = msg.data || {};
                 const isScreen = appData?.type === "screen";
 
-                if (appData?.type === "camera") {
-                    handlePeerCameraOff(peerId);
-                }
+                // ⚠️ 중요:
+                // producerClosed는 "트랙 교체/재-produce" 과정에서도 자주 발생할 수 있음.
+                // 여기서 cameraOff=true + stream=null로 확정해버리면,
+                // 새 producer를 놓치거나 지연될 때 아바타 타일로 오래 머무는 현상이 생긴다.
+                // ✅ cameraOff/muted는 Spring WS(USERS_UPDATE/USER_STATE_CHANGE) 또는 room:sync에서 "명시적으로" 확인될 때만 변경한다.
 
                 /* if (appData?.mediaTag === "screen") {
                     handlePeerScreenOff(peerId);
@@ -4346,12 +4379,9 @@ function MeetingPage({ portalRoomId }) {
                             };
                         }
 
-                        return {
-                            ...p,
-                            stream: null,
-                            cameraOff: true,
-                            lastUpdate: Date.now(),
-                        };
+                        // ✅ 카메라 producer가 닫혀도(재-produce/교체 포함) 기존 스트림을 유지해서
+                        // "아바타 타일"로 튀지 않게 한다. (실제 cameraOff는 서버 상태로만 반영)
+                        return { ...p, lastUpdate: Date.now() };
                     })
                 );
 
