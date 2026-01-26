@@ -1,4 +1,4 @@
-package com.example.demo.security;
+package com.example.demo.oauth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
