@@ -6,58 +6,111 @@
 <mapper namespace="com.example.demo.board.mapper.BoardPostMapper">
 
     <resultMap id="PostMap" type="com.example.demo.board.vo.BoardPostVO">
-        <id property="postId" column="post_id"/>
-        <result property="roomId" column="room_id"/>
-        <result property="userId" column="user_id"/>
-        <result property="category" column="category"/>
-        <result property="title" column="title"/>
-        <result property="content" column="content"/>
-        <result property="isPinned" column="is_pinned"/>
+        <id     property="postId"    column="post_id"/>
+        <result property="roomId"    column="room_id"/>
+        <result property="userId"    column="user_id"/>
+        <result property="category"  column="category"/>
+        <result property="title"     column="title"/>
+        <result property="content"   column="content"/>
+        <result property="isPinned"  column="is_pinned"/>
         <result property="viewCount" column="view_count"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
         <result property="deletedAt" column="deleted_at"/>
     </resultMap>
 
-    <select id="selectList" resultMap="PostMap">
-        SELECT *
+    <select id="selectPostList" resultMap="PostMap">
+        SELECT
+        post_id, room_id, user_id, category, title, content,
+        is_pinned, view_count, created_at, updated_at, deleted_at
         FROM board_posts
-        WHERE room_id = #{roomId}
-        AND deleted_at IS NULL
-        <if test="category != null">
+        WHERE deleted_at IS NULL
+        AND room_id = #{roomId}
+        <if test="category != null and category != ''">
             AND category = #{category}
         </if>
-        <if test="cursor != null">
-            AND post_id &lt; #{cursor}
+        <if test="keyword != null and keyword != ''">
+            AND (
+            title LIKE CONCAT('%', #{keyword}, '%')
+            OR content LIKE CONCAT('%', #{keyword}, '%')
+            )
         </if>
         ORDER BY is_pinned DESC, post_id DESC
-        LIMIT #{size}
+        LIMIT #{size} OFFSET #{offset}
     </select>
 
-    <select id="countComments" resultType="long">
+    <select id="countPostList" resultType="int">
         SELECT COUNT(*)
-        FROM board_comments
-        WHERE post_id = #{postId}
-          AND deleted_at IS NULL
+        FROM board_posts
+        WHERE deleted_at IS NULL
+        AND room_id = #{roomId}
+        <if test="category != null and category != ''">
+            AND category = #{category}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (
+            title LIKE CONCAT('%', #{keyword}, '%')
+            OR content LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
     </select>
 
-    <select id="countAttachments" resultType="long">
-        SELECT COUNT(*)
-        FROM board_attachments
-        WHERE post_id = #{postId}
-    </select>
-
-    <select id="selectById" resultMap="PostMap">
-        SELECT *
+    <select id="selectPostById" resultMap="PostMap">
+        SELECT
+            post_id, room_id, user_id, category, title, content,
+            is_pinned, view_count, created_at, updated_at, deleted_at
         FROM board_posts
         WHERE post_id = #{postId}
           AND deleted_at IS NULL
     </select>
 
-    <update id="increaseViewCount">
+    <update id="incrementViewCount">
         UPDATE board_posts
         SET view_count = view_count + 1
         WHERE post_id = #{postId}
           AND deleted_at IS NULL
     </update>
+
+    <insert id="insertPost"
+            parameterType="com.example.demo.board.vo.BoardPostVO"
+            useGeneratedKeys="true" keyProperty="postId" keyColumn="post_id">
+        INSERT INTO board_posts (
+        room_id, user_id, category, title, content, is_pinned, view_count
+        ) VALUES (
+        #{roomId}, #{userId}, #{category}, #{title}, #{content},
+        <choose>
+            <when test="isPinned != null">#{isPinned}</when>
+            <otherwise>0</otherwise>
+        </choose>,
+        0
+        )
+    </insert>
+
+    <update id="updatePost" parameterType="com.example.demo.board.vo.BoardPostVO">
+        UPDATE board_posts
+        SET
+            category = #{category},
+            title    = #{title},
+            content  = #{content}
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="softDeletePost">
+        UPDATE board_posts
+        SET deleted_at = NOW()
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="updatePinned">
+        UPDATE board_posts
+        SET is_pinned = #{isPinned}
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
 </mapper>

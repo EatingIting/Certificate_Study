@@ -115,7 +115,7 @@
 
 .trow {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
     border-radius: 10px;
@@ -130,13 +130,19 @@
 
 .tleft {
     display: grid;
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 72px minmax(0, 1fr);
     gap: 10px;
     min-width: 0;
     align-items: center;
 }
 .round { width: 72px; font-weight: 900; color: #2c6b40; white-space: nowrap; }
-.row-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-text { 
+    display: block;
+    min-width: 0; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap; 
+}
 
 .tright { display: flex; justify-content: flex-end; align-items: center; }
 .status { font-weight: 700; font-size: 12px; white-space: nowrap; }
@@ -354,4 +360,8 @@
     display: flex;
     align-items: center;     /* ✅ 세로 가운데 */
     justify-content: center; /* ✅ 가로 가운데 */
+}
+
+.dashboard-grid > * {
+    min-width: 0;
 }

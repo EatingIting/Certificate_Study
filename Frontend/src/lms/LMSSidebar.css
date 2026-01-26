@@ -7,6 +7,9 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    min-width: 220px;
+    flex: 0 0 220px;   /* ✅ flex에서 절대 안 줄어들게 */
+    flex-shrink: 0;
 }
 
 /* ===== Menu List ===== */
