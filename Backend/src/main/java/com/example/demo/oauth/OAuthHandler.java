@@ -1,8 +1,6 @@
 package com.example.demo.oauth;
 
 import com.example.demo.jwt.JwtTokenProvider;
-import com.example.demo.oauth.OAuthHandler;
-import com.example.demo.oauth.OAuth2UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
