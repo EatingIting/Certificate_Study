@@ -26,6 +26,7 @@ const MyPage = () => {
     const [selectedSub, setSelectedSub] = useState(null);
 
     const [interestCategories, setInterestCategories] = useState([]);
+    const [tempInterestCategories, setTempInterestCategories] = useState([]);
 
     const navigate = useNavigate();
 
@@ -51,8 +52,29 @@ const MyPage = () => {
             .get("/api/mypage/interests", {
                 headers: { Authorization: `Bearer ${token}` },
             })
-            .then((res) => setInterestCategories(res.data));
+            .then((res) => {
+                setInterestCategories(res.data);
+                setTempInterestCategories(res.data);
+            });
     }, []);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (
+                JSON.stringify(interestCategories) !==
+                JSON.stringify(tempInterestCategories)
+            ) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [interestCategories, tempInterestCategories]);
 
     const fetchProfile = async () => {
         try {
@@ -110,7 +132,7 @@ const MyPage = () => {
     };
 
     const saveEdit = async () => {
-        if (interestCategories.length === 0) {
+        if (tempInterestCategories.length === 0) {
             alert("관심 자격증은 최소 1개 이상 등록해야 합니다.");
             return;
         }
@@ -136,7 +158,13 @@ const MyPage = () => {
                 },
             });
 
+            await axios.put("/api/mypage/interests", tempInterestCategories, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
             alert("수정되었습니다");
+
+            setInterestCategories(tempInterestCategories);
 
             await fetchProfile();
             setEditOpen(false);
@@ -144,7 +172,6 @@ const MyPage = () => {
             console.error("수정 실패", err);
         }
     };
-
 
     const handleMainChange = (e) => {
         const id = Number(e.target.value) || null;
@@ -174,9 +201,7 @@ const MyPage = () => {
         );
     };
 
-    const addCategory = async () => {
-        const token = sessionStorage.getItem("accessToken");
-
+    const addCategory = () => {
         const categoryId = selectedSub ?? selectedMid;
 
         if (!categoryId) {
@@ -184,33 +209,44 @@ const MyPage = () => {
             return;
         }
 
-        if (interestCategories.includes(categoryId)) {
+        if (tempInterestCategories.includes(categoryId)) {
             alert("이미 등록된 관심 자격증입니다.");
             return;
         }
 
-        if (interestCategories.length >= 4) {
+        if (tempInterestCategories.length >= 4) {
             alert("최대 4개까지 가능합니다.");
             return;
         }
 
-        const updated = [...interestCategories, categoryId];
-        setInterestCategories(updated);
-
-        await axios.put("/api/mypage/interests", updated, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        setTempInterestCategories([...tempInterestCategories, categoryId]);
     };
 
-    const removeCategory = async (id) => {
-        const token = sessionStorage.getItem("accessToken");
+    const removeCategory = (id) => {
+        setTempInterestCategories(
+            tempInterestCategories.filter((c) => c !== id)
+        );
+    };
 
-        const updated = interestCategories.filter((c) => c !== id);
-        setInterestCategories(updated);
+    const saveInterestCategories = async () => {
+        if (tempInterestCategories.length === 0) {
+            alert("관심 자격증은 최소 1개 이상 등록해야 합니다.");
+            return;
+        }
 
-        await axios.put("/api/mypage/interests", updated, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        try {
+            const token = sessionStorage.getItem("accessToken");
+
+            await axios.put("/api/mypage/interests", tempInterestCategories, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            alert("관심 자격증이 저장되었습니다.");
+
+            setInterestCategories(tempInterestCategories);
+        } catch (err) {
+            console.error("관심 자격증 저장 실패", err);
+        }
     };
 
     const withdraw = async () => {
@@ -377,31 +413,34 @@ const MyPage = () => {
                         <button className="btn btn-soft" onClick={addCategory}>
                             + 추가
                         </button>
+
+                        <button className="btn btn-gray" onClick={saveInterestCategories}>
+                            저장
+                        </button>
                     </div>
 
                     <div className="chip-row">
-                        {interestCategories.length === 0 ? (
+                        {tempInterestCategories.length === 0 ? (
                             <div className="empty">등록된 관심 자격증이 없어요.</div>
                         ) : (
-                            interestCategories.map((id) => {
+                            tempInterestCategories.map((id) => {
                                 const category = allCategories.find((c) => c.id === id);
 
                                 return (
                                     <span className="chip" key={id}>
-                        {category?.name}
+                                        {category?.name}
                                         <button
                                             className="chip-x"
                                             onClick={() => removeCategory(id)}
                                         >
-                            ×
-                        </button>
-                    </span>
+                                            ×
+                                        </button>
+                                    </span>
                                 );
                             })
                         )}
                     </div>
                 </section>
-
 
                 <section className="section">
                     <div className="section-head">
@@ -540,7 +579,10 @@ const MyPage = () => {
                                         rows={3}
                                         value={draft.introduction}
                                         onChange={(e) =>
-                                            setDraft({ ...draft, introduction: e.target.value })
+                                            setDraft({
+                                                ...draft,
+                                                introduction: e.target.value,
+                                            })
                                         }
                                     />
                                 </label>
