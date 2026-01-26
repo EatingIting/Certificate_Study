@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation, useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import LMSHeader from "./LMSHeader";
 import LMSSidebar from "./LMSSidebar";
@@ -25,8 +25,77 @@ import RoomMyPage from "./room-my-page/RoomMyPage"
 import MeetingPage from "../webrtc/MeetingPage";
 import MeetingPortal from "../webrtc/MeetingPagePortal";
 import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
+import FloatingPip from "../webrtc/FloatingPip";
 
 import "./LMSSubject.css";
+
+// 🔥 PIP 모드에서 MeetingPortal을 숨긴 상태로 렌더링 (WebSocket/스트림 유지용)
+const MeetingPortalHidden = ({ show }) => {
+    useEffect(() => {
+        const meetingRoot = document.getElementById("meeting-root");
+        if (meetingRoot) {
+            if (show) {
+                // 🔥 display:none 금지 (비디오/트랙이 멈출 수 있음) → 화면 밖으로 숨김
+                meetingRoot.style.display = "block";
+                meetingRoot.style.position = "fixed";
+                meetingRoot.style.left = "-10000px";
+                meetingRoot.style.top = "-10000px";
+                meetingRoot.style.width = "1px";
+                meetingRoot.style.height = "1px";
+                meetingRoot.style.opacity = "0";
+                meetingRoot.style.pointerEvents = "none";
+                meetingRoot.style.zIndex = "-1";
+            } else {
+                meetingRoot.style.display = "";
+                meetingRoot.style.position = "";
+                meetingRoot.style.left = "";
+                meetingRoot.style.top = "";
+                meetingRoot.style.width = "";
+                meetingRoot.style.height = "";
+                meetingRoot.style.opacity = "";
+                meetingRoot.style.pointerEvents = "";
+                meetingRoot.style.zIndex = "";
+            }
+        }
+        return () => {
+            if (meetingRoot) {
+                meetingRoot.style.display = "";
+                meetingRoot.style.position = "";
+                meetingRoot.style.left = "";
+                meetingRoot.style.top = "";
+                meetingRoot.style.width = "";
+                meetingRoot.style.height = "";
+                meetingRoot.style.opacity = "";
+                meetingRoot.style.pointerEvents = "";
+                meetingRoot.style.zIndex = "";
+            }
+        };
+    }, [show]);
+
+    if (!show) return null;
+    return <MeetingPortal />;
+};
+
+// 🔥 브라우저 PIP용 숨겨진 비디오 컴포넌트 (페이지 이동해도 스트림 유지)
+const HiddenPipVideo = ({ videoRef }) => {
+    return (
+        <video
+            ref={videoRef}
+            style={{
+                position: 'fixed',
+                top: '-9999px',
+                left: '-9999px',
+                width: '1px',
+                height: '1px',
+                opacity: 0,
+                pointerEvents: 'none',
+            }}
+            autoPlay
+            playsInline
+            muted
+        />
+    );
+};
 
 function LMSSubjectInner() {
     let [activeMenu, setActiveMenu] = useState("dashboard");
@@ -49,227 +118,53 @@ function LMSSubjectInner() {
     }, [location.pathname]);
 
     /* =========================
-       PiP UX
+       PiP UX (커스텀 PIP)
     ========================= */
     const {
         isInMeeting,
         isPipMode,
+        isBrowserPipMode,
         roomId,
+        customPipData,
+        stopCustomPip,
+        endMeeting,
+        updateCustomPipData,
+        pipVideoRef, // 🔥 숨겨진 PIP video ref
     } = useMeeting();
 
-    const prevPipRef = useRef(false);
-    const sourceVideoRef = useRef(null);   // PiP용 비디오
-    const originalVideoRef = useRef(null); // 원본 video 요소 참조
-    const pipAnimationRef = useRef(null);  // 모니터링 타이머
-    const sourceStreamRef = useRef(null);  // MediaStream 저장 (원본)
-    const sourceTrackRef = useRef(null);   // 원본 video track 직접 저장
-    const peerNameRef = useRef("참가자");
-    const isPipCameraOffRef = useRef(false);
-    const pipActiveRef = useRef(false);    // 모니터링 활성화 플래그
-    const pipTrackEndedCountRef = useRef(0); // 🔥 track ended 연속 감지 카운터
+    // 커스텀 PIP에서 회의방 복귀
+    const handlePipReturn = useCallback(() => {
+        console.log("[CustomPiP] 회의방 복귀");
+        stopCustomPip();
 
-    // 직접 비디오 PiP 초기화 (Canvas 없이 - cross-origin 문제 해결)
-    const initCanvasPip = useCallback(async (originalVideo, peerName) => {
-        const mediaStream = originalVideo?.srcObject;
+        const savedRoomId = sessionStorage.getItem("pip.roomId");
+        const savedSubjectId = sessionStorage.getItem("pip.subjectId");
 
-        console.log("[PiP] ======= 초기화 시작 =======", {
-            hasOriginalVideo: !!originalVideo,
-            hasMediaStream: !!mediaStream,
-            videoTracks: mediaStream?.getVideoTracks?.()?.length,
-            trackState: mediaStream?.getVideoTracks?.()?.[0]?.readyState,
-            peerName
-        });
-
-        if (!mediaStream) {
-            console.error("[PiP] MediaStream이 없습니다!");
-            return false;
+        if (savedRoomId && savedSubjectId) {
+            navigate(`/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}`, { replace: true });
         }
+    }, [navigate, stopCustomPip]);
 
-        // 기존 정리
-        pipActiveRef.current = false;
-        if (pipAnimationRef.current) {
-            clearTimeout(pipAnimationRef.current);
-            pipAnimationRef.current = null;
-        }
-        if (sourceVideoRef.current) {
-            sourceVideoRef.current.srcObject = null;
-            sourceVideoRef.current.remove();
-            sourceVideoRef.current = null;
-        }
+    // 커스텀 PIP에서 회의 나가기
+    const handlePipLeave = useCallback(() => {
+        console.log("[CustomPiP] 회의 나가기");
+        
+        // LEAVE 이벤트 발생 (MeetingPage에서 처리)
+        window.dispatchEvent(new CustomEvent("meeting:leave-from-pip"));
+        
+        stopCustomPip();
+        endMeeting();
 
-        // 상태 초기화
-        originalVideoRef.current = originalVideo;  // 🔥 원본 video 참조 저장
-        sourceStreamRef.current = mediaStream;
-        sourceTrackRef.current = mediaStream.getVideoTracks()[0];  // 🔥 track 직접 저장
-        peerNameRef.current = peerName || "참가자";
-        isPipCameraOffRef.current = false;
-
-        console.log("[PiP] track 저장:", {
-            trackId: sourceTrackRef.current?.id,
-            enabled: sourceTrackRef.current?.enabled,
-            readyState: sourceTrackRef.current?.readyState
-        });
-
-        // 🔥 PiP용 비디오 생성
-        const pipVideo = document.createElement("video");
-        pipVideo.autoplay = true;
-        pipVideo.playsInline = true;
-        pipVideo.muted = true;
-        pipVideo.setAttribute("data-pip-video", "true");
-        pipVideo.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:640px;height:480px;";
-        document.body.appendChild(pipVideo);
-        sourceVideoRef.current = pipVideo;
-
-        // 🔥 MediaStream 직접 연결 (Canvas 거치지 않음)
-        pipVideo.srcObject = mediaStream;
-
-        try {
-            await pipVideo.play();
-            console.log("[PiP] 비디오 재생 성공, readyState:", pipVideo.readyState);
-        } catch (e) {
-            console.warn("[PiP] 비디오 재생 실패:", e);
-        }
-
-        // 비디오 데이터 로드 대기 (최대 2초)
-        await new Promise((resolve) => {
-            if (pipVideo.readyState >= 2) {
-                resolve();
-            } else {
-                const onCanPlay = () => {
-                    pipVideo.removeEventListener("canplay", onCanPlay);
-                    resolve();
-                };
-                pipVideo.addEventListener("canplay", onCanPlay);
-                setTimeout(resolve, 2000);
-            }
-        });
-
-        console.log("[PiP] 비디오 준비 완료, readyState:", pipVideo.readyState);
-
-        // 🔥 트랙 상태 모니터링 (저장된 스트림의 track 이벤트 사용)
-        pipActiveRef.current = true;
-
-        // 원본 스트림의 track에 이벤트 리스너 추가
-        const videoTrack = mediaStream.getVideoTracks()[0];
-
-        // 🔥 track 이벤트 - 모두 무시 (canvas 스트림은 탭 전환 시 상태가 변할 수 있음)
-        const handleUnmute = () => {
-            console.log("[PiP] track unmute 이벤트 (무시)");
-        };
-
-        const handleMute = () => {
-            console.log("[PiP] track mute 이벤트 (무시)");
-        };
-
-        const handleEnded = () => {
-            console.log("[PiP] track ended 이벤트 (무시)");
-        };
-
-        if (videoTrack) {
-            videoTrack.addEventListener("unmute", handleUnmute);
-            videoTrack.addEventListener("mute", handleMute);
-            videoTrack.addEventListener("ended", handleEnded);
-            console.log("[PiP] track 이벤트 리스너 등록 완료", {
-                trackId: videoTrack.id,
-                enabled: videoTrack.enabled,
-                muted: videoTrack.muted,
-                readyState: videoTrack.readyState
-            });
-        }
-
-        // 🔥 주기적 모니터링 완전 비활성화
-        // canvas 기반 스트림은 탭 전환 시 브라우저가 track 상태를 변경할 수 있으므로
-        // 자동 종료 기능을 비활성화하여 PiP 안정성 보장
-        console.log("[PiP] 모니터링 비활성화 - 자동 종료 기능 off");
-
-        // cleanup 시 이벤트 리스너 제거를 위해 저장
-        pipVideo._trackListeners = { videoTrack, handleUnmute, handleMute, handleEnded };
-
-        // 🔥 visibilitychange 이벤트 핸들러 - 탭 전환 시 video 유지
-        const handleVisibilityChange = () => {
-            if (!pipActiveRef.current) return;
-            const video = sourceVideoRef.current;
-            if (!video) return;
-
-            console.log("[PiP] visibilitychange:", document.visibilityState);
-
-            if (document.visibilityState === "visible") {
-                // 탭이 다시 보일 때 video 재생 보장
-                if (video.paused) {
-                    video.play().catch(() => { });
-                }
-            }
-            // hidden일 때도 video.play() 유지 - 브라우저가 PiP를 유지하도록 함
-        };
-
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        pipVideo._visibilityHandler = handleVisibilityChange;
-
-        // PiP 요청
-        try {
-            await pipVideo.requestPictureInPicture();
-            console.log("[PiP] ======= PiP 활성화 성공 =======");
-            return true;
-        } catch (e) {
-            console.error("[PiP] PiP 요청 실패:", e);
-            pipActiveRef.current = false;
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            return false;
-        }
-    }, []);
-
-    // PiP 정리
-    const cleanupCanvasPip = useCallback(() => {
-        console.log("[PiP] 정리");
-        pipActiveRef.current = false;
-
-        if (pipAnimationRef.current) {
-            clearTimeout(pipAnimationRef.current);
-            pipAnimationRef.current = null;
-        }
-
-        // 🔥 track 이벤트 리스너 제거
-        if (sourceVideoRef.current?._trackListeners) {
-            const { videoTrack, handleUnmute, handleMute, handleEnded } = sourceVideoRef.current._trackListeners;
-            if (videoTrack) {
-                videoTrack.removeEventListener("unmute", handleUnmute);
-                videoTrack.removeEventListener("mute", handleMute);
-                videoTrack.removeEventListener("ended", handleEnded);
-                console.log("[PiP] track 이벤트 리스너 제거 완료");
-            }
-            sourceVideoRef.current._trackListeners = null;
-        }
-
-        // 🔥 visibilitychange 이벤트 리스너 제거
-        if (sourceVideoRef.current?._visibilityHandler) {
-            document.removeEventListener("visibilitychange", sourceVideoRef.current._visibilityHandler);
-            sourceVideoRef.current._visibilityHandler = null;
-        }
-
-        originalVideoRef.current = null;
-        sourceStreamRef.current = null;
-        sourceTrackRef.current = null;
-        isPipCameraOffRef.current = false;
-    }, []);
+        // 세션 정리
+        sessionStorage.removeItem("pip.roomId");
+        sessionStorage.removeItem("pip.subjectId");
+    }, [stopCustomPip, endMeeting]);
 
     /* =========================
-       Sidebar 이동 시 PiP 강제
+       Sidebar 이동 시 (PIP는 LMSSidebar에서 처리)
     ========================= */
-    const handleSidebarNavigate = async (path) => {
-        if (isInMeeting && !document.pictureInPictureElement) {
-            const video = document.querySelector('video[data-main-video="main"]');
-            if (video) {
-                try {
-                    // Canvas 기반 PiP 사용
-                    const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
-                    await initCanvasPip(video, peerName);
-                } catch (e) {
-                    // PiP 실패해도 네비게이션은 진행
-                    console.warn("[Sidebar] Canvas PiP 실패:", e);
-                }
-            }
-        }
-
+    const handleSidebarNavigate = (path) => {
+        // PIP 요청은 LMSSidebar에서 직접 처리하므로 여기서는 네비게이션만
         navigate(`/lms/${subjectId}/${path}`);
     };
 
@@ -287,107 +182,6 @@ function LMSSubjectInner() {
         return () => window.removeEventListener("ui:toast", handler);
     }, []);
 
-    /* =========================
-       🔥 PiP 요청 이벤트 (Sidebar에서 발생)
-       - MeetingPage가 언마운트되어도 여기서 리스닝
-       - Canvas 기반 PiP로 처리
-    ========================= */
-    useEffect(() => {
-        // 기본 PiP 요청 (video 자동 감지)
-        const handlePipRequest = async () => {
-            console.log("[LMSSubject] meeting:request-pip 이벤트 수신");
-
-            // 이미 PiP 모드면 스킵
-            if (document.pictureInPictureElement) {
-                console.log("[LMSSubject] 이미 PiP 모드임");
-                return;
-            }
-
-        const video = document.querySelector('video[data-main-video="main"]');
-        if (video) {
-            try {
-                // Canvas 기반 PiP 사용
-                const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
-                await initCanvasPip(video, peerName);
-                console.log("[LMSSubject] Canvas PiP 활성화 성공");
-            } catch (e) {
-                console.warn("[LMSSubject] Canvas PiP 요청 실패:", e);
-            }
-        } else {
-            console.warn('[LMSSubject] video[data-main-video="main"] 요소를 찾을 수 없음');
-        }
-        };
-
-        // Canvas PiP 요청 (video와 peerName을 직접 전달받음)
-        const handleCanvasPipRequest = async (e) => {
-            console.log("[LMSSubject] meeting:request-canvas-pip 이벤트 수신");
-
-            // 이미 PiP 모드면 스킵
-            if (document.pictureInPictureElement) {
-                console.log("[LMSSubject] 이미 PiP 모드임");
-                return;
-            }
-
-            const { video, peerName } = e.detail || {};
-            if (video) {
-                try {
-                    await initCanvasPip(video, peerName);
-                    console.log("[LMSSubject] Canvas PiP 활성화 성공");
-                } catch (err) {
-                    console.warn("[LMSSubject] Canvas PiP 요청 실패:", err);
-                }
-            } else {
-                console.warn("[LMSSubject] Canvas PiP 요청에 video가 없음");
-            }
-        };
-
-        window.addEventListener("meeting:request-pip", handlePipRequest);
-        window.addEventListener("meeting:request-canvas-pip", handleCanvasPipRequest);
-
-        return () => {
-            window.removeEventListener("meeting:request-pip", handlePipRequest);
-            window.removeEventListener("meeting:request-canvas-pip", handleCanvasPipRequest);
-        };
-    }, [initCanvasPip]);
-
-    /* =========================
-       🔥 PiP POLLING (핵심)
-    ========================= */
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const nowPip = !!document.pictureInPictureElement;
-
-            /* PiP → 일반 화면 복귀 감지 */
-            if (prevPipRef.current && !nowPip) {
-                // 🔥 카메라 off로 종료된 경우 네비게이션 하지 않음
-                const closedByCameraOff = isPipCameraOffRef.current;
-
-                // Canvas PiP 정리
-                cleanupCanvasPip();
-
-                // 카메라 off가 아닌 경우에만 회의실로 이동
-                if (!closedByCameraOff) {
-                    const savedRoomId = sessionStorage.getItem("pip.roomId");
-                    const savedSubjectId = sessionStorage.getItem("pip.subjectId");
-
-                    if (savedRoomId && savedSubjectId) {
-                        navigate(
-                            `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}`,
-                            { replace: true }
-                        );
-                    }
-                }
-            }
-
-            prevPipRef.current = nowPip;
-        }, 300);
-
-        return () => {
-            clearInterval(interval);
-            // 🔥 useEffect cleanup에서는 cleanupCanvasPip 호출하지 않음
-            // PiP가 닫힐 때만 정리 (위의 polling에서 처리)
-        };
-    }, [navigate, cleanupCanvasPip]);
 
     return (
         <>
@@ -435,7 +229,24 @@ function LMSSubjectInner() {
                 </main>
             </div>
 
-            {(isInMeeting || isPipMode) && roomId && <MeetingPortal />}
+            {/* 🔥 브라우저 PIP용 숨겨진 video (스트림 동기화용) */}
+            <HiddenPipVideo videoRef={pipVideoRef} />
+
+            {/* MeetingPortal: 브라우저 PIP/커스텀 PIP 모두에서 렌더링 (RTCPeerConnection 유지) */}
+            <MeetingPortalHidden
+                show={(isPipMode || isBrowserPipMode) && !!roomId && !location.pathname.includes("/MeetingRoom/")}
+            />
+
+            {/* 커스텀 PIP (브라우저 PIP가 아닐 때만 표시) */}
+            {customPipData && !isBrowserPipMode && (
+                <FloatingPip
+                    stream={customPipData.stream}
+                    peerName={customPipData.peerName}
+                    onReturn={handlePipReturn}
+                    onLeave={handlePipLeave}
+                    onStreamInvalid={updateCustomPipData} // 🔥 추가: 스트림 무효 시 업데이트
+                />
+            )}
 
             <ChatModal />
         </>

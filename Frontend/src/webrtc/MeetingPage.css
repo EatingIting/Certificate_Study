@@ -301,7 +301,28 @@ body {
   min-height: 400px;
 }
 
-/* 전체화면 버튼 */
+/* PiP 모드 오버레이 (검은 배경) */
+.pip-mode-overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  
+  background: #000;
+  border-radius: 16px;
+}
+
+/* PiP 모드 이용중 텍스트 */
+.pip-mode-banner {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 24px;
+  /* font-weight: 600; */
+}
+
 /* PiP 버튼 */
 .pip-btn {
   position: absolute;
@@ -311,6 +332,10 @@ body {
 
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  box-sizing: border-box;
   border-radius: 12px;
   border: none;
 
@@ -360,6 +385,10 @@ body {
 
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  box-sizing: border-box;
   border-radius: 12px;
   border: none;
 
@@ -2058,5 +2087,3 @@ body.fullscreen-active .meet-sidebar {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-
-
