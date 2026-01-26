@@ -91,9 +91,9 @@
     align-items: center;
     background: #97c793;
     color: #fff;
-    padding: 18px;
-    height: 150px;
-    margin-top: 10px;
+    padding: 26px 18px;
+    height: 200px;
+    width: 100%;
 }
 
 .study-info h3 { margin: 0 0 4px; font-size: 18px; font-weight: 900; }
@@ -348,4 +348,10 @@
 
 .fc .fc-daygrid-body-natural .fc-daygrid-day-events {
     margin-bottom: 0;
+}
+
+.dashStudy {
+    display: flex;
+    align-items: center;     /* ✅ 세로 가운데 */
+    justify-content: center; /* ✅ 가로 가운데 */
 }
