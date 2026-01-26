@@ -17,4 +17,6 @@ public class MyPageVO {
     private String introduction;
     private String profileImg;
     private LocalDateTime createdAt;
+
+
 }

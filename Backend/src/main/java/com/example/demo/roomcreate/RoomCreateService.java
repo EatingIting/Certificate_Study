@@ -3,7 +3,12 @@ package com.example.demo.roomcreate;
 import java.util.List;
 
 public interface RoomCreateService {
-    void createRoom(RoomCreateRequest request, String userId);
+
+    void insertRoom(RoomCreateRequest request, String userId);
+
+    void updateRoom(String roomId, RoomCreateRequest request, String userEmail);
+
     List<RoomCreateVO> getRooms();
+
     RoomCreateVO getRoomDetail(String roomId);
 }

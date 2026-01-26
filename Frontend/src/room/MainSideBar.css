@@ -1,0 +1,135 @@
+/* ===== Sidebar Container ===== */
+.sample-sidebar {
+  width: 220px;
+  background: #fff;
+  padding: 16px 12px;
+  border-right: 1px solid #eee;
+  position: relative;
+  margin-left: 0;
+  top: 0; /* 🔥 layout가 header 아래니까 0으로 */
+  height: 100%;
+  align-self: flex-start;
+
+}
+
+
+/* 스크롤 */
+.sb-scroll {
+  height: auto;
+  overflow: visible;
+  padding-right: 4px; /* 스크롤바 때문에 살짝 여유 */
+}
+
+
+/* ===== Menu List ===== */
+.menu-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ===== Parent Menu ===== */
+.menu-parent {
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+  border-radius: 8px;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  transition: background 0.15s ease;
+}
+
+.menu-parent:hover {
+  background: #f1f1ee;
+}
+
+.menu-parent.active {
+  background: #eef6f0;
+  color: #1f7a41;
+}
+
+.arrow {
+  font-size: 11px;
+  color: #999;
+}
+
+/* ===== Submenu ===== */
+.menu-group .submenu {
+  list-style: none;
+  padding: 4px 0 8px 14px;
+  margin: 2px 0 10px;
+  display: none;
+}
+
+.menu-group.open .submenu {
+  display: block;
+}
+
+/* ===== Submenu Item ===== */
+.submenu-item {
+  padding: 6px 10px;
+  margin: 2px 0;
+  font-size: 13px;
+  color: #555;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  position: relative;
+}
+
+.submenu-item::before {
+  content: "•";
+  position: absolute;
+  left: -10px;
+  color: #bbb;
+}
+
+.submenu-item:hover {
+  background: #f3f3f0;
+}
+
+.submenu-item.active {
+  background: #e7f3ec;
+  color: #1f7a41;
+  font-weight: 600;
+}
+
+/* ===== Single Menu ===== */
+.menu-item.menu-single {
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.menu-item.menu-single:hover {
+  background: #f1f1ee;
+}
+
+.menu-item.menu-single.active {
+  background: #eef6f0;
+  color: #1f7a41;
+}
+
+/* ===== Bottom Button ===== */
+.meeting-btn {
+  margin: 12px;
+  padding: 10px 0;
+  border-radius: 8px;
+  border: none;
+  background: #97c793;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.meeting-btn:hover {
+  background: #86b984;
+}

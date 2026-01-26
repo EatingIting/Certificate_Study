@@ -1,6 +1,6 @@
 import "./LMSSidebar.css";
 import { useNavigate, useParams } from "react-router-dom";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useMeeting } from "../webrtc/MeetingContext";
 
 const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuProp }) => {

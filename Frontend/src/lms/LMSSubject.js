@@ -22,11 +22,19 @@ import StudyLeave from "./study-leave/StudyLeave"
 
 import RoomMyPage from "./room-my-page/RoomMyPage"
 
+import MeetingPage from "../webrtc/MeetingPage";
+import MeetingPortal from "../webrtc/MeetingPagePortal";
+import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
+
 import "./LMSSubject.css";
 
-function LMSSubject() {
+function LMSSubjectInner() {
     let [activeMenu, setActiveMenu] = useState("dashboard");
+    let [toastMessage, setToastMessage] = useState("");
+    let [toastVisible, setToastVisible] = useState(false);
+    
     let location = useLocation();
+    let navigate = useNavigate();
     let { subjectId } = useParams();
 
     // ✅ URL이 바뀌면 사이드바 active도 자동으로 맞추기
@@ -428,7 +436,7 @@ function LMSSubject() {
             </div>
 
             {(isInMeeting || isPipMode) && roomId && <MeetingPortal />}
-            
+
             <ChatModal />
         </>
     );

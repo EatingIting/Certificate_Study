@@ -9,6 +9,8 @@ public interface RoomCreateMapper {
 
     int insertRoom(RoomCreateVO room);
 
+    int updateRoom(RoomCreateVO room);
+
     List<RoomCreateVO> findAllRooms();
 
     RoomCreateVO findRoomById(String roomId);
