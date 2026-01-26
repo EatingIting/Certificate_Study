@@ -9,23 +9,22 @@
     <select id="selectReceivedApplications"
             resultType="com.example.demo.application.ApplicationVO">
         SELECT
-            rjr.join_id            AS joinId,
-            rjr.room_id            AS roomId,
-            r.title                AS studyTitle,
-            rjr.apply_message      AS applyMessage,
-            rjr.requested_at       AS requestedAt,
-            u.nickname             AS applicantNickname,
-            u.gender               AS gender,
+            rjr.join_id                  AS joinId,
+            rjr.room_id                  AS roomId,
+            r.title                      AS studyTitle,
+            rjr.request_user_nickname    AS applicantNickname,
+            rjr.apply_message            AS applyMessage,
+            rjr.requested_at             AS requestedAt,
+            u.gender                     AS gender,
             TIMESTAMPDIFF(YEAR, u.birth_date, CURDATE()) AS age
         FROM room_join_request rjr
-                 JOIN room r
-                      ON rjr.room_id = r.room_id
-                 JOIN users u
-                      ON rjr.request_user_id = u.user_id
-        WHERE rjr.owner_user_id = #{ownerUserId}
+                 JOIN room r ON rjr.room_id = r.room_id
+                 JOIN users u ON rjr.request_user_email = u.email
+        WHERE rjr.host_user_email = #{hostUserEmail}
           AND rjr.status = '신청중'
         ORDER BY rjr.requested_at DESC
     </select>
+
 
     <!-- 내가 신청한 스터디 -->
     <select id="selectSentApplications"
@@ -38,51 +37,123 @@
             rjr.status             AS status,
             rjr.requested_at       AS requestedAt
         FROM room_join_request rjr
-                 JOIN room r
-                      ON rjr.room_id = r.room_id
-                 JOIN users u
-                      ON rjr.owner_user_id = u.user_id
-        WHERE rjr.request_user_id = #{requestUserId}
+                 JOIN room r ON rjr.room_id = r.room_id
+                 JOIN users u ON rjr.host_user_email = u.email
+        WHERE rjr.request_user_email = #{requestUserEmail}
         ORDER BY rjr.requested_at DESC
     </select>
+
 
     <!-- 승인 -->
     <update id="approveApplication">
         UPDATE room_join_request
         SET status = '승인'
         WHERE join_id = #{joinId}
-          AND owner_user_id = #{ownerUserId}
+          AND host_user_email = #{hostUserEmail}
     </update>
+
 
     <!-- 거절 -->
     <update id="rejectApplication">
         UPDATE room_join_request
         SET status = '거절'
         WHERE join_id = #{joinId}
-          AND owner_user_id = #{ownerUserId}
+          AND host_user_email = #{hostUserEmail}
     </update>
+
 
     <!-- 신청 -->
     <insert id="insertApplication">
         INSERT INTO room_join_request (
-            join_id,
-            request_user_id,
-            owner_user_id,
-            room_id,
-            status,
-            apply_message,
-            requested_at
+        join_id,
+        request_user_email,
+        request_user_nickname,
+        host_user_email,
+        room_id,
+        status,
+        apply_message,
+        requested_at
         )
         SELECT
-            #{joinId},
-            #{requestUserId},
-            r.host_user_id,
-            #{roomId},
-            '신청중',
-            #{applyMessage},
-            NOW()
+        #{joinId},
+        #{requestUserEmail},
+        #{requestUserNickname},
+        r.host_user_email,
+        #{roomId},
+        '신청중',
+        #{applyMessage},
+        NOW()
         FROM room r
         WHERE r.room_id = #{roomId}
+        AND r.host_user_email != #{requestUserEmail}
+        AND r.status = 'OPEN'
     </insert>
+
+
+    <!-- 중복 여부 -->
+    <select id="existsActiveApplication" resultType="int">
+        SELECT COUNT(*)
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{requestUserEmail}
+          AND status IN ('신청중', '승인')
+    </select>
+
+
+    <!-- joinId → roomId 조회 -->
+    <select id="getRoomIdByJoinId" resultType="String">
+        SELECT room_id
+        FROM room_join_request
+        WHERE join_id = #{joinId}
+    </select>
+
+
+    <!-- 승인된 인원 수 count -->
+    <select id="countApprovedByRoomId" resultType="int">
+        SELECT COUNT(*)
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND status = '승인'
+    </select>
+
+
+    <!-- room 정원(max_participants) 조회 -->
+    <select id="getMaxParticipants" resultType="int">
+        SELECT max_participants
+        FROM room
+        WHERE room_id = #{roomId}
+    </select>
+
+
+    <!-- 정원 꽉 차면 신청중 자동 거절 -->
+    <update id="autoRejectPending">
+        UPDATE room_join_request
+        SET status = '거절'
+        WHERE room_id = #{roomId}
+          AND status = '신청중'
+    </update>
+
+
+    <!-- 방 상태 CLOSED 변경 -->
+    <update id="closeRoom">
+        UPDATE room
+        SET status = 'CLOSED'
+        WHERE room_id = #{roomId}
+    </update>
+
+    <!-- 신청자 성별 조회 -->
+    <select id="getUserGender" resultType="String">
+        SELECT gender
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+    <!-- 방 성별 제한 조회 -->
+    <select id="getRoomGender" resultType="String">
+        SELECT gender
+        FROM room
+        WHERE room_id = #{roomId}
+    </select>
+
 
 </mapper>

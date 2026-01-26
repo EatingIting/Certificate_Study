@@ -55,11 +55,6 @@
   margin-bottom: 20px;
 }
 
-.sr2-illust {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
 
 /* Right info */
 .sr2-info {
@@ -187,4 +182,17 @@
   .sr2-row {
     grid-template-columns: 90px 1fr;
   }
+}
+
+.sr2-study-img {
+  width: 150px;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
+.sr2-primary:disabled {
+  background: #ddd;
+  color: #888;
+  cursor: not-allowed;
 }

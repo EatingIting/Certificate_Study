@@ -2,6 +2,7 @@ package com.example.demo.RoomList;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -11,7 +12,13 @@ public class RoomListService {
 
     private final RoomListMapper roomListMapper;
 
+    @Transactional
     public List<RoomListVO> getRooms() {
+
+        roomListMapper.closeExpiredRooms();
+
+        roomListMapper.closeFullRooms();
+
         return roomListMapper.selectRoomList();
     }
 }
