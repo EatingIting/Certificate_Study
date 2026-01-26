@@ -2,10 +2,6 @@
   Calendar (LMS 일정관리)
 */
 
-/* =========================
-   1) 페이지 공통 변수/레이아웃
-========================= */
-
 .calPage {
     --primary: #97c793;
     --primary-light: #e9fadc;
@@ -22,10 +18,10 @@
 
 .calGrid {
     display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
+    grid-template-columns: 1.4fr 0.6fr;
     gap: 16px;
     align-items: stretch;
-    min-height: 640px;
+    min-height: 720px;
 }
 
 @media (max-width: 980px) {
@@ -37,7 +33,7 @@
 
 .calPage .card {
     border-color: var(--border);
-    border-radius: 16px;
+    border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -70,7 +66,7 @@
 }
 
 /* =========================
-   2) FullCalendar 레이아웃/툴바
+   FullCalendar 레이아웃/툴바
 ========================= */
 
 .calCard .fc {
@@ -78,7 +74,6 @@
     min-height: 0;
 }
 
-/* 툴바를 3칸(grid)으로 정렬 */
 .fc .fc-header-toolbar {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -92,7 +87,7 @@
 
 .fc .fc-toolbar-chunk:nth-child(2) {
     justify-self: center;
-    position: relative; /* 타이틀 기준점 */
+    position: relative;
 }
 
 .fc .fc-toolbar-chunk:nth-child(3) {
@@ -105,7 +100,6 @@
     margin-bottom: 12px;
 }
 
-/* 커스텀 today(myToday) 버튼 */
 .fc .fc-myToday-button {
     height: 30px;
     padding: 0 16px;
@@ -131,7 +125,6 @@
     box-shadow: none;
 }
 
-/* today 버튼을 타이틀 바로 오른쪽에 (타이틀 중앙정렬 유지) */
 .fc .fc-toolbar-chunk:nth-child(2) .fc-myToday-button {
     position: absolute;
     left: calc(100% + 8px);
@@ -140,13 +133,78 @@
     z-index: 5;
 }
 
-/* next 버튼 간격 */
 .fc .fc-toolbar-chunk:nth-child(3) .fc-next-button {
     margin-left: 8px;
 }
 
 /* =========================
-   3) FullCalendar - 이벤트/주말/달력 고정(6주)
+   날짜 숫자(왼쪽 위) + 스터디 회차(오른쪽)
+========================= */
+
+/* FullCalendar 기본 row-reverse/float 제거 + 왼쪽 고정 */
+.calCalendarCard .fc .fc-daygrid-day-top {
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+}
+
+.calCalendarCard .fc .fc-daygrid-day-number {
+    float: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+/* 우리가 렌더링한 상단 줄 */
+.calDayTopRow {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 4px 6px 0 6px;
+}
+
+.calDayNum {
+    font-weight: 900;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.calDayStudyRound {
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.1;
+
+    padding: 2px 6px;
+    border-radius: 999px;
+
+    background: var(--primary-light);
+    color: #2f6a2f;
+    border: 1px solid var(--primary-soft);
+
+    white-space: nowrap;
+}
+
+/* 주말 숫자 색 */
+.fc .fc-day-sun .calDayNum {
+    color: #ef4444;
+}
+
+.fc .fc-day-sat .calDayNum {
+    color: #2563eb;
+}
+
+/* =========================
+   이벤트 영역: 위랑 너무 붙어서 살짝 아래로
+========================= */
+.calCalendarCard .fc .fc-daygrid-day-events {
+    margin-top: 6px;
+}
+
+/* =========================
+   이벤트 스타일
 ========================= */
 
 .calEvent {
@@ -177,7 +235,18 @@
     color: #374151 !important;
 }
 
-/* 주말 색상(헤더 + 날짜) */
+/* 스터디 이벤트 클래스는 남아있지만, 달력에서는 숨김 처리 */
+.calEvent.study {
+    background: var(--primary) !important;
+    color: #ffffff !important;
+}
+
+/* ✅ 달력에서 스터디 이벤트 바 숨김 */
+.calCalendarCard .fc .fc-daygrid-event.calEvent.study {
+    display: none !important;
+}
+
+/* 주말 헤더/기본 숫자 색 */
 .fc .fc-day-sun .fc-daygrid-day-number,
 .fc .fc-col-header-cell.fc-day-sun {
     color: #ef4444;
@@ -188,37 +257,8 @@
     color: #2563eb;
 }
 
-/* +more 링크 여유 */
-.calCalendarCard .fc .fc-daygrid-day-bottom {
-    margin-top: 2px;
-}
-
-/* 달력 내부 스크롤 방지 + 6주 행 높이 고정 */
-.calCalendarCard {
-    overflow: hidden;
-}
-
-.calCalendarCard .fc,
-.calCalendarCard .fc .fc-view-harness,
-.calCalendarCard .fc .fc-scrollgrid,
-.calCalendarCard .fc .fc-daygrid-body,
-.calCalendarCard .fc .fc-daygrid-body table {
-    height: 100%;
-}
-
-/* 6주 기준으로 각 주(행) 높이 동일 */
-.calCalendarCard .fc .fc-daygrid-body tr {
-    height: calc(100% / 6);
-}
-
-/* 기간 막대가 잘리지 않게 */
-.calCalendarCard .fc .fc-daygrid-day-frame,
-.calCalendarCard .fc .fc-daygrid-day-events {
-    overflow: visible;
-}
-
 /* =========================
-   4) 오른쪽 일정 리스트
+   오른쪽 리스트
 ========================= */
 
 .calEmpty {
@@ -261,7 +301,6 @@
     font-weight: 700;
 }
 
-/* 뱃지 */
 .calBadge {
     display: inline-block;
     padding: 4px 10px;
@@ -291,7 +330,14 @@
     color: #374151;
 }
 
-/* 리스트: 설명(최대 2줄) */
+/* 스터디 뱃지는 연한 배경 + 초록 글씨 */
+.calBadge.STUDY {
+    background: var(--primary-light);
+    color: #2f6a2f;
+    border: 1px solid var(--primary-soft);
+}
+
+/* 리스트 설명(최대 2줄) */
 .calItemDesc {
     margin-top: 6px;
     font-size: 12px;
@@ -304,36 +350,76 @@
     overflow: hidden;
 }
 
-/* 리스트 헤더: 제목 + 버튼 */
+/* 리스트 헤더 */
 .calListHead {
     position: relative;
 }
 
-/* 일정 추가 버튼 */
-.calAddBtn {
+/* 버튼 2개 */
+.calListActions {
     position: absolute;
-    top: 2px;
+    top: 8px;
     right: 12px;
 
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 일정 추가: 진한 초록 배경 + 흰 글씨 */
+.calAddBtn {
     height: 34px;
     padding: 0 12px;
 
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: #fff;
+    background: var(--primary);
 
     font-size: 13px;
     font-weight: 900;
-    color: var(--text);
+    color: #ffffff;
     cursor: pointer;
 }
 
 .calAddBtn:hover {
+    filter: brightness(0.97);
+}
+
+/* 스터디 일정 추가: 연한 초록 배경 + 초록 글씨 */
+.calStudyBtn {
+    height: 34px;
+    padding: 0 12px;
+
+    border: 1px solid var(--primary-soft);
+    border-radius: 12px;
     background: var(--primary-light);
+
+    font-size: 13px;
+    font-weight: 900;
+    color: #2f6a2f;
+    cursor: pointer;
+}
+
+.calStudyBtn:hover {
+    filter: brightness(0.98);
+}
+
+/* 좁은 화면에서 겹침 방지 */
+@media (max-width: 520px) {
+    .calListActions {
+        position: static;
+        margin: 8px 16px 0;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .calPage .calListTitle {
+        padding-bottom: 10px;
+    }
 }
 
 /* =========================
-   5) 리스트 ⋮ 메뉴(수정/삭제)
+   리스트 ⋮ 메뉴
 ========================= */
 
 .calItemRight {
@@ -408,7 +494,7 @@
 }
 
 /* =========================
-   6) 모달(일정 추가/수정)
+   모달
 ========================= */
 
 .calModalOverlay {
@@ -486,10 +572,9 @@
 }
 
 /* =========================
-   7) 폼 입력 요소 (폰트/스타일 통일)
+   입력 요소
 ========================= */
 
-/* 폼 요소 폰트 통일 */
 .calInput,
 .calSelect,
 .calTextarea,
@@ -498,7 +583,6 @@
     font-weight: 700;
 }
 
-/* 입력류 공통 */
 .calInput,
 .calSelect {
     height: 38px;
@@ -519,7 +603,6 @@
     box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
 }
 
-/* 날짜 input이 OS 폰트로 튀는 경우 방지(안전장치) */
 .calInput[type="date"] {
     appearance: none;
     -webkit-appearance: none;
@@ -537,7 +620,6 @@
     }
 }
 
-/* textarea */
 .calTextarea {
     padding: 10px 12px;
 
@@ -557,33 +639,72 @@
     box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
 }
 
-/* 색상 input */
-.calColor {
-    height: 38px;
-    width: 64px;
-    padding: 0;
-
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: #fff;
-}
-
 /* =========================
-   8) 글자색 선택 버튼 (검은색/하얀색)
+   색상 선택 UI (팔레트 버튼 방식)
 ========================= */
 
-.calTextColorRow {
+.calColorRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 520px) {
+    .calColorRow {
+        grid-template-columns: 1fr;
+    }
+}
+
+.calColorGroup {
     display: flex;
+    flex-direction: column;
     gap: 8px;
 }
 
-.calTextColorBtn {
-    height: 36px;
-    padding: 0 12px;
+.calColorBtns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
 
+.calColorBtn {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.calColorBtn:hover {
+    transform: translateY(-1px);
+}
+
+.calColorBtn.isActive {
+    outline: 3px solid rgba(165, 222, 160, 0.55);
+    border-color: var(--primary-soft);
+}
+
+.calColorPicker {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 0;
+    background: #fff;
+    cursor: pointer;
+}
+
+.calTextColorBtn {
+    height: 34px;
+    padding: 0 10px;
     border-radius: 12px;
     border: 1px solid var(--border);
     background: #fff;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 
     font-size: 13px;
     font-weight: 900;
@@ -595,13 +716,35 @@
     background: var(--primary-light);
 }
 
-.calTextColorBtn.active {
+.calTextColorBtn.isActive {
+    outline: 3px solid rgba(165, 222, 160, 0.55);
     border-color: var(--primary-soft);
-    box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
+}
+
+.calTextColorDot {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+}
+
+.calColorPreview {
+    margin-top: 4px;
+}
+
+.calPreviewPill {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 900;
+    border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 /* =========================
-   9) 모달 하단 버튼/에러
+   에러/하단 버튼
 ========================= */
 
 .calError {
@@ -655,4 +798,8 @@
 
 .calBtnGhost {
     background: #fff;
+}
+
+.fc .fc-daygrid-day-top {
+    flex-direction: row;
 }

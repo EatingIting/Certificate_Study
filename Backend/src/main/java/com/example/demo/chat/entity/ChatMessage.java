@@ -19,7 +19,7 @@ public class ChatMessage {
     private Long messageId;
 
     @Column(name = "room_id")
-    private Long roomId;
+    private String roomId;
 
     @Column(name = "user_id")
     private String userId;

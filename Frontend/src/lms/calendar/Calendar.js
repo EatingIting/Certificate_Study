@@ -7,58 +7,115 @@ import interactionPlugin from "@fullcalendar/interaction";
 import "./Calendar.css";
 
 function Calendar() {
-    /* =========================
-       Ref (FullCalendar 제어용)
-    ========================= */
     let calendarRef = useRef(null);
 
-    /* =========================
-       달력 화면(월) 표시 관련 상태
-    ========================= */
+    let [sp, setSp] = useSearchParams();
+
     let [visibleRange, setVisibleRange] = useState(null);
     let [visibleTitle, setVisibleTitle] = useState("");
 
-    /* =========================
-       리스트 ⋮ 메뉴 / 수정 모드 상태
-    ========================= */
-    let [openMenuId, setOpenMenuId] = useState(null); // ⋮ 메뉴 열린 이벤트 id
-    let [editingEventId, setEditingEventId] = useState(null); // null이면 추가, 있으면 수정
+    let [openMenuId, setOpenMenuId] = useState(null);
 
     /* =========================
-       더미 일정 데이터 (DB 연동 전)
+       일반 일정(더미)
     ========================= */
     let initialEvents = useMemo(() => {
         return [
-            { id: "1", title: "정보처리기사 접수 시작", start: "2026-01-20", extendedProps: { type: "REGISTRATION" } },
-            { id: "2", title: "SQLD 시험", start: "2026-02-02", extendedProps: { type: "EXAM" } },
-            // FullCalendar는 end가 'exclusive'라서 1/20~1/27을 채우려면 end를 1/28로 넣는 형태가 정상
-            { id: "3", title: "정처기 접수 기간", start: "2026-01-20", end: "2026-01-28", extendedProps: { type: "REGISTRATION" } },
-            { id: "4", title: "기타 일정", start: "2026-01-22", extendedProps: { type: "OTHER", customLabel: "서류 준비" } },
+            {
+                id: "1",
+                title: "정보처리기사 접수 시작",
+                start: "2026-01-20",
+                extendedProps: { type: "REGISTRATION" },
+                backgroundColor: "#e9fadc",
+                borderColor: "#e9fadc",
+                textColor: "#2f6a2f",
+            },
+            {
+                id: "2",
+                title: "SQLD 시험",
+                start: "2026-02-02",
+                extendedProps: { type: "EXAM" },
+                backgroundColor: "#97c793",
+                borderColor: "#97c793",
+                textColor: "#ffffff",
+            },
+            {
+                id: "3",
+                title: "정처기 접수 기간",
+                start: "2026-01-20",
+                end: "2026-01-28",
+                extendedProps: { type: "REGISTRATION" },
+                backgroundColor: "#e9fadc",
+                borderColor: "#e9fadc",
+                textColor: "#2f6a2f",
+            },
+            {
+                id: "4",
+                title: "기타 일정",
+                start: "2026-01-22",
+                extendedProps: { type: "OTHER", customLabel: "서류 준비" },
+                backgroundColor: "#eef5ec",
+                borderColor: "#eef5ec",
+                textColor: "#374151",
+            },
         ];
     }, []);
 
     let [events, setEvents] = useState(initialEvents);
 
     /* =========================
-       모달 상태
+       스터디 일정(더미)
+    ========================= */
+    let initialStudyEvents = useMemo(() => {
+        return [
+            {
+                id: "S1",
+                title: "스터디 1회차",
+                start: "2026-01-21",
+                extendedProps: {
+                    type: "STUDY",
+                    round: 1,
+                    description: "오리엔테이션 / 진행 방식 정하기",
+                },
+            },
+        ];
+    }, []);
+
+    let [studyEvents, setStudyEvents] = useState(initialStudyEvents);
+
+    /* =========================
+       모달 - 일반 일정
     ========================= */
     let [isAddOpen, setIsAddOpen] = useState(false);
+    let [editingEventId, setEditingEventId] = useState(null);
     let [formError, setFormError] = useState("");
 
     let [form, setForm] = useState({
         title: "",
         description: "",
         start: "",
-        end: "", // 사용자는 "포함 종료일"로 입력한다고 가정 (저장 시 +1 해서 FC end(exclusive)로 변환)
+        end: "",
         type: "OTHER",
         customLabel: "",
         colorHex: "#97c793",
         textColor: "#ffffff",
-        isTextColorManual: false,
     });
 
     /* =========================
-       유틸 함수
+       모달 - 스터디
+    ========================= */
+    let [isStudyOpen, setIsStudyOpen] = useState(false);
+    let [editingStudyId, setEditingStudyId] = useState(null);
+    let [studyError, setStudyError] = useState("");
+
+    let [studyForm, setStudyForm] = useState({
+        round: 1,
+        date: "",
+        description: "",
+    });
+
+    /* =========================
+       유틸
     ========================= */
     let toDate = (yyyyMmDd) => {
         let [y, m, d] = yyyyMmDd.split("-").map(Number);
@@ -78,43 +135,22 @@ function Calendar() {
         return toYmd(dt);
     };
 
-    // FullCalendar end(exclusive) -> 사용자 표시용 end(inclusive)
-    let toInclusiveEnd = (endExclusiveYmd) => {
-        return addDays(endExclusiveYmd, -1);
-    };
+    // FullCalendar end(exclusive) -> 표시용 end(inclusive)
+    let toInclusiveEnd = (endExclusiveYmd) => addDays(endExclusiveYmd, -1);
 
-    // 사용자 입력 end(inclusive) -> FullCalendar end(exclusive)
-    let toExclusiveEnd = (endInclusiveYmd) => {
-        return addDays(endInclusiveYmd, 1);
-    };
+    // 입력 end(inclusive) -> FullCalendar end(exclusive)
+    let toExclusiveEnd = (endInclusiveYmd) => addDays(endInclusiveYmd, 1);
 
     let fmtDate = (yyyyMmDd) => {
         let [, m, d] = yyyyMmDd.split("-");
         return `${m}.${d}`;
     };
 
-    // 배경색(hex)에 따라 자동으로 글자색 추천
-    let getAutoTextColor = (hex) => {
-        if (!hex) return "#ffffff";
-
-        let c = hex.replace("#", "").trim();
-        if (c.length !== 6) return "#ffffff";
-
-        let r = parseInt(c.slice(0, 2), 16);
-        let g = parseInt(c.slice(2, 4), 16);
-        let b = parseInt(c.slice(4, 6), 16);
-
-        let brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness >= 150 ? "#000000" : "#ffffff";
-    };
-
-    // 일정이 현재 달력 화면 범위에 걸치는지(리스트 필터)
     let overlaps = (event, range) => {
         if (!range) return true;
 
         let s = event.start instanceof Date ? event.start : toDate(event.start);
 
-        // end가 있으면 exclusive 기준
         let e;
         if (event.end) {
             e = event.end instanceof Date ? event.end : toDate(event.end);
@@ -127,12 +163,49 @@ function Calendar() {
     };
 
     /* =========================
-       오른쪽 리스트(현재 월 일정) 계산
+       달력 표시 이벤트(합치기)
+    ========================= */
+    let allEvents = useMemo(() => {
+        return [...events, ...studyEvents];
+    }, [events, studyEvents]);
+
+    /* =========================
+       날짜 상단 "회차" 맵
+    ========================= */
+    let studyRoundsByDate = useMemo(() => {
+        let map = {};
+
+        for (let i = 0; i < studyEvents.length; i++) {
+            let ev = studyEvents[i];
+
+            let ymd =
+                typeof ev.start === "string"
+                    ? ev.start
+                    : ev.startStr?.slice(0, 10);
+
+            if (!ymd) continue;
+
+            let round = Number(ev.extendedProps?.round);
+            if (!round) continue;
+
+            if (!map[ymd]) map[ymd] = [];
+            map[ymd].push(round);
+        }
+
+        for (let key in map) {
+            map[key] = Array.from(new Set(map[key])).sort((a, b) => a - b);
+        }
+
+        return map;
+    }, [studyEvents]);
+
+    /* =========================
+       오른쪽 리스트
     ========================= */
     let monthlyEvents = useMemo(() => {
-        if (!visibleRange) return events;
+        if (!visibleRange) return allEvents;
 
-        let filtered = events.filter((ev) => overlaps(ev, visibleRange));
+        let filtered = allEvents.filter((ev) => overlaps(ev, visibleRange));
 
         filtered.sort((a, b) => {
             let aS = a.start instanceof Date ? a.start : toDate(a.start);
@@ -141,13 +214,14 @@ function Calendar() {
         });
 
         return filtered;
-    }, [events, visibleRange]);
+    }, [allEvents, visibleRange]);
 
     /* =========================
        라벨/스타일
     ========================= */
     let typeLabel = (ev) => {
         let t = ev.extendedProps?.type;
+        if (t === "STUDY") return "스터디";
         if (t === "REGISTRATION") return "접수";
         if (t === "EXAM") return "시험";
         if (t === "RESULT") return "발표";
@@ -157,6 +231,7 @@ function Calendar() {
 
     let eventClassNames = (arg) => {
         let t = arg.event.extendedProps?.type;
+        if (t === "STUDY") return ["calEvent", "study"];
         if (t === "REGISTRATION") return ["calEvent", "reg"];
         if (t === "EXAM") return ["calEvent", "exam"];
         if (t === "RESULT") return ["calEvent", "result"];
@@ -164,15 +239,28 @@ function Calendar() {
     };
 
     /* =========================
-       모달 열기/닫기
+       URL 쿼리
+    ========================= */
+    let goListView = () => {
+        let next = new URLSearchParams(sp);
+        next.delete("modal");
+        next.set("view", "list");
+        setSp(next, { replace: true });
+    };
+
+    /* =========================
+       일반 일정 모달
     ========================= */
     let closeAddModal = () => {
         setIsAddOpen(false);
         setFormError("");
         setEditingEventId(null);
+
+        if (sp.get("modal") === "add") {
+            goListView();
+        }
     };
 
-    // 추가 모드
     let openAddModal = () => {
         setEditingEventId(null);
         setOpenMenuId(null);
@@ -186,18 +274,12 @@ function Calendar() {
             customLabel: "",
             colorHex: "#97c793",
             textColor: "#ffffff",
-            isTextColorManual: false,
         });
 
         setFormError("");
         setIsAddOpen(true);
     };
 
-    let onChangeForm = (key, value) => {
-        setForm((prev) => ({ ...prev, [key]: value }));
-    };
-
-    // 수정 모드
     let openEditModal = (eventLike) => {
         setEditingEventId(eventLike.id);
         setOpenMenuId(null);
@@ -207,7 +289,6 @@ function Calendar() {
                 ? eventLike.start
                 : eventLike.startStr?.slice(0, 10) || "";
 
-        // eventLike.end는 FullCalendar 기준(exclusive)일 수 있으니, 사용자 입력은 inclusive로 변환
         let endInclusive = "";
         if (eventLike.end) {
             let endStr =
@@ -226,16 +307,16 @@ function Calendar() {
             customLabel: eventLike.extendedProps?.customLabel || "",
             colorHex: eventLike.backgroundColor || "#97c793",
             textColor: eventLike.textColor || "#ffffff",
-            isTextColorManual: true,
         });
 
         setFormError("");
         setIsAddOpen(true);
     };
 
-    /* =========================
-       추가/수정 저장
-    ========================= */
+    let onChangeForm = (key, value) => {
+        setForm((prev) => ({ ...prev, [key]: value }));
+    };
+
     let saveEventFromModal = () => {
         let title = form.title.trim();
 
@@ -248,7 +329,6 @@ function Calendar() {
             return;
         }
 
-        // 종료일이 비어있으면 "단일 일정"으로 처리
         let hasEnd = Boolean(form.end);
         let endInclusive = hasEnd ? form.end : null;
 
@@ -266,7 +346,6 @@ function Calendar() {
             extendedProps.customLabel = form.customLabel.trim();
         }
 
-        // FullCalendar end는 exclusive
         let endExclusive = hasEnd ? toExclusiveEnd(endInclusive) : null;
 
         let nextEvent = {
@@ -289,9 +368,6 @@ function Calendar() {
         closeAddModal();
     };
 
-    /* =========================
-       삭제
-    ========================= */
     let deleteEventById = (id) => {
         setEvents((prev) => prev.filter((e) => e.id !== id));
         setOpenMenuId(null);
@@ -300,21 +376,115 @@ function Calendar() {
             closeAddModal();
         }
     };
-    const [sp] = useSearchParams();
 
+    /* =========================
+       스터디 모달
+    ========================= */
+    let closeStudyModal = () => {
+        setIsStudyOpen(false);
+        setEditingStudyId(null);
+        setStudyError("");
+    };
+
+    let openStudyAddModal = () => {
+        setEditingStudyId(null);
+        setOpenMenuId(null);
+
+        setStudyForm({
+            round: 1,
+            date: "",
+            description: "",
+        });
+
+        setStudyError("");
+        setIsStudyOpen(true);
+    };
+
+    let openStudyEditModal = (studyEvent) => {
+        setEditingStudyId(studyEvent.id);
+        setOpenMenuId(null);
+
+        let dateStr =
+            typeof studyEvent.start === "string"
+                ? studyEvent.start
+                : studyEvent.startStr?.slice(0, 10) || "";
+
+        setStudyForm({
+            round: Number(studyEvent.extendedProps?.round || 1),
+            date: dateStr,
+            description: studyEvent.extendedProps?.description || "",
+        });
+
+        setStudyError("");
+        setIsStudyOpen(true);
+    };
+
+    let onChangeStudyForm = (key, value) => {
+        setStudyForm((prev) => ({ ...prev, [key]: value }));
+    };
+
+    let saveStudyFromModal = () => {
+        let roundNum = Number(studyForm.round);
+
+        if (!roundNum || roundNum < 1) {
+            setStudyError("회차는 1 이상 숫자로 입력해 주세요.");
+            return;
+        }
+
+        if (!studyForm.date) {
+            setStudyError("날짜를 선택해 주세요.");
+            return;
+        }
+
+        let title = `스터디 ${roundNum}회차`;
+
+        let nextStudyEvent = {
+            id: editingStudyId ? editingStudyId : `S${Date.now()}`,
+            title,
+            start: studyForm.date,
+            extendedProps: {
+                type: "STUDY",
+                round: roundNum,
+                description: studyForm.description.trim(),
+            },
+        };
+
+        if (!editingStudyId) {
+            setStudyEvents((prev) => [...prev, nextStudyEvent]);
+        } else {
+            setStudyEvents((prev) => prev.map((e) => (e.id === editingStudyId ? nextStudyEvent : e)));
+        }
+
+        closeStudyModal();
+    };
+
+    let deleteStudyById = (id) => {
+        setStudyEvents((prev) => prev.filter((e) => e.id !== id));
+        setOpenMenuId(null);
+
+        if (editingStudyId === id) {
+            closeStudyModal();
+        }
+    };
+
+    /* =========================
+       URL modal=add 대응
+    ========================= */
     useEffect(() => {
         if (sp.get("modal") === "add") openAddModal();
     }, [sp]);
 
-
     /* =========================
-       렌더
+       팔레트(일정 색) - 온실 톤 중심
     ========================= */
+    let palette = useMemo(() => {
+        return ["#97c793", "#a5dea0", "#e9fadc", "#eef5ec", "#f6faf3"];
+    }, []);
+
     return (
         <div
             className="page calPage"
             onMouseDown={() => {
-                // 바깥 클릭하면 ⋮ 메뉴 닫기
                 if (openMenuId) setOpenMenuId(null);
             }}
         >
@@ -336,7 +506,7 @@ function Calendar() {
                         fixedWeekCount={true}
                         showNonCurrentDates={true}
                         dayMaxEventRows={2}
-                        events={events}
+                        events={allEvents}
                         eventClassNames={eventClassNames}
                         customButtons={{
                             myToday: {
@@ -359,6 +529,23 @@ function Calendar() {
                             });
                             setVisibleTitle(info.view.title || "");
                         }}
+                        /* 날짜칸 상단: 날짜 숫자 + 스터디 회차 */
+                        dayCellContent={(arg) => {
+                            let ymd = toYmd(arg.date);
+                            let rounds = studyRoundsByDate[ymd];
+
+                            let roundText = "";
+                            if (rounds && rounds.length > 0) {
+                                roundText = rounds.length === 1 ? `${rounds[0]}회차` : `${rounds.join(",")}회차`;
+                            }
+
+                            return (
+                                <div className="calDayTopRow">
+                                    <span className="calDayNum">{arg.date.getDate()}</span>
+                                    {roundText ? <span className="calDayStudyRound">{roundText}</span> : null}
+                                </div>
+                            );
+                        }}
                     />
                 </div>
 
@@ -369,22 +556,34 @@ function Calendar() {
                             {visibleTitle ? `${visibleTitle} 일정` : "이번 달 일정"}
                         </div>
 
-                        <button
-                            type="button"
-                            className="calAddBtn"
-                            onMouseDown={(e) => {
-                                e.stopPropagation();
-                                openAddModal();
-                            }}
-                        >
-                            일정 추가
-                        </button>
+                        <div className="calListActions">
+                            <button
+                                type="button"
+                                className="calStudyBtn"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    openStudyAddModal();
+                                }}
+                            >
+                                스터디 일정 추가
+                            </button>
+
+                            <button
+                                type="button"
+                                className="calAddBtn"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    openAddModal();
+                                }}
+                            >
+                                일정 추가
+                            </button>
+                        </div>
                     </div>
 
                     <div
                         className="calListBody"
                         onMouseDown={(e) => {
-                            // 리스트 영역 클릭으로도 메뉴 닫기
                             e.stopPropagation();
                             if (openMenuId) setOpenMenuId(null);
                         }}
@@ -394,20 +593,15 @@ function Calendar() {
                         )}
 
                         {monthlyEvents.map((ev) => {
-                            let startStr =
-                                typeof ev.start === "string"
-                                    ? ev.start
-                                    : ev.startStr?.slice(0, 10);
+                            let startStr = typeof ev.start === "string" ? ev.start : ev.startStr?.slice(0, 10);
 
-                            // ev.end는 FC exclusive -> 표시용으로 -1
                             let endStr = null;
                             if (ev.end) {
-                                let rawEnd =
-                                    typeof ev.end === "string"
-                                        ? ev.end
-                                        : ev.endStr?.slice(0, 10);
+                                let rawEnd = typeof ev.end === "string" ? ev.end : ev.endStr?.slice(0, 10);
                                 endStr = rawEnd ? toInclusiveEnd(rawEnd) : null;
                             }
+
+                            let isStudy = ev.extendedProps?.type === "STUDY";
 
                             return (
                                 <div key={ev.id} className="calItem">
@@ -422,7 +616,6 @@ function Calendar() {
                                                 {endStr ? ` ~ ${fmtDate(endStr)}` : ""}
                                             </span>
 
-                                            {/* ⋮ 버튼 */}
                                             <button
                                                 type="button"
                                                 className="calKebabBtn"
@@ -435,18 +628,15 @@ function Calendar() {
                                                 ⋮
                                             </button>
 
-                                            {/* 메뉴 */}
                                             {openMenuId === ev.id && (
-                                                <div
-                                                    className="calKebabMenu"
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                >
+                                                <div className="calKebabMenu" onMouseDown={(e) => e.stopPropagation()}>
                                                     <button
                                                         type="button"
                                                         className="calKebabItem"
                                                         onMouseDown={(e) => {
                                                             e.stopPropagation();
-                                                            openEditModal(ev);
+                                                            if (isStudy) openStudyEditModal(ev);
+                                                            else openEditModal(ev);
                                                         }}
                                                     >
                                                         수정하기
@@ -457,7 +647,8 @@ function Calendar() {
                                                         className="calKebabItem calKebabDanger"
                                                         onMouseDown={(e) => {
                                                             e.stopPropagation();
-                                                            deleteEventById(ev.id);
+                                                            if (isStudy) deleteStudyById(ev.id);
+                                                            else deleteEventById(ev.id);
                                                         }}
                                                     >
                                                         삭제하기
@@ -481,7 +672,9 @@ function Calendar() {
                 </div>
             </div>
 
-            {/* 일정 추가/수정 모달 */}
+            {/* =========================
+               일반 일정 추가/수정 모달
+            ========================= */}
             {isAddOpen && (
                 <div
                     className="calModalOverlay"
@@ -518,63 +711,6 @@ function Calendar() {
                                     placeholder="예: 장소/준비물/간단 메모"
                                     rows={3}
                                 />
-                            </label>
-
-                            <label className="calField">
-                                <span className="calFieldLabel">색상</span>
-                                <input
-                                    type="color"
-                                    className="calColor"
-                                    value={form.colorHex}
-                                    onChange={(e) => {
-                                        let nextColor = e.target.value;
-
-                                        setForm((prev) => {
-                                            if (prev.isTextColorManual) {
-                                                return { ...prev, colorHex: nextColor };
-                                            }
-                                            return {
-                                                ...prev,
-                                                colorHex: nextColor,
-                                                textColor: getAutoTextColor(nextColor),
-                                            };
-                                        });
-                                    }}
-                                    aria-label="색상 선택"
-                                />
-                            </label>
-
-                            <label className="calField">
-                                <span className="calFieldLabel">글자색</span>
-                                <div className="calTextColorRow">
-                                    <button
-                                        type="button"
-                                        className={`calTextColorBtn ${form.textColor === "#000000" ? "active" : ""}`}
-                                        onMouseDown={() => {
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                textColor: "#000000",
-                                                isTextColorManual: true,
-                                            }));
-                                        }}
-                                    >
-                                        검은색
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        className={`calTextColorBtn ${form.textColor === "#ffffff" ? "active" : ""}`}
-                                        onMouseDown={() => {
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                textColor: "#ffffff",
-                                                isTextColorManual: true,
-                                            }));
-                                        }}
-                                    >
-                                        하얀색
-                                    </button>
-                                </div>
                             </label>
 
                             <div className="calRow2">
@@ -626,6 +762,76 @@ function Calendar() {
                                 </label>
                             </div>
 
+                            {/* ✅ 원래 느낌: 팔레트 + 글자색 버튼 + 미리보기 */}
+                            <div className="calColorRow">
+                                <div className="calColorGroup">
+                                    <span className="calFieldLabel">색상</span>
+
+                                    <div className="calColorBtns">
+                                        {palette.map((c) => (
+                                            <button
+                                                key={c}
+                                                type="button"
+                                                className={`calColorBtn ${form.colorHex === c ? "isActive" : ""}`}
+                                                style={{ background: c }}
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    onChangeForm("colorHex", c);
+                                                }}
+                                                aria-label={`색상 ${c}`}
+                                                title={c}
+                                            />
+                                        ))}
+
+                                        {/* 직접 선택도 유지 */}
+                                        <input
+                                            type="color"
+                                            className="calColorPicker"
+                                            value={form.colorHex}
+                                            onChange={(e) => onChangeForm("colorHex", e.target.value)}
+                                            title="색 직접 선택"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="calColorGroup">
+                                    <span className="calFieldLabel">글자</span>
+
+                                    <div className="calColorBtns">
+                                        {[
+                                            { label: "흰색", value: "#ffffff" },
+                                            { label: "검정", value: "#1f2937" },
+                                        ].map((t) => (
+                                            <button
+                                                key={t.value}
+                                                type="button"
+                                                className={`calTextColorBtn ${form.textColor === t.value ? "isActive" : ""}`}
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    onChangeForm("textColor", t.value);
+                                                }}
+                                                title={t.label}
+                                            >
+                                                <span className="calTextColorDot" style={{ background: t.value }} />
+                                                {t.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="calColorPreview">
+                                <span
+                                    className="calPreviewPill"
+                                    style={{
+                                        backgroundColor: form.colorHex,
+                                        color: form.textColor,
+                                    }}
+                                >
+                                    미리보기
+                                </span>
+                            </div>
+
                             {formError && <div className="calError">{formError}</div>}
                         </div>
 
@@ -646,6 +852,87 @@ function Calendar() {
 
                             <button type="button" className="calBtn calBtnPrimary" onMouseDown={saveEventFromModal}>
                                 {editingEventId ? "수정 저장" : "저장"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* =========================
+               스터디 일정 추가/수정 모달
+            ========================= */}
+            {isStudyOpen && (
+                <div
+                    className="calModalOverlay"
+                    onMouseDown={() => {
+                        setOpenMenuId(null);
+                        closeStudyModal();
+                    }}
+                >
+                    <div className="calModal" onMouseDown={(e) => e.stopPropagation()}>
+                        <div className="calModalHead">
+                            <div className="calModalTitle">{editingStudyId ? "스터디 일정 수정" : "스터디 일정 추가"}</div>
+                            <button type="button" className="calModalClose" onMouseDown={closeStudyModal}>
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="calModalBody">
+                            <div className="calRow2">
+                                <label className="calField">
+                                    <span className="calFieldLabel">회차</span>
+                                    <input
+                                        type="number"
+                                        className="calInput"
+                                        min={1}
+                                        value={studyForm.round}
+                                        onChange={(e) => onChangeStudyForm("round", e.target.value)}
+                                        placeholder="예: 1"
+                                    />
+                                </label>
+
+                                <label className="calField">
+                                    <span className="calFieldLabel">날짜</span>
+                                    <input
+                                        type="date"
+                                        className="calInput"
+                                        value={studyForm.date}
+                                        onChange={(e) => onChangeStudyForm("date", e.target.value)}
+                                    />
+                                </label>
+                            </div>
+
+                            <label className="calField">
+                                <span className="calFieldLabel">설명(선택)</span>
+                                <textarea
+                                    className="calTextarea"
+                                    value={studyForm.description}
+                                    onChange={(e) => onChangeStudyForm("description", e.target.value)}
+                                    placeholder="예: 준비물 / 숙제 / 링크"
+                                    rows={3}
+                                />
+                            </label>
+
+                            {studyError && <div className="calError">{studyError}</div>}
+                        </div>
+
+                        <div className="calModalFoot">
+                            {editingStudyId && (
+                                <button
+                                    type="button"
+                                    className="calBtn calBtnGhost"
+                                    onMouseDown={() => deleteStudyById(editingStudyId)}
+                                >
+                                    삭제하기
+                                </button>
+                            )}
+
+                            <button type="button" className="calBtn calBtnGhost" onMouseDown={closeStudyModal}>
+                                취소
+                            </button>
+
+                            <button type="button" className="calBtn calBtnPrimary" onMouseDown={saveStudyFromModal}>
+                                {editingStudyId ? "수정 저장" : "저장"}
                             </button>
                         </div>
                     </div>

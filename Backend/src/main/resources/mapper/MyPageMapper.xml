@@ -5,30 +5,99 @@
 
 <mapper namespace="com.example.demo.mypage.MyPageMapper">
 
+    <!-- 내 정보 조회 -->
     <select id="findByUserId" resultType="com.example.demo.mypage.MyPageVO">
-        SELECT
-            user_id        AS userId,
-            name,
-            nickname,
-            email,
-            birth_date     AS birthDate,
-            gender,
-            introduction,
-            profile_img    AS profileImg,
-            created_at     AS createdAt
+        SELECT *
         FROM users
-        WHERE user_id = #{userId}
+        WHERE email = #{userId}
     </select>
 
+    <!-- 내 정보 수정 -->
     <update id="updateMyPage">
         UPDATE users
-        SET
-            name = #{name},
+        SET name = #{name},
             nickname = #{nickname},
             birth_date = #{birthDate},
+            gender = #{gender},
             introduction = #{introduction},
-            profile_img = COALESCE(#{profileImg}, profile_img)
-        WHERE user_id = #{userId}
+            profile_img = #{profileImg}
+        WHERE email = #{userId}
     </update>
+
+
+    <!-- 회원 탈퇴 -->
+    <delete id="deleteByEmail">
+        DELETE FROM users
+        WHERE email = #{email}
+    </delete>
+
+    <!-- 성별 조회 -->
+    <select id="getGender" resultType="String">
+        SELECT gender
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+    <!-- 진행중 스터디 -->
+    <select id="getJoinedStudies" resultType="com.example.demo.mypage.MyStudyVO">
+
+        <!-- 방장이 만든 진행중 -->
+        SELECT r.room_id AS roomId,
+        r.title,
+        '진행중' AS status,
+        r.start_date AS startDate,
+        r.ended_at AS endAt,
+        r.host_user_email AS hostEmail
+        FROM room r
+        WHERE r.host_user_email = #{email}
+        AND r.ended_at <![CDATA[ >= ]]> CURDATE()
+
+        UNION
+
+        <!-- 가입 승인된 진행중 -->
+        SELECT r.room_id AS roomId,
+        r.title,
+        '진행중' AS status,
+        r.start_date AS startDate,
+        r.ended_at AS endAt,
+        r.host_user_email AS hostEmail
+        FROM room_join_request j
+        JOIN room r ON j.room_id = r.room_id
+        WHERE j.request_user_email = #{email}
+        AND j.status = '승인'
+        AND r.ended_at <![CDATA[ >= ]]> CURDATE()
+
+    </select>
+
+    <!-- 완료된 스터디 -->
+    <select id="getCompletedStudies" resultType="com.example.demo.mypage.MyStudyVO">
+
+        <!-- 방장이 만든 종료 -->
+        SELECT r.room_id AS roomId,
+        r.title,
+        '종료' AS status,
+        r.start_date AS startDate,
+        r.ended_at AS endAt,
+        r.host_user_email AS hostEmail
+        FROM room r
+        WHERE r.host_user_email = #{email}
+        AND r.ended_at <![CDATA[ < ]]> CURDATE()
+
+        UNION
+
+        <!-- 가입 승인된 종료 -->
+        SELECT r.room_id AS roomId,
+        r.title,
+        '종료' AS status,
+        r.start_date AS startDate,
+        r.ended_at AS endAt,
+        r.host_user_email AS hostEmail
+        FROM room_join_request j
+        JOIN room r ON j.room_id = r.room_id
+        WHERE j.request_user_email = #{email}
+        AND j.status = '승인'
+        AND r.ended_at <![CDATA[ < ]]> CURDATE()
+
+    </select>
 
 </mapper>

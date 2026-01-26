@@ -1,9 +1,9 @@
 package com.example.demo.chat.handler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.demo.chat.dto.ChatMessageDTO;
 import com.example.demo.chat.entity.ChatMessage;
 import com.example.demo.chat.repository.ChatMessageRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -12,7 +12,6 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,51 +24,47 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final ChatMessageRepository chatMessageRepository;
 
-    // 채팅방(roomId)별로 접속한 사람들의 세션을 관리하는 저장소
-    private final Map<Long, Set<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
+    // 1️⃣ Map의 키를 Long -> String으로 변경 (방 번호가 문자열이므로)
+    private final Map<String, Set<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
 
-    // 1. 소켓 연결 성공 시
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        Long roomId = getRoomId(session);
-        // 방에 세션 추가
+        String roomId = getRoomId(session); // 👈 String으로 받음
+
+        // 2️⃣ String 키 사용
         roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
         log.info("입장: RoomId={}, SessionId={}", roomId, session.getId());
     }
 
-    // 2. 메시지 전송 시 (여기가 핵심!)
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String payload = message.getPayload();
-
-        // JSON -> DTO 변환
         ChatMessageDTO chatMessageDTO = objectMapper.readValue(payload, ChatMessageDTO.class);
-        Long roomId = getRoomId(session);
 
-        // ✅ DB에 저장 (Entity로 변환 후 저장)
+        String roomId = getRoomId(session); // 👈 String으로 받음
+
+        // 3️⃣ DB 저장 시 String roomId 사용
         ChatMessage chatMessage = ChatMessage.builder()
                 .roomId(roomId)
                 .userId(chatMessageDTO.getUserId())
                 .messageText(chatMessageDTO.getMessage())
                 .build();
-        chatMessageRepository.save(chatMessage); // 저장 완료!
+        chatMessageRepository.save(chatMessage);
 
-        // ✅ 같은 방 사람들에게 메시지 전송
+        // 4️⃣ Map 조회도 String 키 사용
         Set<WebSocketSession> sessions = roomSessions.get(roomId);
         if (sessions != null) {
             for (WebSocketSession s : sessions) {
                 if (s.isOpen()) {
-                    // DTO를 다시 JSON 문자열로 바꿔서 전송
                     s.sendMessage(new TextMessage(objectMapper.writeValueAsString(chatMessageDTO)));
                 }
             }
         }
     }
 
-    // 3. 소켓 연결 종료 시
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        Long roomId = getRoomId(session);
+        String roomId = getRoomId(session); // 👈 String으로 받음
         Set<WebSocketSession> sessions = roomSessions.get(roomId);
         if (sessions != null) {
             sessions.remove(session);
@@ -77,10 +72,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         log.info("퇴장: RoomId={}, SessionId={}", roomId, session.getId());
     }
 
-    // URL에서 roomId 추출 (/ws/room/1 -> 1)
-    private Long getRoomId(WebSocketSession session) {
+    // 5️⃣ Long.parseLong() 제거! 그냥 문자열 그대로 반환
+    private String getRoomId(WebSocketSession session) {
         String path = session.getUri().getPath();
         String[] segments = path.split("/");
-        return Long.parseLong(segments[segments.length - 1]);
+        return segments[segments.length - 1]; // "bebbffd2-..." 같은 문자열 그대로 리턴
     }
 }
