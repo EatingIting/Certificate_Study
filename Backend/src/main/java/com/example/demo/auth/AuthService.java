@@ -7,4 +7,8 @@ public interface AuthService {
     void signup(AuthVO authVO);
 
     AuthVO login(String email, String password);
+
+    void signupOAuthUser(String email, String nickname);
+
+    AuthVO findByEmail(String email);
 }

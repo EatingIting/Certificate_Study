@@ -15,7 +15,6 @@ public class MyPageController {
 
     private final MyPageService myPageService;
 
-    /* ===== 마이페이지 조회 ===== */
     @GetMapping("/me")
     public ResponseEntity<MyPageVO> getMyPage(Authentication authentication) {
         String userId = (String) authentication.getPrincipal();
@@ -24,13 +23,13 @@ public class MyPageController {
         return ResponseEntity.ok(myPage);
     }
 
-    /* ===== 마이페이지 수정 ===== */
     @PutMapping("/me")
     public ResponseEntity<Void> updateMyPage(
             Authentication authentication,
             @RequestParam String name,
             @RequestParam String nickname,
             @RequestParam String birthDate,
+            @RequestParam String gender,
             @RequestParam(required = false) String introduction,
             @RequestParam(required = false) MultipartFile profileImage
     ) {
@@ -41,10 +40,53 @@ public class MyPageController {
                 name,
                 nickname,
                 birthDate,
+                gender,
                 introduction,
                 profileImage
         );
 
         return ResponseEntity.ok().build();
     }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> withdraw(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        myPageService.withdraw(email);
+
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/me/gender")
+    public ResponseEntity<String> getMyGender(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        String gender = myPageService.getGender(email);
+
+        return ResponseEntity.ok(gender);
+    }
+
+    @GetMapping("/me/studies/joined")
+    public ResponseEntity<?> getJoinedStudies(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        return ResponseEntity.ok(
+                myPageService.getJoinedStudies(email)
+        );
+    }
+
+    @GetMapping("/me/studies/completed")
+    public ResponseEntity<?> getCompletedStudies(Authentication authentication) {
+
+        String email = authentication.getName();
+
+        return ResponseEntity.ok(
+                myPageService.getCompletedStudies(email)
+        );
+    }
+
+
 }
