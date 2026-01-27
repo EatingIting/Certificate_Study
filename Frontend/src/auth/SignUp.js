@@ -151,6 +151,11 @@ const Signup = () => {
             return false;
         }
 
+        if (interestCategories.length === 0) {
+            alert("관심 자격증을 최소 1개 이상 등록해 주세요.");
+            return false;
+        }
+
         return true;
     };
 
@@ -195,6 +200,7 @@ const Signup = () => {
             return;
         }
 
+
         if (interestCategories.length >= 4) {
             alert("관심 자격증은 최대 4개까지 가능합니다.");
             return;
@@ -202,6 +208,8 @@ const Signup = () => {
 
         setInterestCategories([...interestCategories, categoryId]);
     };
+
+    const today = new Date().toISOString().split("T")[0];
 
     const handleSignup = async () => {
         if (!validateSignup()) return;
@@ -306,6 +314,7 @@ const Signup = () => {
                     value={form.birthDate}
                     onChange={handleChange}
                     className="modal-input"
+                    max={today}
                 />
 
                 <div className="gender-group">
@@ -373,7 +382,11 @@ const Signup = () => {
                     ))}
                 </select>
 
-                <button type="button" onClick={addCategory}>
+                <button
+                    type="button"
+                    className="interest-add-btn"
+                    onClick={addCategory}
+                >
                     관심 자격증 추가
                 </button>
 

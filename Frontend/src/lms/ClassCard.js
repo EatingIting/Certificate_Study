@@ -37,14 +37,14 @@ const ClassCard = ({ data, loginUserEmail }) => {
     return (
         <div className="class-card">
             <img
-                src={data.roomImg || "/default.jpg"}
+                src={data.roomImg || "/sample.jpg"}
                 alt={data.title}
-                onError={(e) => (e.target.src = "/default.jpg")}
+                onError={(e) => (e.target.src = "/sample.jpg")}
             />
 
             <div className="card-body">
                 <div className="card-title-row">
-                    <div className="card-title">🎓 {data.title}</div>
+                    <div className="lms-card-title">🎓 {data.title}</div>
 
                     {isHost && (
                         <div
