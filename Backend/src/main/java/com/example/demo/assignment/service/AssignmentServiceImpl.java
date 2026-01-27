@@ -35,11 +35,12 @@ public class AssignmentServiceImpl implements AssignmentService {
         vo.setTitle(req.getTitle());
         vo.setDescription(req.getDescription());
         vo.setDueAt(req.getDueAt());
-        vo.setCreatedByEmail(req.getCreatedByEmail());
+        vo.setCreatedByUserId(req.getCreatedByUserId());
 
-        assignmentMapper.insertAssignment(vo);
+        assignmentMapper.insertAssignment(vo); // 여기서 DB INSERT 실행 + PK가 vo.assignmentId에 채워짐
         return vo.getAssignmentId();
     }
+
 
     @Override
     public void submitAssignment(Long assignmentId, String userId, String submitTitle, String memo, MultipartFile file) {

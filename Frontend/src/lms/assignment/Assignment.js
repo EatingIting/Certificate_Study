@@ -34,11 +34,39 @@ const Assignment = () => {
         setSelected(null);
     };
 
-    const onSubmit = (e) => {
-        e.preventDefault();
+    const onSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!selected?.id) {
+        alert("선택된 과제가 없습니다.");
+        return;
+    }
+
+    try {
+        const fd = new FormData();
+        fd.append("userId", userId);
+        fd.append("submitTitle", submitTitle);
+        if (submitMemo) fd.append("memo", submitMemo);
+        if (submitFile) fd.append("file", submitFile);
+
+        await api.post(`/assignments/${selected.id}/submissions`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        });
+
         closeSubmitModal();
-        alert("제출이 완료되었습니다! (데모)");
+        await fetchAssignments(); // 제출 후 상태(status) 갱신
+        alert("제출이 완료되었습니다!");
+    } catch (err) {
+    console.error("CREATE ERROR:", {
+        message: err.message,
+        status: err.response?.status,
+        data: err.response?.data,
+        url: err.config?.baseURL + err.config?.url,
+    });
+    alert(`과제 생성 실패: ${err.response?.status || ""}`);
+    }
     };
+
 
     // ===== 과제 생성 모달 =====
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -58,21 +86,31 @@ const Assignment = () => {
         setIsCreateOpen(false);
     };
 
-    const onCreate = (e) => {
-        e.preventDefault();
+    const onCreate = async (e) => {
+    e.preventDefault();
 
-        // 데모: 리스트에 추가
-        const newItem = {
-            id: `new-${Date.now()}`,
-            title: createTitle,
-            dueDate: createDue || "미정",
-            author: "김민수",
-            status: "제출 하기",
+    try {
+        // 백엔드 LocalDateTime이므로 "YYYY-MM-DDTHH:mm:ss" 형태로 맞춤
+        const dueAt = `${createDue}T23:59:00`;
+
+        // ✅ 백엔드 DTO가 createdByUserId 받는 버전 기준
+        const payload = {
+        title: createTitle,
+        description: createDesc,
+        dueAt,
+        createdByUserId: userId,
         };
 
-        setAssignments((prev) => [newItem, ...prev]);
+        const res = await api.post(`/rooms/${roomId}/assignments`, payload);
+
+        // 생성 성공하면 목록 다시 불러오기
         closeCreateModal();
-        alert("과제가 생성되었습니다! (데모)");
+        await fetchAssignments();
+        alert("과제가 생성되었습니다!");
+    } catch (err) {
+        console.error(err);
+        alert("과제 생성 실패");
+    }
     };
 
     const fetchAssignments = async () => {
