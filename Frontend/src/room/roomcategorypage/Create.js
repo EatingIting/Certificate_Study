@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import api from "../../api/api";
 import "./Create.css";
 import { useLocation, useNavigate } from "react-router-dom";
-import { toBackendUrl } from "../../utils/backendUrl";
 
 const CreateRoom = () => {
     const navigate = useNavigate();
@@ -31,6 +30,7 @@ const CreateRoom = () => {
         maxParticipants: 4,
     });
 
+    const today = new Date().toISOString().split("T")[0];
 
     const [studyImage, setStudyImage] = useState(null);
     const [previewUrl, setPreviewUrl] = useState("");
@@ -44,7 +44,6 @@ const CreateRoom = () => {
     const [selectedMid, setSelectedMid] = useState(null);
     const [selectedSub, setSelectedSub] = useState(null);
 
-
     const [editCategoryId, setEditCategoryId] = useState(null);
 
     useEffect(() => {
@@ -52,7 +51,6 @@ const CreateRoom = () => {
         api.get("/category/main").then((res) => setMainCategories(res.data));
     }, []);
 
-    /* 입력값 변경 */
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({
@@ -60,7 +58,6 @@ const CreateRoom = () => {
             [name]: name === "maxParticipants" ? Number(value) : value,
         }));
     };
-
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -70,7 +67,6 @@ const CreateRoom = () => {
         setPreviewUrl(URL.createObjectURL(file));
     };
 
-    /* 카테고리 변경 */
     const handleMainChange = (e) => {
         const id = Number(e.target.value) || null;
         setSelectedMain(id);
@@ -178,7 +174,6 @@ const CreateRoom = () => {
         );
     }, [selectedMid]);
 
-    /* 제출 */
     const handleSubmit = async () => {
         if (!form.title.trim()) {
             alert("스터디 그룹 이름을 입력해주세요");
@@ -265,7 +260,6 @@ const CreateRoom = () => {
                         onChange={handleImageChange}
                     />
 
-                    {/* 미리보기 */}
                     {previewUrl && (
                         <div className="image-preview">
                             <img src={previewUrl} alt="스터디 사진 미리보기" />
@@ -273,7 +267,6 @@ const CreateRoom = () => {
                     )}
                 </div>
 
-                {/* 날짜 */}
                 <div className="create-inline">
                     <div>
                         <p className="section-label">스터디 시작일</p>
@@ -283,6 +276,7 @@ const CreateRoom = () => {
                             name="startDate"
                             value={form.startDate}
                             onChange={handleChange}
+                            min={today}
                         />
                     </div>
 
@@ -294,6 +288,7 @@ const CreateRoom = () => {
                             name="endDate"
                             value={form.endDate}
                             onChange={handleChange}
+                            min={form.startDate || today}
                         />
                     </div>
 
@@ -305,6 +300,7 @@ const CreateRoom = () => {
                             name="examDate"
                             value={form.examDate}
                             onChange={handleChange}
+                            min={today}
                         />
                     </div>
 
@@ -316,11 +312,11 @@ const CreateRoom = () => {
                             name="deadline"
                             value={form.deadline}
                             onChange={handleChange}
+                            min={today}
                         />
                     </div>
                 </div>
 
-                {/* 카테고리 */}
                 <p className="section-label">카테고리</p>
 
                 <select value={selectedMain ?? ""} onChange={handleMainChange}>
@@ -358,7 +354,6 @@ const CreateRoom = () => {
                     ))}
                 </select>
 
-                {/* 인원 + 성별 */}
                 <div className="create-inline">
                     <div>
                         <p className="section-label">최대 인원</p>

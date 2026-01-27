@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import heroImg from "./메인메인.png";
-import { toBackendUrl } from "../utils/backendUrl";
 
 function Main() {
     const navigate = useNavigate();
@@ -45,7 +44,7 @@ function Main() {
     };
 
     const getImageUrl = (img) => {
-        if (!img) return "/default.jpg";
+        if (!img) return "/sample.jpg";
 
         if (img.startsWith("http")) return img;
 
@@ -98,7 +97,7 @@ function Main() {
                                     alt="스터디 썸네일"
                                     className="thumb-img"
                                     onError={(e) => {
-                                        e.currentTarget.src = "/default.jpg";
+                                        e.currentTarget.src = "/sample.jpg";
                                     }}
                                 />
                             </div>

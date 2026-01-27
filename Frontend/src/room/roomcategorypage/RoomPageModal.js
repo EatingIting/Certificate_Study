@@ -2,7 +2,6 @@ import "./RoomPageModal.css";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/api";
-import { toBackendUrl } from "../../utils/backendUrl";
 
 const formatKoreanDate = (value) => {
   if (!value) return "미정";
@@ -38,7 +37,8 @@ const RoomPageModal = ({ open, onClose, study }) => {
     if (open) {
       setGenderLoading(true);
 
-      api.get("/mypage/me/gender")
+      api
+          .get("/mypage/me/gender")
           .then((res) => {
             setMyGender(res.data);
           })
@@ -51,6 +51,7 @@ const RoomPageModal = ({ open, onClose, study }) => {
   if (!open || !study) return null;
 
   const myEmail = getEmailFromToken();
+  const isLoggedIn = !!myEmail;
 
   const isMyStudy = study.hostUserEmail?.trim() === myEmail?.trim();
 
@@ -58,6 +59,14 @@ const RoomPageModal = ({ open, onClose, study }) => {
       study.gender === "ALL" || (myGender && study.gender === myGender);
 
   const handleGoStep2 = () => setStep(2);
+
+  const getImageUrl = (img) => {
+    if (!img) return "/sample.jpg";
+
+    if (img.startsWith("http")) return img;
+
+    return `http://localhost:8080${img}`;
+  };
 
   const handleSubmit = async () => {
     if (!requestUserNickname.trim()) {
@@ -86,10 +95,6 @@ const RoomPageModal = ({ open, onClose, study }) => {
     }
   };
 
-  const maxParticipants = study.maxParticipants
-      ? `${study.maxParticipants}명`
-      : "미정";
-
   const genderMap = {
     ALL: "전체",
     FEMALE: "여자",
@@ -115,22 +120,20 @@ const RoomPageModal = ({ open, onClose, study }) => {
           <div className="sr2-body">
             {step === 1 ? (
                 <div className="sr2-content">
-                  {/* ===== 왼쪽 일러스트 ===== */}
-                    <div className="sr2-illust">
-                        {study.roomImg && (
-                            <img
-                                src={study.roomImg.startsWith("http")
-                                    ? study.roomImg
-                                    : `http://localhost:8080${study.roomImg}`}
-                                alt="스터디 사진"
-                                className="sr2-study-img"
-                            />
-                        )}
-                    </div>
+                  {/* ===== 왼쪽 이미지 ===== */}
+                  <div className="sr2-illust">
+                    <img
+                        src={getImageUrl(study.roomImg)}
+                        alt="스터디 사진"
+                        className="sr2-study-img"
+                        onError={(e) => {
+                          e.currentTarget.src = "/sample.jpg";
+                        }}
+                    />
+                  </div>
 
 
-
-                    {/* ===== 오른쪽 정보 ===== */}
+                  {/* ===== 오른쪽 정보 ===== */}
                   <div className="sr2-info">
                     <div className="sr2-row">
                       <div className="sr2-k">스터디명</div>
@@ -146,12 +149,16 @@ const RoomPageModal = ({ open, onClose, study }) => {
 
                     <div className="sr2-row">
                       <div className="sr2-k">모집 마감일</div>
-                      <div className="sr2-v">{formatKoreanDate(study.deadline)}</div>
+                      <div className="sr2-v">
+                        {formatKoreanDate(study.deadline)}
+                      </div>
                     </div>
 
                     <div className="sr2-row">
                       <div className="sr2-k">시험일자</div>
-                      <div className="sr2-v">{formatKoreanDate(study.examDate)}</div>
+                      <div className="sr2-v">
+                        {formatKoreanDate(study.examDate)}
+                      </div>
                     </div>
 
                     <div className="sr2-row">
@@ -174,18 +181,22 @@ const RoomPageModal = ({ open, onClose, study }) => {
                       <div className="sr2-v">{genderMap[study.gender]}</div>
                     </div>
 
-                    {!genderLoading && !isMyStudy && !isGenderAllowed && (
-                        <div
-                            style={{
-                              marginTop: "3px",
-                              fontSize: "13px",
-                              color: "red",
-                              fontWeight: "700",
-                            }}
-                        >
-                          ⚠ 성별 제한으로 신청할 수 없습니다.
-                        </div>
-                    )}
+                    {/* ✅ 로그인 되어 있을 때만 성별 제한 */}
+                    {isLoggedIn &&
+                        !genderLoading &&
+                        !isMyStudy &&
+                        !isGenderAllowed && (
+                            <div
+                                style={{
+                                  marginTop: "3px",
+                                  fontSize: "13px",
+                                  color: "red",
+                                  fontWeight: "700",
+                                }}
+                            >
+                              ⚠ 성별 제한으로 신청할 수 없습니다.
+                            </div>
+                        )}
 
                     <div className="sr2-row">
                       <div className="sr2-k">스터디장</div>
@@ -196,6 +207,25 @@ const RoomPageModal = ({ open, onClose, study }) => {
                       <div className="sr2-k">설명</div>
                       <div className="sr2-v sr2-desc">{study.content}</div>
                     </div>
+
+                    {/* ✅ 로그인 안내 (설명 밑에 크게 표시) */}
+                    {!isLoggedIn && (
+                        <div
+                            style={{
+                              marginTop: "15px",
+                              padding: "12px",
+                              backgroundColor: "#fff3f3",
+                              border: "1px solid red",
+                              borderRadius: "8px",
+                              fontSize: "15px",
+                              fontWeight: "800",
+                              color: "red",
+                              textAlign: "center",
+                            }}
+                        >
+                          ⚠ 로그인 후 신청할 수 있습니다.
+                        </div>
+                    )}
                   </div>
                 </div>
             ) : (
@@ -208,7 +238,9 @@ const RoomPageModal = ({ open, onClose, study }) => {
                       onChange={(e) => setRequestUserNickname(e.target.value)}
                   />
 
-                  <div className="sr2-form-label">신청 목적 및 간단한 자기소개</div>
+                  <div className="sr2-form-label">
+                    신청 목적 및 간단한 자기소개
+                  </div>
                   <textarea
                       className="sr2-textarea"
                       placeholder="예) 토익 800 목표입니다. 매주 2회 이상 참여 가능합니다."
@@ -227,13 +259,23 @@ const RoomPageModal = ({ open, onClose, study }) => {
                 <>
                   <button
                       className="sr2-primary"
-                      disabled={!genderLoading && !isMyStudy && !isGenderAllowed}
+                      disabled={
+                          !isLoggedIn ||
+                          (!genderLoading && !isMyStudy && !isGenderAllowed)
+                      }
                       onClick={() => {
+                        if (!isLoggedIn) {
+                          alert("로그인 후 신청할 수 있습니다.");
+                          return;
+                        }
+
                         if (!isMyStudy && !isGenderAllowed) return;
 
                         if (isMyStudy) {
                           api.get(`/rooms/${study.roomId}`).then((res) => {
-                            navigate("/room/create", { state: { study: res.data } });
+                            navigate("/room/create", {
+                              state: { study: res.data },
+                            });
                           });
                         } else {
                           handleGoStep2();
