@@ -11,7 +11,8 @@ public class AssignmentVO {
     private String description;
     private LocalDateTime dueAt;
 
-    private String createdByEmail;
+    private String createdByUserId;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
