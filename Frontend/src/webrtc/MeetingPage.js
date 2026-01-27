@@ -61,7 +61,7 @@ const UserAvatar = ({ name, size = "md", src }) => {
 };
 
 // VideoTile 내부에서 오디오 레벨을 직접 감지
-const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false, videoRef }) => {
+const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false, videoRef, isFilterPreparing = false }) => {
     const internalVideoRef = useRef(null);
     const videoEl = internalVideoRef;
 
@@ -128,12 +128,13 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     // ✅ 핵심: "실제로 video를 렌더링할지"를 별도로 결정
     // - 화면공유는 videoTrack이 있으면 항상 렌더링
     // - 카메라 OFF면 (상대가 OFF한 경우) 무조건 video를 끄고 아바타 타일로 전환
+    // - 🔥 필터(이모지/배경제거) 준비 중이면 비디오 숨김 (쌩얼 노출 방지)
     const shouldRenderVideo = useMemo(() => {
         if (!stream) return false;
         if (isScreen) return stream.getVideoTracks().length > 0;
         if (safeUser.cameraOff) return false;
         return canShowVideo;
-    }, [stream, isScreen, safeUser.cameraOff, canShowVideo]);
+    }, [stream, isScreen, safeUser.cameraOff, safeUser.isMe, isFilterPreparing, canShowVideo]);
 
     // ✅ 오디오 레벨 감지(원격용)
     // - 상대방도 말할 때 speaking이 true가 되어 파란 테두리가 뜨도록
@@ -303,16 +304,9 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             data-peer-id={peerId}
             data-peer-name={peerName}
         >
-            {/* ✅ roomReconnecting이 false면 접속 중 스피너도 표시 안 함 */}
-            {roomReconnecting && (isJoining && !safeUser.isMe) && (
-                <div className="reconnecting-overlay">
-                    <Loader2 className="spinner" />
-                    <p>접속 중...</p>
-                </div>
-            )}
-
-            {/* ✅ roomReconnecting이 false면 개별 isReconnecting도 무시 (PIP 복귀 후 스피너 강제 해제) */}
-            {roomReconnecting && ((isReconnecting && !safeUser.isMe) || showRoomReconnecting) && (
+            {/* ✅ 핵심 원칙: 재접속 스피너는 원격 타일(remote tile)에만 표시 */}
+            {/* 로컬 타일(!safeUser.isMe === false)은 절대 재접속 스피너를 보지 않음 */}
+            {!safeUser.isMe && isReconnecting && (
                 <div className="reconnecting-overlay">
                     <Loader2 className="spinner" />
                     <p>재접속 중...</p>
@@ -330,11 +324,21 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                     data-peer-name={peerName}
                     className={`video-element ${isScreen ? "screen" : ""}`}
                     style={{
-                        display: shouldRenderVideo ? "block" : "none"
+                        // 🔥 필터 준비 중일 때는 video를 보여줘서 canvas 스피너가 전송되도록 함
+                        display: (shouldRenderVideo || (safeUser.isMe && isFilterPreparing)) ? "block" : "none"
                     }}
                 />
 
-                {!shouldRenderVideo && (
+                {/* 🔥 필터 준비 중일 때 로컬 사용자에게만 필터 준비중 스피너 표시 */}
+                {safeUser.isMe && isFilterPreparing && (
+                    <div className="camera-off-placeholder filter-preparing">
+                        <Loader2 className="spinner" />
+                        <p className="stream-label">필터 준비 중...</p>
+                    </div>
+                )}
+
+                {/* 카메라 꺼짐 또는 스트림 없음 (필터 준비 중이 아닐 때만) */}
+                {!shouldRenderVideo && !(safeUser.isMe && isFilterPreparing) && (
                     <div className="camera-off-placeholder">
                         <UserAvatar name={safeUser.name} size={isMain ? "lg" : "md"} />
                         <p className="stream-label">{safeUser.name}</p>
@@ -393,6 +397,7 @@ function MeetingPage({ portalRoomId }) {
         requestBrowserPip,
         isPipMode,
         isBrowserPipMode,
+        pipVideoRef, // 🔥 브라우저 PIP용 숨겨진 video element ref
     } = useMeeting();
 
     useEffect(() => {
@@ -401,6 +406,43 @@ function MeetingPage({ portalRoomId }) {
         console.log("[MeetingPage] startMeeting", { roomId, subjectId });
         startMeeting(roomId, subjectId);
     }, [roomId, subjectId, startMeeting]);
+
+    // 🔥 브라우저 PIP용 숨겨진 video element 생성 및 초기화
+    useEffect(() => {
+        if (!pipVideoRef) return;
+
+        // 이미 생성되어 있으면 재생성하지 않음
+        if (pipVideoRef.current) {
+            console.log("[MeetingPage] 숨겨진 PIP video가 이미 존재합니다.");
+            return;
+        }
+
+        // 숨겨진 video element 생성
+        const hiddenVideo = document.createElement("video");
+        hiddenVideo.autoplay = true;
+        hiddenVideo.playsInline = true;
+        hiddenVideo.muted = true;
+        // 완전히 숨기기 (화면 밖으로 이동 + 투명도 0)
+        hiddenVideo.style.cssText = "position:fixed; bottom:-9999px; right:-9999px; width:1px; height:1px; opacity:0; pointer-events:none; z-index:-9999;";
+        document.body.appendChild(hiddenVideo);
+        pipVideoRef.current = hiddenVideo;
+
+        console.log("[MeetingPage] ✅ 숨겨진 PIP video element 생성 완료");
+
+        // cleanup: 컴포넌트 언마운트 시 제거
+        return () => {
+            if (pipVideoRef.current) {
+                try {
+                    pipVideoRef.current.pause();
+                    pipVideoRef.current.srcObject = null;
+                    pipVideoRef.current.remove();
+                } catch (e) {
+                    console.warn("[MeetingPage] 숨겨진 PIP video cleanup 중 오류:", e);
+                }
+                pipVideoRef.current = null;
+            }
+        };
+    }, [pipVideoRef]);
 
     const [layoutMode, setLayoutMode] = useState("speaker");
 
@@ -437,6 +479,19 @@ function MeetingPage({ portalRoomId }) {
 
     const [isLocalLoading, setIsLocalLoading] = useState(true);
     const [recvTransportReady, setRecvTransportReady] = useState(false);
+
+    // 🔥 필터(이모지/배경제거) 준비 중 상태 - 준비 완료 전까지 쌩얼 노출 방지
+    // 🔥 필터 준비중 스피너 (모든 사람에게 보이도록)
+    const [isFilterPreparing, setIsFilterPreparing] = useState(() => {
+        try {
+            const savedEmoji = localStorage.getItem("faceEmoji") || sessionStorage.getItem("faceEmoji");
+            const savedBgRemove = localStorage.getItem("faceBgRemove") === "true" || sessionStorage.getItem("faceBgRemove") === "true";
+            // 저장된 필터 설정이 있으면 처음부터 준비 중 상태로 시작
+            return !!(savedEmoji || savedBgRemove);
+        } catch {
+            return false;
+        }
+    });
 
     const [messages, setMessages] = useState(() => {
         try {
@@ -481,7 +536,8 @@ function MeetingPage({ portalRoomId }) {
     // 🔥 (emoji쪽) 배경 지우기 토글
     const [bgRemove, setBgRemove] = useState(() => {
         try {
-            return sessionStorage.getItem("faceBgRemove") === "true";
+            // ✅ 배경제거는 "다음 접속에도 유지"해야 하므로 localStorage 우선
+            return localStorage.getItem("faceBgRemove") === "true" || sessionStorage.getItem("faceBgRemove") === "true";
         } catch {
             return false;
         }
@@ -527,6 +583,8 @@ function MeetingPage({ portalRoomId }) {
     const camOnRef = useRef(camOn);
     const micPermissionRef = useRef(micPermission);
     const camPermissionRef = useRef(camPermission);
+    // 🔥 필터 준비 중 상태 ref (비동기 함수에서 최신 값 참조용)
+    const isFilterPreparingRef = useRef(isFilterPreparing);
     // ✅ 필터 적용/해제 시 재사용할 "실제 카메라" 트랙(중복 getUserMedia로 검은화면 나는 것 방지)
     const lastCameraTrackRef = useRef(null);
 
@@ -794,6 +852,58 @@ function MeetingPage({ portalRoomId }) {
     useEffect(() => { camOnRef.current = camOn; }, [camOn]);
     useEffect(() => { micPermissionRef.current = micPermission; }, [micPermission]);
     useEffect(() => { camPermissionRef.current = camPermission; }, [camPermission]);
+    useEffect(() => { isFilterPreparingRef.current = isFilterPreparing; }, [isFilterPreparing]);
+
+    // 🔥 컴포넌트 마운트 시 저장된 필터 설정이 있으면 모델을 미리 로딩 (즉시 적용을 위해)
+    useEffect(() => {
+        try {
+            const savedEmoji = localStorage.getItem("faceEmoji") || sessionStorage.getItem("faceEmoji");
+            const savedBgRemove = localStorage.getItem("faceBgRemove") === "true" || sessionStorage.getItem("faceBgRemove") === "true";
+
+            // 저장된 필터 설정이 있으면 모델을 미리 로딩 (cold start 방지)
+            if (savedEmoji) {
+                ensureFaceDetector().catch(() => { });
+                console.log("[MeetingPage] Preloading FaceDetector for instant emoji");
+            }
+            if (savedBgRemove) {
+                // 배경제거 세그멘터도 미리 로딩 (cold start 방지)
+                const cur = faceBgSegmenterRef.current;
+                if (!cur?.segmenter && !cur?.loading) {
+                    const loading = (async () => {
+                        try {
+                            const { ImageSegmenter, FilesetResolver } = await import("@mediapipe/tasks-vision");
+                            const vision = await FilesetResolver.forVisionTasks(
+                                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
+                            );
+                            const segmenter = await ImageSegmenter.createFromOptions(vision, {
+                                baseOptions: {
+                                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite",
+                                    delegate: "CPU",
+                                },
+                                runningMode: "VIDEO",
+                                outputCategoryMask: true,
+                            });
+                            return segmenter;
+                        } catch (e) {
+                            console.warn("[MeetingPage] Failed to preload bg segmenter:", e);
+                            return null;
+                        }
+                    })();
+                    faceBgSegmenterRef.current = { loading };
+                    loading.then((seg) => {
+                        if (seg) {
+                            faceBgSegmenterRef.current = { segmenter: seg };
+                            console.log("[MeetingPage] Preloaded bg segmenter for instant bg removal");
+                        } else {
+                            faceBgSegmenterRef.current = null;
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[MeetingPage] Failed to preload models:", e);
+        }
+    }, []); // 마운트 시 한 번만 실행
 
     if (!userIdRef.current) {
         const savedId = localStorage.getItem("stableUserId");
@@ -962,6 +1072,10 @@ function MeetingPage({ portalRoomId }) {
         setCamOn(false);
         localStorage.setItem("camOn", "false");
 
+        // 필터 준비 상태 해제
+        setIsFilterPreparing(false);
+        isFilterPreparingRef.current = false;
+
         // ⭐ 서버에 상태 전파
         wsRef.current?.send(JSON.stringify({
             type: "USER_STATE_CHANGE",
@@ -978,6 +1092,21 @@ function MeetingPage({ portalRoomId }) {
             return;
         }
 
+        // 🔥 [최적화 1] 카메라 요청과 동시에 모델 로딩 시작 (병렬 처리)
+        const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
+        const wantBgRemove = !!bgRemoveRef.current;
+        const needFiltersOnStart = wantEmoji || wantBgRemove;
+
+        // 필터가 필요하면 준비 중 상태로 설정 (모든 사람에게 스피너 표시)
+        if (needFiltersOnStart) {
+            setIsFilterPreparing(true);
+            isFilterPreparingRef.current = true;
+            console.log("[turnOnCamera] Filter settings detected, setting preparing state");
+        }
+
+        // await로 기다리지 않고 프로미스만 트리거해둡니다 (병렬 처리)
+        if (wantEmoji) ensureFaceDetector().catch(() => { });
+
         // 🔥 핵심: 이미 canvas pipeline이 활성화되어 있고 track이 살아있으면 재사용
         // (이모지/배경제거 변경 시 track 교체 방지 → PiP 안정성 보장)
         const existingOutTrack = canvasPipelineOutTrackRef.current;
@@ -991,11 +1120,20 @@ function MeetingPage({ portalRoomId }) {
             console.log("[turnOnCamera] pipeline already active, reusing existing track/producer");
             setCamOn(true);
             localStorage.setItem("camOn", "true");
+            // 이미 활성화되어 있으므로 스피너 해제
+            setIsFilterPreparing(false);
+            isFilterPreparingRef.current = false;
             return;
         }
 
         // 1) 카메라 트랙 획득
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        } catch (err) {
+            console.error("Camera permission denied or error", err);
+            return;
+        }
         const rawTrack = stream.getVideoTracks()[0];
         console.log("[turnOnCamera] got camera track:", rawTrack.id, rawTrack.readyState);
         if (isLikelyCameraTrack(rawTrack)) lastCameraTrackRef.current = rawTrack;
@@ -1018,25 +1156,17 @@ function MeetingPage({ portalRoomId }) {
         v.autoplay = true;
         v.playsInline = true;
         v.muted = true;
-        v.style.cssText = "position:fixed; bottom:0; right:0; width:640px; height:480px; opacity:0; pointer-events:none; z-index:-999;";
+        // 렌더링 최적화를 위해 완전 투명보다는 1px 크기로라도 존재하게 함
+        v.style.cssText = "position:fixed; bottom:0; right:0; width:640px; height:480px; opacity:0.01; pointer-events:none; z-index:-999;";
         document.body.appendChild(v);
         canvasPipelineVideoElRef.current = v;
         v.srcObject = new MediaStream([rawTrack]);
-        try { await v.play(); } catch { }
+        // 🔥 v.play()를 await하지 않고 즉시 다음 단계로 진행 (비동기로 처리)
+        v.play().catch(() => { }); // 에러 무시하고 계속 진행
 
-        // 메타데이터 로드 대기
-        await new Promise((resolve) => {
-            if (v.videoWidth > 0 && v.videoHeight > 0) return resolve();
-            const onLoaded = () => {
-                v.removeEventListener("loadedmetadata", onLoaded);
-                resolve();
-            };
-            v.addEventListener("loadedmetadata", onLoaded);
-            setTimeout(resolve, 1500);
-        });
-
-        const videoW = v.videoWidth || 640;
-        const videoH = v.videoHeight || 480;
+        // 🔥 메타데이터 로드 대기 완전 제거 - drawLoop에서 처리하므로 즉시 시작
+        const videoW = 640; // 기본값으로 시작, drawLoop에서 실제 크기로 업데이트
+        const videoH = 480;
 
         // 4) Canvas 생성 (항상 사용)
         const canvas = document.createElement("canvas");
@@ -1045,9 +1175,8 @@ function MeetingPage({ portalRoomId }) {
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
         canvasPipelineCanvasRef.current = canvas;
 
-        // 5) Canvas에서 track 캡처 (이것이 producer에 연결될 track)
-        // ✅ 필터(배경제거/이모지) 자동복원 시 과부하 방지: 기본은 15fps로 시작
-        const outStream = canvas.captureStream(15);
+        // 5) Canvas에서 track 캡처 (부드러운 화면을 위해 30fps 시도)
+        const outStream = canvas.captureStream(30);
         const outTrack = outStream.getVideoTracks()[0];
         canvasPipelineOutTrackRef.current = outTrack;
 
@@ -1063,10 +1192,128 @@ function MeetingPage({ portalRoomId }) {
 
         // 7) ✅ FaceDetector는 drawLoop에서 필요할 때만 ensureFaceDetector()로 로딩(초기/자동복원 멈춤 방지)
 
-        // 8) Draw 루프 시작 (producer 생성 전에 캔버스에 프레임 그리기)
+        // 🔥 상태를 즉시 업데이트하여 UI가 바로 반응하도록
+        setCamOn(true);
+        localStorage.setItem("camOn", "true");
+
+        // 8) 로컬 스트림 설정 (drawLoop 시작 전에 설정하여 즉시 표시)
+        const prevAudio = localStreamRef.current
+            ?.getAudioTracks()
+            .filter((t) => t.readyState !== "ended") ?? [];
+        const merged = new MediaStream([...prevAudio, outTrack]);
+        localStreamRef.current = merged;
+        setLocalStream(merged);
+        bumpStreamVersion();
+
+        // 🔥 필터가 필요하면 스피너를 보여주기 위해 먼저 producer 생성
+        // (스피너가 모든 사람에게 보이도록 하기 위해 producer를 먼저 생성)
+        // await를 사용하여 producer가 생성된 후에 스피너를 그리고 drawLoop 시작
+        let producerCreated = false;
+        let producerCreating = false;
+        if (needFiltersOnStart) {
+            // 스피너를 그리기 전에 producer를 먼저 생성 (await로 기다림)
+            producerCreating = true;
+            const transport = sendTransportRef.current;
+            if (transport && !transport.closed) {
+                try {
+                    const newProducer = await transport.produce({
+                        track: outTrack,
+                        appData: { type: "camera" },
+                    });
+                    producersRef.current.set("camera", newProducer);
+                    producerCreated = true;
+                    producerCreating = false;
+                    console.log("[turnOnCamera] producer created immediately for spinner");
+
+                    // 🔥 Producer가 생성된 후, 첫 프레임으로 스피너를 그려서 즉시 전송
+                    // 이렇게 하면 producer가 생성되자마자 스피너가 전송됨
+                    // 첫 번째 사진처럼 흰색 배경에 초록색 스피너로 그리기
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+                    const radius = 30;
+                    const time = Date.now() / 20;
+
+                    // Notched Circle Spinner (Loader2 style)
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate(time * Math.PI / 180);
+                    const spinnerColor = "#10B981"; // Tailwind emerald-500
+                    ctx.strokeStyle = spinnerColor;
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = "round";
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 30, 0, 1.5 * Math.PI);
+                    ctx.stroke();
+                    ctx.restore();
+
+                    ctx.fillStyle = "#374151"; // Gray-700
+                    ctx.font = "bold 24px Pretendard, sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText("필터 준비 중...", centerX, centerY + 60);
+
+                    console.log("[turnOnCamera] First spinner frame drawn after producer creation");
+
+                    // 🔥 Producer가 생성된 후, requestAnimationFrame을 사용하여 첫 프레임을 강제로 그리기
+                    // 이렇게 하면 producer가 생성된 직후에 스피너가 그려진 프레임이 전송됨
+                    // 첫 번째 사진처럼 흰색 배경에 초록색 스피너로 그리기
+                    requestAnimationFrame(() => {
+                        // 첫 프레임을 다시 그려서 확실히 전송되도록 함
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                        const centerX2 = canvas.width / 2;
+                        const centerY2 = canvas.height / 2;
+                        const radius2 = 30;
+                        const time2 = Date.now() / 20;
+
+                        // Notched Circle Spinner (Loader2 style)
+                        ctx.save();
+                        ctx.translate(centerX2, centerY2);
+                        ctx.rotate(time2 * Math.PI / 180);
+                        const spinnerColor2 = "#10B981"; // Tailwind emerald-500
+                        ctx.strokeStyle = spinnerColor2;
+                        ctx.lineWidth = 4;
+                        ctx.lineCap = "round";
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 30, 0, 1.5 * Math.PI);
+                        ctx.stroke();
+                        ctx.restore();
+
+                        ctx.fillStyle = "#374151"; // Gray-700
+                        ctx.font = "bold 24px Pretendard, sans-serif";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.fillText("필터 준비 중...", centerX2, centerY2 + 60);
+
+                        console.log("[turnOnCamera] Second spinner frame drawn via requestAnimationFrame");
+                    });
+                } catch (e) {
+                    console.error("[turnOnCamera] producer creation failed for spinner:", e);
+                    producerCreating = false;
+                }
+            } else {
+                producerCreating = false;
+            }
+        }
+
+        // 9) Draw 루프 시작 (producer 생성 후 캔버스에 프레임 그리기)
+        // 🔥 Producer가 생성된 경우, 짧은 시간 기다린 후 drawLoop 시작 (producer가 완전히 활성화되도록)
+        if (producerCreated && needFiltersOnStart) {
+            // Producer가 생성되었으면 100ms 기다린 후 drawLoop 시작
+            // 이렇게 하면 producer가 완전히 활성화된 후에 스피너를 그리기 시작
+            await new Promise(resolve => setTimeout(resolve, 100));
+            console.log("[turnOnCamera] Waited 100ms after producer creation, starting drawLoop");
+        }
+
         canvasPipelineActiveRef.current = true;
         let frameCount = 0;
-        let producerCreated = false;
+        let framesAfterProducer = 0; // 🔥 Producer 생성 후 스피너 전송 보장을 위한 카운터
+        const filterStartTime = Date.now(); // 🔥 시간 기반 타임아웃용
+        let filteredFramesDrawn = 0; // 🔥 필터가 실제로 적용된 프레임 개수 (쌩얼 노출 방지)
 
         // 🔥 배경 제거용 캔버스 및 세그멘터 초기화
         let bgFrameCanvas = null;
@@ -1133,230 +1380,288 @@ function MeetingPage({ portalRoomId }) {
         const drawLoop = async () => {
             if (!canvasPipelineActiveRef.current) return;
 
-            // ✅ drawLoop 전역 스코프에서 참조되는 값들(스코프 오류 방지)
+            const isBgRemoveOn = !!bgRemoveRef.current;
+            const isEmojiOn = !!faceEmojiRef.current && faceModeRef.current === "emoji";
             const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
-            const wantBgRemove = !!bgRemoveRef.current;
-            const wantEmojiForFrame = !!faceEmojiRef.current && faceModeRef.current === "emoji";
 
-            // 🔥 최소한 원본 프레임은 항상 그리기 (에러나도 검은화면 방지)
-            let drewFrame = false;
-
+            // ==========================================================
+            // 1. 얼굴 감지 실행 (비동기) - 🔥 새로고침 시 바로 시작
+            // ==========================================================
             try {
-                // 🔥 배경 제거 모드 체크
-                if (wantBgRemove && warmupDone) ensureBgSegmenterForPipeline();
+                if (isEmojiOn) {
+                    if (!faceDetectorRef.current) ensureFaceDetector().catch(() => { });
 
-                // 비디오 프레임을 캔버스에 그리기
-                if (!wantBgRemove) {
-                    // 기본: 원본 비디오 그대로
-                    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-                    drewFrame = true;
+                    const nowMs = Date.now();
+                    // 🔥 감지 주기: 30ms (초당 33회) - 더 빠른 감지
+                    if (faceDetectorRef.current && nowMs - lastDetectAtRef.current > 30) {
+                        lastDetectAtRef.current = nowMs;
+                        if (!faceDetectInFlightRef.current) {
+                            faceDetectInFlightRef.current = true;
+                            faceDetectSeqRef.current++;
+                            const currentSeq = faceDetectSeqRef.current;
+                            const vw = v.videoWidth || canvas.width;
+                            const vh = v.videoHeight || canvas.height;
+
+                            runFaceDetectOnce(v, vw, vh)
+                                .then(normalized => {
+                                    if (currentSeq !== faceDetectSeqRef.current) return;
+                                    if (normalized) {
+                                        lastFaceBoxRef.current = normalized;
+                                        lastFaceBoxAtRef.current = Date.now();
+                                    } else {
+                                        // 얼굴 잃어버림: 1초 정도는 기존 위치 유지 (깜빡임 방지)
+                                        if (Date.now() - (lastFaceBoxAtRef.current || 0) > 1000) {
+                                            lastFaceBoxRef.current = null;
+                                        }
+                                    }
+                                })
+                                .finally(() => {
+                                    if (currentSeq === faceDetectSeqRef.current) faceDetectInFlightRef.current = false;
+                                });
+                        }
+                    }
+                }
+            } catch { }
+
+            // ==========================================================
+            // 2. 배경 제거 추론 (비동기) - 🔥 새로고침 시 바로 시작
+            // ==========================================================
+            if (isBgRemoveOn) ensureBgSegmenterForPipeline();
+
+            // ==========================================================
+            // 🎨 그리기 단계 (Safe Rendering)
+            // ==========================================================
+
+            // 비디오 준비 상태 확인 - 동적 크기 업데이트
+            const videoReady = v && v.videoWidth > 0 && v.videoHeight > 0 && v.readyState >= 2;
+            if (videoReady) {
+                // 비디오 크기가 변경되었으면 캔버스 크기 업데이트
+                const currentW = v.videoWidth;
+                const currentH = v.videoHeight;
+                if (canvas.width !== currentW || canvas.height !== currentH) {
+                    canvas.width = currentW;
+                    canvas.height = currentH;
+                }
+            } else {
+                // 비디오가 준비되지 않았으면 검은 화면 (하지만 계속 루프 실행)
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                canvasPipelineRafRef.current = setTimeout(drawLoop, 33);
+                return;
+            }
+
+            // 🔥 필터 준비 중이면 스피너를 canvas에 그려서 모든 사람에게 보이게 함
+            // 🔥 핵심: Producer가 생성된 후에만 스피너를 그려서 전송되도록 보장
+            let isShowingSpinner = false;
+            if (isFilterPreparingRef.current && (isEmojiOn || isBgRemoveOn)) {
+                // 🔥 producer가 실제로 생성되었는지 확인 (ref를 직접 확인하여 클로저 문제 해결)
+                const actualProducer = producersRef.current.get("camera");
+                const hasProducer = actualProducer && !actualProducer.closed;
+
+                // 🔥 producer가 생성되지 않았으면 먼저 생성 시도
+                if (!hasProducer && !producerCreating) {
+                    producerCreating = true;
+                    const transport = sendTransportRef.current;
+                    if (transport && !transport.closed) {
+                        transport.produce({
+                            track: outTrack,
+                            appData: { type: "camera" },
+                        }).then((newProducer) => {
+                            producersRef.current.set("camera", newProducer);
+                            producerCreated = true;
+                            producerCreating = false;
+                            console.log("[turnOnCamera] producer created for spinner in drawLoop (frame:", frameCount, ")");
+                        }).catch((e) => {
+                            console.error("[turnOnCamera] producer creation failed for spinner in drawLoop:", e);
+                            producerCreating = false;
+                        });
+                    } else {
+                        producerCreating = false;
+                    }
+                }
+
+                // 🔥 Producer가 생성된 후에만 스피너를 그려서 전송되도록 보장
+                // Producer가 생성되기 전에는 검은 화면만 보여줌
+                if (hasProducer) {
+                    isShowingSpinner = true;
+
+                    // 흰색 배경
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // 스피너 그리기 (간단한 회전 원)
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+                    const radius = 30;
+                    const time = Date.now() / 20; // 회전 속도
+
+                    // Notched Circle Spinner (Loader2 style)
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate(time * Math.PI / 180);
+                    const spinnerColor = "#10B981"; // Tailwind emerald-500
+                    ctx.strokeStyle = spinnerColor;
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = "round";
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 30, 0, 1.5 * Math.PI);
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // 텍스트
+                    ctx.fillStyle = "#374151"; // Gray-700
+                    ctx.font = "bold 24px Pretendard, sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText("필터 준비 중...", centerX, centerY + 60);
                 } else {
-                    // 🔥 배경 제거 모드
-                    // 1) 프레임 캔버스 준비
+                    // producer가 생성되기 전에는 검은 화면만 보여줌
+                    ctx.fillStyle = "#000000";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            // 스피너를 보여주는 중이 아니면 정상 렌더링
+            if (!isShowingSpinner) {
+                // 필터 준비 상태 확인 (렌더링용)
+                const isEmojiReady = !isEmojiOn || (isEmojiOn && !!lastFaceBoxRef.current);
+                const isBgReady = !isBgRemoveOn || (isBgRemoveOn && !!faceBgSegmenterRef.current?.segmenter);
+
+                // 🖌️ 렌더링 시작 - 필터가 준비되면 정상 렌더링
+                // A. 배경 제거 (준비되었을 때만)
+                if (isBgRemoveOn && isBgReady) {
                     if (!bgFrameCanvas) {
                         bgFrameCanvas = document.createElement("canvas");
                         bgFrameCanvas.width = canvas.width;
                         bgFrameCanvas.height = canvas.height;
                         bgFrameCtx = bgFrameCanvas.getContext("2d");
                     }
+                    // 1) 비디오 -> 임시 캔버스
+                    bgFrameCtx.drawImage(v, 0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
 
-                    // 2) 프레임 캔버스에 비디오 그리기
-                    if (bgFrameCtx) {
-                        bgFrameCtx.globalCompositeOperation = "source-over";
-                        bgFrameCtx.clearRect(0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
-                        bgFrameCtx.drawImage(v, 0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
-                    }
-
-                    // 3) 세그멘테이션 마스크 업데이트 (90ms 쓰로틀)
+                    // 2) 추론 & 마스크
                     const seg = faceBgSegmenterRef.current?.segmenter;
                     const nowMs = performance.now();
-                    // ✅ 너무 자주 돌리면 얼굴탐지/렌더가 밀릴 수 있음 → 약간 완화
-                    if (seg && nowMs - faceBgLastInferAtRef.current > 140) {
+                    if (seg && nowMs - faceBgLastInferAtRef.current > 100) { // Throttle
                         faceBgLastInferAtRef.current = nowMs;
                         try {
                             const vw = v.videoWidth || canvas.width;
                             const vh = v.videoHeight || canvas.height;
                             const segInput = getBgSegInput(vw, vh);
-                            if (!segInput?.ctx) throw new Error("no seg input ctx");
                             segInput.ctx.drawImage(v, 0, 0, segInput.w, segInput.h);
                             const res = seg.segmentForVideo(segInput.canvas, nowMs);
                             const mask = res?.categoryMask;
                             if (mask) {
-                                const maskW = mask.width ?? 0;
-                                const maskH = mask.height ?? 0;
-                                const dataU8 = mask.getAsUint8Array?.();
-                                if (dataU8 && maskW && maskH && dataU8.length >= maskW * maskH) {
-                                    let maskCanvas = faceBgMaskCanvasRef.current;
-                                    if (!maskCanvas) {
-                                        maskCanvas = document.createElement("canvas");
-                                        faceBgMaskCanvasRef.current = maskCanvas;
-                                    }
-                                    if (maskCanvas.width !== maskW || maskCanvas.height !== maskH) {
-                                        maskCanvas.width = maskW;
-                                        maskCanvas.height = maskH;
-                                    }
-                                    const mctx = maskCanvas.getContext("2d");
-                                    if (mctx) {
-                                        const img = mctx.createImageData(maskW, maskH);
-                                        // selfie_segmenter: 0=person(사람), 1+=background(배경)
-                                        for (let i = 0; i < maskW * maskH; i++) {
-                                            const isPerson = dataU8[i] === 0;
-                                            const o = i * 4;
-                                            img.data[o] = 255;
-                                            img.data[o + 1] = 255;
-                                            img.data[o + 2] = 255;
-                                            img.data[o + 3] = isPerson ? 255 : 0;
-                                        }
-                                        mctx.putImageData(img, 0, 0);
-                                    }
+                                const maskW = mask.width;
+                                const maskH = mask.height;
+                                const dataU8 = mask.getAsUint8Array();
+                                let maskCanvas = faceBgMaskCanvasRef.current;
+                                if (!maskCanvas) {
+                                    maskCanvas = document.createElement("canvas");
+                                    faceBgMaskCanvasRef.current = maskCanvas;
                                 }
+                                maskCanvas.width = maskW;
+                                maskCanvas.height = maskH;
+                                const mctx = maskCanvas.getContext("2d");
+                                const img = mctx.createImageData(maskW, maskH);
+                                for (let i = 0; i < maskW * maskH; i++) {
+                                    const isPerson = dataU8[i] === 0; // 0: person
+                                    const o = i * 4;
+                                    img.data[o] = 255; img.data[o + 1] = 255; img.data[o + 2] = 255;
+                                    img.data[o + 3] = isPerson ? 255 : 0;
+                                }
+                                mctx.putImageData(img, 0, 0);
                             }
                         } catch { }
                     }
 
-                    // 4) 마스크 적용 및 최종 출력
-                    const maskCanvas = faceBgMaskCanvasRef.current;
-                    if (maskCanvas && bgFrameCtx) {
+                    // 3) 마스크 합성
+                    if (faceBgMaskCanvasRef.current) {
                         bgFrameCtx.globalCompositeOperation = "destination-in";
-                        bgFrameCtx.drawImage(maskCanvas, 0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
+                        bgFrameCtx.drawImage(faceBgMaskCanvasRef.current, 0, 0, bgFrameCanvas.width, bgFrameCanvas.height);
                         bgFrameCtx.globalCompositeOperation = "source-over";
 
-                        // 흰색 배경 + 사람만
-                        ctx.save();
+                        // 최종: 흰 배경 + 사람
                         ctx.fillStyle = "#ffffff";
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(bgFrameCanvas, 0, 0, canvas.width, canvas.height);
-                        ctx.restore();
-                        drewFrame = true;
+                        filteredFramesDrawn++;
                     } else {
-                        // 마스크 로딩 중: 원본 비디오 표시
+                        // 배경제거가 켜져있지만 세그멘터가 아직 준비 안됨 -> 원본 비디오
                         ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-                        drewFrame = true;
+                    }
+                } else {
+                    // B. 일반 비디오 (배경제거 X)
+                    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                }
+
+                // C. 이모지 그리기 (얼굴이 감지되었을 때만)
+                if (isEmojiOn && lastFaceBoxRef.current) {
+                    const box = normalizeFaceBox(lastFaceBoxRef.current, v.videoWidth, v.videoHeight);
+                    if (box) {
+                        const scaleX = canvas.width / (v.videoWidth || canvas.width);
+                        const scaleY = canvas.height / (v.videoHeight || canvas.height);
+                        const size = Math.max(120, Math.max(box.width * scaleX, box.height * scaleY) * 2.5); // 이모지 크기 키움
+                        const x = (box.x + box.width / 2) * scaleX;
+                        const y = (box.y + box.height / 2) * scaleY - (size * 0.1);
+
+                        // 부드러운 이동 (Smoothing) - 🔥 새로고침 시 바로 따라오도록 개선
+                        const prev = smoothedFaceBoxRef.current;
+                        const curr = { x, y, size };
+                        // 🔥 새로고침 직후(처음 몇 프레임) 또는 얼굴이 새로 감지된 경우 즉시 따라오게 함
+                        const isNewDetection = !prev ||
+                            frameCount <= 10 ||
+                            (lastFaceBoxAtRef.current && Date.now() - lastFaceBoxAtRef.current < 300);
+                        const factor = isNewDetection ? 1.0 : 0.9; // 새 감지 시 즉시 이동, 이후 부드럽게
+                        const smoothed = prev && !isNewDetection ? {
+                            x: prev.x + (curr.x - prev.x) * factor,
+                            y: prev.y + (curr.y - prev.y) * factor,
+                            size: prev.size + (curr.size - prev.size) * factor
+                        } : curr;
+                        smoothedFaceBoxRef.current = smoothed;
+
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.font = `${smoothed.size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+                        ctx.fillText(faceEmojiRef.current, smoothed.x, smoothed.y);
+                        filteredFramesDrawn++;
                     }
                 }
-            } catch (e) {
-                // 🔥 에러 발생 시에도 원본 프레임 그리기 시도 (검은화면 방지)
-                if (!drewFrame) {
-                    try {
-                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-                        drewFrame = true;
-                    } catch { }
+            } // end of if (!isShowingSpinner) - 정상 렌더링 블록 닫기
+
+            frameCount++;
+            if (producerCreated) {
+                framesAfterProducer++;
+            }
+
+            // 🔥 필터 준비 완료 체크 및 스피너 해제 (조건 완화)
+            if (isFilterPreparingRef.current) {
+                const elapsed = Date.now() - filterStartTime;
+
+                // 모델 준비 상태 확인
+                const detectorLoaded = !isEmojiOn || !!faceDetectorRef.current;
+                const segmenterLoaded = !isBgRemoveOn || !!faceBgSegmenterRef.current?.segmenter;
+                const allModelsLoaded = detectorLoaded && segmenterLoaded;
+
+                // 🔥 조건 완화: 모델만 로드되면 해제 (얼굴 감지 대기하지 않음)
+                // 타임아웃도 더 짧게 (1.5초 -> 1.0초)
+                // 🔥 중요: Producer가 생성된 후 최소 10프레임(약 300ms)은 스피너를 유지하여
+                // 다른 참가자들에게 "준비 중" 상태가 확실히 보이도록 함
+                if ((allModelsLoaded || elapsed > 1000) && producerCreated && framesAfterProducer > 10) {
+                    console.log("[turnOnCamera] Filter ready, removing spinner (elapsed:", elapsed, "ms, detector:", detectorLoaded, ", segmenter:", segmenterLoaded, ", frames:", filteredFramesDrawn, ")");
+                    setIsFilterPreparing(false);
+                    isFilterPreparingRef.current = false;
+                    // 스무딩 초기화하여 이모지가 즉시 따라오게 함
+                    if (isEmojiOn) {
+                        smoothedFaceBoxRef.current = null;
+                    }
                 }
             }
 
-            // 🔥 이모지 오버레이
-            // ✅ "얼굴이 인식될 때만" 그리고 "유효한 bbox + 최근 탐지"일 때만 표시
-            try {
-                const emoji = faceEmojiRef.current;
-                const wantEmoji = !!emoji && faceModeRef.current === "emoji";
-                const box = lastFaceBoxRef.current;
-                const videoW = v.videoWidth || canvas.width;
-                const videoH = v.videoHeight || canvas.height;
-                // ✅ bgRemove(세그멘테이션)와 같이 켤 때 탐지가 느려질 수 있어 최근성 기준을 완화
-                const isRecent = lastFaceBoxAtRef.current && (Date.now() - lastFaceBoxAtRef.current < 1200);
-                const normalizedBox = normalizeFaceBox(box, videoW, videoH);
-                const canDraw = wantEmoji && !!normalizedBox && isRecent;
-
-                if (!canDraw) {
-                    // ✅ 얼굴 인식 실패/불안정 시: 가운데에 뜨는 현상 방지(스무딩 좌표 리셋)
-                    smoothedFaceBoxRef.current = null;
-                } else {
-                    const scaleX = canvas.width / (v.videoWidth || canvas.width);
-                    const scaleY = canvas.height / (v.videoHeight || canvas.height);
-
-                    const targetBox = {
-                        x: (normalizedBox.x + normalizedBox.width / 2) * scaleX,
-                        y: (normalizedBox.y + normalizedBox.height / 2) * scaleY - (normalizedBox.height * scaleY * 0.25),
-                        size: Math.max(normalizedBox.width * scaleX, normalizedBox.height * scaleY)
-                    };
-
-                    // targetBox가 비정상이면 표시 안 함
-                    if (!Number.isFinite(targetBox.x) || !Number.isFinite(targetBox.y) || !Number.isFinite(targetBox.size)) {
-                        smoothedFaceBoxRef.current = null;
-                    } else {
-                        const smoothFactor = 0.75;
-                        const prev = smoothedFaceBoxRef.current;
-                        smoothedFaceBoxRef.current = prev
-                            ? {
-                                x: prev.x + (targetBox.x - prev.x) * smoothFactor,
-                                y: prev.y + (targetBox.y - prev.y) * smoothFactor,
-                                size: prev.size + (targetBox.size - prev.size) * smoothFactor
-                            }
-                            : targetBox;
-
-                        const smoothed = smoothedFaceBoxRef.current;
-                        const maxSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.98);
-                        const size = Math.max(120, Math.min(maxSize, Math.floor(smoothed.size * 2.8)));
-
-                        ctx.save();
-                        ctx.textAlign = "center";
-                        ctx.textBaseline = "middle";
-                        ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-                        ctx.fillText(emoji, smoothed.x, smoothed.y);
-                        ctx.restore();
-                    }
-                }
-            } catch { }
-
-            // 얼굴 감지 (throttle + in-flight lock + 최신 결과만 반영)
-            try {
-                const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
-                const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
-                if (wantEmoji && warmupDone && !faceDetectorRef.current) {
-                    // 초기 로딩 실패/지연 대비: 백그라운드에서 재시도
-                    ensureFaceDetector().catch(() => { });
-                }
-
-                const nowMs = Date.now();
-                if (wantEmoji && warmupDone && faceDetectorRef.current && nowMs - lastDetectAtRef.current > 50) {
-                    lastDetectAtRef.current = nowMs;
-
-                    if (!faceDetectInFlightRef.current) {
-                        faceDetectInFlightRef.current = true;
-                        const seq = ++faceDetectSeqRef.current;
-                        const vw = v.videoWidth || canvas.width;
-                        const vh = v.videoHeight || canvas.height;
-                        const DETECT_TIMEOUT_MS = 900;
-                        const timeoutId = setTimeout(() => {
-                            // ✅ 로딩/탐지가 너무 오래 걸리면 잠금 해제(이모지 "멈춤" 방지)
-                            if (seq === faceDetectSeqRef.current) {
-                                faceDetectInFlightRef.current = false;
-                            }
-                        }, DETECT_TIMEOUT_MS);
-
-                        Promise.resolve(runFaceDetectOnce(v, vw, vh))
-                            .then((normalized) => {
-                                // 최신 요청만 반영(늦게 도착한 결과로 "멈춤" 방지)
-                                if (seq !== faceDetectSeqRef.current) return;
-
-                                if (normalized) {
-                                    lastFaceBoxRef.current = normalized;
-                                    lastFaceBoxAtRef.current = Date.now();
-                                } else {
-                                    // 짧은 미스는 바로 끊지 않음
-                                    if (!lastFaceBoxAtRef.current || Date.now() - lastFaceBoxAtRef.current > 900) {
-                                        lastFaceBoxRef.current = null;
-                                        lastFaceBoxAtRef.current = 0;
-                                        smoothedFaceBoxRef.current = null;
-                                    }
-                                }
-                            })
-                            .finally(() => {
-                                clearTimeout(timeoutId);
-                                // ✅ 다른 seq가 이미 시작됐으면 풀지 않는다(새 탐지 in-flight 보호)
-                                if (seq === faceDetectSeqRef.current) {
-                                    faceDetectInFlightRef.current = false;
-                                }
-                            });
-                    }
-                }
-            } catch { }
-
-            frameCount++;
-
-            // 🔥 충분한 프레임이 그려진 후 producer 생성 (keyframe 보장)
-            if (!producerCreated && frameCount >= 5) {
-                producerCreated = true;
+            // 🔥 Producer 생성 (최초 1회) - 비디오가 준비되었을 때 생성
+            // 스피너는 위에서 이미 처리했으므로 여기서는 비디오 준비 시에만 생성
+            if (!producerCreated && !producerCreating && videoReady && !isShowingSpinner) {
+                producerCreating = true;
                 try {
                     const transport = sendTransportRef.current;
                     if (transport && !transport.closed) {
@@ -1365,44 +1670,41 @@ function MeetingPage({ portalRoomId }) {
                             appData: { type: "camera" },
                         });
                         producersRef.current.set("camera", newProducer);
-                        console.log("[turnOnCamera] producer created with canvas track (keyframe guaranteed)");
+                        producerCreated = true;
+                        producerCreating = false;
+                        console.log("[turnOnCamera] producer created (frame:", frameCount, ")");
+                    } else {
+                        producerCreating = false;
                     }
                 } catch (e) {
                     console.error("[turnOnCamera] producer creation failed:", e);
+                    producerCreating = false;
                 }
             }
 
-            // 🔥 setTimeout 사용 (백그라운드에서도 실행됨)
-            const nextInterval = (wantBgRemove || wantEmojiForFrame) ? FILTER_INTERVAL : BASE_INTERVAL;
-            canvasPipelineRafRef.current = setTimeout(drawLoop, nextInterval);
+            // 🔥 필터 준비 중이고 producer가 생성되었으면 즉시 다음 프레임 그리기 (스피너 전송 보장)
+            if (isFilterPreparingRef.current && (isEmojiOn || isBgRemoveOn) && producerCreated) {
+                // Producer가 생성되었고 스피너를 그려야 하면 즉시 다음 프레임 그리기
+                canvasPipelineRafRef.current = setTimeout(drawLoop, 16); // 더 빠르게 시작 (~60fps)
+            } else {
+                canvasPipelineRafRef.current = setTimeout(drawLoop, 33); // ~30fps
+            }
         };
 
-        // Draw 루프 시작
+        // Draw 루프 즉시 시작 (비동기로 실행하여 블로킹 방지)
         drawLoop();
 
-        // 8) 로컬 스트림 설정 (로컬 미리보기용)
-        const prevAudio = localStreamRef.current
-            ?.getAudioTracks()
-            .filter((t) => t.readyState !== "ended") ?? [];
-        const merged = new MediaStream([...prevAudio, outTrack]);
-        localStreamRef.current = merged;
-        setLocalStream(merged);
-        bumpStreamVersion();
+        // ⭐ 서버에 상태 전파 (비동기로 처리하여 블로킹 방지)
+        // setTimeout으로 비동기 처리하여 카메라 켜기 지연 방지
+        setTimeout(() => {
+            wsRef.current?.send(JSON.stringify({
+                type: "USER_STATE_CHANGE",
+                userId,
+                changes: { cameraOff: false },
+            }));
+        }, 0);
 
-        setCamOn(true);
-        localStorage.setItem("camOn", "true");
-
-        // 9) FaceDetector 초기화 (이모지용) - 이미 위에서 비동기로 로딩 중이므로 여기서는 스킵
-        // 🔥 ensureFaceDetector()가 필요할 때 백그라운드에서 로딩됨
-
-        // ⭐ 서버에 상태 전파
-        wsRef.current?.send(JSON.stringify({
-            type: "USER_STATE_CHANGE",
-            userId,
-            changes: { cameraOff: false },
-        }));
-
-        console.log("[turnOnCamera] canvas pipeline started, emoji mode:", faceModeRef.current, "emoji:", faceEmojiRef.current);
+        console.log("[turnOnCamera] canvas pipeline started immediately, emoji mode:", faceModeRef.current, "emoji:", faceEmojiRef.current);
     };
 
     // ✅ 전체화면 상태 감지(원본 유지)
@@ -1609,7 +1911,10 @@ function MeetingPage({ portalRoomId }) {
             if (faceMode) localStorage.setItem("faceMode", faceMode);
             else localStorage.removeItem("faceMode");
 
-            // bgRemove는 기존 동작 유지(세션 단위)
+            // ✅ 배경제거도 localStorage에 저장(다음 접속에도 유지)
+            if (bgRemove) localStorage.setItem("faceBgRemove", String(bgRemove));
+            else localStorage.removeItem("faceBgRemove");
+            // 기존 sessionStorage와의 호환성을 위해 sessionStorage에도 저장
             sessionStorage.setItem("faceBgRemove", String(bgRemove));
         } catch { }
     }, [faceEmoji, faceMode, bgRemove]);
@@ -2294,17 +2599,64 @@ function MeetingPage({ portalRoomId }) {
         // 🔥 첫 프레임이 그려진 후 트랙 교체용 플래그
         let hasReplacedTrack = false;
         let frameCount = 0;
+        const filterStartTime = Date.now(); // 🔥 시간 기반 타임아웃용
+        let filteredFramesDrawn = 0; // 🔥 필터가 실제로 적용된 프레임 개수 (쌩얼 노출 방지)
 
         // 렌더 루프
         const draw = async () => {
             if (!faceFilterActiveRef.current) return;
 
+            // 🔥 비디오가 준비되지 않았으면 검은 화면
+            const videoReady = v && v.videoWidth > 0 && v.videoHeight > 0 && v.readyState >= 2;
+            if (!videoReady) {
+                // 비디오가 준비되지 않았으면 검은 배경
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                faceFilterRafRef.current = requestAnimationFrame(draw);
+                return;
+            }
+
             // 비디오 프레임 (+ 배경 제거 옵션)
             const wantBgRemove = !!bgRemoveRef.current;
+            const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
+
+            // 🔥 필터 준비 상태 확인 (배경제거만 체크)
+            // 이모지는 여기서 체크하지 않음 - draw에서 얼굴 미감지 시 기본 이모지로 가림
+            const checkFiltersReady = () => {
+                // 배경제거가 켜져있어도 세그멘터 로딩을 기다리지 않음 (너무 오래 걸림)
+                // 대신 세그멘터가 준비될 때까지 검은 화면을 유지하고, 준비되면 바로 적용
+                return true; // 항상 true 반환하여 바로 시작 (세그멘터는 백그라운드에서 로딩)
+            };
+            const filtersReady = checkFiltersReady();
+
+            // 🔥 배경제거 세그멘터가 실제로 준비되었는지 확인 (필터 적용 여부 판단용)
+            const bgSegActuallyReady = wantBgRemove ? !!faceBgSegmenterRef.current?.segmenter : true;
+
+            // 🔥 필터 준비 중이면 항상 검은 화면 (쌩얼 노출 방지)
+            if (isFilterPreparingRef.current && (wantBgRemove || wantEmoji)) {
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                faceFilterRafRef.current = requestAnimationFrame(draw);
+                return;
+            }
+
+            // 🔥 배경제거가 켜져있는데 세그멘터가 준비되지 않았을 때 처리
+            if (wantBgRemove && !bgSegActuallyReady) {
+                // 배경제거만 켜져있고 세그멘터가 준비되지 않았으면 검은 화면 (쌩얼 노출 방지)
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                faceFilterRafRef.current = requestAnimationFrame(draw);
+                return;
+            }
+
             if (wantBgRemove) ensureBgSegmenter();
 
             try {
-                if (!wantBgRemove || !frameCtx) {
+                // 🔥 필터 준비 중이면 원본 비디오를 그리지 않음 (검은 화면 유지)
+                if (isFilterPreparingRef.current && (wantBgRemove || wantEmoji)) {
+                    // 필터 준비 중에는 검은 화면만 유지 (위에서 이미 그려짐)
+                    // 얼굴 감지는 계속 진행 (아래에서 처리)
+                } else if (!wantBgRemove || !frameCtx) {
                     // 기본: 원본 그대로
                     ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
                 } else {
@@ -2357,22 +2709,82 @@ function MeetingPage({ portalRoomId }) {
                     // 3) frameCanvas에 마스크 적용(destination-in)
                     const maskCanvas = faceBgMaskCanvasRef.current;
                     if (maskCanvas) {
-                        frameCtx.globalCompositeOperation = "destination-in";
-                        frameCtx.drawImage(maskCanvas, 0, 0, frameCanvas.width, frameCanvas.height);
-                        frameCtx.globalCompositeOperation = "source-over";
+                        // 🔥 마스크 자체가 유효한지 먼저 확인 (마스크 크기 확인)
+                        const maskW = maskCanvas.width || 0;
+                        const maskH = maskCanvas.height || 0;
+                        if (maskW < 10 || maskH < 10) {
+                            // 마스크가 너무 작으면 유효하지 않음
+                            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        } else {
+                            frameCtx.globalCompositeOperation = "destination-in";
+                            frameCtx.drawImage(maskCanvas, 0, 0, frameCanvas.width, frameCanvas.height);
+                            frameCtx.globalCompositeOperation = "source-over";
 
-                        // 4) 최종 출력: 배경 흰색 + 사람만
-                        ctx.save();
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(frameCanvas, 0, 0, canvas.width, canvas.height);
-                        ctx.restore();
+                            // 🔥 마스크 적용 후 실제로 사람 영역이 있는지 확인 (효율적인 샘플링 방식)
+                            // 사람이 감지되지 않으면 원본 비디오 표시 (하얀 배경만 보이는 문제 방지)
+                            try {
+                                // 성능을 위해 샘플링으로 확인 (전체 픽셀 확인은 너무 느림)
+                                const sampleSize = 50; // 50x50 샘플링
+                                const stepX = Math.max(1, Math.floor(frameCanvas.width / sampleSize));
+                                const stepY = Math.max(1, Math.floor(frameCanvas.height / sampleSize));
+                                const imageData = frameCtx.getImageData(0, 0, frameCanvas.width, frameCanvas.height);
+                                const data = imageData.data;
+                                let visiblePixels = 0;
+                                let totalSamples = 0;
+
+                                // 샘플링으로 확인
+                                for (let y = 0; y < frameCanvas.height; y += stepY) {
+                                    for (let x = 0; x < frameCanvas.width; x += stepX) {
+                                        const idx = (y * frameCanvas.width + x) * 4;
+                                        if (data[idx + 3] > 10) { // alpha > 10
+                                            visiblePixels++;
+                                        }
+                                        totalSamples++;
+                                    }
+                                }
+
+                                const visibleRatio = totalSamples > 0 ? visiblePixels / totalSamples : 0;
+                                // 사람 영역이 3% 미만이면 원본 비디오 표시 (마스크가 제대로 작동하지 않음)
+                                if (visibleRatio < 0.03) {
+                                    console.log("[BgRemove] 사람 영역이 거의 없음, 원본 비디오 표시:", visibleRatio);
+                                    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                                } else {
+                                    // 4) 최종 출력: 배경 흰색 + 사람만
+                                    ctx.save();
+                                    ctx.fillStyle = "#ffffff";
+                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                    ctx.drawImage(frameCanvas, 0, 0, canvas.width, canvas.height);
+                                    ctx.restore();
+                                    // 🔥 배경제거가 실제로 적용된 프레임 카운트 증가
+                                    if (wantBgRemove) filteredFramesDrawn++;
+                                }
+                            } catch (checkError) {
+                                // 검증 실패 시: 필터 준비 중이면 검은 화면, 아니면 원본 비디오
+                                if (isFilterPreparingRef.current && (wantBgRemove || wantEmoji)) {
+                                    ctx.fillStyle = "#000000";
+                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                } else {
+                                    console.warn("[BgRemove] 마스크 검증 실패, 원본 비디오 표시:", checkError);
+                                    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                                }
+                            }
+                        }
                     } else {
-                        // 🔥 마스크가 아직 로드되지 않았으면 원본 비디오 그대로 표시
-                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        // 🔥 마스크가 아직 로드되지 않았을 때: 필터 준비 중이면 검은 화면, 아니면 원본 비디오
+                        if (isFilterPreparingRef.current && (wantBgRemove || wantEmoji)) {
+                            ctx.fillStyle = "#000000";
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        } else {
+                            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        }
                     }
                 }
             } catch {
+                // 필터 준비 중이면 검은 화면 유지
+                if (isFilterPreparingRef.current && (wantBgRemove || wantEmoji)) {
+                    ctx.fillStyle = "#000000";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
                 faceFilterRafRef.current = requestAnimationFrame(draw);
                 return;
             }
@@ -2381,12 +2793,17 @@ function MeetingPage({ portalRoomId }) {
             const now = Date.now();
             const wantEmojiForDetect = !!faceEmojiRef.current && faceModeRef.current === "emoji";
             const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
-            if (wantEmojiForDetect && warmupDone && !faceDetectorRef.current) {
+            // 🔥 필터 준비 중이면 얼굴 감지를 즉시 시작 (warmupDone 대기 없음)
+            const shouldStartDetection = isFilterPreparingRef.current ? true : warmupDone;
+
+            if (wantEmojiForDetect && shouldStartDetection && !faceDetectorRef.current) {
                 ensureFaceDetector().catch(() => { });
             }
 
             const det = faceDetectorRef.current;
-            if (wantEmojiForDetect && warmupDone && det && now - lastDetectAtRef.current > 50) {
+            // 🔥 필터 준비 중이면 얼굴 감지 간격을 더 짧게 (더 빠른 감지)
+            const detectInterval = isFilterPreparingRef.current ? 30 : 50;
+            if (wantEmojiForDetect && shouldStartDetection && det && now - lastDetectAtRef.current > detectInterval) {
                 lastDetectAtRef.current = now;
 
                 if (!faceDetectInFlightRef.current) {
@@ -2418,7 +2835,7 @@ function MeetingPage({ portalRoomId }) {
             // 이모지 오버레이
             // ✅ 얼굴이 인식되지 않으면 절대 그리지 않는다(가운데 뜨는 현상 방지)
             const currentEmoji = faceEmojiRef.current;
-            const wantEmoji = !!currentEmoji && faceModeRef.current === "emoji";
+            // wantEmoji는 위에서 이미 선언됨 (2408번 라인)
             const box = lastFaceBoxRef.current;
             const videoW = v.videoWidth || canvas.width;
             const videoH = v.videoHeight || canvas.height;
@@ -2427,6 +2844,7 @@ function MeetingPage({ portalRoomId }) {
             const canDraw = wantEmoji && !!normalizedBox && isRecent;
 
             if (!canDraw) {
+                // ✅ 얼굴 인식 실패/불안정 시: 가운데 뜨는 현상 방지(스무딩 좌표 리셋)
                 smoothedFaceBoxRef.current = null;
             } else {
                 const scaleX = canvas.width / (v.videoWidth || canvas.width);
@@ -2461,48 +2879,67 @@ function MeetingPage({ portalRoomId }) {
                     ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
                     ctx.fillText(currentEmoji, smoothed.x, smoothed.y);
                     ctx.restore();
+                    // 🔥 이모지가 그려진 프레임 카운트 증가
+                    if (wantEmoji) filteredFramesDrawn++;
                 }
             }
 
-            // 🔥 첫 프레임이 그려진 후 새 producer 생성 (keyframe 보장, 검은 화면 방지)
+            // 🔥 첫 프레임이 그려진 후 + 필터가 준비되면 새 producer 생성 (keyframe 보장, 쌩얼 노출 방지)
             frameCount++;
             if (!hasReplacedTrack && frameCount >= 3) {
-                hasReplacedTrack = true;
-                try {
-                    // outTrack 활성화
-                    try { outTrack.enabled = true; } catch { }
+                const MAX_WAIT_MS = 100; // 🔥 시간 기반 타임아웃: 최대 0.1초 대기 (매우 빠른 응답)
+                const elapsed = Date.now() - filterStartTime;
+                const isTimeout = elapsed >= MAX_WAIT_MS;
 
-                    // 🔥 핵심: replaceTrack 대신 producer를 close하고 새로 produce
-                    // 새 producer 생성 시 자연스럽게 keyframe이 전송됨
-                    const oldProducer = producersRef.current.get("camera");
-                    if (oldProducer) {
-                        try { oldProducer.close(); } catch { }
-                        producersRef.current.delete("camera");
+                // 필터가 필요 없거나 타임아웃이면 producer 생성
+                // 항상 바로 시작 (세그멘터는 백그라운드에서 로딩, 이모지는 바로 적용 가능)
+                const needFilters = wantBgRemove || wantEmoji;
+                if (!needFilters || isTimeout) {
+                    hasReplacedTrack = true;
+                    try {
+                        // outTrack 활성화
+                        try { outTrack.enabled = true; } catch { }
+
+                        // 🔥 핵심: replaceTrack 대신 producer를 close하고 새로 produce
+                        // 새 producer 생성 시 자연스럽게 keyframe이 전송됨
+                        const oldProducer = producersRef.current.get("camera");
+                        if (oldProducer) {
+                            try { oldProducer.close(); } catch { }
+                            producersRef.current.delete("camera");
+                        }
+
+                        // 새 producer 생성 (keyframe 자동 전송)
+                        const transport = sendTransportRef.current;
+                        if (transport && !transport.closed) {
+                            const newProducer = await transport.produce({
+                                track: outTrack,
+                                appData: { type: "camera" },
+                            });
+                            producersRef.current.set("camera", newProducer);
+                            if (!needFilters) {
+                                console.log("[FaceEmoji] new producer created with canvas track (no filters needed)");
+                            } else if (filtersReady) {
+                                console.log("[FaceEmoji] new producer created with canvas track (filters ready)", elapsed, "ms");
+                            } else {
+                                console.log("[FaceEmoji] new producer created with canvas track (timeout after", elapsed, "ms)");
+                            }
+                        }
+
+                        // 로컬 스트림도 outTrack으로 전환
+                        const prevAudio = localStreamRef.current
+                            ?.getAudioTracks()
+                            .filter((t) => t.readyState === "live") ?? [];
+                        const merged = new MediaStream([...prevAudio, outTrack]);
+                        localStreamRef.current = merged;
+                        setLocalStream(merged);
+                        bumpStreamVersion();
+                    } catch (e) {
+                        console.error("[FaceEmoji] new producer creation failed:", e);
                     }
-
-                    // 새 producer 생성 (keyframe 자동 전송)
-                    const transport = sendTransportRef.current;
-                    if (transport && !transport.closed) {
-                        const newProducer = await transport.produce({
-                            track: outTrack,
-                            appData: { type: "camera" },
-                        });
-                        producersRef.current.set("camera", newProducer);
-                        console.log("[FaceEmoji] new producer created with canvas track (keyframe guaranteed)");
-                    }
-
-                    // 로컬 스트림도 outTrack으로 전환
-                    const prevAudio = localStreamRef.current
-                        ?.getAudioTracks()
-                        .filter((t) => t.readyState === "live") ?? [];
-                    const merged = new MediaStream([...prevAudio, outTrack]);
-                    localStreamRef.current = merged;
-                    setLocalStream(merged);
-                    bumpStreamVersion();
-                } catch (e) {
-                    console.error("[FaceEmoji] new producer creation failed:", e);
                 }
             }
+
+            // 🔥 스피너 제거됨 - 필터 준비 완료 로직 제거
 
             faceFilterRafRef.current = requestAnimationFrame(draw);
         };
@@ -2697,6 +3134,13 @@ function MeetingPage({ portalRoomId }) {
         // camOn이 false면 카메라 producer는 만들지 않음 (상대가 아바타로 보는 게 맞음)
         if (!camOnRef.current) {
             // console.log(`[ensureLocalProducers] Camera is OFF, skipping camera producer`);
+            return;
+        }
+
+        // 🔥 필터 준비 중이면 카메라 producer 생성 건너뜀 (쌩얼 전송 방지)
+        // turnOnCamera()에서 필터 준비 완료 후 producer를 생성함
+        if (isFilterPreparingRef.current) {
+            console.log(`[ensureLocalProducers] Filter preparing, skipping camera producer`);
             return;
         }
 
@@ -3436,23 +3880,26 @@ function MeetingPage({ portalRoomId }) {
 
     useEffect(() => {
         const init = async () => {
-            await startLocalMedia();
-
-            // 🔥 저장된 이모지/배경제거 상태가 있으면 canvasPipeline으로 전환
+            // 🔥 저장된 이모지/배경제거 상태 확인
             const savedEmoji = faceEmojiRef.current;
             const savedBgRemove = bgRemoveRef.current;
-            if (savedEmoji || savedBgRemove) {
-                console.log("[Init] Detected saved emoji/bgRemove, switching to canvasPipeline");
-                // 약간의 대기 후 turnOnCamera 호출
-                setTimeout(async () => {
-                    if (!canvasPipelineActiveRef.current) {
-                        try {
-                            await turnOnCamera();
-                        } catch (e) {
-                            console.warn("[Init] turnOnCamera for saved state failed:", e);
-                        }
-                    }
-                }, 500);
+            const needFilters = !!(savedEmoji || savedBgRemove);
+
+            if (needFilters) {
+                // 🔥 필터 설정이 있으면 바로 turnOnCamera()로 canvas 파이프라인 시작
+                // startLocalMedia() 없이 직접 시작하여 쌩얼 노출 방지
+                console.log("[Init] Filter settings detected, starting with canvas pipeline directly");
+                try {
+                    await turnOnCamera();
+                } catch (e) {
+                    console.warn("[Init] turnOnCamera for saved state failed:", e);
+                    // 실패 시 일반 모드로 fallback
+                    setIsFilterPreparing(false);
+                    await startLocalMedia();
+                }
+            } else {
+                // 필터 설정이 없으면 기존 방식대로
+                await startLocalMedia();
             }
         };
         init();
@@ -3623,6 +4070,16 @@ function MeetingPage({ portalRoomId }) {
                 // 항상 roomReconnecting을 false로 설정 (peers가 없어도)
                 hasFinishedInitialSyncRef.current = true;
                 setRoomReconnecting(false);
+
+                // ✅ 재접속 완료: 다른 참가자들에게 알림
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({
+                        type: "USER_RECONNECTING",
+                        userId: userId,
+                        reconnecting: false,
+                    }));
+                    console.log("[MeetingPage] 재접속 완료 알림 전송");
+                }
 
                 // ✅ room:sync 완료 후 모든 참가자의 isReconnecting 강제 해제
                 setParticipants(prev => prev.map(p => ({
@@ -4349,20 +4806,23 @@ function MeetingPage({ portalRoomId }) {
 
                 if (data.type === "USER_RECONNECTING") {
                     const peerId = String(data.userId);
-                    if (peerId === String(userId)) return;
+                    if (peerId === String(userId)) return; // 본인은 무시 (본인 타일에는 스피너 표시 안 함)
 
+                    const reconnecting = data.reconnecting !== false; // 기본값은 true
+                    
                     setParticipants(prev =>
                         prev.map(p =>
                             String(p.id) === peerId
                                 ? {
                                     ...p,
-                                    isReconnecting: true,
-                                    isLoading: true,
-                                    reconnectStartedAt: Date.now(),
+                                    isReconnecting: reconnecting,
+                                    isLoading: reconnecting, // 재접속 중일 때만 로딩 표시
+                                    reconnectStartedAt: reconnecting ? (p.reconnectStartedAt || Date.now()) : undefined,
                                 }
                                 : p
                         )
                     );
+                    console.log(`[MeetingPage] USER_RECONNECTING: ${peerId} = ${reconnecting}`);
                     return;
                 }
             };
@@ -4419,6 +4879,16 @@ function MeetingPage({ portalRoomId }) {
 
         hasFinishedInitialSyncRef.current = false;
         setRoomReconnecting(true);
+        
+        // ✅ 재접속 시작: 다른 참가자들에게 알림 (로컬 타일에는 스피너 표시 안 함)
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: "USER_RECONNECTING",
+                userId: userId,
+                reconnecting: true,
+            }));
+            console.log("[MeetingPage] 재접속 시작 알림 전송");
+        }
 
         // ✅ 요청하신 형태: https ? wss : ws
         // ✅ window.location.hostname(=IP/도메인)로 4000(SFU) 직접 연결
@@ -4916,6 +5386,7 @@ function MeetingPage({ portalRoomId }) {
                                                 isScreen={isMainScreenShare}
                                                 reaction={mainUser?.reaction}
                                                 videoRef={mainVideoRef}
+                                                isFilterPreparing={isFilterPreparing}
                                             />
                                         )}
                                         <button
@@ -5171,6 +5642,7 @@ function MeetingPage({ portalRoomId }) {
                                                                 roomReconnecting={roomReconnecting}
                                                                 isScreen={p.isScreenSharing}
                                                                 reaction={p.reaction}
+                                                                isFilterPreparing={isFilterPreparing}
                                                             />
                                                             <span className="strip-name">
                                                                 {p.isMe ? "(나)" : p.name}
@@ -5219,6 +5691,7 @@ function MeetingPage({ portalRoomId }) {
                                                 roomReconnecting={roomReconnecting}
                                                 isScreen={p.isScreenSharing}
                                                 reaction={p.reaction}
+                                                isFilterPreparing={isFilterPreparing}
                                             />
                                             <span className="strip-name">
                                                 {p.isMe ? "(나)" : p.name}
@@ -5246,6 +5719,7 @@ function MeetingPage({ portalRoomId }) {
                                                 roomReconnecting={roomReconnecting}
                                                 isScreen={isGridScreenShare}
                                                 reaction={gridFullscreenUser?.isMe ? myReaction : gridFullscreenUser?.reaction}
+                                                isFilterPreparing={isFilterPreparing}
                                             />
 
                                             {/* 전체화면 토글 버튼 */}
@@ -5447,6 +5921,7 @@ function MeetingPage({ portalRoomId }) {
                                                                 roomReconnecting={roomReconnecting}
                                                                 isScreen={part.isScreenSharing}
                                                                 reaction={part.reaction}
+                                                                isFilterPreparing={isFilterPreparing}
                                                             />
                                                             <span className="strip-name">{part.isMe ? "(나)" : part.name}</span>
                                                         </div>
@@ -5485,6 +5960,7 @@ function MeetingPage({ portalRoomId }) {
                                                     roomReconnecting={roomReconnecting}
                                                     isScreen={p.isScreenSharing}
                                                     reaction={p.isMe ? myReaction : null}
+                                                    isFilterPreparing={isFilterPreparing}
                                                 />
 
                                                 <button
