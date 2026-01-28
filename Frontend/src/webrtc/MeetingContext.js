@@ -64,7 +64,7 @@ export const MeetingProvider = ({ children }) => {
     }, []);
 
     // 🔥 아바타를 canvas로 그려서 MediaStream으로 변환하는 함수
-    const createAvatarStream = useCallback((name, width = 640, height = 480) => {
+    const createAvatarStream = useCallback((name, width = 640, height = 480, showName = true) => {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -76,8 +76,9 @@ export const MeetingProvider = ({ children }) => {
 
         // 아바타 원 그리기
         const centerX = width / 2;
-        const centerY = height / 2;
-        const radius = Math.min(width, height) * 0.3;
+        // showName이 true면 이름 공간을 위해 위로 이동, false면 중앙에 배치
+        const centerY = showName ? height / 2 - 20 : height / 2;
+        const radius = Math.min(width, height) * 0.25;
 
         // 그라데이션 배경
         const gradient = ctx.createLinearGradient(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
@@ -101,6 +102,30 @@ export const MeetingProvider = ({ children }) => {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(initials, centerX, centerY);
+
+        // 이름 텍스트 (아바타 아래) - showName이 true일 때만 표시
+        if (showName) {
+            const displayName = name || "참가자";
+            ctx.fillStyle = "#374151"; // 어두운 회색
+            // 폰트 크기를 크게 설정 (최소 20px, 또는 width의 5% 중 큰 값)
+            const fontSize = Math.max(20, width * 0.05);
+            ctx.font = `bold ${fontSize}px Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            // 텍스트가 너무 길면 잘라내기
+            const maxWidth = width * 0.85;
+            let finalName = displayName;
+            const metrics = ctx.measureText(displayName);
+            if (metrics.width > maxWidth) {
+                // 텍스트가 너무 길면 "..." 추가
+                let truncated = displayName;
+                while (ctx.measureText(truncated + "...").width > maxWidth && truncated.length > 0) {
+                    truncated = truncated.slice(0, -1);
+                }
+                finalName = truncated + "...";
+            }
+            ctx.fillText(finalName, centerX, centerY + radius + 15);
+        }
 
         // Canvas를 MediaStream으로 변환
         const stream = canvas.captureStream(30); // 30fps
@@ -411,15 +436,8 @@ export const MeetingProvider = ({ children }) => {
             // 🔥 해당 peerId의 스트림을 찾기 (같은 사람의 최신 스트림)
             let finalStream = null;
             
-            // 1) 숨겨진 PIP video의 스트림 확인 (브라우저 PiP에서 사용하던 것)
-            const hiddenVideoStream = pipVideoRef.current?.srcObject;
-            if (hiddenVideoStream) {
-                // peerId가 일치하는지 확인 (선택적)
-                finalStream = hiddenVideoStream;
-            }
-            
-            // 2) 해당 peerId의 Portal 스트림 찾기
-            if (!finalStream && peerId) {
+            // 1) 해당 peerId의 Portal 스트림 찾기 (실제 비디오 스트림 우선)
+            if (peerId) {
                 const peerStream = findPortalStreamForPeerId(peerId);
                 if (peerStream?.stream && isStreamValidCheck(peerStream.stream)) {
                     finalStream = peerStream.stream;
@@ -427,10 +445,11 @@ export const MeetingProvider = ({ children }) => {
                 }
             }
             
-            // 3) 스트림이 없거나 유효하지 않으면 아바타 스트림 생성
+            // 2) 스트림이 없거나 유효하지 않으면 아바타 스트림 생성 (커스텀 PiP이므로 이름 표시 안 함)
+            // 브라우저 PiP에서 사용하던 아바타 스트림은 재사용하지 않고 항상 새로 생성
             if (!finalStream || !isStreamValidCheck(finalStream)) {
-                console.log("[MeetingContext] 브라우저 PiP에서 보고 있던 대상의 스트림이 없어서 아바타 스트림 생성", { peerId, peerName });
-                finalStream = createAvatarStream(peerName);
+                console.log("[MeetingContext] 브라우저 PiP에서 보고 있던 대상의 스트림이 없어서 아바타 스트림 생성 (커스텀 PiP용, 이름 없음)", { peerId, peerName });
+                finalStream = createAvatarStream(peerName, 640, 480, false);
             }
             
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (브라우저 PiP에서 보고 있던 대상 유지)", { peerId, peerName });
@@ -442,18 +461,47 @@ export const MeetingProvider = ({ children }) => {
         }
 
         // 🔥 2순위: 숨겨진 PIP video의 stable 스트림 (브라우저 PIP에서 사용하던 스트림)
+        // 단, 실제 비디오 스트림인 경우에만 사용 (아바타 스트림은 재생성)
         const hiddenVideoStream = pipVideoRef.current?.srcObject;
         if (hiddenVideoStream) {
             const peerName = pending?.peerName || "참가자";
             const peerId = pending?.peerId || "";
-            let finalStream = hiddenVideoStream;
             const isHiddenStreamValid = isStreamValidCheck(hiddenVideoStream);
             
-            // 🔥 스트림이 유효하지 않으면 아바타 스트림 생성
-            if (!isHiddenStreamValid) {
-                console.log("[MeetingContext] 숨겨진 video 스트림이 유효하지 않아서 아바타 스트림 생성");
-                finalStream = createAvatarStream(peerName);
+            let finalStream = null;
+            
+            // 실제 비디오 스트림인 경우에만 재사용 (아바타 스트림이 아닌 경우)
+            if (isHiddenStreamValid) {
+                // 해당 peerId의 실제 Portal 스트림을 먼저 찾기
+                if (peerId) {
+                    const peerStream = findPortalStreamForPeerId(peerId);
+                    if (peerStream?.stream && isStreamValidCheck(peerStream.stream)) {
+                        finalStream = peerStream.stream;
+                        console.log("[MeetingContext] 해당 peerId의 Portal 스트림 발견:", peerId);
+                    }
+                }
+                
+                // Portal 스트림을 찾지 못했고, 숨겨진 스트림이 실제 비디오인 경우에만 재사용
+                if (!finalStream) {
+                    const videoTracks = hiddenVideoStream.getVideoTracks();
+                    // Canvas에서 생성된 아바타 스트림은 보통 특정 크기를 가짐
+                    // 하지만 확실하지 않으므로, 아바타 스트림일 가능성이 있으면 재생성
+                    const mightBeAvatarStream = videoTracks.length === 1 && 
+                        videoTracks[0].getSettings().width === 640 && 
+                        videoTracks[0].getSettings().height === 480;
+                    
+                    if (!mightBeAvatarStream) {
+                        finalStream = hiddenVideoStream;
+                    }
+                }
             }
+            
+            // 아바타 스트림이거나 유효하지 않으면 새로 생성 (커스텀 PiP이므로 이름 표시 안 함)
+            if (!finalStream) {
+                console.log("[MeetingContext] 숨겨진 video 스트림이 아바타 스트림이거나 유효하지 않아서 새 아바타 스트림 생성 (커스텀 PiP용, 이름 없음)");
+                finalStream = createAvatarStream(peerName, 640, 480, false);
+            }
+            
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (숨겨진 video 스트림)");
             setCustomPipData({ stream: finalStream, peerName, peerId });
             setIsPipMode(true);
@@ -466,10 +514,10 @@ export const MeetingProvider = ({ children }) => {
         const portalMain = findPortalMainStream();
         if (portalMain) {
             let finalStream = portalMain.stream;
-            // 🔥 스트림이 없거나 비디오 트랙이 없으면 아바타 스트림 생성
+            // 🔥 스트림이 없거나 비디오 트랙이 없으면 아바타 스트림 생성 (커스텀 PiP이므로 이름 표시 안 함)
             if (!finalStream || !isStreamValidCheck(finalStream)) {
                 console.log("[MeetingContext] 메인 발표자 비디오 스트림이 없어서 아바타 스트림 생성");
-                finalStream = createAvatarStream(portalMain.peerName || "참가자");
+                finalStream = createAvatarStream(portalMain.peerName || "참가자", 640, 480, false);
             }
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (Portal main 스트림)");
             setCustomPipData({ stream: finalStream, peerName: portalMain.peerName || "참가자", peerId: portalMain.peerId || "" });
@@ -485,10 +533,10 @@ export const MeetingProvider = ({ children }) => {
 
         if (domStream) {
             let finalStream = domStream.stream;
-            // 🔥 스트림이 유효하지 않으면 아바타 스트림 생성
+            // 🔥 스트림이 유효하지 않으면 아바타 스트림 생성 (커스텀 PiP이므로 이름 표시 안 함)
             if (!isStreamValidCheck(finalStream)) {
                 console.log("[MeetingContext] DOM 스트림이 유효하지 않아서 아바타 스트림 생성");
-                finalStream = createAvatarStream(domStream.peerName || "참가자");
+                finalStream = createAvatarStream(domStream.peerName || "참가자", 640, 480, false);
             }
             console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (DOM 스트림)");
             setCustomPipData({ stream: finalStream, peerName: domStream.peerName || "참가자", peerId: domStream.peerId || "" });
@@ -515,7 +563,7 @@ export const MeetingProvider = ({ children }) => {
             if (retryHiddenStream) {
                 let finalStream = retryHiddenStream;
                 if (!isStreamValidCheck(finalStream)) {
-                    finalStream = createAvatarStream(targetPeerName);
+                    finalStream = createAvatarStream(targetPeerName, 640, 480, false);
                 }
                 console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (재시도 - 숨겨진 video)", { peerId: targetPeerId, peerName: targetPeerName });
                 setCustomPipData({ stream: finalStream, peerName: targetPeerName, peerId: targetPeerId });
@@ -530,7 +578,7 @@ export const MeetingProvider = ({ children }) => {
                 if (peerStream) {
                     let finalStream = peerStream.stream;
                     if (!finalStream || !isStreamValidCheck(finalStream)) {
-                        finalStream = createAvatarStream(targetPeerName);
+                        finalStream = createAvatarStream(targetPeerName, 640, 480, false);
                     }
                     console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (재시도 - 해당 peerId의 Portal)", { peerId: targetPeerId, peerName: targetPeerName });
                     setCustomPipData({ stream: finalStream, peerName: targetPeerName, peerId: targetPeerId });
@@ -545,7 +593,7 @@ export const MeetingProvider = ({ children }) => {
             if (retryPortal && (!targetPeerId || retryPortal.peerId === targetPeerId)) {
                 let finalStream = retryPortal.stream;
                 if (!finalStream || !isStreamValidCheck(finalStream)) {
-                    finalStream = createAvatarStream(targetPeerName || retryPortal.peerName || "참가자");
+                    finalStream = createAvatarStream(targetPeerName || retryPortal.peerName || "참가자", 640, 480, false);
                 }
                 const finalPeerId = targetPeerId || retryPortal.peerId || "";
                 const finalPeerName = targetPeerName || retryPortal.peerName || "참가자";
@@ -561,7 +609,7 @@ export const MeetingProvider = ({ children }) => {
             if (retryStream && (!targetPeerId || retryStream.peerId === targetPeerId)) {
                 let finalStream = retryStream.stream;
                 if (!isStreamValidCheck(finalStream)) {
-                    finalStream = createAvatarStream(targetPeerName || retryStream.peerName || "참가자");
+                    finalStream = createAvatarStream(targetPeerName || retryStream.peerName || "참가자", 640, 480, false);
                 }
                 const finalPeerId = targetPeerId || retryStream.peerId || "";
                 const finalPeerName = targetPeerName || retryStream.peerName || "참가자";
@@ -572,9 +620,9 @@ export const MeetingProvider = ({ children }) => {
                 return;
             }
             
-            // 5) 마지막으로 아바타 스트림 생성 (같은 사람 유지)
+            // 5) 마지막으로 아바타 스트림 생성 (같은 사람 유지, 커스텀 PiP이므로 이름 표시 안 함)
             if (targetPeerId || targetPeerName !== "참가자") {
-                const finalStream = createAvatarStream(targetPeerName);
+                const finalStream = createAvatarStream(targetPeerName, 640, 480, false);
                 console.log("[MeetingContext] ✅ 커스텀 PIP로 전환 (재시도 - 아바타 스트림)", { peerId: targetPeerId, peerName: targetPeerName });
                 setCustomPipData({ stream: finalStream, peerName: targetPeerName, peerId: targetPeerId });
                 pendingPipDataRef.current = { stream: finalStream, peerName: targetPeerName, peerId: targetPeerId };
@@ -590,7 +638,7 @@ export const MeetingProvider = ({ children }) => {
             }
 
             console.log("[MeetingContext] ❌ 스트림을 찾을 수 없음, 아바타 스트림으로 생성");
-            const avatarStream = createAvatarStream(pending?.peerName || "참가자");
+            const avatarStream = createAvatarStream(pending?.peerName || "참가자", 640, 480, false);
             setCustomPipData({ stream: avatarStream, peerName: pending?.peerName || "참가자", peerId: pending?.peerId || "" });
             pendingPipDataRef.current = { stream: avatarStream, peerName: pending?.peerName || "참가자", peerId: pending?.peerId || "" };
             isTransitioningRef.current = false;
@@ -607,7 +655,7 @@ export const MeetingProvider = ({ children }) => {
         // 🔥 스트림이 없거나 비디오 트랙이 없으면 아바타 스트림 생성
         if (!stream || !stream.getVideoTracks().some(t => t.readyState === "live")) {
             console.log("[MeetingContext] 비디오 스트림이 없어서 아바타 스트림 생성");
-            stream = createAvatarStream(safePeerName);
+            stream = createAvatarStream(safePeerName, 640, 480, true);
         }
         if (document.pictureInPictureElement) {
             console.log("[MeetingContext] 이미 PiP 모드입니다.");
@@ -730,9 +778,9 @@ export const MeetingProvider = ({ children }) => {
                 const stable = ensurePipStableStream();
                 const ok = hasLiveVideoTrack(stable);
                 if (!ok) {
-                    // 카메라가 꺼져있으면 아바타 스트림으로 전환
+                    // 카메라가 꺼져있으면 아바타 스트림으로 전환 (브라우저 PiP이므로 이름 표시)
                     const who = pendingPipDataRef.current?.peerName || "참가자";
-                    const avatarStream = createAvatarStream(who);
+                    const avatarStream = createAvatarStream(who, 640, 480, true);
                     syncPipStableStreamFrom(avatarStream);
                     if (pipVideoRef.current) {
                         pipVideoRef.current.srcObject = ensurePipStableStream();
@@ -810,9 +858,9 @@ export const MeetingProvider = ({ children }) => {
 
             const ok = hasLiveVideoTrack(customPipData.stream);
             if (!ok) {
-                // 카메라가 꺼져있으면 아바타 스트림으로 전환
+                // 카메라가 꺼져있으면 아바타 스트림으로 전환 (커스텀 PiP이므로 이름 표시 안 함)
                 const who = customPipData?.peerName || "참가자";
-                const avatarStream = createAvatarStream(who);
+                const avatarStream = createAvatarStream(who, 640, 480, false);
                 setCustomPipData({ 
                     stream: avatarStream, 
                     peerName: who, 
