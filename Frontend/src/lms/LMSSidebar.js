@@ -108,48 +108,73 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        //video 요소 찾기 (화면공유 우선 → 메인 → 그 외)
-        const isValidVideoEl = (v) => {
-            const s = v?.srcObject;
-            const tracks = s?.getVideoTracks?.() ?? [];
-            return !!v && !!s && tracks.length > 0 && tracks.some((t) => t.readyState === "live");
-        };
-
-        const pickFirstValid = (selector) => {
-            const nodes = document.querySelectorAll(selector);
-            for (const v of nodes) {
-                if (isValidVideoEl(v)) return v;
+        // 🔥 메인 발표자 찾기 (비디오 트랙이 없어도 찾기)
+        const findMainPresenter = () => {
+            // 1) 메인 비디오 타일 찾기 (비디오 트랙 유무와 관계없이)
+            const mainVideo = document.querySelector('video[data-main-video="main"]');
+            if (mainVideo) {
+                const tile = mainVideo.closest(".video-tile");
+                const peerId = tile?.dataset?.peerId || mainVideo?.dataset?.peerId || "";
+                const peerName =
+                    tile?.dataset?.peerName ||
+                    mainVideo?.dataset?.peerName ||
+                    tile?.querySelector(".stream-label")?.textContent ||
+                    "참가자";
+                return { video: mainVideo, stream: mainVideo.srcObject, peerName, peerId };
             }
+
+            // 2) 메인 스테이지의 비디오 타일 찾기
+            const mainTile = document.querySelector('.main-stage .video-tile.main, .layout-speaker .video-tile.main');
+            if (mainTile) {
+                const video = mainTile.querySelector('video.video-element');
+                const peerId = mainTile?.dataset?.peerId || "";
+                const peerName =
+                    mainTile?.dataset?.peerName ||
+                    mainTile?.querySelector(".stream-label")?.textContent ||
+                    "참가자";
+                return { video, stream: video?.srcObject, peerName, peerId };
+            }
+
+            // 3) 화면공유 우선 찾기 (비디오 트랙 있는 것만)
+            const screenVideo = document.querySelector('.video-tile:not(.me) video.video-element.screen');
+            if (screenVideo && screenVideo.srcObject) {
+                const tracks = screenVideo.srcObject.getVideoTracks();
+                if (tracks.length > 0 && tracks.some((t) => t.readyState === "live")) {
+                    const tile = screenVideo.closest(".video-tile");
+                    const peerId = tile?.dataset?.peerId || screenVideo?.dataset?.peerId || "";
+                    const peerName =
+                        tile?.dataset?.peerName ||
+                        screenVideo?.dataset?.peerName ||
+                        tile?.querySelector(".stream-label")?.textContent ||
+                        "참가자";
+                    return { video: screenVideo, stream: screenVideo.srcObject, peerName, peerId };
+                }
+            }
+
             return null;
         };
 
-        const video =
-            pickFirstValid('.video-tile:not(.me) video.video-element.screen') ||
-            pickFirstValid('video[data-main-video="main"]') ||
-            pickFirstValid('.video-tile:not(.me) video.video-element') ||
-            pickFirstValid('.video-tile video.video-element');
-        
-        if (!video) {
-            console.log('[LMSSidebar] 유효한 video 요소를 찾을 수 없음');
+        const mainPresenter = findMainPresenter();
+        if (!mainPresenter) {
+            console.log('[LMSSidebar] 메인 발표자를 찾을 수 없음');
             return;
         }
 
-        const stream = video.srcObject;
-        if (!stream) {
-            console.log('[LMSSidebar] video.srcObject가 없음');
-            return;
+        const { video, stream, peerName, peerId } = mainPresenter;
+        
+        // 🔥 video 요소가 없어도 메인 발표자 정보는 있으므로 PiP 실행 가능
+        // requestBrowserPip에서 스트림이 없으면 아바타 스트림을 생성함
+        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName, peerId, hasStream: !!stream });
+        
+        // video 요소가 없으면 임시 video 요소 생성
+        let videoEl = video;
+        if (!videoEl) {
+            videoEl = document.createElement("video");
+            videoEl.style.cssText = "position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none;";
+            document.body.appendChild(videoEl);
         }
         
-        const tile = video.closest(".video-tile");
-        const peerId = tile?.dataset?.peerId || video?.dataset?.peerId || "";
-        const peerName =
-            tile?.dataset?.peerName ||
-            video?.dataset?.peerName ||
-            tile?.querySelector(".stream-label")?.textContent ||
-            "참가자";
-        
-        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName, peerId });
-        await requestBrowserPip(video, stream, peerName, peerId);
+        await requestBrowserPip(videoEl, stream, peerName, peerId);
     }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
     const toggleParent = (key) => {
