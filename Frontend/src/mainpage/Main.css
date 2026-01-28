@@ -158,6 +158,8 @@
     gap: 20px;
 }
 
+
+
 .cardbox {
     background: white;
     border: 1px solid #eee;
@@ -165,7 +167,6 @@
     padding: 20px;
     cursor: pointer;
     transition: transform 0.25s ease, box-shadow 0.25s ease;
-
 }
 .cardbox:hover {
     transform: translateY(-6px);
@@ -230,4 +231,21 @@
     border: none;
     font-weight: bold;
     cursor: pointer;
+}
+
+.study-sample-container{
+    width: min(1400px, 100%);
+    margin: 0 auto;
+    padding: 40px 60px;
+    background: #f9fafb;
+}
+
+.main-room-title {
+    margin-top: 15px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+h5 {
+    font-size: 14px;
 }

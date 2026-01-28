@@ -20,5 +20,12 @@ public class RoomListService {
         roomListMapper.closeFullRooms();
 
         return roomListMapper.selectRoomList();
+
     }
+
+    @Transactional
+    public void deleteRoom(String roomId) {
+        roomListMapper.deleteRoom(roomId);
+    }
+
 }

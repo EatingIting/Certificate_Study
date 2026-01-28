@@ -12,6 +12,9 @@
         SELECT
             r.room_id AS roomId,
             r.title,
+
+            r.host_user_email AS hostUserEmail,
+
             u.nickname,
 
             r.room_img AS roomImg,
@@ -29,13 +32,11 @@
             r.gender,
             r.created_at AS createdAt,
 
-
             CASE
                 WHEN c.level = 1 THEN c.name
                 WHEN c.level = 2 THEN c.name
                 WHEN c.level = 3 THEN mid.name
                 END AS midCategoryName,
-
 
             CASE
                 WHEN c.level = 3 THEN c.name
@@ -44,16 +45,14 @@
 
         FROM room r
                  JOIN users u ON r.host_user_email = u.email
-
-
                  LEFT JOIN category c ON r.categoryId = c.id
-
                  LEFT JOIN category mid ON c.parent_id = mid.id
 
         WHERE r.status = 'OPEN'
         ORDER BY r.created_at DESC
 
     </select>
+
 
 
 
@@ -78,5 +77,10 @@
                     AND rjr.status = '승인'
               ) &gt;= r.max_participants
     </update>
+
+    <delete id="deleteRoom" parameterType="String">
+        DELETE FROM room
+        WHERE room_id = #{roomId}
+    </delete>
 
 </mapper>

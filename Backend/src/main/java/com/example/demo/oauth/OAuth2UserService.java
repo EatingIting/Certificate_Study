@@ -1,7 +1,6 @@
-package com.example.demo.security;
+package com.example.demo.oauth;
 
 import com.example.demo.auth.AuthMapper;
-import com.example.demo.auth.AuthVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -44,12 +42,16 @@ public class OAuth2UserService extends DefaultOAuth2UserService {
 
             nickname = (String) properties.get("nickname");
 
-        } else if (provider.equals("google")) {
+        }
+
+        else if (provider.equals("google")) {
 
             email = user.getAttribute("email");
             nickname = user.getAttribute("name");
 
-        } else if (provider.equals("naver")) {
+        }
+
+        else if (provider.equals("naver")) {
 
             Map<String, Object> attributes = user.getAttributes();
 
@@ -60,27 +62,17 @@ public class OAuth2UserService extends DefaultOAuth2UserService {
             nickname = (String) response.get("name");
         }
 
-        // 자동 회원가입
-        if (authMapper.countByEmail(email) == 0) {
-
-            AuthVO newUser = new AuthVO();
-            newUser.setUserId(UUID.randomUUID().toString());
-            newUser.setEmail(email);
-            newUser.setPassword("OAUTH_LOGIN");
-            newUser.setNickname(nickname);
-            newUser.setName(nickname);
-
-            authMapper.insertUser(newUser);
-        }
+        boolean exists = authMapper.countByEmail(email) > 0;
 
         return new DefaultOAuth2User(
                 List.of(() -> "ROLE_USER"),
                 Map.of(
                         "email", email,
-                        "nickname", nickname
+                        "nickname", nickname,
+                        "exists", exists,
+                        "provider", provider
                 ),
                 "email"
         );
     }
-
 }

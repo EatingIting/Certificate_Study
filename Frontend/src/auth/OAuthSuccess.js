@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import axios from "axios";
+import api from "../api/api";
 
 const OAuthSuccess = () => {
     useEffect(() => {
@@ -13,12 +13,8 @@ const OAuthSuccess = () => {
 
         alert("로그인 성공!");
 
-        axios
-            .get("http://localhost:8080/api/mypage/me", {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            })
+        api
+            .get("/mypage/me")
             .then((res) => {
                 const user = res.data;
                 sessionStorage.setItem("nickname", user.nickname);
