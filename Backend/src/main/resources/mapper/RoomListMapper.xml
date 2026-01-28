@@ -14,8 +14,7 @@
             r.title,
 
             r.host_user_email AS hostUserEmail,
-
-            u.nickname,
+            r.hostUserNickname AS hostUserNickname,
 
             r.room_img AS roomImg,
             r.start_date AS startDate,
@@ -44,7 +43,7 @@
                 END AS subCategoryName
 
         FROM room r
-                 JOIN users u ON r.host_user_email = u.email
+
                  LEFT JOIN category c ON r.categoryId = c.id
                  LEFT JOIN category mid ON c.parent_id = mid.id
 
@@ -52,8 +51,6 @@
         ORDER BY r.created_at DESC
 
     </select>
-
-
 
 
     <!-- deadline 지난 방 CLOSED 처리 -->
@@ -78,6 +75,8 @@
               ) &gt;= r.max_participants
     </update>
 
+
+    <!-- 방 삭제 -->
     <delete id="deleteRoom" parameterType="String">
         DELETE FROM room
         WHERE room_id = #{roomId}
