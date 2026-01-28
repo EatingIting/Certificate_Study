@@ -30,17 +30,17 @@
             r.created_at AS createdAt,
             r.room_img AS roomImg,
 
-            u.nickname,
             r.host_user_email AS hostUserEmail,
 
             r.hostUserNickname AS hostUserNickname,
-            r.categoryId       AS categoryId,
+
+            r.categoryId AS categoryId,
 
             c2.name AS midCategoryName,
             c3.name AS subCategoryName
 
         FROM room r
-                 JOIN users u ON r.host_user_email = u.email
+
                  LEFT JOIN category c2 ON r.categoryId = c2.id
                  LEFT JOIN category c3 ON c2.parent_id = c3.id
 

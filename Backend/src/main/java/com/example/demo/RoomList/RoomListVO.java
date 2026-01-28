@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 public class RoomListVO {
     private String roomId;
     private String title;
-    private String nickname;
+    private String hostUserNickname;
 
     private String hostUserEmail;
 

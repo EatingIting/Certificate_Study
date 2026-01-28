@@ -37,6 +37,8 @@ const Auth = () => {
         try {
             const res = await login(form.email, form.password);
 
+            console.log("로그인 응답:", res.data);
+
             sessionStorage.setItem("userId", res.data.userId);
             sessionStorage.setItem("nickname", res.data.nickname);
             sessionStorage.setItem("accessToken", res.data.token);

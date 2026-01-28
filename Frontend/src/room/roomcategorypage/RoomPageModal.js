@@ -33,22 +33,30 @@ const RoomPageModal = ({ open, onClose, study }) => {
     return decoded.sub;
   };
 
-  useEffect(() => {
-    if (open) {
-      setGenderLoading(true);
+    useEffect(() => {
+        if (!open) return;
 
-      api
-          .get("/mypage/me/gender")
-          .then((res) => {
-            setMyGender(res.data);
-          })
-          .finally(() => {
+        const token = sessionStorage.getItem("accessToken");
+
+        if (!token) {
             setGenderLoading(false);
-          });
-    }
-  }, [open]);
+            setMyGender(null);
+            return;
+        }
 
-  if (!open || !study) return null;
+        setGenderLoading(true);
+
+        api.get("/mypage/me/gender")
+            .then((res) => {
+                setMyGender(res.data);
+            })
+            .finally(() => {
+                setGenderLoading(false);
+            });
+    }, [open]);
+
+
+    if (!open || !study) return null;
 
   const myEmail = getEmailFromToken();
   const isLoggedIn = !!myEmail;
@@ -200,15 +208,13 @@ const RoomPageModal = ({ open, onClose, study }) => {
 
                     <div className="sr2-row">
                       <div className="sr2-k">스터디장</div>
-                      <div className="sr2-v">{study.nickname}</div>
+                      <div className="sr2-v">{study.hostUserNickname}</div>
                     </div>
 
                     <div className="sr2-row sr2-row-desc">
                       <div className="sr2-k">설명</div>
                       <div className="sr2-v sr2-desc">{study.content}</div>
                     </div>
-
-                    {/* ✅ 로그인 안내 (설명 밑에 크게 표시) */}
                     {!isLoggedIn && (
                         <div
                             style={{

@@ -363,7 +363,7 @@ const RoomPage = () => {
                                 </span>
                             )}
                         </div>
-                        <div>{room.nickname}</div>
+                        <div>{room.hostUserNickname}</div>
                         <div>{room.createdAt?.slice(0, 10)}</div>
                     </div>
                 ))}
