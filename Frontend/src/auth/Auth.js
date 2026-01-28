@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Auth.css";
-import logo from "./메인로고.png";
 import { login } from "../api/api";
+const logo = require("./메인로고.png");
 
 const Auth = () => {
     const navigate = useNavigate();
