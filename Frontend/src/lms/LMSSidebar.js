@@ -2,6 +2,7 @@ import "./LMSSidebar.css";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useState, useCallback, useEffect } from "react";
 import { useMeeting } from "../webrtc/MeetingContext";
+import api from "../api/api";
 
 const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuProp }) => {
     const navigate = useNavigate();
@@ -553,15 +554,26 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             <button
                 className="meeting-btn"
                 type="button"
-                onClick={() => {
-                    const roomId = subjectId;
-                    if (subjectId) {
-                        sessionStorage.setItem("lms.activeRoomId", subjectId);
+                onClick={async () => {
+                    if (!subjectId) return;
+
+                    try {
+                        // 서버에서 roomId 가져오기 (8자리)
+                        const response = await api.get(`/meeting-rooms/room-id/${subjectId}`);
+                        const roomId = response.data.roomId;
+
+                        if (roomId) {
+                            sessionStorage.setItem("lms.activeRoomId", roomId);
+                        }
+
+                        window.dispatchEvent(new Event("meeting:request-pip"));
+
+                        navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
+                    } catch (error) {
+                        console.error("[LMSSidebar] roomId 가져오기 실패:", error);
+                        // 에러 발생 시 기존 방식으로 fallback (하지만 이 경우는 없어야 함)
+                        alert("화상 채팅방 입장에 실패했습니다. 다시 시도해주세요.");
                     }
-
-                    window.dispatchEvent(new Event("meeting:request-pip"));
-
-                    navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
                 }}
             >
                 화상 채팅방 입장하기

@@ -792,13 +792,9 @@ function MeetingPage({ portalRoomId }) {
 
     const [layoutMode, setLayoutMode] = useState("speaker");
 
-    const [sidebarView, setSidebarView] = useState(() => {
-        return sessionStorage.getItem("sidebarView") || "chat";
-    });
+    const [sidebarView, setSidebarView] = useState("chat");
 
-    const [sidebarOpen, setSidebarOpen] = useState(() => {
-        return sessionStorage.getItem("sidebarOpen") === "true";
-    });
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     const [micOn, setMicOn] = useState(() => {
         const saved = localStorage.getItem("micOn");
@@ -910,6 +906,7 @@ function MeetingPage({ portalRoomId }) {
 
     const effectAliveRef = useRef(true);
     const chatEndRef = useRef(null);
+    const chatAreaRef = useRef(null);
     const [chatConnected, setChatConnected] = useState(false);
     const lastSpeakingRef = useRef(null);
     const isInitialMountRef = useRef(true);
@@ -951,6 +948,12 @@ function MeetingPage({ portalRoomId }) {
     const faceDetectorLoadingRef = useRef(null);
     const faceDetectorLastAttemptAtRef = useRef(0);
     const faceDetectInFlightRef = useRef(false);
+
+    // 🔥 bottom-strip 스크롤 관련 refs
+    const bottomStripRef = useRef(null);
+    const isDraggingRef = useRef(false);
+    const startXRef = useRef(0);
+    const scrollLeftRef = useRef(0);
     const faceDetectSeqRef = useRef(0);
     const faceDetectCanvasRef = useRef(null);
     const faceDetectCtxRef = useRef(null);
@@ -4470,6 +4473,99 @@ function MeetingPage({ portalRoomId }) {
         }
     }, [participants.some(p => p.isScreenSharing)]);
 
+    // 🔥 bottom-strip 드래그 스크롤 기능 (strip-item 포함)
+    useEffect(() => {
+        const stripEl = bottomStripRef.current;
+        if (!stripEl) return;
+
+        let dragStartX = 0;
+        let dragStartScrollLeft = 0;
+        let isDragging = false;
+        let hasMoved = false; // 드래그로 이동했는지 확인
+
+        // 드래그 스크롤 핸들러
+        const handleMouseDown = (e) => {
+            // bottom-strip 또는 strip-item 내부에서만 드래그 시작
+            const target = e.target;
+            const stripItem = target.closest(".strip-item");
+            const isInStrip = stripEl.contains(target) || stripItem;
+            
+            if (isInStrip) {
+                isDragging = true;
+                hasMoved = false;
+                dragStartX = e.pageX;
+                dragStartScrollLeft = stripEl.scrollLeft;
+                isDraggingRef.current = false; // 초기화
+                stripEl.style.cursor = "grabbing";
+                stripEl.style.userSelect = "none";
+            }
+        };
+
+        const handleMouseMove = (e) => {
+            if (!isDragging) return;
+            
+            const deltaX = e.pageX - dragStartX;
+            const moveDistance = Math.abs(deltaX);
+            
+            // 5px 이상 이동했으면 드래그로 간주
+            if (moveDistance > 5) {
+                hasMoved = true;
+                isDraggingRef.current = true; // 드래그 중임을 표시
+                e.preventDefault();
+                const walk = deltaX * 2; // 스크롤 속도 조절
+                stripEl.scrollLeft = dragStartScrollLeft - walk;
+            }
+        };
+
+        const handleMouseUp = () => {
+            if (isDragging) {
+                isDragging = false;
+                stripEl.style.cursor = "grab";
+                stripEl.style.userSelect = "";
+                
+                // 약간의 지연 후 드래그 상태 해제 (클릭 이벤트 처리 후)
+                setTimeout(() => {
+                    isDraggingRef.current = false;
+                }, 10);
+            }
+        };
+
+        const handleMouseLeave = () => {
+            if (isDragging) {
+                isDragging = false;
+                stripEl.style.cursor = "grab";
+                stripEl.style.userSelect = "";
+                isDraggingRef.current = false;
+            }
+        };
+
+        // 이벤트 리스너 등록
+        stripEl.addEventListener("mousedown", handleMouseDown);
+        document.addEventListener("mousemove", handleMouseMove);
+        document.addEventListener("mouseup", handleMouseUp);
+        stripEl.addEventListener("mouseleave", handleMouseLeave);
+
+        return () => {
+            stripEl.removeEventListener("mousedown", handleMouseDown);
+            document.removeEventListener("mousemove", handleMouseMove);
+            document.removeEventListener("mouseup", handleMouseUp);
+            stripEl.removeEventListener("mouseleave", handleMouseLeave);
+        };
+    }, []);
+
+    // 🔥 strip-item 클릭 이벤트에서 드래그인지 확인
+    const handleStripItemClick = useCallback((e, participantId) => {
+        // 드래그로 이동했다면 클릭 이벤트 무시
+        if (isDraggingRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+        
+        manuallySelectedRef.current = true;
+        setActiveSpeakerId(participantId);
+    }, []);
+
     useEffect(() => {
         return () => {
             joiningTimeoutRef.current.forEach((t) => clearTimeout(t));
@@ -5613,8 +5709,8 @@ function MeetingPage({ portalRoomId }) {
         }
 
         // 메시지가 있고 채팅 영역이 보이는 상태일 때만 스크롤
-        if (messages.length > 0 && chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        if (messages.length > 0 && chatAreaRef.current) {
+            chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
         }
     }, [messages]);
 
@@ -5875,7 +5971,7 @@ function MeetingPage({ portalRoomId }) {
 
                                                     {sidebarView === "chat" && (
                                                         <>
-                                                            <div className="fullscreen-chat-area custom-scrollbar">
+                                                            <div className="fullscreen-chat-area custom-scrollbar" ref={chatAreaRef}>
                                                                 {messages.map((msg) => (
                                                                     <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
                                                                         <div className="msg-content-wrapper">
@@ -6058,16 +6154,13 @@ function MeetingPage({ portalRoomId }) {
                                 </div>
 
                                 {/* 일반 모드 하단 스트립 (전체화면 아님) */}
-                                <div className="bottom-strip custom-scrollbar">
+                                <div ref={bottomStripRef} className="bottom-strip custom-scrollbar">
                                     {orderedParticipants.map((p) => (
                                         <div
                                             key={p.id}
                                             className={`strip-item ${activeSpeakerId === p.id ? "active-strip" : ""
                                                 } ${p.isScreenSharing ? "screen-sharing" : ""}`}
-                                            onClick={() => {
-                                                manuallySelectedRef.current = true;
-                                                setActiveSpeakerId(p.id);
-                                            }}
+                                            onClick={(e) => handleStripItemClick(e, p.id)}
                                         >
                                             <VideoTile
                                                 user={p}
@@ -6209,7 +6302,7 @@ function MeetingPage({ portalRoomId }) {
 
                                                     {sidebarView === "chat" && (
                                                         <>
-                                                            <div className="grid-fullscreen-chat-area custom-scrollbar">
+                                                            <div className="grid-fullscreen-chat-area custom-scrollbar" ref={chatAreaRef}>
                                                                 {messages.map((msg) => (
                                                                     <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
                                                                         <div className="msg-content-wrapper">
@@ -6465,88 +6558,81 @@ function MeetingPage({ portalRoomId }) {
                                     }} />
                             )}
                             <ButtonControl label="얼굴" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
-                            <ButtonControl label="채팅" active={sidebarOpen && sidebarView === "chat"} icon={MessageSquare} onClick={() => toggleSidebar("chat")} />
-                            <ButtonControl label="참여자" active={sidebarOpen && sidebarView === "participants"} icon={Users} onClick={() => toggleSidebar("participants")} />
                             <div className="divider"></div>
                             <ButtonControl label="통화 종료" danger icon={Phone} onClick={handleHangup} />
                         </div>
                     </div>
                 </main>
 
-                <aside className={`meet-sidebar ${sidebarOpen && !isGridFullscreen && !isFullscreen ? "open" : ""}`}>
+                <aside className={`meet-sidebar ${!isGridFullscreen && !isFullscreen ? "open" : ""}`}>
                     <div className="sidebar-inner">
                         <div className="sidebar-header">
-                            <h2 className="sidebar-title">{sidebarView === "chat" ? "회의 채팅" : "참여자 목록"}</h2>
-                            <button onClick={() => setSidebarOpen(false)} className="close-btn">
-                                <X size={20} />
-                            </button>
+                            <h2 className="sidebar-title">참여자 목록</h2>
                         </div>
 
-                        {sidebarView === "chat" && (
-                            <>
-                                <div className="chat-area custom-scrollbar">
-                                    {messages.map((msg) => (
-                                        <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
-                                            <div className="msg-content-wrapper">
-                                                {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
-                                                <div className="msg-bubble">{msg.text}</div>
+                        <div className="participants-area">
+                            <div className="section-label">참여 중 ({participants.length})</div>
+                            {participants.map((p) => (
+                                <div key={p.id} className={`participant-card ${p.isMe ? "me" : ""}`}>
+                                    <div className="p-info">
+                                        <UserAvatar name={p.name} />
+                                        <div>
+                                            <div className={`p-name ${p.isMe ? "me" : ""}`}>
+                                                {p.name} {p.isMe ? "(나)" : ""}
                                             </div>
-                                            <span className="msg-time">
-                                                {msg.userName}, {msg.time}
-                                            </span>
-                                        </div>
-                                    ))}
-                                    <div ref={chatEndRef} />
-                                </div>
-                                <div className="chat-input-area">
-                                    <form onSubmit={handleSendMessage} className="chat-form">
-                                        <input
-                                            type="text"
-                                            value={chatDraft}
-                                            onChange={(e) => setChatDraft(e.target.value)}
-                                            placeholder="메시지를 입력하세요..."
-                                            className="chat-input"
-                                        />
-                                        <button type="submit" className="send-btn" disabled={!chatDraft.trim()}>
-                                            <Send size={16} />
-                                        </button>
-                                    </form>
-                                </div>
-                            </>
-                        )}
-
-                        {sidebarView === "participants" && (
-                            <div className="participants-area custom-scrollbar">
-                                <div className="section-label">참여 중 ({participants.length})</div>
-                                {participants.map((p) => (
-                                    <div key={p.id} className={`participant-card ${p.isMe ? "me" : ""}`}>
-                                        <div className="p-info">
-                                            <UserAvatar name={p.name} />
-                                            <div>
-                                                <div className={`p-name ${p.isMe ? "me" : ""}`}>
-                                                    {p.name} {p.isMe ? "(나)" : ""}
-                                                </div>
-                                                <div className="p-role">{p.isMe ? "나" : "팀원"}</div>
-                                            </div>
-                                        </div>
-                                        <div className="p-status">
-                                            {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} className="icon-hidden" />}
-                                            {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} className="icon-hidden" />}
-                                            {!p.isMe && (
-                                                <button className="more-btn">
-                                                    <MoreHorizontal size={16} />
-                                                </button>
-                                            )}
+                                            <div className="p-role">{p.isMe ? "나" : "팀원"}</div>
                                         </div>
                                     </div>
-                                ))}
-                                <div className="invite-section">
-                                    <button className="invite-btn" onClick={handleInvite}>
-                                        <Share size={16} /> 초대하기
-                                    </button>
+                                    <div className="p-status">
+                                        {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} className="icon-hidden" />}
+                                        {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} className="icon-hidden" />}
+                                        {!p.isMe && (
+                                            <button className="more-btn">
+                                                <MoreHorizontal size={16} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
+                            ))}
+                            <div className="invite-section">
+                                <button className="invite-btn" onClick={handleInvite}>
+                                    <Share size={16} /> 초대하기
+                                </button>
                             </div>
-                        )}
+                        </div>
+
+                        <div className="sidebar-chat-divider">
+                            <span>채팅</span>
+                        </div>
+
+                        <div className="chat-area custom-scrollbar" ref={chatAreaRef}>
+                            {messages.map((msg) => (
+                                <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
+                                    <div className="msg-content-wrapper">
+                                        {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
+                                        <div className="msg-bubble">{msg.text}</div>
+                                    </div>
+                                    <span className="msg-time">
+                                        {msg.userName}, {msg.time}
+                                    </span>
+                                </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                        </div>
+                        <div className="chat-input-area">
+                            <form onSubmit={handleSendMessage} className="chat-form">
+                                <input
+                                    type="text"
+                                    value={chatDraft}
+                                    onChange={(e) => setChatDraft(e.target.value)}
+                                    placeholder="메시지를 입력하세요..."
+                                    className="chat-input"
+                                />
+                                <button type="submit" className="send-btn" disabled={!chatDraft.trim()}>
+                                    <Send size={16} />
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </aside>
             </div>
