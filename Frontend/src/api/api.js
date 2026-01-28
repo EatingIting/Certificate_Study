@@ -1,12 +1,23 @@
 import axios from "axios";
+import { getBackendOrigin } from "../utils/backendUrl";
 
+// HTTPS 환경에서는 절대 URL 사용, HTTP 환경에서는 상대 경로 사용
+const getBaseURL = () => {
+    if (process.env.REACT_APP_API_BASE_URL) {
+        return process.env.REACT_APP_API_BASE_URL;
+    }
+    
+    // HTTPS로 접속하는 경우 절대 URL 사용 (Mixed Content 방지)
+    if (window.location.protocol === "https:") {
+        return `${getBackendOrigin()}/api`;
+    }
+    
+    // HTTP 환경에서는 상대 경로 사용 (프록시 활용)
+    return "/api";
+};
 
 const api = axios.create({
-    // 배포 환경(다른 PC에서 접속)에서 localhost 하드코딩을 피하기 위해
-    // 기본은 상대경로(/api)로 요청한다.
-    // - 개발: CRA dev server + setupProxy가 localhost:8080으로 프록시
-    // - 배포: 동일 오리진에서 /api를 백엔드로 라우팅(리버스 프록시 또는 Spring 정적서빙)
-    baseURL: process.env.REACT_APP_API_BASE_URL || "/api",
+    baseURL: getBaseURL(),
     headers: {
         "Content-Type": "application/json",
     },
@@ -26,6 +37,25 @@ api.interceptors.request.use(
         return config;
     },
     (error) => Promise.reject(error)
+);
+
+// 응답 인터셉터: 인증 실패 시 처리
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        // 401 Unauthorized 또는 403 Forbidden인 경우
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            console.warn("[API] 인증 실패:", error.response?.status);
+            // 필요시 로그인 페이지로 리다이렉트할 수 있음
+        }
+        
+        // 네트워크 에러인 경우
+        if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
+            console.error("[API] 네트워크 에러:", error.message);
+        }
+        
+        return Promise.reject(error);
+    }
 );
 
 // 이메일 중복 체크
