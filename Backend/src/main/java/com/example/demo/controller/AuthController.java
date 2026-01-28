@@ -2,7 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.auth.AuthService;
 import com.example.demo.auth.AuthVO;
-import com.example.demo.security.JwtTokenProvider;
+import com.example.demo.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

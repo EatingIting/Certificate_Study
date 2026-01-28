@@ -1,8 +1,10 @@
 package com.example.demo.chat.controller;
 
-import com.example.demo.chat.service.GeminiService;
+import com.example.demo.chat.service.OpenAiService; // 👈 import 변경
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.Map;
 
 @RestController
@@ -10,14 +12,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiController {
 
-    private final GeminiService geminiService; // 👈 이게 있어야 함
+    private final OpenAiService openAiService; // 👈 이름 변경
 
     @PostMapping("/chat")
-    public String chatWithAi(@RequestBody Map<String, String> request) {
+    public ResponseEntity<String> chat(@RequestBody Map<String, String> request) {
         String userMessage = request.get("message");
-        String subject = request.getOrDefault("subject", "IT 지식 전문가");
+        // String subject = request.get("subject"); // 필요하면 주제도 프롬프트에 섞어서 전달 가능
 
-        // 🚨 중요: 소문자 geminiService로 호출해야 합니다!
-        return geminiService.getContents(userMessage, subject);
+        String answer = openAiService.getContents(userMessage);
+        return ResponseEntity.ok(answer);
     }
 }

@@ -11,6 +11,17 @@ module.exports = function (app) {
         })
     );
 
+    // OAuth2 리다이렉트/인증 엔드포인트 프록시
+    // (window.location.href로 이동하는 경우에도 dev server가 백엔드로 전달)
+    app.use(
+        "/oauth2",
+        createProxyMiddleware({
+            target: "http://localhost:8080",
+            changeOrigin: true,
+            secure: false,
+        })
+    );
+
     // WebSocket 프록시 (Spring 시그널링 서버)
     app.use(
         "/ws",

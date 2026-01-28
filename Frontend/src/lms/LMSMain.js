@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 import ClassCard from "./ClassCard";
 import api from "../api/api";
 import "./LMSMain.css";
-import {useNavigate} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const LMSMain = () => {
     const [classList, setClassList] = useState([]);
+    const [loginUserEmail, setLoginUserEmail] = useState("");
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -17,16 +18,26 @@ const LMSMain = () => {
         }
     }, [navigate]);
 
-    // ✅ 내 클래스룸 목록 불러오기
     useEffect(() => {
-        api.get("/classrooms/my")
-            .then((res) => {
-                setClassList(res.data);
-            })
-            .catch((err) => {
-                console.error("클래스룸 불러오기 실패", err);
-            });
+        const email = sessionStorage.getItem("userEmail");
+        console.log("세션 userEmail:", email);
+        if (email) {
+            setLoginUserEmail(email);
+        }
     }, []);
+
+    useEffect(() => {
+    api.get("/classrooms/my")
+        .then((res) => {
+        setClassList(res.data);
+        })
+        .catch((err) => {
+        console.error("클래스룸 불러오기 실패", err);
+        });
+    }, []);
+
+    console.log("classList:", classList, "type:", typeof classList, "isArray:", Array.isArray(classList));
+
 
     return (
         <main className="lms-main">
@@ -35,7 +46,11 @@ const LMSMain = () => {
             <div className="class-grid">
                 {classList.length > 0 ? (
                     classList.map((item) => (
-                        <ClassCard key={item.roomId} data={item} />
+                        <ClassCard
+                            key={item.roomId}
+                            data={item}
+                            loginUserEmail={loginUserEmail}
+                        />
                     ))
                 ) : (
                     <p style={{ marginTop: "20px", color: "gray" }}>

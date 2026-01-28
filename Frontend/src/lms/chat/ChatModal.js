@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './ChatModal.css';
+// ✅ 팀장님이 만드신 유틸리티 함수 임포트 (경로 확인 필요)
+import { getHostnameWithPort, getWsProtocol } from "../../utils/backendUrl";
 
 // 🔹 상수 및 환경 설정
 const STICKER_LIST = ["👌", "👍", "🎉", "😭", "🔥", "🤔"];
 const MODAL_WIDTH = 360; 
 const MODAL_HEIGHT = 600;
 
-const HOST = window.location.hostname;
-const API_BASE_URL = `http://${HOST}:8080`; 
-const WS_BASE_URL = `ws://${HOST}:8080`;
-
 const ChatModal = ({ roomId, roomName }) => {
+  // =================================================================
+  // 1. 상태 관리
+  // =================================================================
   const [isOpen, setIsOpen] = useState(false);         
   const [isMenuOpen, setIsMenuOpen] = useState(false); 
   const [showStickerMenu, setShowStickerMenu] = useState(false); 
@@ -20,6 +21,7 @@ const ChatModal = ({ roomId, roomName }) => {
   const [inputValue, setInputValue] = useState("");    
   const [userList, setUserList] = useState([]);        
 
+  // 메시지 목록
   const [chatMessages, setChatMessages] = useState([]); 
   const [aiMessages, setAiMessages] = useState([{       
     userId: 'AI_BOT',
@@ -29,6 +31,7 @@ const ChatModal = ({ roomId, roomName }) => {
     isAiResponse: true
   }]);
 
+  // 창 위치 상태 (초기값: 우측 하단)
   const [position, setPosition] = useState({ x: window.innerWidth - 100, y: window.innerHeight - 100 });
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
@@ -37,27 +40,40 @@ const ChatModal = ({ roomId, roomName }) => {
   const scrollRef = useRef(null); 
 
   // =================================================================
-  // 2. 사용자 정보 가져오기 (게스트 모드 추가 - 절대 안 막힘!)
+  // 2. 동적 URL 생성 (팀장님 코드 스타일 적용)
+  // =================================================================
+  const { apiBaseUrl, wsUrl } = useMemo(() => {
+      const host = getHostnameWithPort();
+      const wsProtocol = getWsProtocol(); // ws:// 또는 wss://
+      // ws -> http, wss -> https 로 변환
+      const httpProtocol = wsProtocol === 'wss' ? 'https' : 'http';
+
+      return {
+          apiBaseUrl: `${httpProtocol}://${host}`,
+          wsUrl: `${wsProtocol}://${host}`
+      };
+  }, []);
+
+  // =================================================================
+  // 3. 사용자 정보 가져오기
   // =================================================================
   const myInfo = useMemo(() => {
     try {
-        // 1. 로컬스토리지 시도
-        const storedUserId = localStorage.getItem("stableUserId") || localStorage.getItem("userId");
-        const storedUserName = localStorage.getItem("stableUserName") || localStorage.getItem("userName") || localStorage.getItem("nickname");
+        const storedUserId = localStorage.getItem("userId") || localStorage.getItem("user_id");
+        const storedUserName = localStorage.getItem("userName") || localStorage.getItem("nickname") || localStorage.getItem("name");
 
         if (storedUserId) {
             return { userId: storedUserId, userName: storedUserName || "익명" };
         }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("사용자 정보 파싱 실패:", e); }
     
-    // 🚨 [핵심 해결책] 정보가 없으면 '게스트'로라도 통과시킴 (더 이상 빨간창 안 뜸)
-    console.warn("로그인 정보 없음 -> 게스트 모드로 진입");
-    const randomId = "GUEST-" + Math.random().toString(36).substr(2, 9);
-    return { userId: randomId, userName: "게스트" }; 
+    // 로그인이 안 되어 있으면 null 반환
+    return null; 
   }, []);
 
   const currentMessages = isAiMode ? aiMessages : chatMessages;
 
+  // 시간 포맷 (오전/오후 HH:MM)
   const formatTime = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
@@ -69,13 +85,18 @@ const ChatModal = ({ roomId, roomName }) => {
     return `${ampm} ${hours}:${minutes < 10 ? '0' + minutes : minutes}`;
   };
 
-  // 3. API & WebSocket
+  // =================================================================
+  // 4. API & WebSocket 연동
+  // =================================================================
   useEffect(() => {
+    // 로그인이 안 되어 있거나 방 정보가 없으면 실행 안 함
     if (!isOpen || !roomId || !myInfo) return;
 
+    // 4-1. 지난 대화 내용 불러오기 (fetch URL 수정됨)
     const fetchChatHistory = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/chat/rooms/${roomId}/messages`);
+            // ✅ 수정: 동적 apiBaseUrl 사용
+            const res = await fetch(`${apiBaseUrl}/api/chat/rooms/${roomId}/messages`);
             if (res.ok) {
                 const data = await res.json();
                 const dbMessages = data.map(msg => ({
@@ -87,20 +108,30 @@ const ChatModal = ({ roomId, roomName }) => {
                 }));
                 setChatMessages(dbMessages);
             }
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error("채팅 기록 로드 실패:", err); }
     };
     fetchChatHistory();
-  }, [isOpen, roomId, myInfo]);
+  }, [isOpen, roomId, myInfo, apiBaseUrl]); // dependency에 apiBaseUrl 추가
 
   useEffect(() => {
     if (!roomId || !myInfo) return;
 
+    console.log(`📡 [Room ${roomId}] WebSocket 연결 시도...`);
+
+    // 4-2. 소켓 연결 (팀장님 코드 적용)
+    // ✅ 수정: wsUrl 및 쿼리 파라미터 인코딩 적용
     const socket = new WebSocket(
-        `${WS_BASE_URL}/ws/chat/${roomId}?userId=${myInfo.userId}&userName=${myInfo.userName}`
+        `${wsUrl}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(myInfo.userName)}`
     );
+
+    socket.onopen = () => {
+        console.log("✅ WebSocket 연결 성공!");
+    };
 
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        
+        // (1) 일반 대화 수신
         if (data.type === "TALK") {
             setChatMessages(prev => [...prev, { 
                 userId: data.userId, 
@@ -109,21 +140,30 @@ const ChatModal = ({ roomId, roomName }) => {
                 isSticker: STICKER_LIST.includes(data.message),
                 createdAt: data.createdAt || new Date().toISOString()
             }]);
+            
             if (!isOpen && !isAiMode) setUnreadCount(prev => prev + 1);
+        
+        // (2) 접속자 목록 갱신
         } else if (data.type === "USERS_UPDATE") {
+            console.log("👥 접속자 목록 갱신:", data.users);
             setUserList(data.users);
         }
     };
 
     ws.current = socket;
     return () => socket.close();
-  }, [isOpen, isAiMode, myInfo, roomId]);
+  }, [isOpen, isAiMode, myInfo, roomId, wsUrl]); // dependency에 wsUrl 추가
 
+  // 스크롤 자동 이동
   useEffect(() => {
-    if (isOpen && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (isOpen && scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [currentMessages, isOpen]);
 
-  // 4. 이벤트 핸들러
+  // =================================================================
+  // 5. 이벤트 핸들러 (드래그 & 전송)
+  // =================================================================
   const handleMouseDown = (e) => {
     isDragging.current = false;
     dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
@@ -150,9 +190,15 @@ const ChatModal = ({ roomId, roomName }) => {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  const toggleChat = () => { if (!isDragging.current) { setIsOpen(!isOpen); if (!isOpen) setUnreadCount(0); } };
+  const toggleChat = () => { 
+      if (!isDragging.current) { 
+          setIsOpen(!isOpen); 
+          if (!isOpen) setUnreadCount(0); 
+      } 
+  };
   const toggleAiMode = () => setIsAiMode(!isAiMode);
 
+  // 메시지 전송
   const handleSend = async (text = inputValue) => {
     if (!text.trim()) return;
     if (!myInfo) return;
@@ -161,18 +207,23 @@ const ChatModal = ({ roomId, roomName }) => {
     setShowStickerMenu(false);
 
     if (isAiMode) {
+        // [AI 모드] Gemini API 호출
         setAiMessages(prev => [...prev, { userId: myInfo.userId, message: text, createdAt: new Date().toISOString(), isAiResponse: false }]);
         setAiMessages(prev => [...prev, { userId: 'AI_BOT', userName: 'AI 튜터', message: "...", createdAt: new Date().toISOString(), isAiResponse: true, isLoading: true }]);
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
+            // ✅ 수정: 동적 apiBaseUrl 사용
+            const res = await fetch(`${apiBaseUrl}/api/ai/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: text, subject: roomName || "일반 지식" })
             });
-
+            
+            // HTML 응답(로그인 페이지)이 오면 에러 처리
             const contentType = res.headers.get("content-type");
-            if (contentType && contentType.includes("text/html")) throw new Error("Security Block");
+            if (contentType && contentType.includes("text/html")) {
+                throw new Error("Security Block");
+            }
 
             if (!res.ok) throw new Error("AI Error");
             const aiReply = await res.text();
@@ -185,17 +236,27 @@ const ChatModal = ({ roomId, roomName }) => {
             setAiMessages(prev => prev.map(msg => msg.isLoading ? { ...msg, message: "AI 서버 연결 실패 😭", isLoading: false } : msg));
         }
     } else {
+        // [일반 모드] 소켓 전송
         if (ws.current?.readyState === WebSocket.OPEN) {
-            ws.current.send(JSON.stringify({ type: "TALK", roomId, userId: myInfo.userId, userName: myInfo.userName, message: text }));
+            ws.current.send(JSON.stringify({ 
+                type: "TALK", 
+                roomId, 
+                userId: myInfo.userId, 
+                userName: myInfo.userName, 
+                message: text 
+            }));
         }
     }
   };
 
-  // 5. 렌더링 (위치 계산)
+  // =================================================================
+  // 6. 렌더링
+  // =================================================================
   const modalLeft = Math.min(Math.max(10, position.x - MODAL_WIDTH + 60), window.innerWidth - MODAL_WIDTH - 10);
   const modalTop = Math.min(Math.max(10, position.y - MODAL_HEIGHT + 60), window.innerHeight - MODAL_HEIGHT - 10);
 
-  // 더 이상 에러창을 띄우지 않고, 그냥 버튼을 보여줍니다.
+  if (!myInfo) return null;
+
   return (
     <>
       {!isOpen && (
@@ -210,7 +271,7 @@ const ChatModal = ({ roomId, roomName }) => {
         </div>
       )}
 
-      <div className={`tc-wrapper ${isAiMode ? 'ai-mode' : ''}`} style={{ display: isOpen ? 'flex' : 'none', left: `${modalLeft}px`, top: `${modalTop}px`, width: `${MODAL_WIDTH}px`, height: `${MODAL_HEIGHT}px` }}>
+      <div className={`tc-wrapper ${isAiMode ? 'ai-mode' : ''}`} style={{ display: isOpen ? 'flex' : 'none', left: `${modalLeft}px`, top: `${modalTop}px`}}>
         <div className={`tc-header ${isAiMode ? 'ai-mode' : ''}`} onMouseDown={handleMouseDown} style={{ cursor: 'move' }}>
           <span className="tc-title">{isAiMode ? "🤖 AI 튜터" : "💬 스터디룸 채팅"}</span>
           <div className="tc-icons">
@@ -258,4 +319,5 @@ const ChatModal = ({ roomId, roomName }) => {
     </>
   );
 };
+
 export default ChatModal;

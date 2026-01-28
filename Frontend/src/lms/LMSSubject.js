@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation, useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 import LMSHeader from "./LMSHeader";
 import LMSSidebar from "./LMSSidebar";
@@ -29,13 +29,12 @@ import FloatingPip from "../webrtc/FloatingPip";
 
 import "./LMSSubject.css";
 
-// 🔥 PIP 모드에서 MeetingPortal을 숨긴 상태로 렌더링 (WebSocket/스트림 유지용)
+// PIP 모드에서 MeetingPortal을 숨긴 상태로 렌더링
 const MeetingPortalHidden = ({ show }) => {
     useEffect(() => {
         const meetingRoot = document.getElementById("meeting-root");
         if (meetingRoot) {
             if (show) {
-                // 🔥 display:none 금지 (비디오/트랙이 멈출 수 있음) → 화면 밖으로 숨김
                 meetingRoot.style.display = "block";
                 meetingRoot.style.position = "fixed";
                 meetingRoot.style.left = "-10000px";
@@ -76,7 +75,7 @@ const MeetingPortalHidden = ({ show }) => {
     return <MeetingPortal />;
 };
 
-// 🔥 브라우저 PIP용 숨겨진 비디오 컴포넌트 (페이지 이동해도 스트림 유지)
+// 브라우저 PIP용 숨겨진 비디오 컴포넌트 (페이지 이동해도 스트림 유지)
 const HiddenPipVideo = ({ videoRef }) => {
     return (
         <video
@@ -101,12 +100,14 @@ function LMSSubjectInner() {
     let [activeMenu, setActiveMenu] = useState("dashboard");
     let [toastMessage, setToastMessage] = useState("");
     let [toastVisible, setToastVisible] = useState(false);
-    
+    // 커스텀 PiP에서 "나가기" 클릭 시, UI는 즉시 숨김
+    const [pipClosing, setPipClosing] = useState(false);
+    const pipLeaveTimerRef = useRef(null);
+
     let location = useLocation();
     let navigate = useNavigate();
     let { subjectId } = useParams();
 
-    // ✅ URL이 바뀌면 사이드바 active도 자동으로 맞추기
     useEffect(() => {
         let p = location.pathname;
 
@@ -117,9 +118,7 @@ function LMSSubjectInner() {
         else setActiveMenu("dashboard");
     }, [location.pathname]);
 
-    /* =========================
-       PiP UX (커스텀 PIP)
-    ========================= */
+    // pip ux
     const {
         isInMeeting,
         isPipMode,
@@ -129,7 +128,7 @@ function LMSSubjectInner() {
         stopCustomPip,
         endMeeting,
         updateCustomPipData,
-        pipVideoRef, // 🔥 숨겨진 PIP video ref
+        pipVideoRef, // 숨겨진 PIP video ref
     } = useMeeting();
 
     // 커스텀 PIP에서 회의방 복귀
@@ -148,29 +147,46 @@ function LMSSubjectInner() {
     // 커스텀 PIP에서 회의 나가기
     const handlePipLeave = useCallback(() => {
         console.log("[CustomPiP] 회의 나가기");
-        
+
         // LEAVE 이벤트 발생 (MeetingPage에서 처리)
         window.dispatchEvent(new CustomEvent("meeting:leave-from-pip"));
-        
-        stopCustomPip();
-        endMeeting();
 
-        // 세션 정리
-        sessionStorage.removeItem("pip.roomId");
-        sessionStorage.removeItem("pip.subjectId");
+        // UI는 즉시 숨김 (사용자 체감 즉시 반응)
+        setPipClosing(true);
+
+        // 소켓으로 LEAVE가 전달될 시간을 조금 준 뒤 정리/언마운트
+        if (pipLeaveTimerRef.current) {
+            clearTimeout(pipLeaveTimerRef.current);
+        }
+        pipLeaveTimerRef.current = setTimeout(() => {
+            stopCustomPip();
+            endMeeting();
+
+            // 세션 정리
+            sessionStorage.removeItem("pip.roomId");
+            sessionStorage.removeItem("pip.subjectId");
+
+            setPipClosing(false);
+            pipLeaveTimerRef.current = null;
+        }, 600);
     }, [stopCustomPip, endMeeting]);
 
-    /* =========================
-       Sidebar 이동 시 (PIP는 LMSSidebar에서 처리)
-    ========================= */
+    // cleanup
+    useEffect(() => {
+        return () => {
+            if (pipLeaveTimerRef.current) {
+                clearTimeout(pipLeaveTimerRef.current);
+                pipLeaveTimerRef.current = null;
+            }
+        };
+    }, []);
+
+    // Sidebar 이동 시
     const handleSidebarNavigate = (path) => {
-        // PIP 요청은 LMSSidebar에서 직접 처리하므로 여기서는 네비게이션만
         navigate(`/lms/${subjectId}/${path}`);
     };
 
-    /* =========================
-       Toast 이벤트
-    ========================= */
+    //Toast 이벤트
     useEffect(() => {
         const handler = (e) => {
             if (!e.detail) return;
@@ -208,7 +224,7 @@ function LMSSubjectInner() {
                         <Route path="assignment" element={<Assignment setActiveMenu={setActiveMenu} />} />
                         <Route path="assignment/:id" element={<AssignmentDetail />} />
 
-                        {/* ✅ 게시판: 목록 / 글쓰기 / 상세 */}
+                        {/* 게시판: 목록 / 글쓰기 / 상세 */}
                         <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
                         <Route path="board/write" element={<BoardWrite setActiveMenu={setActiveMenu} />} />
                         <Route path="board/:postId" element={<BoardDetail setActiveMenu={setActiveMenu} />} />
@@ -216,7 +232,7 @@ function LMSSubjectInner() {
 
                         <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 
-                        <Route path="study/members" element={<StudyMembers />}  />
+                        <Route path="study/members" element={<StudyMembers />} />
                         <Route path="study/leave" element={<StudyLeave />} />
 
                         <Route path="mypage" element={<RoomMyPage />} />
@@ -229,22 +245,22 @@ function LMSSubjectInner() {
                 </main>
             </div>
 
-            {/* 🔥 브라우저 PIP용 숨겨진 video (스트림 동기화용) */}
+            {/* 브라우저 PIP용 숨겨진 video */}
             <HiddenPipVideo videoRef={pipVideoRef} />
 
-            {/* MeetingPortal: 브라우저 PIP/커스텀 PIP 모두에서 렌더링 (RTCPeerConnection 유지) */}
+            {/* MeetingPortal: 브라우저 PIP/커스텀 PIP 모두에서 렌더링 */}
             <MeetingPortalHidden
                 show={(isPipMode || isBrowserPipMode) && !!roomId && !location.pathname.includes("/MeetingRoom/")}
             />
 
             {/* 커스텀 PIP (브라우저 PIP가 아닐 때만 표시) */}
-            {customPipData && !isBrowserPipMode && (
+            {customPipData && !isBrowserPipMode && !pipClosing && (
                 <FloatingPip
                     stream={customPipData.stream}
                     peerName={customPipData.peerName}
                     onReturn={handlePipReturn}
                     onLeave={handlePipLeave}
-                    onStreamInvalid={updateCustomPipData} // 🔥 추가: 스트림 무효 시 업데이트
+                    onStreamInvalid={updateCustomPipData} // 스트림 무효 시 업데이트
                 />
             )}
 

@@ -1573,11 +1573,51 @@ body {
 }
 
 .video-tile.speaking {
-  box-shadow: 0 0 0 2px var(--success-color);
+  /* speaking 효과는 box-shadow를 건드리지 않고(=선택 타일 초록 테두리 유지),
+     내부(inset) 링을 pseudo-element로 깜빡이게 한다 */
+  --speaking-blue: rgba(155, 206, 238, 1);
 }
 
 .video-tile.main.speaking {
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.6);
+  --speaking-blue: rgba(155, 206, 238, 1);
+}
+
+/* ✅ 파스텔톤 파란 speaking 링은 항상 존재(=class 제거 시 자연스럽게 fade-out) */
+.video-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--speaking-blue, rgba(155, 206, 238, 1));
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+  will-change: opacity;
+}
+
+/* 말할 때만 깜빡 + 보이기 */
+.video-tile.speaking::after {
+  opacity: 0.25;
+  animation: speakingBlueBlink 0.9s ease-in-out infinite;
+}
+
+/* 하단 스트립: (나) 제외한 상대방 타일은 speaking 링을 조금 더 두껍게 */
+.bottom-strip .video-tile:not(.me).speaking::after {
+  box-shadow: inset 0 0 0 3px var(--speaking-blue, rgba(155, 206, 238, 1));
+}
+
+/* 메인 타일은 조금 더 두껍게(원하면 조절 가능) */
+.video-tile.main.speaking::after {
+  box-shadow: inset 0 0 0 3px var(--speaking-blue, rgba(155, 206, 238, 1));
+}
+
+@keyframes speakingBlueBlink {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-tile.speaking::after { animation: none; }
 }
 
 .video-stream-mock {
@@ -1749,7 +1789,7 @@ body {
     justify-content: center;
     background-color: #1a1a1a; /* 살짝 어두운 배경 */
     color: #e5e5e5;
-    z-index: 10;
+    z-index: 5; /* 🔥 필터 준비중 스피너(canvas)가 보이도록 z-index 낮춤 */
     position: absolute;
     top: 0;
     left: 0;
