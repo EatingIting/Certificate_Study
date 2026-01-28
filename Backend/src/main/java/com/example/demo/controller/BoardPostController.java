@@ -63,10 +63,10 @@ public class BoardPostController {
     // 작성(Post만): /api/board/posts
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody BoardPostCreateRequest req, Authentication authentication) {
-        String userId = authentication.getName();
+        String email = authentication.getName();
 
-        BoardPostVO post = BoardConverter.toPostVO(req, userId);
-        long postId = boardPostService.createPost(post);
+        BoardPostVO post = BoardConverter.toPostVO(req, email);
+        long postId = boardPostService.createPost(post, email);
 
         return ResponseEntity.ok(Map.of("postId", postId));
     }
@@ -76,10 +76,10 @@ public class BoardPostController {
     public ResponseEntity<?> update(@PathVariable long postId,
                                     @Valid @RequestBody BoardPostUpdateRequest req,
                                     Authentication authentication) {
-        String userId = authentication.getName();
+        String email = authentication.getName();
 
-        BoardPostVO post = BoardConverter.toPostVO(postId, req, userId);
-        boardPostService.updatePost(post);
+        BoardPostVO post = BoardConverter.toPostVO(postId, req, email);
+        boardPostService.updatePost(post, email);
 
         return ResponseEntity.ok().build();
     }
@@ -87,8 +87,8 @@ public class BoardPostController {
     // 삭제(soft): /api/board/posts/{postId}
     @DeleteMapping("/{postId}")
     public ResponseEntity<?> delete(@PathVariable long postId, Authentication authentication) {
-        String userId = authentication.getName();
-        boardPostService.deletePost(postId, userId);
+        String email = authentication.getName();
+        boardPostService.deletePost(postId, email);
         return ResponseEntity.ok().build();
     }
 
@@ -97,13 +97,13 @@ public class BoardPostController {
     public ResponseEntity<?> pinned(@PathVariable long postId,
                                     @RequestBody Map<String, Object> body,
                                     Authentication authentication) {
-        String userId = authentication.getName();
+        String email = authentication.getName();
 
         boolean pinned = false;
         Object v = body.get("pinned");
         if (v instanceof Boolean) pinned = (Boolean) v;
 
-        boardPostService.setPinned(postId, userId, pinned);
+        boardPostService.setPinned(postId, email, pinned);
         return ResponseEntity.ok().build();
     }
 }

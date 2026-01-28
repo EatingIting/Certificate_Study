@@ -41,23 +41,23 @@ public class BoardDetailServiceImpl implements BoardDetailService {
 
     @Override
     @Transactional
-    public long createPostWithAttachments(BoardPostDetailVO detail) {
+    public long createPostWithAttachments(BoardPostDetailVO detail, String email) {
         if (detail == null || detail.getPost() == null) {
             throw new IllegalArgumentException("게시글 정보가 없습니다.");
         }
-        long postId = boardPostService.createPost(detail.getPost());
+        long postId = boardPostService.createPost(detail.getPost(), email);
         boardAttachmentService.addAll(postId, detail.getAttachments());
         return postId;
     }
 
     @Override
     @Transactional
-    public void updatePostAndReplaceAttachments(BoardPostDetailVO detail) {
+    public void updatePostAndReplaceAttachments(BoardPostDetailVO detail, String email) {
         if (detail == null || detail.getPost() == null || detail.getPost().getPostId() == null) {
             throw new IllegalArgumentException("게시글 정보가 올바르지 않습니다.");
         }
         long postId = detail.getPost().getPostId();
-        boardPostService.updatePost(detail.getPost());
+        boardPostService.updatePost(detail.getPost(), email);
         boardAttachmentService.replaceAll(postId, detail.getAttachments());
     }
 }

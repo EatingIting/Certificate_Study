@@ -8,9 +8,9 @@ public interface BoardCommentService {
 
     List<BoardCommentVO> getByPostId(long postId);
 
-    long addComment(BoardCommentVO comment);
+    long addComment(BoardCommentVO comment, String email);
 
-    void updateComment(long commentId, String userId, String content);
+    void updateComment(long commentId, String email, String content);
 
-    void deleteComment(long commentId, String userId);
+    void deleteComment(long commentId, String email);
 }

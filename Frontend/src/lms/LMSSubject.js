@@ -14,7 +14,7 @@ import AssignmentDetail from "./assignment/AssignmentDetail";
 import Board from "./board/Board";
 import BoardWrite from "./board/BoardWrite";
 import BoardDetail from "./board/BoardDetail";
-// import BoardEdit from "./board/BoardEdit"; // 나중에 필요하면
+import BoardEdit from "./board/BoardEdit";
 
 import Calendar from "./calendar/Calendar";
 import StudyMembers from "./study-members/StudyMembers"
@@ -228,7 +228,7 @@ function LMSSubjectInner() {
                         <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
                         <Route path="board/write" element={<BoardWrite setActiveMenu={setActiveMenu} />} />
                         <Route path="board/:postId" element={<BoardDetail setActiveMenu={setActiveMenu} />} />
-                        {/* <Route path="board/:postId/edit" element={<BoardEdit setActiveMenu={setActiveMenu} />} /> */}
+                        <Route path="board/:postId/edit" element={<BoardEdit setActiveMenu={setActiveMenu} />} />
 
                         <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 

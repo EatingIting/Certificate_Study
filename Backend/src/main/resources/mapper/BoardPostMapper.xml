@@ -91,7 +91,8 @@
         SET
             category = #{category},
             title    = #{title},
-            content  = #{content}
+            content  = #{content},
+            is_pinned = #{isPinned}
         WHERE post_id = #{postId}
           AND user_id = #{userId}
           AND deleted_at IS NULL

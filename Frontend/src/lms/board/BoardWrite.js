@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import "./Board.css";
+import { BoardApi } from "./BoardApi";
 
 function BoardWrite() {
     let navigate = useNavigate();
     let [sp] = useSearchParams();
+    let { subjectId } = useParams();
+    let roomId = subjectId;
 
-    // 목록에서 넘어온 카테고리 쿼리(?)가 있으면 기본값으로 사용
     let queryCategory = sp.get("category"); // "공지" | "일반" | "질문" | "자료" | null
 
-    let allowedCategories = useMemo(() => {
-        return ["공지", "일반", "질문", "자료"];
-    }, []);
+    let allowedCategories = useMemo(() => ["공지", "일반", "질문", "자료"], []);
 
     let initialCategory = useMemo(() => {
         if (queryCategory && allowedCategories.includes(queryCategory)) return queryCategory;
@@ -21,20 +21,28 @@ function BoardWrite() {
     let [category, setCategory] = useState(initialCategory);
     let [title, setTitle] = useState("");
     let [content, setContent] = useState("");
+    let [submitting, setSubmitting] = useState(false);
+    let [error, setError] = useState("");
 
-    // 첨부파일
+    // 공지일 때만 고정 여부 선택
+    let [isPinned, setIsPinned] = useState(false);
+
+    // 첨부파일 UI는 유지하되, 현재는 전송하지 않음
     let fileInputRef = useRef(null);
-    let [files, setFiles] = useState([]); // File[]
+    let [files, setFiles] = useState([]);
 
-    // queryCategory가 바뀌면(직접 URL 바꾸거나) category도 동기화
     useEffect(() => {
-        setCategory(initialCategory);
+        setCategory(initialCategory === "공지");
     }, [initialCategory]);
 
-    let titleMax = 200; // DB가 VARCHAR(200)였으니 프론트도 맞춤
+    useEffect(() => {
+        if (category !== "공지") setIsPinned(false);
+    }, [category]);
+
+    let titleMax = 200;
     let contentMax = 5000;
     let maxFiles = 5;
-    let maxEachBytes = 10 * 1024 * 1024; // 10MB
+    let maxEachBytes = 10 * 1024 * 1024;
 
     let isValid = title.trim().length > 0 && content.trim().length > 0;
 
@@ -42,18 +50,11 @@ function BoardWrite() {
         let picked = Array.from(e.target.files || []);
         if (picked.length === 0) return;
 
-        // 개수 제한
         let next = [...files, ...picked];
-        if (next.length > maxFiles) {
-            next = next.slice(0, maxFiles);
-        }
-
-        // 용량 제한(초과 파일은 제외)
+        if (next.length > maxFiles) next = next.slice(0, maxFiles);
         next = next.filter((f) => f.size <= maxEachBytes);
 
         setFiles(next);
-
-        // 같은 파일 다시 선택 가능하도록 input value 초기화
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
@@ -66,10 +67,7 @@ function BoardWrite() {
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
-    let goList = () => {
-        // board/write 의 상위가 board 라우트이므로 .. 로 가면 /lms/:subjectId/board
-        navigate("..");
-    };
+    let goList = () => navigate(`/lms/${subjectId}/board`);
 
     let formatBytes = (bytes) => {
         if (bytes < 1024) return `${bytes} B`;
@@ -79,33 +77,46 @@ function BoardWrite() {
         return `${mb.toFixed(1)} MB`;
     };
 
+    let categoryToCode = (label) => {
+        if (label === "공지") return "NOTICE";
+        if (label === "일반") return "GENERAL";
+        if (label === "질문") return "QNA";
+        if (label === "자료") return "RESOURCE";
+        return "GENERAL";
+    };
+
     let submit = async (e) => {
         e.preventDefault();
-        if (!isValid) return;
+        if (!isValid || !roomId) return;
 
-        // ✅ 백엔드 연동 전: 여기 payload 형태만 먼저 잡아둠
-        // 나중에 MyBatis + 컨트롤러에서 multipart/form-data로 받으면 됨.
-        let payload = {
-            category: category,
-            title: title.trim(),
-            content: content.trim(),
-            files: files, // File[]
-        };
+        try {
+            setSubmitting(true);
+            setError("");
 
-        console.log("[BoardWrite submit payload]", payload);
+            // ✅ 공지일 때만 isPinned를 사용, 그 외는 무조건 false
+            let finalPinned = category === "공지" ? !!isPinned : false;
 
-        // TODO(백엔드 붙일 때):
-        // let form = new FormData();
-        // form.append("category", category);
-        // form.append("title", title.trim());
-        // form.append("content", content.trim());
-        // files.forEach((f) => form.append("files", f));
-        // await axios.post(`/api/rooms/${roomId}/board/posts`, form, {
-        //   headers: { "Content-Type": "multipart/form-data" },
-        // });
+            let res = await BoardApi.createPost({
+                roomId,
+                category: categoryToCode(category),
+                title: title.trim(),
+                content: content.trim(),
+                isPinned: finalPinned,
+            });
 
-        // 일단은 “등록된 것처럼” 목록으로 이동
-        goList();
+            let postId = res?.postId;
+            if (!postId) {
+                // 서버 응답이 예상과 다를 때
+                goList();
+                return;
+            }
+
+            navigate(`/lms/${subjectId}/board/${postId}`);
+        } catch (e2) {
+            setError(e2?.message || "작성 실패");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -113,7 +124,7 @@ function BoardWrite() {
             <div className="bd-head">
                 <div>
                     <h2 className="bd-title">글쓰기</h2>
-                    <p className="bd-sub">카테고리/제목/내용/첨부파일을 입력해 게시글을 작성하세요.</p>
+                    <p className="bd-sub">카테고리/제목/내용을 입력해 게시글을 작성하세요.</p>
                 </div>
 
                 <div className="bd-actions">
@@ -125,7 +136,8 @@ function BoardWrite() {
 
             <div className="bd-card">
                 <form className="bd-form" onSubmit={submit}>
-                    {/* 카테고리 */}
+                    {error && <div className="bd-sub">{error}</div>}
+
                     <div className="bd-row">
                         <label className="bd-label" htmlFor="bw-category">
                             카테고리
@@ -135,12 +147,14 @@ function BoardWrite() {
                             className="bd-select"
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
+                            disabled={submitting}
                         >
                             <option value="공지">공지</option>
                             <option value="일반">일반</option>
                             <option value="질문">질문</option>
                             <option value="자료">자료</option>
                         </select>
+
                         {queryCategory && (
                             <div className="bd-hint">
                                 현재 목록 카테고리: <b>{queryCategory}</b> (기본값으로 반영됨)
@@ -148,7 +162,28 @@ function BoardWrite() {
                         )}
                     </div>
 
-                    {/* 제목 */}
+                    {/* ✅ 공지일 때만 고정 체크박스 노출 */}
+                    {category === "공지" && (
+                        <div className="bd-row">
+                            <label className="bd-label" htmlFor="bw-pinned">
+                                상단 고정
+                            </label>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <input
+                                    id="bw-pinned"
+                                    type="checkbox"
+                                    checked={isPinned}
+                                    onChange={(e) => setIsPinned(e.target.checked)}
+                                    disabled={submitting}
+                                />
+                                <span className="bd-hint" style={{ margin: 0 }}>
+                                    체크하면 공지 글이 목록 상단에 고정돼요.
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="bd-row">
                         <label className="bd-label" htmlFor="bw-title">
                             제목
@@ -160,13 +195,13 @@ function BoardWrite() {
                             onChange={(e) => setTitle(e.target.value)}
                             placeholder="제목을 입력하세요"
                             maxLength={titleMax}
+                            disabled={submitting}
                         />
                         <div className="bd-hint">
                             {title.length}/{titleMax}
                         </div>
                     </div>
 
-                    {/* 내용 */}
                     <div className="bd-row">
                         <label className="bd-label" htmlFor="bw-content">
                             내용
@@ -179,16 +214,16 @@ function BoardWrite() {
                             placeholder="내용을 입력하세요"
                             rows={10}
                             maxLength={contentMax}
+                            disabled={submitting}
                         />
                         <div className="bd-hint">
                             {content.length}/{contentMax}
                         </div>
                     </div>
 
-                    {/* 첨부파일 */}
                     <div className="bd-row">
                         <label className="bd-label" htmlFor="bw-files">
-                            첨부파일 (최대 {maxFiles}개, 파일당 10MB 이하)
+                            첨부파일 (현재는 저장만 가능 / 업로드 연동은 다음 단계)
                         </label>
 
                         <div className="bd-filebar">
@@ -199,14 +234,10 @@ function BoardWrite() {
                                 type="file"
                                 multiple
                                 onChange={onPickFiles}
+                                disabled={submitting}
                             />
 
-                            <button
-                                type="button"
-                                className="bd-btn-ghost"
-                                onClick={clearFiles}
-                                disabled={files.length === 0}
-                            >
+                            <button type="button" className="bd-btn-ghost" onClick={clearFiles} disabled={files.length === 0 || submitting}>
                                 첨부 초기화
                             </button>
                         </div>
@@ -223,6 +254,7 @@ function BoardWrite() {
                                             onClick={() => removeFileAt(idx)}
                                             aria-label="첨부파일 삭제"
                                             title="삭제"
+                                            disabled={submitting}
                                         >
                                             ✕
                                         </button>
@@ -234,17 +266,16 @@ function BoardWrite() {
                         )}
 
                         <div className="bd-hint">
-                            * 10MB 초과 파일은 자동으로 제외됩니다. * 최대 개수 초과 시 앞에서부터 {maxFiles}개만
-                            유지됩니다.
+                            * 다음 단계에서 “파일 업로드 API(S3/서버 저장)” 또는 “URL 첨부 메타 저장”으로 맞춰서 연동할 수 있어.
                         </div>
                     </div>
 
                     <div className="bd-actions" style={{ justifyContent: "flex-end" }}>
-                        <button type="button" className="bd-btn-ghost" onClick={goList}>
+                        <button type="button" className="bd-btn-ghost" onClick={goList} disabled={submitting}>
                             취소
                         </button>
-                        <button type="submit" className="bd-btn" disabled={!isValid}>
-                            등록
+                        <button type="submit" className="bd-btn" disabled={!isValid || submitting}>
+                            {submitting ? "등록 중..." : "등록"}
                         </button>
                     </div>
                 </form>

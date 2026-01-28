@@ -6,7 +6,7 @@ public interface BoardDetailService {
 
     BoardPostDetailVO getDetail(long postId, boolean incView);
 
-    long createPostWithAttachments(BoardPostDetailVO detail);
+    long createPostWithAttachments(BoardPostDetailVO detail, String email);
 
-    void updatePostAndReplaceAttachments(BoardPostDetailVO detail);
+    void updatePostAndReplaceAttachments(BoardPostDetailVO detail, String email);
 }
