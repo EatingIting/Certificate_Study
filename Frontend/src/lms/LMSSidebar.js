@@ -160,7 +160,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
     const navigateWithPip = async (path) => {
       if (isInMeeting) {
-        await requestPipIfPossible();
+        await requestPipIfMeeting();
       }
       navigate(path);
     };
