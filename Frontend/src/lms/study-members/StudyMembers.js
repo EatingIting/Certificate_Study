@@ -1,25 +1,26 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import api from "../../api/api";
 import "./StudyMembers.css";
 
 function StudyMembers() {
     let navigate = useNavigate();
-    let { subjectId } = useParams();
+    let { subjectId } = useParams(); // = roomId 로 사용
 
-    // ✅ (임시) 현재 로그인 유저 역할 (백엔드 붙이면 교체)
-    let myRole = "OWNER"; // "OWNER" | "MEMBER"
-    let isOwner = myRole === "OWNER";
-
-    // ✅ (임시) 이미 승인 완료된 스터디룸 멤버 목록
-    let [members, setMembers] = useState([
-        { id: 1, name: "홍길동", email: "hong@test.com", role: "OWNER" },
-        { id: 2, name: "김철수", email: "chul@test.com", role: "MEMBER" },
-        { id: 3, name: "이영희", email: "young@test.com", role: "MEMBER" },
-        { id: 4, name: "박민수", email: "minsu@test.com", role: "MEMBER" },
-    ]);
-
+    // ✅ 서버에서 받아올 상태
+    let [myRole, setMyRole] = useState(""); // "OWNER" | "MEMBER"
+    let [members, setMembers] = useState([]);
     let [query, setQuery] = useState("");
     let [toast, setToast] = useState("");
+    let [loading, setLoading] = useState(false);
+    let [guardMsg, setGuardMsg] = useState("");
+
+    let isOwner = myRole === "OWNER";
+
+    // ✅ 안정성: 언마운트/요청 레이스/토스트 타이머 방지
+    let isMountedRef = useRef(false);
+    let requestSeqRef = useRef(0);
+    let toastTimerRef = useRef(null);
 
     let filtered = useMemo(() => {
         let q = query.trim().toLowerCase();
@@ -34,12 +35,63 @@ function StudyMembers() {
 
     let showToast = (msg) => {
         setToast(msg);
-        window.setTimeout(() => setToast(""), 1500);
+
+        if (toastTimerRef.current) {
+            clearTimeout(toastTimerRef.current);
+        }
+
+        toastTimerRef.current = window.setTimeout(() => {
+            if (isMountedRef.current) setToast("");
+        }, 1500);
     };
 
     let confirmText = (msg) => window.confirm(msg);
 
-    let promoteToOwner = (memberId) => {
+    // ✅ 목록 조회
+    let fetchMembers = async () => {
+        let seq = ++requestSeqRef.current;
+
+        setLoading(true);
+        setGuardMsg("");
+
+        try {
+            // baseURL = http://localhost:8080/api
+            // => 여기서는 /rooms/... 만 적어야 함
+            let res = await api.get(`/rooms/${subjectId}/participants`);
+
+            if (!isMountedRef.current) return;
+            if (seq !== requestSeqRef.current) return;
+
+            let data = res.data || {};
+            setMyRole(data.myRole || "");
+            setMembers(Array.isArray(data.members) ? data.members : []);
+        } catch (err) {
+            if (!isMountedRef.current) return;
+            if (seq !== requestSeqRef.current) return;
+
+            let status = err?.response?.status;
+
+            if (status === 403) {
+                setMyRole("MEMBER");
+                setMembers([]);
+                setGuardMsg("방장만 접근할 수 있는 페이지입니다.");
+            } else if (status === 401) {
+                setGuardMsg("로그인이 필요합니다. 다시 로그인해주세요.");
+            } else if (status === 404) {
+                setGuardMsg("스터디룸을 찾을 수 없습니다.");
+            } else {
+                setGuardMsg("멤버 목록을 불러오지 못했습니다.");
+            }
+        } finally {
+            if (!isMountedRef.current) return;
+            if (seq !== requestSeqRef.current) return;
+
+            setLoading(false);
+        }
+    };
+
+    // ✅ 방장 위임
+    let promoteToOwner = async (memberId) => {
         if (!isOwner) return;
 
         let target = members.find((m) => m.id === memberId);
@@ -51,18 +103,21 @@ function StudyMembers() {
         );
         if (!ok) return;
 
-        setMembers((prev) => {
-            return prev.map((m) => {
-                if (m.role === "OWNER") return { ...m, role: "MEMBER" };
-                if (m.id === memberId) return { ...m, role: "OWNER" };
-                return m;
+        try {
+            await api.patch(`/rooms/${subjectId}/participants/owner`, {
+                targetUserId: memberId,
             });
-        });
 
-        showToast("방장 권한을 위임했어요.");
+            showToast("방장 권한을 위임했어요.");
+            await fetchMembers();
+        } catch (err) {
+            let msg = err?.response?.data?.message;
+            showToast(msg || "방장 위임에 실패했어요.");
+        }
     };
 
-    let kickMember = (memberId) => {
+    // ✅ 내보내기(강퇴)
+    let kickMember = async (memberId) => {
         if (!isOwner) return;
 
         let target = members.find((m) => m.id === memberId);
@@ -76,9 +131,35 @@ function StudyMembers() {
         let ok = confirmText(`정말 "${target.name}"님을 스터디룸에서 내보낼까요?`);
         if (!ok) return;
 
-        setMembers((prev) => prev.filter((m) => m.id !== memberId));
-        showToast("스터디원을 내보냈어요.");
+        try {
+            // axios.delete는 body를 config.data로 넣음
+            await api.delete(`/rooms/${subjectId}/participants`, {
+                data: { targetUserId: memberId },
+            });
+
+            showToast("스터디원을 내보냈어요.");
+            await fetchMembers();
+        } catch (err) {
+            let msg = err?.response?.data?.message;
+            showToast(msg || "내보내기에 실패했어요.");
+        }
     };
+
+    // ✅ 최초 로딩
+    useEffect(() => {
+        isMountedRef.current = true;
+        fetchMembers();
+
+        return () => {
+            isMountedRef.current = false;
+
+            if (toastTimerRef.current) {
+                clearTimeout(toastTimerRef.current);
+                toastTimerRef.current = null;
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subjectId]);
 
     return (
         <div className="page smPage">
@@ -100,9 +181,14 @@ function StudyMembers() {
                 </p>
             </div>
 
-            {!isOwner && <div className="smGuard">방장만 접근할 수 있는 페이지입니다.</div>}
+            {/* 로딩 */}
+            {loading && <div className="smGuard">불러오는 중...</div>}
 
-            {isOwner && (
+            {/* 비방장/에러 가드 */}
+            {!loading && guardMsg && <div className="smGuard">{guardMsg}</div>}
+
+            {/* 방장만 */}
+            {!loading && !guardMsg && isOwner && (
                 <div className="card smCard">
                     <div className="smCardHead">
                         <div className="smCardTitle">
@@ -142,9 +228,13 @@ function StudyMembers() {
                                     <div className="smEmail">{m.email}</div>
 
                                     <div>
-                    <span className={`smRoleBadge ${isOwnerRow ? "owner" : "member"}`}>
-                      {isOwnerRow ? "OWNER" : "MEMBER"}
-                    </span>
+                                        <span
+                                            className={`smRoleBadge ${
+                                                isOwnerRow ? "owner" : "member"
+                                            }`}
+                                        >
+                                            {isOwnerRow ? "OWNER" : "MEMBER"}
+                                        </span>
                                     </div>
 
                                     <div className="smActionsCol">
@@ -171,10 +261,6 @@ function StudyMembers() {
                                 </div>
                             );
                         })}
-                    </div>
-
-                    <div className="smFootNote">
-                        ⚠️ 방장 위임/내보내기는 백엔드에서도 반드시 권한 체크(403)로 막아야 합니다.
                     </div>
                 </div>
             )}

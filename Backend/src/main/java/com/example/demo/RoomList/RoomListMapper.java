@@ -12,4 +12,6 @@ public interface RoomListMapper {
     int closeExpiredRooms();
 
     int closeFullRooms();
+
+    void deleteRoom(String roomId);
 }

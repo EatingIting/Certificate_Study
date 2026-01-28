@@ -38,3 +38,6 @@ out/
 
 ### keystore.p12 ###
 **/src/main/resources/keystore.p12
+
+### env ###
+.env

@@ -21,6 +21,7 @@
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+
 }
 
 /* 이미지 */
@@ -35,7 +36,7 @@
     padding: 16px;
 }
 
-.card-title {
+.lms-card-title {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 6px;
@@ -69,3 +70,71 @@
 .enter-btn:hover {
     background-color: #86b883;
 }
+.card-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+/* 기준 */
+.dropdown-wrapper {
+    position: relative;
+}
+
+/* ⋮ 버튼 */
+.more-btn {
+    opacity: 0.8;              /* ← 완전 숨기지 말 것 */
+    visibility: visible;
+    pointer-events: auto;
+
+    background: none;
+    border: none;
+    font-size: 18px;
+    line-height: 1;
+    padding: 4px 6px;
+    cursor: pointer;
+    color: #374151;
+
+    transition: opacity 0.15s ease;
+}
+
+
+.class-card,
+.card-body {
+    overflow: visible;
+}
+.class-card:hover .more-btn {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* 드롭다운 */
+.dropdown-menu {
+    position: absolute;
+    top: 24px;
+    right: 0;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    overflow: hidden;
+    z-index: 100;
+}
+
+/* 메뉴 아이템 */
+.dropdown-menu div {
+    padding: 10px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.dropdown-menu div:hover {
+    background: #f3f4f6;
+}
+
+.dropdown-menu .exit {
+    color: #ef4444;
+}
+

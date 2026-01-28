@@ -8,7 +8,7 @@ const MyApplications = () => {
 
   // 로그인 체크
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
+    const token = sessionStorage.getItem("accessToken");
     if (!token) {
       alert("로그인이 필요한 페이지입니다.");
       navigate("/auth");
@@ -23,7 +23,6 @@ const MyApplications = () => {
   // 로딩 상태
   const [loading, setLoading] = useState(false);
 
-  // ✅ 신청 목록 불러오기 함수 (재사용 가능)
   const fetchApplications = async (signal) => {
     try {
       setLoading(true);
@@ -51,7 +50,6 @@ const MyApplications = () => {
     }
   };
 
-  // ⭐ 탭 변경 시 목록 불러오기
   useEffect(() => {
     const controller = new AbortController();
 
@@ -60,19 +58,16 @@ const MyApplications = () => {
     return () => controller.abort();
   }, [tab]);
 
-  // 상세 토글
   const toggleDetail = (joinId) => {
     setOpenApplicationId((prev) => (prev === joinId ? null : joinId));
   };
 
-  // ✅ 승인 버튼
   const handleApprove = async (joinId) => {
     try {
       await api.post(`/applications/${joinId}/approve`);
 
       alert("승인 되었습니다.");
 
-      // ✅ 승인 후 목록 재조회 (정원 꽉 차면 자동 거절된 신청도 사라짐)
       fetchApplications();
 
       setOpenApplicationId(null);
@@ -82,14 +77,12 @@ const MyApplications = () => {
     }
   };
 
-  // ✅ 거절 버튼
   const handleReject = async (joinId) => {
     try {
       await api.post(`/applications/${joinId}/reject`);
 
       alert("거절 되었습니다.");
 
-      // ✅ 거절 후 목록 재조회
       fetchApplications();
 
       setOpenApplicationId(null);

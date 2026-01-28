@@ -70,10 +70,26 @@
     box-shadow: 0 5px 25px rgba(0,0,0,0.15);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
     z-index: 9990;
     animation: slideUp 0.3s ease;
     border: 1px solid rgba(0,0,0,0.05);
+
+    overflow: hidden;
+
+    /* 1. 기본 크기 (처음 켰을 때 크기) */
+    width: 360px;
+    height: 600px;
+
+    /* 2. 크기 조절 활성화 (핵심 ⭐) */
+    resize: both;        /* 가로, 세로 모두 조절 가능 */
+    
+    /* 3. 최소 크기 제한 (지금 크기보다 작아지지 않게) */
+    min-width: 360px;
+    min-height: 600px;
+
+    /* 4. 최대 크기 제한 (화면 밖으로 나가지 않게 안전장치) */
+    max-width: 90vw;     /* 화면 너비의 90%까지만 */
+    max-height: 90vh;    /* 화면 높이의 90%까지만 */
 }
 
 @keyframes slideUp {
@@ -208,7 +224,6 @@
     transition: background-color 0.3s;
 }
 
-/* AI 모드일 때 배경색 미세 변경 (아주 연한 푸른빛) */
 .tc-body.ai-mode {
     background-color: #fcfcff;
 }
@@ -216,11 +231,14 @@
 .tc-body::-webkit-scrollbar { width: 6px; }
 .tc-body::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 3px; }
 
+/* 🟢 메시지 행 (말풍선 너비 조절 핵심) */
 .tc-msg-row {
     display: flex;
     align-items: flex-end;
     gap: 10px;
-    max-width: 85%;
+    
+    /* 👇 여기를 85% -> 90%로 늘리면 더 시원해집니다 */
+    max-width: 90%; 
 }
 
 .tc-msg-row.me {
@@ -243,7 +261,6 @@
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
-/* AI 프로필 아이콘 (진한 초록) */
 .tc-profile.ai-profile {
     background-color: #7ab377;
     color: white;
@@ -257,15 +274,20 @@
 }
 .me .tc-name { margin-right: 5px; }
 
-/* 말풍선 공통 */
+/* 🟢 말풍선 공통 (텍스트 가독성 핵심) */
 .tc-bubble {
     padding: 12px 16px;
     border-radius: 18px;
     font-size: 14px;
-    line-height: 1.5;
-    word-break: break-word;
+    line-height: 1.6;  /* 1.5 -> 1.6으로 살짝 늘리면 읽기 더 편함 */
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     position: relative;
+
+    /* 👇 긴 단어 줄바꿈 (사용자님이 추가하신 것, 잘하셨습니다!) */
+    word-break: break-word; 
+    
+    /* 👇 [필수 추가] AI 줄바꿈/띄어쓰기 인식하게 해줌 */
+    white-space: pre-wrap; 
 }
 
 .tc-bubble.other {
@@ -280,7 +302,7 @@
     border-bottom-right-radius: 4px;
 }
 
-/* AI 답변 말풍선 (초록색 테두리 포인트) */
+/* AI 답변 말풍선 */
 .tc-bubble.ai-bubble {
     background-color: white;
     color: #333;

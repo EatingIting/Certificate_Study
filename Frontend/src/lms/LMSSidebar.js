@@ -2,6 +2,7 @@ import "./LMSSidebar.css";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useState, useCallback, useEffect } from "react";
 import { useMeeting } from "../webrtc/MeetingContext";
+import api from "../api/api";
 
 const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuProp }) => {
     const navigate = useNavigate();
@@ -32,7 +33,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         let path = location.pathname;
         let search = location.search || "";
         let sp = new URLSearchParams(search);
-        let last = path.split("/").filter(Boolean).pop(); // dashboard, calendar, board ...
+        let last = path.split("/").filter(Boolean).pop();
 
         let nextActive = activeMenu;
 
@@ -63,8 +64,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             else nextActive = "board/all";
         }
 
-        // ✅ 스터디 관리 라우트 동기화 (추가)
-        // 예: /lms/1/study/members, /lms/1/study/leave
+        // 스터디 관리 라우트 동기화
         if (last === "members") nextActive = "study/members";
         if (last === "leave") nextActive = "study/leave";
 
@@ -108,45 +108,50 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        // 🔥 video 요소 찾기 (여러 방식 시도)
-        let video = document.querySelector('video[data-main-video="main"]');
-        
-        // isMain이 없으면 srcObject가 있는 첫 번째 video 찾기
-        if (!video) {
-            console.log('[LMSSidebar] data-main-video="main" 없음, 다른 video 요소 찾기');
-            const allVideos = document.querySelectorAll('video');
-            console.log(`[LMSSidebar] 발견된 video 요소 수: ${allVideos.length}`);
-            
-            for (const v of allVideos) {
-                if (v.srcObject && v.srcObject.getVideoTracks().length > 0) {
-                    video = v;
-                    console.log('[LMSSidebar] srcObject 있는 video 발견');
-                    break;
-                }
+        // 🔥 video 요소 찾기 (화면공유 우선 → 메인 → 그 외)
+        const isValidVideoEl = (v) => {
+            const s = v?.srcObject;
+            const tracks = s?.getVideoTracks?.() ?? [];
+            return !!v && !!s && tracks.length > 0 && tracks.some((t) => t.readyState === "live");
+        };
+
+        const pickFirstValid = (selector) => {
+            const nodes = document.querySelectorAll(selector);
+            for (const v of nodes) {
+                if (isValidVideoEl(v)) return v;
             }
-        }
+            return null;
+        };
+
+        const video =
+            pickFirstValid('.video-tile:not(.me) video.video-element.screen') ||
+            pickFirstValid('video[data-main-video="main"]') ||
+            pickFirstValid('.video-tile:not(.me) video.video-element') ||
+            pickFirstValid('.video-tile video.video-element');
         
         if (!video) {
             console.log('[LMSSidebar] 유효한 video 요소를 찾을 수 없음');
             return;
         }
 
-        // 🔥 브라우저 PiP 요청 (MeetingContext에서 처리)
         const stream = video.srcObject;
         if (!stream) {
             console.log('[LMSSidebar] video.srcObject가 없음');
             return;
         }
         
-        const peerName = video.closest(".video-tile")?.querySelector(".stream-label")?.textContent || "참가자";
+        const tile = video.closest(".video-tile");
+        const peerId = tile?.dataset?.peerId || video?.dataset?.peerId || "";
+        const peerName =
+            tile?.dataset?.peerName ||
+            video?.dataset?.peerName ||
+            tile?.querySelector(".stream-label")?.textContent ||
+            "참가자";
         
-        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName });
-        await requestBrowserPip(video, stream, peerName);
+        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName, peerId });
+        await requestBrowserPip(video, stream, peerName, peerId);
     }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
-    // ===============================
-    // 메인메뉴 클릭: 이동 X, 펼침/접힘만
-    // ===============================
     const toggleParent = (key) => {
       setOpenKeys((prev) =>
         prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
@@ -160,13 +165,9 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
       navigate(path);
     };
 
-    // ===============================
-    // 하위 메뉴 클릭: 이동 + PiP
-    // ===============================
     const goChild = async (parentKey, activeKey, path) => {
         setActiveMenu(activeKey);
 
-        // 하위 눌렀을 때 해당 그룹은 열린 상태 유지
         setOpenKeys((prev) =>
             prev.includes(parentKey) ? prev : [...prev, parentKey]
         );
@@ -177,15 +178,12 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             detail: { path: `/lms/${subjectId}/${path}` }
         }));
 
-        // 🔥 회의 중이면 자동 PiP (user gesture 컨텍스트에서 직접 호출)
+        // 회의 중이면 자동 PiP
         await requestPipIfMeeting();
 
         navigate(`/lms/${subjectId}/${path}`);
     };
 
-    // ===============================
-    // 대시보드 단일 메뉴 이동
-    // ===============================
     const goDashboard = async () => {
         setActiveMenu("dashboard");
 
@@ -194,7 +192,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             detail: { path: `/lms/${subjectId}/dashboard` }
         }));
 
-        // 🔥 회의 중이면 자동 PiP (user gesture 컨텍스트에서 직접 호출)
+        // 회의 중이면 자동 PiP
         await requestPipIfMeeting();
 
         navigate(`/lms/${subjectId}/dashboard`);
@@ -556,13 +554,77 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             <button
                 className="meeting-btn"
                 type="button"
-                onClick={() => {
-                    const roomId =
-                        Date.now().toString(36) +
-                        Math.random().toString(36).substring(2, 6);
+                onClick={async () => {
+                    if (!subjectId) {
+                        console.error("[LMSSidebar] subjectId가 없습니다.");
+                        return;
+                    }
+
+                    console.log("[LMSSidebar] 화상채팅방 입장 요청: subjectId=", subjectId);
+
+                    // 최대 3번 재시도
+                    const maxRetries = 3;
+                    let roomId = null;
+
+                    for (let retryCount = 0; retryCount < maxRetries && !roomId; retryCount++) {
+                        try {
+                            const currentAttempt = retryCount + 1;
+                            console.log(`[LMSSidebar] roomId 조회 시도 ${currentAttempt}/${maxRetries}`);
+                            // 백엔드에서 subjectId 기반으로 roomId를 받아옴
+                            const response = await api.get(`/meeting-rooms/room-id/${subjectId}`);
+                            roomId = response.data?.roomId;
+
+                            if (roomId) {
+                                console.log("[LMSSidebar] roomId 조회 성공:", roomId);
+                                sessionStorage.setItem("lms.activeRoomId", roomId);
+                                sessionStorage.setItem("pip.roomId", roomId);
+                                sessionStorage.setItem("pip.subjectId", subjectId);
+                                break;
+                            } else {
+                                console.warn("[LMSSidebar] roomId가 응답에 없습니다.");
+                            }
+                        } catch (error) {
+                            const currentAttempt = retryCount + 1;
+                            const errorMessage = error.response?.data?.message || error.message || "알 수 없는 오류";
+                            const statusCode = error.response?.status;
+                            
+                            console.error(`[LMSSidebar] roomId 조회 실패 (시도 ${currentAttempt}/${maxRetries}):`, {
+                                status: statusCode,
+                                message: errorMessage,
+                                error: error
+                            });
+                            
+                            if (currentAttempt < maxRetries) {
+                                // 재시도 전 대기
+                                await new Promise(resolve => setTimeout(resolve, 1000 * currentAttempt));
+                            }
+                        }
+                    }
+
+                    if (!roomId) {
+                        console.error("[LMSSidebar] roomId 조회 실패: 최대 재시도 횟수 초과. API 서버를 확인하세요.");
+                        console.error("[LMSSidebar] 디버깅 정보:", {
+                            subjectId,
+                            apiBaseURL: api.defaults.baseURL,
+                            token: sessionStorage.getItem("accessToken") ? "있음" : "없음",
+                            protocol: window.location.protocol,
+                            hostname: window.location.hostname
+                        });
+                        
+                        const errorMsg = "화상채팅방 입장에 실패했습니다.\n\n" +
+                            "가능한 원인:\n" +
+                            "1. 네트워크 연결 문제\n" +
+                            "2. 서버 응답 지연\n" +
+                            "3. 브라우저 보안 설정\n\n" +
+                            "해결 방법:\n" +
+                            "- 페이지를 새로고침하세요\n" +
+                            "- 브라우저 캐시를 삭제하세요\n" +
+                            "- 다른 브라우저로 시도해보세요";
+                        alert(errorMsg);
+                        return;
+                    }
 
                     window.dispatchEvent(new Event("meeting:request-pip"));
-
                     navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
                 }}
             >
