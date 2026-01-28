@@ -1200,6 +1200,9 @@ function MeetingPage({ portalRoomId }) {
     const roomSyncRequestedRef = useRef(false); // room:sync 요청 중복 방지
     const screenProducerRef = useRef(null);
     const cameraWasOnBeforeScreenShareRef = useRef(false); // 화면공유 시작 전 카메라 상태
+    const faceEmojiWasOnBeforeScreenShareRef = useRef(null); // 화면공유 시작 전 이모지 필터 상태 (null: 없음, 문자열: 이모지)
+    const faceModeWasOnBeforeScreenShareRef = useRef(null); // 화면공유 시작 전 필터 모드
+    const bgRemoveWasOnBeforeScreenShareRef = useRef(false); // 화면공유 시작 전 배경제거 상태
     const isStoppingScreenShareRef = useRef(false); // stopScreenShare 중복 실행 방지
     const [isScreenSharing, setIsScreenSharing] = useState(false);
 
@@ -2168,17 +2171,22 @@ function MeetingPage({ portalRoomId }) {
         } catch { }
     }, [faceEmoji, faceMode, bgRemove]);
 
-    // 🔥 F5 새로고침 후 저장된 이모지/배경제거 상태 자동 복원
+    // 🔥 F5 새로고침 후 저장된 마이크/카메라/이모지/배경제거 상태 자동 복원
     const hasMountedRef = useRef(false);
     useEffect(() => {
         if (hasMountedRef.current) return;
         hasMountedRef.current = true;
 
+        // 저장된 마이크/카메라 상태 확인
+        const savedMicOn = micOnRef.current;
+        const savedCamOn = camOnRef.current;
+        
         // 저장된 이모지 또는 배경제거 상태가 있으면 자동 적용
         const savedEmoji = faceEmojiRef.current;
         const savedBgRemove = bgRemoveRef.current;
 
-        if (savedEmoji || savedBgRemove) {
+        // 마이크나 카메라가 켜져있었거나, 이모지/배경제거가 활성화되어 있었으면 복원
+        if (savedMicOn || savedCamOn || savedEmoji || savedBgRemove) {
             // 🔥 빠른 canvas 파이프라인 시작 - sendTransport 준비되면 바로 시작
             const checkAndApply = async () => {
                 // sendTransport가 준비될 때까지 대기 (최대 10초, 50ms 간격으로 빠르게 체크)
@@ -2188,14 +2196,46 @@ function MeetingPage({ portalRoomId }) {
                     waited += 50;
                 }
 
-                // sendTransport가 준비되면 바로 turnOnCamera 호출
-                if (sendTransportRef.current && !sendTransportRef.current.closed && !canvasPipelineActiveRef.current) {
-                    console.log("[Auto-restore] sendTransport ready, applying saved emoji/bgRemove:", { savedEmoji, savedBgRemove, waited });
+                // sendTransport가 준비되면 상태 복원
+                if (sendTransportRef.current && !sendTransportRef.current.closed) {
+                    console.log("[Auto-restore] sendTransport ready, restoring saved state:", { 
+                        savedMicOn, 
+                        savedCamOn, 
+                        savedEmoji, 
+                        savedBgRemove, 
+                        waited 
+                    });
+                    
                     try {
-                        pipelineWarmupUntilRef.current = Date.now() + 1000;
-                        await turnOnCamera();
+                        // 카메라가 켜져있었을 때만 카메라 켜기 (이모지/배경제거가 있어도 카메라가 꺼져있었으면 켜지 않음)
+                        if (savedCamOn) {
+                            if (!canvasPipelineActiveRef.current) {
+                                pipelineWarmupUntilRef.current = Date.now() + 1000;
+                                await turnOnCamera();
+                            }
+                        }
+                        // 카메라가 켜져있고 이모지/배경제거가 활성화되어 있으면 이모지 필터 적용
+                        // (카메라가 이미 켜져있거나 방금 켠 경우)
+                        else if ((savedCamOn || canvasPipelineActiveRef.current) && (savedEmoji || savedBgRemove)) {
+                            // 카메라가 이미 켜져있으면 이모지 필터만 적용
+                            if (canvasPipelineActiveRef.current && savedEmoji) {
+                                await startFaceEmojiFilter(savedEmoji);
+                            }
+                        }
+                        
+                        // 마이크가 켜져있었으면 마이크 켜기 (ensureLocalProducers에서 처리되지만 명시적으로 확인)
+                        if (savedMicOn) {
+                            // ensureLocalProducers가 이미 호출되었을 수 있으므로, 트랙 enabled 상태만 확인
+                            const audioTracks = localStreamRef.current?.getAudioTracks() ?? [];
+                            audioTracks.forEach(t => {
+                                if (t.enabled !== savedMicOn) {
+                                    t.enabled = savedMicOn;
+                                    console.log("[Auto-restore] Audio track enabled set to", savedMicOn);
+                                }
+                            });
+                        }
                     } catch (e) {
-                        console.warn("[Auto-restore] turnOnCamera failed:", e);
+                        console.warn("[Auto-restore] Failed to restore state:", e);
                     }
                 }
             };
@@ -3656,7 +3696,19 @@ function MeetingPage({ portalRoomId }) {
             cameraWasOnBeforeScreenShareRef.current = camOnRef.current;
             // console.log(`[startScreenShare] Saving camera state: ${cameraWasOnBeforeScreenShareRef.current}`);
 
-            // 1) 카메라 producer 닫기 (원격에 camera producerClosed 나가게)
+            // ⭐ 화면공유 시작 전 이모지 필터 상태 저장
+            faceEmojiWasOnBeforeScreenShareRef.current = faceEmojiRef.current || null;
+            faceModeWasOnBeforeScreenShareRef.current = faceModeRef.current || null;
+            bgRemoveWasOnBeforeScreenShareRef.current = bgRemoveRef.current || false;
+            // console.log(`[startScreenShare] Saving emoji filter state: emoji=${faceEmojiWasOnBeforeScreenShareRef.current}, mode=${faceModeWasOnBeforeScreenShareRef.current}, bgRemove=${bgRemoveWasOnBeforeScreenShareRef.current}`);
+
+            // 1) 이모지 필터가 활성화되어 있으면 중지
+            if (faceFilterActiveRef.current || faceEmojiRef.current || faceModeRef.current === "emoji") {
+                console.log("[startScreenShare] Stopping emoji filter before screen share");
+                await stopFaceEmojiFilter();
+            }
+
+            // 2) 카메라 producer 닫기 (원격에 camera producerClosed 나가게)
             const cameraProducer = producersRef.current.get("camera");
             if (cameraProducer) {
                 const id = cameraProducer.id;
@@ -3665,7 +3717,7 @@ function MeetingPage({ portalRoomId }) {
                 safeSfuSend({ action: "closeProducer", data: { producerId: id } });
             }
 
-            // 2) 로컬 카메라 "비디오 트랙만" 정지 (오디오는 유지)
+            // 3) 로컬 카메라 "비디오 트랙만" 정지 (오디오는 유지)
             if (localStreamRef.current) {
                 localStreamRef.current.getVideoTracks().forEach((t) => {
                     try { t.stop(); } catch { }
@@ -3685,7 +3737,7 @@ function MeetingPage({ portalRoomId }) {
                 setLocalStream(audioOnly);
             }
 
-            // 3) 화면공유 producer 생성
+            // 4) 화면공유 producer 생성
             const screenProducer = await sendTransportRef.current.produce({
                 track,
                 appData: { type: "screen" },
@@ -3789,6 +3841,9 @@ function MeetingPage({ portalRoomId }) {
                         })
                     );
                 }
+
+                // 카메라가 꺼져있으면 이모지 필터 복원하지 않음 (상태는 저장해두고 나중에 카메라 켤 때 적용)
+                // 저장된 상태 초기화는 카메라가 켜져있을 때만 수행
                 return;
             }
 
@@ -3798,51 +3853,111 @@ function MeetingPage({ portalRoomId }) {
                 return;
             }
 
-            // (중요) 기존 로컬 오디오 트랙은 살리고, 비디오만 새로 받음
-            const prevAudioTracks = localStreamRef.current
-                ? localStreamRef.current.getAudioTracks().filter(t => t.readyState !== "ended")
-                : [];
+            // 화면공유 시작 전 이모지 필터 상태 확인
+            const savedEmoji = faceEmojiWasOnBeforeScreenShareRef.current;
+            const savedMode = faceModeWasOnBeforeScreenShareRef.current;
+            const savedBgRemove = bgRemoveWasOnBeforeScreenShareRef.current;
+            const hadEmojiFilter = savedEmoji || savedMode === "emoji" || savedBgRemove;
 
-            const newStream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: false,
-            });
+            // 이모지 필터가 활성화되어 있었으면 turnOnCamera를 사용 (canvas pipeline)
+            // 이렇게 하면 아바타가 잠깐 뜨는 문제를 방지하고 이모지 필터가 바로 적용됨
+            if (hadEmojiFilter) {
+                console.log(`[stopScreenShare] Restoring camera with emoji filter: emoji=${savedEmoji}, mode=${savedMode}, bgRemove=${savedBgRemove}`);
+                
+                // 상태 먼저 복원 (turnOnCamera가 이 상태를 확인함)
+                if (savedEmoji) {
+                    faceEmojiRef.current = savedEmoji;
+                    setFaceEmoji(savedEmoji);
+                }
+                if (savedMode) {
+                    faceModeRef.current = savedMode;
+                    setFaceMode(savedMode);
+                }
+                if (savedBgRemove !== undefined) {
+                    bgRemoveRef.current = savedBgRemove;
+                    setBgRemove(savedBgRemove);
+                }
 
-            const newVideoTrack = newStream.getVideoTracks()[0];
-            if (!newVideoTrack || newVideoTrack.readyState !== "live") {
-                console.warn("[restore] camera track not live, skip produce");
-                return;
-            }
+                // turnOnCamera 호출 (canvas pipeline 사용, 이모지 필터 자동 적용)
+                try {
+                    await turnOnCamera();
+                    console.log("[stopScreenShare] Camera restored with emoji filter via turnOnCamera");
+                } catch (e) {
+                    console.error("[stopScreenShare] Failed to restore camera with turnOnCamera:", e);
+                    // 실패 시 fallback으로 일반 카메라 복구
+                    const prevAudioTracks = localStreamRef.current
+                        ? localStreamRef.current.getAudioTracks().filter(t => t.readyState !== "ended")
+                        : [];
+                    const newStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false,
+                    });
+                    const newVideoTrack = newStream.getVideoTracks()[0];
+                    if (newVideoTrack && newVideoTrack.readyState === "live") {
+                        await produceCamera(newVideoTrack, true);
+                        const merged = new MediaStream([...prevAudioTracks, newVideoTrack]);
+                        localStreamRef.current = merged;
+                        setLocalStream(merged);
+                        setParticipants((prev) =>
+                            prev.map((p) =>
+                                p.isMe ? { ...p, cameraOff: false, stream: merged } : p
+                            )
+                        );
+                    }
+                }
+            } else {
+                // 이모지 필터가 없었으면 기존 방식으로 복구 (produceCamera 사용)
+                // (중요) 기존 로컬 오디오 트랙은 살리고, 비디오만 새로 받음
+                const prevAudioTracks = localStreamRef.current
+                    ? localStreamRef.current.getAudioTracks().filter(t => t.readyState !== "ended")
+                    : [];
 
-            // console.log(`[restore] Restoring camera because it was ON before screen share`);
+                const newStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false,
+                });
 
-            // 4) camera producer 생성 (enabled=true 명시)
-            await produceCamera(newVideoTrack, true);
+                const newVideoTrack = newStream.getVideoTracks()[0];
+                if (!newVideoTrack || newVideoTrack.readyState !== "live") {
+                    console.warn("[restore] camera track not live, skip produce");
+                    return;
+                }
 
-            // 5) 로컬 스트림 갱신 (오디오 + 새 비디오 병합)
-            const merged = new MediaStream([...prevAudioTracks, newVideoTrack]);
-            localStreamRef.current = merged;
-            setLocalStream(merged);
+                // console.log(`[restore] Restoring camera because it was ON before screen share`);
 
-            // console.log(`[restore] camera restored, cameraOff = false`);
+                // 4) camera producer 생성 (enabled=true 명시)
+                await produceCamera(newVideoTrack, true);
 
-            // 6) 내 UI 상태: 카메라 ON으로 반영
-            setParticipants((prev) =>
-                prev.map((p) =>
-                    p.isMe ? { ...p, cameraOff: false, stream: merged } : p
-                )
-            );
+                // 5) 로컬 스트림 갱신 (오디오 + 새 비디오 병합)
+                const merged = new MediaStream([...prevAudioTracks, newVideoTrack]);
+                localStreamRef.current = merged;
+                setLocalStream(merged);
 
-            // 7) Spring 서버에도 카메라 ON 상태 전파
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(
-                    JSON.stringify({
-                        type: "USER_STATE_CHANGE",
-                        userId,
-                        changes: { cameraOff: false },
-                    })
+                // console.log(`[restore] camera restored, cameraOff = false`);
+
+                // 6) 내 UI 상태: 카메라 ON으로 반영
+                setParticipants((prev) =>
+                    prev.map((p) =>
+                        p.isMe ? { ...p, cameraOff: false, stream: merged } : p
+                    )
                 );
+
+                // 7) Spring 서버에도 카메라 ON 상태 전파
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(
+                        JSON.stringify({
+                            type: "USER_STATE_CHANGE",
+                            userId,
+                            changes: { cameraOff: false },
+                        })
+                    );
+                }
             }
+
+            // 저장된 상태 초기화
+            faceEmojiWasOnBeforeScreenShareRef.current = null;
+            faceModeWasOnBeforeScreenShareRef.current = null;
+            bgRemoveWasOnBeforeScreenShareRef.current = false;
         } catch (e) {
             console.error("[stopScreenShare] failed:", e);
         } finally {
@@ -4167,7 +4282,7 @@ function MeetingPage({ portalRoomId }) {
     const toggleMic = async () => {
         const newVal = !micOn;
         setMicOn(newVal);
-        localStorage.setItem("micOn", newVal);
+        localStorage.setItem("micOn", String(newVal)); // 문자열로 저장
 
         console.log(`[toggleMic] newVal=${newVal}, micOn=${micOn}`);
 
@@ -4296,11 +4411,18 @@ function MeetingPage({ portalRoomId }) {
 
             if (needFilters && camOnRef.current) {
                 // 🔥 이모지/배경제거 설정이 있고 카메라가 켜져있으면 바로 canvas 파이프라인 시작
-                console.log("[Init] Filter settings detected, starting canvas pipeline directly");
-                try {
-                    await turnOnCamera();
-                } catch (e) {
-                    console.warn("[Init] turnOnCamera failed, fallback to startLocalMedia:", e);
+                // 카메라가 꺼져있으면 이모지/배경제거가 있어도 카메라를 켜지 않음
+                if (camOnRef.current) {
+                    console.log("[Init] Filter settings detected and camera is ON, starting canvas pipeline directly");
+                    try {
+                        await turnOnCamera();
+                    } catch (e) {
+                        console.warn("[Init] turnOnCamera failed, fallback to startLocalMedia:", e);
+                        await startLocalMedia();
+                    }
+                } else {
+                    // 카메라가 꺼져있으면 필터 설정이 있어도 카메라를 켜지 않음
+                    console.log("[Init] Filter settings detected but camera is OFF, starting local media without camera");
                     await startLocalMedia();
                 }
             } else {
