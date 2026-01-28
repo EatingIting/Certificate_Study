@@ -451,6 +451,18 @@ body {
   border-radius: 0;
 }
 
+/* 전체화면 모드에서 화면공유 비디오 타일은 overflow visible */
+.main-stage:fullscreen .video-tile.screen-share,
+.main-stage:fullscreen .video-tile:has(.video-element.screen) {
+  overflow: visible;
+}
+
+.main-stage:fullscreen .video-content.screen-share,
+.main-stage:fullscreen .video-content:has(.video-element.screen) {
+  overflow: visible;
+  background: #000;
+}
+
 /* 전체화면 모드의 참가자 스트립 */
 .fullscreen-strip {
   display: none;
@@ -892,9 +904,17 @@ body {
     aspect-ratio: auto;
 }
 
-.main-stage.screen-share-active .video-tile {
+.main-stage.screen-share-active .video-tile,
+.main-stage.screen-share-active .video-tile.screen-share {
     border: 3px solid #ff4d4d;
     box-shadow: 0 0 15px rgba(255, 77, 77, 0.3);
+    overflow: visible;
+}
+
+.main-stage.screen-share-active .video-content,
+.main-stage.screen-share-active .video-content.screen-share {
+    overflow: visible;
+    background: #000;
 }
 
 .main-stage .video-tile {
@@ -1559,6 +1579,18 @@ body {
   border-radius: 0;
 }
 
+/* 그리드 전체화면 모드에서 화면공유 비디오 타일은 overflow visible */
+.grid-fullscreen-video-area .video-tile.screen-share,
+.grid-fullscreen-video-area .video-tile:has(.video-element.screen) {
+  overflow: visible;
+}
+
+.grid-fullscreen-video-area .video-content.screen-share,
+.grid-fullscreen-video-area .video-content:has(.video-element.screen) {
+  overflow: visible;
+  background: #000;
+}
+
 /* 사이드바 열릴 때 비디오 영역이 왼쪽으로 밀림 - 반드시 기본 스타일 뒤에 위치 */
 .grid-fullscreen-container.active.sidebar-open .grid-fullscreen-video-area {
   right: 360px !important;
@@ -1638,6 +1670,13 @@ body {
   box-shadow: none;
 }
 
+/* 화면공유 비디오 타일은 overflow를 visible로 하여 전체 화면이 보이도록 */
+.video-tile.screen-share,
+.video-tile:has(.video-element.screen),
+.video-tile-wrapper:has(.video-element.screen) .video-tile {
+  overflow: visible;
+}
+
 .video-content {
   position: relative;
   width: 100%;
@@ -1645,6 +1684,13 @@ body {
   background: #f3f4f6;
   overflow: hidden;
   border-radius: 1rem;
+}
+
+/* 화면공유 비디오 콘텐츠도 overflow를 visible로 */
+.video-content.screen-share,
+.video-content:has(.video-element.screen) {
+  overflow: visible;
+  background: #000;
 }
 
 .video-tile.main {
@@ -1736,6 +1782,8 @@ body {
 }
 
 .video-element.screen {
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     background-color: black;
 }

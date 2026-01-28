@@ -619,7 +619,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     return (
         <div
-            className={`video-tile ${isMain ? "main" : ""} ${safeUser.isMe ? "me" : ""} ${isSpeaking ? "speaking" : ""}`}
+            className={`video-tile ${isMain ? "main" : ""} ${safeUser.isMe ? "me" : ""} ${isSpeaking ? "speaking" : ""} ${isScreen ? "screen-share" : ""}`}
             data-peer-id={peerId}
             data-peer-name={peerName}
         >
@@ -633,7 +633,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                 </div>
             )}
 
-            <div className="video-content" style={{ position: "relative" }}>
+            <div className={`video-content ${isScreen ? "screen-share" : ""}`} style={{ position: "relative" }}>
                 {/* 🔥 숨겨진 video element (canvas 렌더링 소스) */}
                 <video
                     ref={setVideoRef}
@@ -660,7 +660,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                     style={{
                         width: "100%",
                         height: "100%",
-                        objectFit: "cover",
+                        objectFit: isScreen ? "contain" : "cover",
                         display: "block",
                         // 🔥 shouldRenderVideo가 false여도 canvas를 DOM에 유지 (마지막 프레임 보존)
                         // opacity로 숨기면 canvas 내용이 유지됨
