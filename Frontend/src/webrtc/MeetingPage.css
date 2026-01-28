@@ -254,6 +254,12 @@ body {
   position: relative;
 }
 
+/* 하단 스트립이 테두리가 잘리지 않도록 meet-stage의 하단 패딩 조정 */
+.layout-speaker .meet-stage,
+.subject-content .meet-stage {
+  padding-bottom: calc(6rem + 16px); /* 하단 스트립의 상단 패딩만큼 추가하여 테두리가 잘리지 않도록 */
+}
+
 /* LMS 내부에서 meet-stage */
 .subject-content .meet-stage {
   overflow: visible;
@@ -936,8 +942,9 @@ body {
   scroll-behavior: smooth;
   cursor: grab;
 
-  padding: 12px 2px 1rem 2px; /* 하단 패딩을 늘려서 아이콘이 보이도록 */
+  padding: 16px 2px 1rem 2px; /* 상단 패딩을 늘려서 테두리가 잘리지 않도록 */
   margin-top: 1rem;
+  position: relative; /* 위치 고정을 위해 */
 
   /* 스크롤바 숨기기 (필요할 때만 표시) */
   scrollbar-width: thin;
@@ -984,6 +991,8 @@ body {
   max-height: 160px;
   overflow: visible; /* 아이콘이 잘리지 않도록 */
   padding-bottom: 20px; /* 하단 패딩 추가하여 아이콘이 보이도록 */
+  position: relative; /* 위치 고정을 위해 */
+  margin-top: 0; /* 상단 마진 제거하여 위치 고정 */
 }
 
 .bottom-strip .video-tile {
@@ -1022,6 +1031,11 @@ body {
 
 .strip-item:hover {
   transform: translateY(-5px); /* 마우스 호버시 살짝 위로 */
+}
+
+/* 하단 스트립의 strip-item은 호버 시에도 테두리가 잘리지 않도록 */
+.bottom-strip .strip-item:hover {
+  transform: translateY(-3px); /* 호버 시 이동 거리를 줄여서 테두리가 잘리지 않도록 */
 }
 
 .strip-item .video-content {
