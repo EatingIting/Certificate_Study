@@ -1465,11 +1465,13 @@ function MeetingPage({ portalRoomId }) {
         localStorage.setItem("camOn", "false");
 
         // ⭐ 서버에 상태 전파
-        wsRef.current?.send(JSON.stringify({
-            type: "USER_STATE_CHANGE",
-            userId,
-            changes: { cameraOff: true },
-        }));
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: "USER_STATE_CHANGE",
+                userId,
+                changes: { cameraOff: true },
+            }));
+        }
 
         console.log("[turnOffCamera] camera and canvas pipeline stopped");
     };
@@ -1940,11 +1942,13 @@ function MeetingPage({ portalRoomId }) {
         // ⭐ 서버에 상태 전파 (비동기로 처리하여 블로킹 방지)
         // setTimeout으로 비동기 처리하여 카메라 켜기 지연 방지
         setTimeout(() => {
-            wsRef.current?.send(JSON.stringify({
-                type: "USER_STATE_CHANGE",
-                userId,
-                changes: { cameraOff: false },
-            }));
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: "USER_STATE_CHANGE",
+                    userId,
+                    changes: { cameraOff: false },
+                }));
+            }
         }, 0);
 
         console.log("[turnOnCamera] canvas pipeline started immediately, emoji mode:", faceModeRef.current, "emoji:", faceEmojiRef.current);
@@ -1966,12 +1970,14 @@ function MeetingPage({ portalRoomId }) {
         e.preventDefault();
         if (!chatDraft.trim()) return;
 
-        wsRef.current?.send(
-            JSON.stringify({
-                type: "CHAT",
-                message: chatDraft,
-            })
-        );
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+                JSON.stringify({
+                    type: "CHAT",
+                    message: chatDraft,
+                })
+            );
+        }
 
         setChatDraft("");
     };
@@ -3280,6 +3286,50 @@ function MeetingPage({ portalRoomId }) {
         });
     }, [micPermission, camPermission]);
 
+    // 🔥 아바타를 canvas로 그려서 MediaStream으로 변환하는 함수
+    const createAvatarStream = useCallback((name, width = 640, height = 480) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        // 배경색 (회색)
+        ctx.fillStyle = "#f3f4f6";
+        ctx.fillRect(0, 0, width, height);
+
+        // 아바타 원 그리기
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = Math.min(width, height) * 0.3;
+
+        // 그라데이션 배경
+        const gradient = ctx.createLinearGradient(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+        gradient.addColorStop(0, "#eef6f0");
+        gradient.addColorStop(1, "#cfe8d6");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 텍스트 (이니셜)
+        const initials = (name || "?")
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .substring(0, 2)
+            .toUpperCase();
+        
+        ctx.fillStyle = "#97c793";
+        ctx.font = `bold ${radius * 0.8}px Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(initials, centerX, centerY);
+
+        // Canvas를 MediaStream으로 변환
+        const stream = canvas.captureStream(30); // 30fps
+        return stream;
+    }, []);
+
     const handleBrowserPip = useCallback(async () => {
         const video = mainVideoRef.current;
         if (!video) return;
@@ -3287,33 +3337,44 @@ function MeetingPage({ portalRoomId }) {
         if (!document.pictureInPictureElement) {
             // 🔥 PiP 요청 전에 video에 스트림이 있는지 확인하고 강제 설정
             const currentMainStream = mainStreamRef.current;
-            if (!video.srcObject && currentMainStream) {
-                console.log("[PiP] video.srcObject가 없어서 강제 설정");
-                video.srcObject = currentMainStream;
+            let stream = video.srcObject || currentMainStream;
+            const peerName = mainUser?.name || "참가자";
+            const peerId = mainUser?.id != null ? String(mainUser.id) : "";
+
+            // 🔥 스트림이 없거나 비디오 트랙이 없으면 아바타 스트림 생성
+            if (!stream || !stream.getVideoTracks().some(t => t.readyState === "live")) {
+                console.log("[PiP] 비디오 스트림이 없어서 아바타 스트림 생성");
+                stream = createAvatarStream(peerName);
+                video.srcObject = stream;
                 video.muted = true;
                 try {
                     await video.play();
                 } catch { }
-            }
+            } else {
+                if (!video.srcObject && currentMainStream) {
+                    console.log("[PiP] video.srcObject가 없어서 강제 설정");
+                    video.srcObject = currentMainStream;
+                    video.muted = true;
+                    try {
+                        await video.play();
+                    } catch { }
+                }
 
-            // video가 재생 가능한 상태인지 확인
-            if (video.readyState < 2) {
-                // 메타데이터 로드 대기
-                await new Promise((resolve) => {
-                    const onCanPlay = () => {
-                        video.removeEventListener("canplay", onCanPlay);
-                        resolve();
-                    };
-                    video.addEventListener("canplay", onCanPlay);
-                    setTimeout(resolve, 1000); // 1초 타임아웃
-                });
+                // video가 재생 가능한 상태인지 확인
+                if (video.readyState < 2) {
+                    // 메타데이터 로드 대기
+                    await new Promise((resolve) => {
+                        const onCanPlay = () => {
+                            video.removeEventListener("canplay", onCanPlay);
+                            resolve();
+                        };
+                        video.addEventListener("canplay", onCanPlay);
+                        setTimeout(resolve, 1000); // 1초 타임아웃
+                    });
+                }
             }
 
             // 🔥 MeetingContext의 requestBrowserPip 사용 (polling 포함)
-            const stream = video.srcObject;
-            const peerName = mainUser?.name || "참가자";
-            const peerId = mainUser?.id != null ? String(mainUser.id) : "";
-
             console.log("[PiP] MeetingContext requestBrowserPip 호출");
             const success = await requestBrowserPip(video, stream, peerName, peerId);
 
@@ -3325,7 +3386,7 @@ function MeetingPage({ portalRoomId }) {
                 });
             }
         }
-    }, [requestBrowserPip, mainUser]);
+    }, [requestBrowserPip, mainUser, createAvatarStream]);
 
     // --- Local media ---
     const startLocalMedia = async () => {
@@ -4427,10 +4488,14 @@ function MeetingPage({ portalRoomId }) {
 
         console.log("[room:sync] Sending room:sync request");
         roomSyncRequestedRef.current = true;
-        sfuWs.send(JSON.stringify({
-            action: "room:sync",
-            requestId: safeUUID(),
-        }));
+        if (sfuWs && sfuWs.readyState === WebSocket.OPEN) {
+            sfuWs.send(JSON.stringify({
+                action: "room:sync",
+                requestId: safeUUID(),
+            }));
+        } else {
+            console.warn("[room:sync] SFU WebSocket not ready, skipping send");
+        }
 
         // 타임아웃 설정 (10초 후에도 응답이 없으면 재시도)
         const timeoutId = setTimeout(() => {
@@ -4613,9 +4678,11 @@ function MeetingPage({ portalRoomId }) {
             }
 
             try {
-                wsRef.current?.send(
-                    JSON.stringify({ type: "LEAVE" })
-                );
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(
+                        JSON.stringify({ type: "LEAVE" })
+                    );
+                }
             } catch { }
 
             try {
@@ -4967,30 +5034,14 @@ function MeetingPage({ portalRoomId }) {
                 }, 30000);
             };
 
-            ws.onclose = (event) => {
-                console.log(`❌ WS CLOSED: code=${event.code}, reason=${event.reason || 'none'}`);
-                
-                // 파이어폭스 특정 오류 코드 확인
-                const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
-                if (isFirefox && event.code === 1006) {
-                    console.warn("⚠️ 파이어폭스: 비정상 종료 (1006). Mixed Content 또는 인증서 문제일 수 있습니다.");
-                }
-                
+            ws.onclose = () => {
+                console.log("❌ WS CLOSED");
                 setChatConnected(false);
                 if (pingInterval) clearInterval(pingInterval); // 타이머 정리
             };
 
             ws.onerror = (error) => {
                 console.error("❌ WS ERROR", error);
-                const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
-                
-                if (isFirefox) {
-                    console.warn("⚠️ 파이어폭스에서 웹소켓 연결 실패. 다음을 확인하세요:");
-                    console.warn("1. HTTPS 환경에서는 WSS 사용 확인");
-                    console.warn("2. Self-signed 인증서 사용 시 브라우저 설정 확인");
-                    console.warn(`3. 연결 시도 URL: ${wsUrl}`);
-                }
-                
                 setChatConnected(false);
             };
 
@@ -5422,22 +5473,9 @@ function MeetingPage({ portalRoomId }) {
         }
 
         // ✅ 요청하신 형태: https ? wss : ws
-        // ✅ 개발 환경에서는 프록시 경로 사용, 프로덕션에서는 직접 연결
+        // ✅ window.location.hostname(=IP/도메인)로 4000(SFU) 직접 연결
         const protocol = getWsProtocol();
-        const isDev = process.env.NODE_ENV === 'development';
-        let sfuUrl;
-        
-        if (isDev) {
-            // 개발 환경: 프록시 경로 사용 (파이어폭스 호환성)
-            const port = window.location.port ? `:${window.location.port}` : '';
-            sfuUrl = `${protocol}://${window.location.hostname}${port}/sfu/`;
-        } else {
-            // 프로덕션: 직접 포트로 연결
-            sfuUrl = `${protocol}://${window.location.hostname}:4000/sfu/`;
-        }
-        
-        console.log(`[SFU] WebSocket 연결 시도: ${sfuUrl}`);
-        const sfuWs = new WebSocket(sfuUrl);
+        const sfuWs = new WebSocket(`${protocol}://${window.location.hostname}:4000/sfu/`);
         sfuWsRef.current = sfuWs;
 
         const drainPending = async () => {
@@ -5714,28 +5752,10 @@ function MeetingPage({ portalRoomId }) {
 
         sfuWs.onerror = (error) => {
             console.error("❌ SFU WS ERROR", error);
-            const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
-            
-            if (isFirefox) {
-                console.warn("⚠️ 파이어폭스에서 웹소켓 연결 실패. 다음을 확인하세요:");
-                console.warn("1. HTTPS 환경에서는 WSS 사용 확인");
-                console.warn("2. Self-signed 인증서 사용 시 브라우저 설정 확인");
-                console.warn("3. 개발 환경에서는 프록시 경로 사용 확인");
-                console.warn(`4. 연결 시도 URL: ${sfuUrl}`);
-            }
-            
             setRoomReconnecting(false);
         };
 
-        sfuWs.onclose = (event) => {
-            console.log(`[SFU] WebSocket Closed: code=${event.code}, reason=${event.reason || 'none'}`);
-            
-            // 파이어폭스 특정 오류 코드 확인
-            const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
-            if (isFirefox && event.code === 1006) {
-                console.warn("⚠️ 파이어폭스: 비정상 종료 (1006). Mixed Content 또는 인증서 문제일 수 있습니다.");
-            }
-            
+        sfuWs.onclose = () => {
             consumersRef.current.forEach((c) => safeClose(c));
             consumersRef.current.clear();
             producersRef.current.forEach((p) => safeClose(p));

@@ -34,6 +34,50 @@ const FloatingPip = ({
         }
     }, [position.x]);
 
+    // 🔥 아바타를 canvas로 그려서 MediaStream으로 변환하는 함수
+    const createAvatarStream = useCallback((name, width = 640, height = 480) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        // 배경색 (회색)
+        ctx.fillStyle = "#f3f4f6";
+        ctx.fillRect(0, 0, width, height);
+
+        // 아바타 원 그리기
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = Math.min(width, height) * 0.3;
+
+        // 그라데이션 배경
+        const gradient = ctx.createLinearGradient(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+        gradient.addColorStop(0, "#eef6f0");
+        gradient.addColorStop(1, "#cfe8d6");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 텍스트 (이니셜)
+        const initials = (name || "?")
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .substring(0, 2)
+            .toUpperCase();
+        
+        ctx.fillStyle = "#97c793";
+        ctx.font = `bold ${radius * 0.8}px Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(initials, centerX, centerY);
+
+        // Canvas를 MediaStream으로 변환
+        const stream = canvas.captureStream(30); // 30fps
+        return stream;
+    }, []);
+
     // 🔥 스트림 유효성 검사 함수 (enabled 체크 제거 - clone/PIP 스트림에서 false일 수 있음)
     const isStreamValid = useCallback((s) => {
         if (!s) return false;
@@ -92,24 +136,32 @@ const FloatingPip = ({
 
         console.log("[FloatingPip] 스트림 연결 시도", { stream, videoRef: videoRef.current });
 
-        if (videoRef.current && stream) {
-            const videoTracks = stream.getVideoTracks();
-            console.log("[FloatingPip] 비디오 트랙:", videoTracks.map(t => ({
-                id: t.id,
-                enabled: t.enabled,
-                readyState: t.readyState,
-                muted: t.muted
-            })));
+        if (videoRef.current) {
+            let finalStream = stream;
+            
+            // 🔥 스트림이 없거나 비디오 트랙이 없으면 아바타 스트림 생성
+            if (!finalStream || !isStreamValid(finalStream)) {
+                console.log("[FloatingPip] 비디오 스트림이 없어서 아바타 스트림 생성");
+                finalStream = createAvatarStream(peerName);
+            } else {
+                const videoTracks = finalStream.getVideoTracks();
+                console.log("[FloatingPip] 비디오 트랙:", videoTracks.map(t => ({
+                    id: t.id,
+                    enabled: t.enabled,
+                    readyState: t.readyState,
+                    muted: t.muted
+                })));
+            }
 
             // 🔥 stream을 그대로 사용 (track 교체/동기화 시 검은화면 방지)
-            videoRef.current.srcObject = stream;
-            lastValidStreamRef.current = stream;
+            videoRef.current.srcObject = finalStream;
+            lastValidStreamRef.current = finalStream;
 
             videoRef.current.play()
                 .then(() => console.log("[FloatingPip] ✅ 비디오 재생 성공"))
                 .catch((err) => console.error("[FloatingPip] ❌ 비디오 재생 실패:", err));
         }
-    }, [stream, isInitialized]);
+    }, [stream, isInitialized, peerName, isStreamValid, createAvatarStream]);
 
     // 🔥 스트림 상태 모니터링 (track이 ended되면 새 스트림 찾기)
     useEffect(() => {
