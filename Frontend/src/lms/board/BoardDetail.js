@@ -10,6 +10,9 @@ function BoardDetail() {
     let [loading, setLoading] = useState(false);
     let [error, setError] = useState("");
     let [detail, setDetail] = useState(null); // { post, comments, attachments }
+    let [newComment, setNewComment] = useState("");
+    let [comments, setComments] = useState([]);
+    let [commentSubmitting, setCommentSubmitting] = useState(false);
 
     let categoryToCode = (v) => {
         if (!v) return "";
@@ -57,6 +60,28 @@ function BoardDetail() {
         };
     }, [postId]);
 
+    useEffect(() => {
+        if (!postId) return;
+
+        let alive = true;
+
+        (async () => {
+            try {
+                let list = await BoardApi.getComments(postId);
+                if (!alive) return;
+                setComments(Array.isArray(list) ? list : []);
+            } catch (e) {
+                if (!alive) return;
+                // 댓글은 실패해도 상세는 보여줘야 해서 조용히 처리(원하면 error에 합쳐도 됨)
+                setComments([]);
+            }
+        })();
+
+        return () => {
+            alive = false;
+        };
+    }, [postId]);
+
     let onBack = () => navigate(`/lms/${subjectId}/board`); // board로
     let onEdit = () => navigate(`/lms/${subjectId}/board/${postId}/edit`);
     let onDelete = async () => {
@@ -64,6 +89,40 @@ function BoardDetail() {
         if (!ok) return;
         await BoardApi.deletePost(postId);
         onBack();
+    };
+
+    let reloadComments = async () => {
+        let list = await BoardApi.getComments(postId);
+        setComments(Array.isArray(list) ? list : []);
+    };
+
+
+    let onCreateComment = async () => {
+        let text = newComment.trim();
+        if (!text) return;
+
+        try {
+            setCommentSubmitting(true);
+            await BoardApi.createComment(postId, { content: text });
+            setNewComment("");
+            await reloadComments();
+        } catch (e) {
+            alert(e?.message || "댓글 작성 실패");
+        } finally {
+            setCommentSubmitting(false);
+        }
+    };
+
+    let onDeleteComment = async (commentId) => {
+    let ok = window.confirm("댓글을 삭제할까요?");
+        if (!ok) return;
+
+        try {
+            await BoardApi.deleteComment(commentId);
+            await reloadComments();
+        } catch (e) {
+            alert(e?.message || "댓글 삭제 실패");
+        }
     };
 
     if (loading) {
@@ -181,10 +240,48 @@ function BoardDetail() {
                     </div>
                 )}
 
-                {/* 댓글은 UI가 아직 없어서 "개수"만 표시 (원하면 바로 붙여줄게) */}
-                {Array.isArray(detail?.comments) && (
-                    <div className="bd-hint" style={{ marginTop: 10 }}>
-                        댓글 {detail.comments.length}개
+                <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                    <textarea
+                        className="bd-input"
+                        rows={3}
+                        placeholder="댓글을 입력하세요."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        style={{ flex: 1 }}
+                        disabled={commentSubmitting}
+                    />
+                    <button
+                        className="bd-btn"
+                        type="button"
+                        disabled={commentSubmitting || !newComment.trim()}
+                        onClick={onCreateComment}
+                    >
+                        등록
+                    </button>
+                </div>
+
+                {/* ✅ 댓글 UI */}
+                {Array.isArray(comments) && (
+                    <div style={{ marginTop: 16 }}>
+                        <div className="bd-label" style={{ marginBottom: 8 }}>
+                            댓글 {comments.length}개
+                        </div>
+
+                        {comments.length === 0 ? (
+                            <div className="bd-hint">댓글이 없습니다.</div>
+                        ) : (
+                            <div style={{ display: "grid", gap: 10 }}>
+                                {comments.map((c) => (
+                                    <div key={c.commentId} className="bd-card" style={{ padding: 12 }}>
+                                        <div className="bd-detail-meta" style={{ marginBottom: 6 }}>
+                                            <span>작성자: {c.userId}</span>
+                                            <span>작성일: {formatKst(c.createdAt)}</span>
+                                        </div>
+                                        <div style={{ whiteSpace: "pre-wrap" }}>{c.content}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

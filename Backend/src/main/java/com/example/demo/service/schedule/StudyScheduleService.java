@@ -13,7 +13,7 @@ public interface StudyScheduleService {
 
     Long insert(StudyScheduleCreateRequest req);
 
-    void update(Long studyScheduleId, StudyScheduleUpdateRequest req);
+    void update(Long studyScheduleId, String roomId, StudyScheduleUpdateRequest req);
 
     void delete(Long studyScheduleId, String roomId);
 }

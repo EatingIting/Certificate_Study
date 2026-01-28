@@ -59,7 +59,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Override
     @Transactional
-    public void update(Long scheduleId, ScheduleUpdateRequest req) {
+    public void update(Long scheduleId, String roomId, String userId, ScheduleUpdateRequest req) {
         LocalDate startAt = LocalDate.parse(req.getStart());
         LocalDate endAt = (req.getEnd() == null || req.getEnd().isBlank())
                 ? startAt
@@ -77,6 +77,8 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         ScheduleVO vo = ScheduleVO.builder()
                 .scheduleId(scheduleId)
+                .roomId(roomId)
+                .userId(userId)
                 .title(req.getTitle().trim())
                 .description(req.getDescription())
                 .startAt(Date.valueOf(startAt))

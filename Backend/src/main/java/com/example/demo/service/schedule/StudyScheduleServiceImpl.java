@@ -40,9 +40,10 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
 
     @Override
     @Transactional
-    public void update(Long studyScheduleId, StudyScheduleUpdateRequest req) {
+    public void update(Long studyScheduleId, String roomId, StudyScheduleUpdateRequest req) {
         StudyScheduleVO vo = StudyScheduleVO.builder()
                 .studyScheduleId(studyScheduleId)
+                .roomId(roomId)
                 .roundNum(req.getRound())
                 .studyDate(Date.valueOf(LocalDate.parse(req.getDate())))
                 .description(req.getDescription())
