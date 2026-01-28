@@ -1,6 +1,6 @@
 import {
     ChevronDown, ChevronUp, LayoutGrid, Loader2, Maximize, Minimize, MessageSquare, Mic, MicOff,
-    Monitor, MoreHorizontal, Phone, PictureInPicture2, Send, Share, Smile, Users, Video, VideoOff, X,
+    Monitor, MoreHorizontal, PanelRightClose, PanelRightOpen, Phone, PictureInPicture2, Send, Share, Smile, Users, Video, VideoOff, X,
 } from "lucide-react";
 import "pretendard/dist/web/static/pretendard.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -672,7 +672,10 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
                 {/* 카메라 꺼짐 또는 스트림 없음 - canvas 위에 겹쳐서 표시 */}
                 {!shouldRenderVideo && (
-                    <div className="camera-off-placeholder" style={{ position: "relative", zIndex: 1 }}>
+                    <div 
+                        className="camera-off-placeholder" 
+                        style={isMain ? { position: "absolute", zIndex: 1, top: "50%", left: "50%", transform: "translate(-50%, -50%)" } : { position: "relative", zIndex: 1 }}
+                    >
                         <UserAvatar name={safeUser.name} size={isMain ? "lg" : "md"} />
                         <p className="stream-label">{safeUser.name}</p>
                     </div>
@@ -792,9 +795,24 @@ function MeetingPage({ portalRoomId }) {
 
     const [layoutMode, setLayoutMode] = useState("speaker");
 
-    const [sidebarView, setSidebarView] = useState("chat");
+    // 🔥 사이드바 상태를 로컬스토리지에서 복원 (기본값: 열림)
+    const [sidebarView, setSidebarView] = useState(() => {
+        try {
+            return localStorage.getItem("meeting.sidebarView") || "chat";
+        } catch {
+            return "chat";
+        }
+    });
 
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(() => {
+        try {
+            const saved = localStorage.getItem("meeting.sidebarOpen");
+            // 저장된 값이 있으면 사용, 없으면 기본값 true (열림)
+            return saved !== null ? saved === "true" : true;
+        } catch {
+            return true; // 기본값: 열림
+        }
+    });
 
     const [micOn, setMicOn] = useState(() => {
         const saved = localStorage.getItem("micOn");
@@ -1347,6 +1365,19 @@ function MeetingPage({ portalRoomId }) {
             setSidebarOpen(true);
         }
     };
+
+    // 🔥 사이드바 토글 (열기/닫기만)
+    const toggleSidebarOpen = useCallback(() => {
+        if (sidebarOpen) {
+            setSidebarOpen(false);
+        } else {
+            // 닫혀있을 때는 기본적으로 채팅 뷰로 열기
+            if (!sidebarView) {
+                setSidebarView("chat");
+            }
+            setSidebarOpen(true);
+        }
+    }, [sidebarOpen, sidebarView]);
 
     // 🔥 초대 링크 복사
     const handleInvite = async () => {
@@ -4936,14 +4967,30 @@ function MeetingPage({ portalRoomId }) {
                 }, 30000);
             };
 
-            ws.onclose = () => {
-                console.log("❌ WS CLOSED");
+            ws.onclose = (event) => {
+                console.log(`❌ WS CLOSED: code=${event.code}, reason=${event.reason || 'none'}`);
+                
+                // 파이어폭스 특정 오류 코드 확인
+                const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+                if (isFirefox && event.code === 1006) {
+                    console.warn("⚠️ 파이어폭스: 비정상 종료 (1006). Mixed Content 또는 인증서 문제일 수 있습니다.");
+                }
+                
                 setChatConnected(false);
                 if (pingInterval) clearInterval(pingInterval); // 타이머 정리
             };
 
             ws.onerror = (error) => {
                 console.error("❌ WS ERROR", error);
+                const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+                
+                if (isFirefox) {
+                    console.warn("⚠️ 파이어폭스에서 웹소켓 연결 실패. 다음을 확인하세요:");
+                    console.warn("1. HTTPS 환경에서는 WSS 사용 확인");
+                    console.warn("2. Self-signed 인증서 사용 시 브라우저 설정 확인");
+                    console.warn(`3. 연결 시도 URL: ${wsUrl}`);
+                }
+                
                 setChatConnected(false);
             };
 
@@ -5375,9 +5422,22 @@ function MeetingPage({ portalRoomId }) {
         }
 
         // ✅ 요청하신 형태: https ? wss : ws
-        // ✅ window.location.hostname(=IP/도메인)로 4000(SFU) 직접 연결
+        // ✅ 개발 환경에서는 프록시 경로 사용, 프로덕션에서는 직접 연결
         const protocol = getWsProtocol();
-        const sfuWs = new WebSocket(`${protocol}://${window.location.hostname}:4000/sfu/`);
+        const isDev = process.env.NODE_ENV === 'development';
+        let sfuUrl;
+        
+        if (isDev) {
+            // 개발 환경: 프록시 경로 사용 (파이어폭스 호환성)
+            const port = window.location.port ? `:${window.location.port}` : '';
+            sfuUrl = `${protocol}://${window.location.hostname}${port}/sfu/`;
+        } else {
+            // 프로덕션: 직접 포트로 연결
+            sfuUrl = `${protocol}://${window.location.hostname}:4000/sfu/`;
+        }
+        
+        console.log(`[SFU] WebSocket 연결 시도: ${sfuUrl}`);
+        const sfuWs = new WebSocket(sfuUrl);
         sfuWsRef.current = sfuWs;
 
         const drainPending = async () => {
@@ -5652,7 +5712,30 @@ function MeetingPage({ portalRoomId }) {
             }
         };
 
-        sfuWs.onclose = () => {
+        sfuWs.onerror = (error) => {
+            console.error("❌ SFU WS ERROR", error);
+            const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+            
+            if (isFirefox) {
+                console.warn("⚠️ 파이어폭스에서 웹소켓 연결 실패. 다음을 확인하세요:");
+                console.warn("1. HTTPS 환경에서는 WSS 사용 확인");
+                console.warn("2. Self-signed 인증서 사용 시 브라우저 설정 확인");
+                console.warn("3. 개발 환경에서는 프록시 경로 사용 확인");
+                console.warn(`4. 연결 시도 URL: ${sfuUrl}`);
+            }
+            
+            setRoomReconnecting(false);
+        };
+
+        sfuWs.onclose = (event) => {
+            console.log(`[SFU] WebSocket Closed: code=${event.code}, reason=${event.reason || 'none'}`);
+            
+            // 파이어폭스 특정 오류 코드 확인
+            const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+            if (isFirefox && event.code === 1006) {
+                console.warn("⚠️ 파이어폭스: 비정상 종료 (1006). Mixed Content 또는 인증서 문제일 수 있습니다.");
+            }
+            
             consumersRef.current.forEach((c) => safeClose(c));
             consumersRef.current.clear();
             producersRef.current.forEach((p) => safeClose(p));
@@ -5694,10 +5777,24 @@ function MeetingPage({ portalRoomId }) {
     }, [roomId, userId]); // isPipMode를 의존성에서 제거하여 재연결 방지
 
     useEffect(() => {
+        // 로컬스토리지에 저장 (재접속/새로고침 시 복원)
+        try {
+            localStorage.setItem("meeting.sidebarOpen", String(sidebarOpen));
+        } catch (e) {
+            console.warn("[MeetingPage] localStorage 저장 실패:", e);
+        }
+        // 세션스토리지에도 저장 (호환성)
         sessionStorage.setItem("sidebarOpen", String(sidebarOpen));
     }, [sidebarOpen]);
 
     useEffect(() => {
+        // 로컬스토리지에 저장 (재접속/새로고침 시 복원)
+        try {
+            localStorage.setItem("meeting.sidebarView", sidebarView);
+        } catch (e) {
+            console.warn("[MeetingPage] localStorage 저장 실패:", e);
+        }
+        // 세션스토리지에도 저장 (호환성)
         sessionStorage.setItem("sidebarView", sidebarView);
     }, [sidebarView]);
 
@@ -6378,8 +6475,12 @@ function MeetingPage({ portalRoomId }) {
                                                     />
                                                 )}
                                                 <ButtonControl label="얼굴" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
-                                                <ButtonControl label="채팅" icon={MessageSquare} active={sidebarOpen && sidebarView === "chat"} onClick={() => toggleSidebar("chat")} />
-                                                <ButtonControl label="참여자" icon={Users} active={sidebarOpen && sidebarView === "participants"} onClick={() => toggleSidebar("participants")} />
+                                                <ButtonControl 
+                                                    label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"} 
+                                                    icon={sidebarOpen ? PanelRightClose : PanelRightOpen} 
+                                                    active={sidebarOpen} 
+                                                    onClick={toggleSidebarOpen} 
+                                                />
                                                 <div className="divider" />
                                                 <ButtonControl label="통화 종료" danger icon={Phone} onClick={handleHangup} />
                                             </div>
@@ -6558,13 +6659,19 @@ function MeetingPage({ portalRoomId }) {
                                     }} />
                             )}
                             <ButtonControl label="얼굴" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
+                            <ButtonControl 
+                                label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"} 
+                                icon={sidebarOpen ? PanelRightClose : PanelRightOpen} 
+                                active={sidebarOpen} 
+                                onClick={toggleSidebarOpen} 
+                            />
                             <div className="divider"></div>
                             <ButtonControl label="통화 종료" danger icon={Phone} onClick={handleHangup} />
                         </div>
                     </div>
                 </main>
 
-                <aside className={`meet-sidebar ${!isGridFullscreen && !isFullscreen ? "open" : ""}`}>
+                <aside className={`meet-sidebar ${sidebarOpen && !isGridFullscreen && !isFullscreen ? "open" : ""}`}>
                     <div className="sidebar-inner">
                         <div className="sidebar-header">
                             <h2 className="sidebar-title">참여자 목록</h2>
