@@ -13,7 +13,7 @@ public interface ScheduleService {
 
     Long insert(ScheduleCreateRequest req);
 
-    void update(Long scheduleId, ScheduleUpdateRequest req);
+    void update(Long scheduleId, String roomId, String userId, ScheduleUpdateRequest req);
 
     void softDelete(Long scheduleId, String roomId, String userId);
 }

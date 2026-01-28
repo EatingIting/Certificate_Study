@@ -115,4 +115,32 @@ export const BoardApi = {
             method: "DELETE",
         });
     },
+
+    /** 댓글 목록 */
+    getComments(postId) {
+        return request(`/api/board/posts/${postId}/comments`, { method: "GET" });
+    },
+
+    /** 댓글 작성 */
+    createComment(postId, { content }) {
+        return request(`/api/board/posts/${postId}/comments`, {
+            method: "POST",
+            body: JSON.stringify({ content }),
+        });
+    },
+
+    /** 댓글 수정 */
+    updateComment(commentId, { content }) {
+        return request(`/api/board/comments/${commentId}`, {
+            method: "PUT",
+            body: JSON.stringify({ content }),
+        });
+    },
+
+    /** 댓글 삭제 */
+    deleteComment(commentId) {
+        return request(`/api/board/comments/${commentId}`, {
+            method: "DELETE",
+        });
+    },
 };

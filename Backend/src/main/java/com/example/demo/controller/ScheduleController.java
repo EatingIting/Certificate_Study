@@ -24,6 +24,8 @@ public class ScheduleController {
     @PutMapping("/{scheduleId}")
     public void update(
             @PathVariable Long scheduleId,
+            @RequestParam String roomId,
+            @RequestParam String userId,
             @Valid @RequestBody ScheduleUpdateRequest req
     ) {
         scheduleService.update(scheduleId, req);
