@@ -6,11 +6,12 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.UUID;
 
 @Slf4j
 @Service
 public class MeetingRoomServiceImpl implements MeetingRoomService {
+
+    private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     @Override
     public String getRoomIdBySubjectId(String subjectId) {
@@ -20,26 +21,23 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         }
 
         try {
+            // subjectId를 기반으로 해시 생성
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(subjectId.getBytes(StandardCharsets.UTF_8));
-
-            long msb = 0;
-            long lsb = 0;
-            for (int i = 0; i < 8; i++) {
-                msb = (msb << 8) | (hash[i] & 0xff);
-            }
-            for (int i = 8; i < 16; i++) {
-                lsb = (lsb << 8) | (hash[i] & 0xff);
-            }
-
-            msb = (msb & 0xffffffffffff0fffL) | 0x4000L; // 버전 4
-            lsb = (lsb & 0x3fffffffffffffffL) | 0x8000000000000000L; // variant
-
-            UUID uuid = new UUID(msb, lsb);
-            String roomId = uuid.toString();
             
-            log.debug("[MeetingRoomServiceImpl] subjectId={} -> roomId={}", subjectId, roomId);
-            return roomId;
+            // 해시의 첫 4바이트를 사용하여 8자리 roomId 생성
+            StringBuilder roomId = new StringBuilder(8);
+            
+            // 해시값을 사용하여 일관된 roomId 생성 (같은 subjectId는 같은 roomId)
+            for (int i = 0; i < 8; i++) {
+                int index = (hash[i % hash.length] & 0xFF) % CHARACTERS.length();
+                if (index < 0) index += CHARACTERS.length();
+                roomId.append(CHARACTERS.charAt(index));
+            }
+            
+            String result = roomId.toString();
+            log.debug("[MeetingRoomServiceImpl] subjectId={} -> roomId={}", subjectId, result);
+            return result;
         } catch (NoSuchAlgorithmException e) {
             log.error("[MeetingRoomServiceImpl] SHA-256 알고리즘을 찾을 수 없습니다.", e);
             throw new RuntimeException("SHA-256 알고리즘을 찾을 수 없습니다.", e);
