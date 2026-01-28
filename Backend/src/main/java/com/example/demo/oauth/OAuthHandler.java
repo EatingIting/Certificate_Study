@@ -33,13 +33,15 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
         Boolean exists = oauthUser.getAttribute("exists");
         String provider = oauthUser.getAttribute("provider");
 
+        String frontUrl =
+                request.getScheme() + "://" + request.getServerName() + ":3000";
+
         if (exists != null && exists) {
 
             String token = jwtTokenProvider.createAccessToken(email);
 
             response.sendRedirect(
-                    "http://localhost:3000/oauth-success"
-                            + "?token=" + token
+                    frontUrl + "/oauth-success?token=" + token
             );
         }
 
@@ -51,7 +53,7 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
             );
 
             response.sendRedirect(
-                    "http://localhost:3000/signup"
+                    frontUrl + "/signup"
                             + "?email=" + encodedEmail
                             + "&provider=" + provider
             );

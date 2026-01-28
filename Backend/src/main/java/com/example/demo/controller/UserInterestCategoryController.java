@@ -17,7 +17,6 @@ public class UserInterestCategoryController {
     private final UserInterestCategoryService service;
     private final AuthMapper authMapper;
 
-    // ✅ 관심카테고리 조회
     @GetMapping
     public List<Long> getMyInterests(Authentication authentication) {
 
@@ -30,7 +29,6 @@ public class UserInterestCategoryController {
         return service.getInterestCategories(user.getUserId());
     }
 
-    // ✅ 관심카테고리 수정
     @PutMapping
     public void updateMyInterests(
             Authentication authentication,

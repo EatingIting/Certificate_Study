@@ -7,7 +7,7 @@ public class RoomJoinRequestVO {
 
     private String joinId;
     private String requestUserEmail;
-    private String ownerUserEmail;
+    private String hostUserEmail;
     private String roomId;
     private String status;
     private String applyMessage;
