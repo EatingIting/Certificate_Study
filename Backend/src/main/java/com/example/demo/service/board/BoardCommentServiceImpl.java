@@ -1,5 +1,7 @@
 package com.example.demo.service.board;
 
+import com.example.demo.auth.AuthService;
+import com.example.demo.auth.AuthVO;
 import com.example.demo.board.mapper.BoardCommentMapper;
 import com.example.demo.board.vo.BoardCommentVO;
 import org.springframework.stereotype.Service;
@@ -10,9 +12,19 @@ import java.util.List;
 public class BoardCommentServiceImpl implements BoardCommentService {
 
     private final BoardCommentMapper boardCommentMapper;
+    private final AuthService authService;
 
-    public BoardCommentServiceImpl(BoardCommentMapper boardCommentMapper) {
+    public BoardCommentServiceImpl(BoardCommentMapper boardCommentMapper, AuthService authService) {
         this.boardCommentMapper = boardCommentMapper;
+        this.authService = authService;
+    }
+
+    private String resolveUserIdByEmail(String email) {
+        AuthVO user = authService.findByEmail(email);
+        if (user == null) {
+            throw new IllegalStateException("유저를 찾을 수 없습니다. (email=" + email + ")");
+        }
+        return user.getUserId(); // ✅ UUID(36)
     }
 
     @Override
@@ -21,7 +33,10 @@ public class BoardCommentServiceImpl implements BoardCommentService {
     }
 
     @Override
-    public long addComment(BoardCommentVO comment) {
+    public long addComment(BoardCommentVO comment, String email) {
+        String userId = resolveUserIdByEmail(email);
+        comment.setUserId(userId);
+
         int inserted = boardCommentMapper.insert(comment);
         if (inserted == 0 || comment.getCommentId() == null) {
             throw new IllegalStateException("댓글 등록에 실패했습니다.");
@@ -30,7 +45,9 @@ public class BoardCommentServiceImpl implements BoardCommentService {
     }
 
     @Override
-    public void updateComment(long commentId, String userId, String content) {
+    public void updateComment(long commentId, String email, String content) {
+        String userId = resolveUserIdByEmail(email);
+
         int updated = boardCommentMapper.updateContent(commentId, userId, content);
         if (updated == 0) {
             throw new IllegalStateException("댓글 수정 불가 (작성자 아님/삭제됨/존재하지 않음)");
@@ -38,7 +55,9 @@ public class BoardCommentServiceImpl implements BoardCommentService {
     }
 
     @Override
-    public void deleteComment(long commentId, String userId) {
+    public void deleteComment(long commentId, String email) {
+        String userId = resolveUserIdByEmail(email);
+
         int updated = boardCommentMapper.softDelete(commentId, userId);
         if (updated == 0) {
             throw new IllegalStateException("댓글 삭제 불가 (작성자 아님/이미 삭제/존재하지 않음)");

@@ -16,13 +16,13 @@ public interface BoardPostService {
 
     BoardPostVO getPostById(long postId);
 
-    long createPost(BoardPostVO post);
+    long createPost(BoardPostVO post, String email);
 
-    void updatePost(BoardPostVO post);
+    void updatePost(BoardPostVO post, String email);
 
-    void deletePost(long postId, String userId);
+    void deletePost(long postId, String email);
 
-    void setPinned(long postId, String userId, boolean isPinned);
+    void setPinned(long postId, String email, boolean isPinned);
 
     void incrementViewCount(long postId);
 }

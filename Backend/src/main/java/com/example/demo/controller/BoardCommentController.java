@@ -37,10 +37,10 @@ public class BoardCommentController {
     public ResponseEntity<?> create(@PathVariable long postId,
                                     @Valid @RequestBody BoardCommentCreateRequest req,
                                     Authentication authentication) {
-        String userId = authentication.getName();
+        String email = authentication.getName();
 
-        BoardCommentVO vo = BoardConverter.toCommentVO(postId, req, userId);
-        long commentId = boardCommentService.addComment(vo);
+        BoardCommentVO vo = BoardConverter.toCommentVO(postId, req, email);
+        long commentId = boardCommentService.addComment(vo, email);
 
         return ResponseEntity.ok(Map.of("commentId", commentId));
     }
@@ -50,16 +50,16 @@ public class BoardCommentController {
     public ResponseEntity<?> update(@PathVariable long commentId,
                                     @Valid @RequestBody BoardCommentUpdateRequest req,
                                     Authentication authentication) {
-        String userId = authentication.getName();
-        boardCommentService.updateComment(commentId, userId, req.getContent());
+        String email = authentication.getName();
+        boardCommentService.updateComment(commentId, email, req.getContent());
         return ResponseEntity.ok().build();
     }
 
     // 댓글 삭제(soft): /api/board/comments/{commentId}
     @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<?> delete(@PathVariable long commentId, Authentication authentication) {
-        String userId = authentication.getName();
-        boardCommentService.deleteComment(commentId, userId);
+        String email = authentication.getName();
+        boardCommentService.deleteComment(commentId, email);
         return ResponseEntity.ok().build();
     }
 }

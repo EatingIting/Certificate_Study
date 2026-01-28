@@ -1,5 +1,8 @@
 package com.example.demo.service.board;
 
+import com.example.demo.auth.AuthService;
+import com.example.demo.auth.AuthServiceImpl;
+import com.example.demo.auth.AuthVO;
 import com.example.demo.board.mapper.BoardPostMapper;
 import com.example.demo.board.vo.BoardPostVO;
 import org.springframework.stereotype.Service;
@@ -12,9 +15,17 @@ import java.util.Map;
 public class BoardPostServiceImpl implements BoardPostService {
 
     private final BoardPostMapper boardPostMapper;
+    private final AuthService authService;
 
-    public BoardPostServiceImpl(BoardPostMapper boardPostMapper) {
+    public BoardPostServiceImpl(BoardPostMapper boardPostMapper, AuthService authService) {
         this.boardPostMapper = boardPostMapper;
+        this.authService = authService;
+    }
+
+    private String getUserIdByEmail(String email) {
+        AuthVO user = authService.findByEmail(email);
+        if (user == null) throw new IllegalStateException("유저를 찾을 수 없습니다.");
+        return user.getUserId(); // UUID(36)
     }
 
     @Override
@@ -41,7 +52,9 @@ public class BoardPostServiceImpl implements BoardPostService {
     }
 
     @Override
-    public long createPost(BoardPostVO post) {
+    public long createPost(BoardPostVO post, String email) {
+        post.setUserId(getUserIdByEmail(email)); // ✅ 여기서 UUID로 확정
+
         int inserted = boardPostMapper.insertPost(post);
         if (inserted == 0 || post.getPostId() == null) {
             throw new IllegalStateException("게시글 등록에 실패했습니다.");
@@ -50,7 +63,9 @@ public class BoardPostServiceImpl implements BoardPostService {
     }
 
     @Override
-    public void updatePost(BoardPostVO post) {
+    public void updatePost(BoardPostVO post, String email) {
+        post.setUserId(getUserIdByEmail(email)); // ✅ 작성자 검증도 UUID 기준으로
+
         int updated = boardPostMapper.updatePost(post);
         if (updated == 0) {
             throw new IllegalStateException("게시글 수정 불가 (작성자 아님/삭제됨/존재하지 않음)");
@@ -58,10 +73,12 @@ public class BoardPostServiceImpl implements BoardPostService {
     }
 
     @Override
-    public void deletePost(long postId, String userId) {
+    public void deletePost(long postId, String email) {
+        String userId = getUserIdByEmail(email);
+
         int updated = boardPostMapper.softDeletePost(postId, userId);
         if (updated == 0) {
-            throw new IllegalStateException("게시글 삭제 불가 (작성자 아님/이미 삭제/존재하지 않음)");
+            throw new IllegalStateException("게시글 삭제 불가 (작성자 아님/삭제됨/존재하지 않음)");
         }
     }
 

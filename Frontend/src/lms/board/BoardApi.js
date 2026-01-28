@@ -1,0 +1,118 @@
+const API_BASE = ""; // proxy 쓰면 비워둬도 됨 (ex: localhost:3000 → 8080)
+
+export const formatKst = (ts) => {
+    if (!ts) return "";
+    let d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return String(ts);
+
+    let pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(
+        d.getMinutes()
+    )}`;
+};
+
+
+/** JWT 토큰 가져오기 */
+const getToken = () => {
+    return (
+        sessionStorage.getItem("accessToken") ||
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("jwt_token") ||
+        localStorage.getItem("token") ||
+        ""
+    );
+};
+
+/** 공통 fetch */
+const request = async (path, options = {}) => {
+    const token = getToken();
+
+    const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(options.headers || {}),
+        },
+    });
+
+    if (!res.ok) {
+        // 로그인 안 됐을 때
+        if (res.status === 401) {
+            throw new Error("로그인이 필요합니다.");
+        }
+        throw new Error("요청 실패");
+    }
+
+    // 바디가 없을 수 있음(DELETE/PUT 등)
+    if (res.status === 204) return null;
+
+    // 200인데도 body가 비어있는 케이스가 있음(지금 너 상황)
+    const text = await res.text();
+    if (!text) return null;
+
+    // JSON이면 파싱, 아니면 그대로 반환
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) return JSON.parse(text);
+
+    return text;
+};
+
+export const BoardApi = {
+    /** 게시글 목록 */
+    listPosts({ roomId, category, keyword, page, size }) {
+        const qs = new URLSearchParams({
+            roomId,
+            ...(category ? { category } : {}),
+            ...(keyword ? { keyword } : {}),
+            page,
+            size,
+        }).toString();
+
+        return request(`/api/board/posts?${qs}`, {
+            method: "GET",
+        });
+    },
+
+    /** 게시글 상세 */
+    getDetail(postId, incView = true) {
+        return request(
+            `/api/board/detail/posts/${postId}?incView=${incView}`,
+            { method: "GET" }
+        );
+    },
+
+    /** 게시글 작성 */
+    createPost({ roomId, category, title, content, isPinned }) {
+        return request(`/api/board/posts`, {
+            method: "POST",
+            body: JSON.stringify({
+                roomId,
+                category,
+                title,
+                content,
+                isPinned,
+            }),
+        });
+    },
+
+    /** 게시글 수정 */
+    updatePost(postId, { category, title, content, isPinned }) {
+        return request(`/api/board/posts/${postId}`, {
+            method: "PUT",
+            body: JSON.stringify({
+                category,
+                title,
+                content,
+                isPinned,
+            }),
+        });
+    },
+
+    /** 게시글 삭제 */
+    deletePost(postId) {
+        return request(`/api/board/posts/${postId}`, {
+            method: "DELETE",
+        });
+    },
+};

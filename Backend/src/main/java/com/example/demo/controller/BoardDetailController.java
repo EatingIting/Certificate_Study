@@ -38,10 +38,10 @@ public class BoardDetailController {
     @PostMapping("/posts")
     public ResponseEntity<?> create(@Valid @RequestBody BoardPostDetailCreateRequest req,
                                     Authentication authentication) {
-        String userId = authentication.getName();
+        String email = authentication.getName();
 
-        BoardPostDetailVO vo = BoardConverter.toDetailVO(req, userId);
-        long postId = boardDetailService.createPostWithAttachments(vo);
+        BoardPostDetailVO vo = BoardConverter.toDetailVO(req, email);
+        long postId = boardDetailService.createPostWithAttachments(vo, email);
 
         return ResponseEntity.ok(Map.of("postId", postId));
     }
@@ -51,10 +51,10 @@ public class BoardDetailController {
     public ResponseEntity<?> update(@PathVariable long postId,
                                     @Valid @RequestBody BoardPostDetailUpdateRequest req,
                                     Authentication authentication) {
-        String userId = authentication.getName();
+        String email = authentication.getName();
 
-        BoardPostDetailVO vo = BoardConverter.toDetailVO(postId, req, userId);
-        boardDetailService.updatePostAndReplaceAttachments(vo);
+        BoardPostDetailVO vo = BoardConverter.toDetailVO(postId, req, email);
+        boardDetailService.updatePostAndReplaceAttachments(vo, email);
 
         return ResponseEntity.ok().build();
     }
