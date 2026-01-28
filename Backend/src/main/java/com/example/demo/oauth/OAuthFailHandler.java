@@ -24,8 +24,11 @@ public class OAuthFailHandler extends SimpleUrlAuthenticationFailureHandler {
                 StandardCharsets.UTF_8
         );
 
+        String frontUrl =
+                request.getScheme() + "://" + request.getServerName() + ":3000";
+
         response.sendRedirect(
-                "http://localhost:3000/oauth-fail?error=" + msg
+                frontUrl + "/oauth-fail?error=" + msg
         );
     }
 }

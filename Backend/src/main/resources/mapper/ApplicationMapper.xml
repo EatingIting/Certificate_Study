@@ -155,5 +155,25 @@
         WHERE room_id = #{roomId}
     </select>
 
+    <!-- 신청 상태 조회 -->
+    <select id="findStatus" resultType="String">
+        SELECT status
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{requestUserEmail}
+    </select>
+
+    <!-- 거절된 신청 재신청 처리 -->
+    <update id="reapply">
+        UPDATE room_join_request
+        SET status = '신청중',
+            apply_message = #{applyMessage},
+            requested_at = NOW()
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{requestUserEmail}
+          AND status = '거절'
+    </update>
+
+
 
 </mapper>

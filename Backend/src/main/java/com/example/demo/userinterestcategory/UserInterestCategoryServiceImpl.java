@@ -9,7 +9,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class UserInterestCategoryImpl implements UserInterestCategoryService {
+public class UserInterestCategoryServiceImpl implements UserInterestCategoryService {
 
     private final UserInterestCategoryMapper mapper;
 

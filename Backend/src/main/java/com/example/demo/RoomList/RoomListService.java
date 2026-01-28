@@ -1,5 +1,6 @@
 package com.example.demo.RoomList;
 
+import com.example.demo.userinterestcategory.UserInterestCategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +17,9 @@ public class RoomListService {
     public List<RoomListVO> getRooms() {
 
         roomListMapper.closeExpiredRooms();
-
         roomListMapper.closeFullRooms();
 
         return roomListMapper.selectRoomList();
-
     }
 
     @Transactional
@@ -28,4 +27,13 @@ public class RoomListService {
         roomListMapper.deleteRoom(roomId);
     }
 
+    @Transactional
+    public List<RoomListVO> getInterestRooms(List<Long> categoryIds) {
+
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return List.of(); // 관심없으면 빈 리스트
+        }
+
+        return roomListMapper.selectRoomsByCategoryIds(categoryIds);
+    }
 }
