@@ -3287,7 +3287,7 @@ function MeetingPage({ portalRoomId }) {
     }, [micPermission, camPermission]);
 
     // 🔥 아바타를 canvas로 그려서 MediaStream으로 변환하는 함수
-    const createAvatarStream = useCallback((name, width = 640, height = 480) => {
+    const createAvatarStream = useCallback((name, width = 640, height = 480, showName = true) => {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -3299,8 +3299,9 @@ function MeetingPage({ portalRoomId }) {
 
         // 아바타 원 그리기
         const centerX = width / 2;
-        const centerY = height / 2;
-        const radius = Math.min(width, height) * 0.3;
+        // showName이 true면 이름 공간을 위해 위로 이동, false면 중앙에 배치
+        const centerY = showName ? height / 2 - 20 : height / 2;
+        const radius = Math.min(width, height) * 0.25;
 
         // 그라데이션 배경
         const gradient = ctx.createLinearGradient(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
@@ -3324,6 +3325,30 @@ function MeetingPage({ portalRoomId }) {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(initials, centerX, centerY);
+
+        // 이름 텍스트 (아바타 아래) - showName이 true일 때만 표시
+        if (showName) {
+            const displayName = name || "참가자";
+            ctx.fillStyle = "#374151"; // 어두운 회색
+            // 폰트 크기를 크게 설정 (최소 20px, 또는 width의 5% 중 큰 값)
+            const fontSize = Math.max(20, width * 0.05);
+            ctx.font = `bold ${fontSize}px Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            // 텍스트가 너무 길면 잘라내기
+            const maxWidth = width * 0.85;
+            let finalName = displayName;
+            const metrics = ctx.measureText(displayName);
+            if (metrics.width > maxWidth) {
+                // 텍스트가 너무 길면 "..." 추가
+                let truncated = displayName;
+                while (ctx.measureText(truncated + "...").width > maxWidth && truncated.length > 0) {
+                    truncated = truncated.slice(0, -1);
+                }
+                finalName = truncated + "...";
+            }
+            ctx.fillText(finalName, centerX, centerY + radius + 15);
+        }
 
         // Canvas를 MediaStream으로 변환
         const stream = canvas.captureStream(30); // 30fps
