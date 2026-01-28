@@ -248,7 +248,10 @@ function LMSSubjectInner() {
                 />
             )}
 
-            <ChatModal />
+            {/* 현재 경로가 'MeetingRoom/' 을 포함하지 않을 때만 렌더링 */}
+            {!location.pathname.includes("/MeetingRoom/") && (
+                <ChatModal roomId={subjectId} />
+            )}
         </>
     );
 }

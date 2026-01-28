@@ -16,9 +16,8 @@ public class ChatConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // 🚨 중요: 주소를 "/ws/room" -> "/ws/chat"으로 변경!
-        // 이렇게 하면 팀장님 거랑 충돌 안 남
-        registry.addHandler(chatWebSocketHandler, "/ws/chat/*")
-                .setAllowedOrigins("*");
+        // ws://localhost:8080/ws/chat/{roomId} 주소로 연결
+        registry.addHandler(chatWebSocketHandler, "/ws/chat/**")
+                .setAllowedOrigins("*"); // 모든 도메인에서 접속 허용 (배포 시 보안 주의)
     }
 }
