@@ -129,9 +129,18 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     // - 화면공유는 videoTrack이 있으면 항상 렌더링
     // - 카메라 OFF면 (상대가 OFF한 경우) 무조건 video를 끄고 아바타 타일로 전환
     // - 🔥 필터(이모지/배경제거) 준비 중이면 비디오 숨김 (쌩얼 노출 방지)
+    // - 🔥 스트림이 있으면 무조건 렌더링 (검은화면 방지)
     const shouldRenderVideo = useMemo(() => {
         if (!stream) return false;
         if (isScreen) return stream.getVideoTracks().length > 0;
+        // 🔥 카메라 OFF가 아니고 스트림이 있으면 무조건 렌더링 (검은화면 방지)
+        if (!safeUser.cameraOff && stream.getVideoTracks().length > 0) {
+            // 스트림이 live 상태이거나 track이 있으면 렌더링
+            const hasLiveTrack = stream.getVideoTracks().some(t => t.readyState === "live");
+            if (hasLiveTrack) return true;
+            // track이 있으면 일단 렌더링 (readyState가 곧 live가 될 수 있음)
+            return true;
+        }
         if (safeUser.cameraOff) return false;
         return canShowVideo;
     }, [stream, isScreen, safeUser.cameraOff, safeUser.isMe, isFilterPreparing, canShowVideo]);
@@ -273,31 +282,77 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             return;
         }
 
-        // 🔥 stream id가 변경되었거나 srcObject가 없으면 강제로 다시 설정
-        const needsUpdate = streamIdRef.current !== currentStreamId || v.srcObject !== stream;
+        // 🔥 stream id가 변경되었거나 srcObject가 없거나 다르면 강제로 다시 설정
+        // 🔥 스트림이 있으면 무조건 업데이트 (검은화면 방지)
+        const needsUpdate = streamIdRef.current !== currentStreamId || v.srcObject !== stream || !v.srcObject || (stream && !v.srcObject);
 
         if (stream && needsUpdate) {
-            console.log("[VideoTile] updating srcObject, streamId:", currentStreamId);
+            console.log("[VideoTile] updating srcObject, streamId:", currentStreamId, "hasTracks:", stream.getVideoTracks().length);
+            // 🔥 기존 srcObject를 먼저 정리 (브라우저가 제대로 업데이트하도록)
+            if (v.srcObject && v.srcObject !== stream) {
+                try {
+                    v.srcObject = null;
+                } catch (e) {
+                    console.warn("[VideoTile] srcObject 정리 실패:", e);
+                }
+            }
             v.srcObject = stream;
             streamIdRef.current = currentStreamId;
         }
 
         v.muted = true;
-        v.play().catch(() => { });
+        
+        // 🔥 비디오 재생 보장 (여러 번 시도)
+        const ensurePlay = async () => {
+            if (!v || !v.srcObject || !shouldRenderVideo) return;
+            
+            try {
+                if (v.paused) {
+                    await v.play();
+                    console.log("[VideoTile] ✅ 비디오 재생 성공");
+                }
+            } catch (err) {
+                console.warn("[VideoTile] 비디오 재생 실패, 재시도:", err);
+                // 재시도 (100ms 후)
+                setTimeout(() => {
+                    if (v && v.srcObject && shouldRenderVideo) {
+                        v.play().catch(() => {});
+                    }
+                }, 100);
+            }
+        };
+        
+        ensurePlay();
+
+        // 🔥 스트림이 live 상태인데 비디오가 재생되지 않으면 주기적으로 재시도
+        const playRetryInterval = setInterval(() => {
+            if (!v || !v.srcObject || !shouldRenderVideo) {
+                clearInterval(playRetryInterval);
+                return;
+            }
+            
+            const hasLiveTrack = stream && stream.getVideoTracks().some(t => t.readyState === "live");
+            if (hasLiveTrack && (v.paused || v.readyState < 2)) {
+                console.log("[VideoTile] 스트림이 live인데 비디오가 재생되지 않음, 재시도");
+                v.play().catch(() => {});
+            } else if (hasLiveTrack && !v.paused) {
+                // 정상 재생 중이면 interval 정리
+                clearInterval(playRetryInterval);
+            }
+        }, 500);
 
         // 🔥 Page Visibility API: 탭이 다시 보일 때 비디오 재생
         const handleVisibilityChange = () => {
-            if (!document.hidden && v && v.paused && v.srcObject && shouldRenderVideo) {
+            if (!document.hidden && v && v.srcObject && shouldRenderVideo) {
                 console.log("[VideoTile] 탭이 다시 보임, 비디오 재생 시도");
-                v.play().catch((err) => {
-                    console.warn("[VideoTile] 비디오 재생 실패:", err);
-                });
+                ensurePlay();
             }
         };
 
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
+            clearInterval(playRetryInterval);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
     }, [stream, shouldRenderVideo, currentStreamId])
@@ -346,21 +401,12 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                     data-peer-name={peerName}
                     className={`video-element ${isScreen ? "screen" : ""}`}
                     style={{
-                        // 🔥 필터 준비 중일 때는 video를 보여줘서 canvas 스피너가 전송되도록 함
-                        display: (shouldRenderVideo || (safeUser.isMe && isFilterPreparing)) ? "block" : "none"
+                        display: shouldRenderVideo ? "block" : "none"
                     }}
                 />
 
-                {/* 🔥 필터 준비 중일 때 로컬 사용자에게만 필터 준비중 스피너 표시 */}
-                {safeUser.isMe && isFilterPreparing && (
-                    <div className="camera-off-placeholder filter-preparing">
-                        <Loader2 className="spinner" />
-                        <p className="stream-label">필터 준비 중...</p>
-                    </div>
-                )}
-
-                {/* 카메라 꺼짐 또는 스트림 없음 (필터 준비 중이 아닐 때만) */}
-                {!shouldRenderVideo && !(safeUser.isMe && isFilterPreparing) && (
+                {/* 카메라 꺼짐 또는 스트림 없음 */}
+                {!shouldRenderVideo && (
                     <div className="camera-off-placeholder">
                         <UserAvatar name={safeUser.name} size={isMain ? "lg" : "md"} />
                         <p className="stream-label">{safeUser.name}</p>
@@ -515,18 +561,9 @@ function MeetingPage({ portalRoomId }) {
     const [isLocalLoading, setIsLocalLoading] = useState(true);
     const [recvTransportReady, setRecvTransportReady] = useState(false);
 
-    // 🔥 필터(이모지/배경제거) 준비 중 상태 - 준비 완료 전까지 쌩얼 노출 방지
-    // 🔥 필터 준비중 스피너 (모든 사람에게 보이도록)
-    const [isFilterPreparing, setIsFilterPreparing] = useState(() => {
-        try {
-            const savedEmoji = localStorage.getItem("faceEmoji") || sessionStorage.getItem("faceEmoji");
-            const savedBgRemove = localStorage.getItem("faceBgRemove") === "true" || sessionStorage.getItem("faceBgRemove") === "true";
-            // 저장된 필터 설정이 있으면 처음부터 준비 중 상태로 시작
-            return !!(savedEmoji || savedBgRemove);
-        } catch {
-            return false;
-        }
-    });
+    // 🔥 필터 준비중 스피너 제거 - 항상 false로 유지하여 바로 카메라 표시
+    // 이모지/배경제거는 준비되면 자동으로 적용됨
+    const [isFilterPreparing] = useState(false);
 
     const [messages, setMessages] = useState(() => {
         try {
@@ -1107,10 +1144,6 @@ function MeetingPage({ portalRoomId }) {
         setCamOn(false);
         localStorage.setItem("camOn", "false");
 
-        // 필터 준비 상태 해제
-        setIsFilterPreparing(false);
-        isFilterPreparingRef.current = false;
-
         // ⭐ 서버에 상태 전파
         wsRef.current?.send(JSON.stringify({
             type: "USER_STATE_CHANGE",
@@ -1122,21 +1155,17 @@ function MeetingPage({ portalRoomId }) {
     };
 
     const turnOnCamera = async () => {
-        if (!sendTransportRef.current || sendTransportRef.current.closed) {
-            console.warn("[turnOnCamera] sendTransport not ready");
-            return;
-        }
+        // 🔥 sendTransport 체크를 producer 생성 부분으로 이동
+        // canvas 파이프라인은 먼저 시작하여 이모지가 바로 적용되게 함
 
         // 🔥 [최적화 1] 카메라 요청과 동시에 모델 로딩 시작 (병렬 처리)
         const wantEmoji = !!faceEmojiRef.current && faceModeRef.current === "emoji";
         const wantBgRemove = !!bgRemoveRef.current;
         const needFiltersOnStart = wantEmoji || wantBgRemove;
 
-        // 필터가 필요하면 준비 중 상태로 설정 (모든 사람에게 스피너 표시)
+        // 필터가 필요하면 모델 로딩 시작 (스피너 없이 바로 비디오 표시)
         if (needFiltersOnStart) {
-            setIsFilterPreparing(true);
-            isFilterPreparingRef.current = true;
-            console.log("[turnOnCamera] Filter settings detected, setting preparing state");
+            console.log("[turnOnCamera] Filter settings detected, loading models in background");
         }
 
         // await로 기다리지 않고 프로미스만 트리거해둡니다 (병렬 처리)
@@ -1155,22 +1184,24 @@ function MeetingPage({ portalRoomId }) {
             console.log("[turnOnCamera] pipeline already active, reusing existing track/producer");
             setCamOn(true);
             localStorage.setItem("camOn", "true");
-            // 이미 활성화되어 있으므로 스피너 해제
-            setIsFilterPreparing(false);
-            isFilterPreparingRef.current = false;
             return;
         }
 
-        // 1) 카메라 트랙 획득
+        // 1) 카메라 트랙 획득 (오디오도 함께 - 이전 스트림이 없을 경우 대비)
         let stream;
+        const needAudio = !localStreamRef.current?.getAudioTracks().some(t => t.readyState === "live");
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: needAudio
+            });
         } catch (err) {
             console.error("Camera permission denied or error", err);
             return;
         }
         const rawTrack = stream.getVideoTracks()[0];
-        console.log("[turnOnCamera] got camera track:", rawTrack.id, rawTrack.readyState);
+        const newAudioTrack = stream.getAudioTracks()[0];
+        console.log("[turnOnCamera] got camera track:", rawTrack.id, rawTrack.readyState, "audio:", needAudio ? newAudioTrack?.id : "reusing");
         if (isLikelyCameraTrack(rawTrack)) lastCameraTrackRef.current = rawTrack;
         canvasPipelineRawTrackRef.current = rawTrack;
 
@@ -1232,123 +1263,33 @@ function MeetingPage({ portalRoomId }) {
         localStorage.setItem("camOn", "true");
 
         // 8) 로컬 스트림 설정 (drawLoop 시작 전에 설정하여 즉시 표시)
+        // 이전 오디오 트랙이 있으면 사용, 없으면 새로 가져온 트랙 사용
         const prevAudio = localStreamRef.current
             ?.getAudioTracks()
-            .filter((t) => t.readyState !== "ended") ?? [];
-        const merged = new MediaStream([...prevAudio, outTrack]);
+            .filter((t) => t.readyState === "live") ?? [];
+        const audioTracks = prevAudio.length > 0 ? prevAudio : (newAudioTrack ? [newAudioTrack] : []);
+        // 오디오 트랙 enabled 상태 설정
+        audioTracks.forEach(t => { t.enabled = !!micOnRef.current; });
+        const merged = new MediaStream([...audioTracks, outTrack]);
         localStreamRef.current = merged;
         setLocalStream(merged);
         bumpStreamVersion();
+
+        // 🔥 권한 설정 (startLocalMedia와 동일하게)
+        setMicPermission("granted");
+        setCamPermission("granted");
+        setIsLocalLoading(false);
 
         // 🔥 필터가 필요하면 스피너를 보여주기 위해 먼저 producer 생성
         // (스피너가 모든 사람에게 보이도록 하기 위해 producer를 먼저 생성)
         // await를 사용하여 producer가 생성된 후에 스피너를 그리고 drawLoop 시작
         let producerCreated = false;
         let producerCreating = false;
-        if (needFiltersOnStart) {
-            // 스피너를 그리기 전에 producer를 먼저 생성 (await로 기다림)
-            producerCreating = true;
-            const transport = sendTransportRef.current;
-            if (transport && !transport.closed) {
-                try {
-                    const newProducer = await transport.produce({
-                        track: outTrack,
-                        appData: { type: "camera" },
-                    });
-                    producersRef.current.set("camera", newProducer);
-                    producerCreated = true;
-                    producerCreating = false;
-                    console.log("[turnOnCamera] producer created immediately for spinner");
-
-                    // 🔥 Producer가 생성된 후, 첫 프레임으로 스피너를 그려서 즉시 전송
-                    // 이렇게 하면 producer가 생성되자마자 스피너가 전송됨
-                    // 첫 번째 사진처럼 흰색 배경에 초록색 스피너로 그리기
-                    ctx.fillStyle = "#ffffff";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    const centerX = canvas.width / 2;
-                    const centerY = canvas.height / 2;
-                    const radius = 30;
-                    const time = Date.now() / 20;
-
-                    // Notched Circle Spinner (Loader2 style)
-                    ctx.save();
-                    ctx.translate(centerX, centerY);
-                    ctx.rotate(time * Math.PI / 180);
-                    const spinnerColor = "#10B981"; // Tailwind emerald-500
-                    ctx.strokeStyle = spinnerColor;
-                    ctx.lineWidth = 4;
-                    ctx.lineCap = "round";
-                    ctx.beginPath();
-                    ctx.arc(0, 0, 30, 0, 1.5 * Math.PI);
-                    ctx.stroke();
-                    ctx.restore();
-
-                    ctx.fillStyle = "#374151"; // Gray-700
-                    ctx.font = "bold 24px Pretendard, sans-serif";
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillText("필터 준비 중...", centerX, centerY + 60);
-
-                    console.log("[turnOnCamera] First spinner frame drawn after producer creation");
-
-                    // 🔥 Producer가 생성된 후, requestAnimationFrame을 사용하여 첫 프레임을 강제로 그리기
-                    // 이렇게 하면 producer가 생성된 직후에 스피너가 그려진 프레임이 전송됨
-                    // 첫 번째 사진처럼 흰색 배경에 초록색 스피너로 그리기
-                    requestAnimationFrame(() => {
-                        // 첫 프레임을 다시 그려서 확실히 전송되도록 함
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                        const centerX2 = canvas.width / 2;
-                        const centerY2 = canvas.height / 2;
-                        const radius2 = 30;
-                        const time2 = Date.now() / 20;
-
-                        // Notched Circle Spinner (Loader2 style)
-                        ctx.save();
-                        ctx.translate(centerX2, centerY2);
-                        ctx.rotate(time2 * Math.PI / 180);
-                        const spinnerColor2 = "#10B981"; // Tailwind emerald-500
-                        ctx.strokeStyle = spinnerColor2;
-                        ctx.lineWidth = 4;
-                        ctx.lineCap = "round";
-                        ctx.beginPath();
-                        ctx.arc(0, 0, 30, 0, 1.5 * Math.PI);
-                        ctx.stroke();
-                        ctx.restore();
-
-                        ctx.fillStyle = "#374151"; // Gray-700
-                        ctx.font = "bold 24px Pretendard, sans-serif";
-                        ctx.textAlign = "center";
-                        ctx.textBaseline = "middle";
-                        ctx.fillText("필터 준비 중...", centerX2, centerY2 + 60);
-
-                        console.log("[turnOnCamera] Second spinner frame drawn via requestAnimationFrame");
-                    });
-                } catch (e) {
-                    console.error("[turnOnCamera] producer creation failed for spinner:", e);
-                    producerCreating = false;
-                }
-            } else {
-                producerCreating = false;
-            }
-        }
-
-        // 9) Draw 루프 시작 (producer 생성 후 캔버스에 프레임 그리기)
-        // 🔥 Producer가 생성된 경우, 짧은 시간 기다린 후 drawLoop 시작 (producer가 완전히 활성화되도록)
-        if (producerCreated && needFiltersOnStart) {
-            // Producer가 생성되었으면 100ms 기다린 후 drawLoop 시작
-            // 이렇게 하면 producer가 완전히 활성화된 후에 스피너를 그리기 시작
-            await new Promise(resolve => setTimeout(resolve, 100));
-            console.log("[turnOnCamera] Waited 100ms after producer creation, starting drawLoop");
-        }
+        // 9) Draw 루프 시작 (producer는 drawLoop 내에서 생성됨)
+        // 🔥 WebSocket으로 filterPreparing 상태를 동기화하므로 canvas 스피너 불필요
 
         canvasPipelineActiveRef.current = true;
         let frameCount = 0;
-        let framesAfterProducer = 0; // 🔥 Producer 생성 후 스피너 전송 보장을 위한 카운터
-        const filterStartTime = Date.now(); // 🔥 시간 기반 타임아웃용
-        let filteredFramesDrawn = 0; // 🔥 필터가 실제로 적용된 프레임 개수 (쌩얼 노출 방지)
 
         // 🔥 배경 제거용 캔버스 및 세그멘터 초기화
         let bgFrameCanvas = null;
@@ -1485,79 +1426,9 @@ function MeetingPage({ portalRoomId }) {
                 return;
             }
 
-            // 🔥 필터 준비 중이면 스피너를 canvas에 그려서 모든 사람에게 보이게 함
-            // 🔥 핵심: Producer가 생성된 후에만 스피너를 그려서 전송되도록 보장
-            let isShowingSpinner = false;
-            if (isFilterPreparingRef.current && (isEmojiOn || isBgRemoveOn)) {
-                // 🔥 producer가 실제로 생성되었는지 확인 (ref를 직접 확인하여 클로저 문제 해결)
-                const actualProducer = producersRef.current.get("camera");
-                const hasProducer = actualProducer && !actualProducer.closed;
-
-                // 🔥 producer가 생성되지 않았으면 먼저 생성 시도
-                if (!hasProducer && !producerCreating) {
-                    producerCreating = true;
-                    const transport = sendTransportRef.current;
-                    if (transport && !transport.closed) {
-                        transport.produce({
-                            track: outTrack,
-                            appData: { type: "camera" },
-                        }).then((newProducer) => {
-                            producersRef.current.set("camera", newProducer);
-                            producerCreated = true;
-                            producerCreating = false;
-                            console.log("[turnOnCamera] producer created for spinner in drawLoop (frame:", frameCount, ")");
-                        }).catch((e) => {
-                            console.error("[turnOnCamera] producer creation failed for spinner in drawLoop:", e);
-                            producerCreating = false;
-                        });
-                    } else {
-                        producerCreating = false;
-                    }
-                }
-
-                // 🔥 Producer가 생성된 후에만 스피너를 그려서 전송되도록 보장
-                // Producer가 생성되기 전에는 검은 화면만 보여줌
-                if (hasProducer) {
-                    isShowingSpinner = true;
-
-                    // 흰색 배경
-                    ctx.fillStyle = "#ffffff";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    // 스피너 그리기 (간단한 회전 원)
-                    const centerX = canvas.width / 2;
-                    const centerY = canvas.height / 2;
-                    const radius = 30;
-                    const time = Date.now() / 20; // 회전 속도
-
-                    // Notched Circle Spinner (Loader2 style)
-                    ctx.save();
-                    ctx.translate(centerX, centerY);
-                    ctx.rotate(time * Math.PI / 180);
-                    const spinnerColor = "#10B981"; // Tailwind emerald-500
-                    ctx.strokeStyle = spinnerColor;
-                    ctx.lineWidth = 4;
-                    ctx.lineCap = "round";
-                    ctx.beginPath();
-                    ctx.arc(0, 0, 30, 0, 1.5 * Math.PI);
-                    ctx.stroke();
-                    ctx.restore();
-
-                    // 텍스트
-                    ctx.fillStyle = "#374151"; // Gray-700
-                    ctx.font = "bold 24px Pretendard, sans-serif";
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillText("필터 준비 중...", centerX, centerY + 60);
-                } else {
-                    // producer가 생성되기 전에는 검은 화면만 보여줌
-                    ctx.fillStyle = "#000000";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                }
-            }
-
-            // 스피너를 보여주는 중이 아니면 정상 렌더링
-            if (!isShowingSpinner) {
+            // 🔥 필터 준비 중에도 원본 비디오를 canvas에 그려서 다른 참가자에게 전송
+            // WebSocket으로 filterPreparing 상태를 동기화하므로 VideoTile 오버레이로 스피너 표시
+            {
                 // 필터 준비 상태 확인 (렌더링용)
                 const isEmojiReady = !isEmojiOn || (isEmojiOn && !!lastFaceBoxRef.current);
                 const isBgReady = !isBgRemoveOn || (isBgRemoveOn && !!faceBgSegmenterRef.current?.segmenter);
@@ -1620,7 +1491,6 @@ function MeetingPage({ portalRoomId }) {
                         ctx.fillStyle = "#ffffff";
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(bgFrameCanvas, 0, 0, canvas.width, canvas.height);
-                        filteredFramesDrawn++;
                     } else {
                         // 배경제거가 켜져있지만 세그멘터가 아직 준비 안됨 -> 원본 비디오
                         ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
@@ -1659,43 +1529,14 @@ function MeetingPage({ portalRoomId }) {
                         ctx.textBaseline = "middle";
                         ctx.font = `${smoothed.size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
                         ctx.fillText(faceEmojiRef.current, smoothed.x, smoothed.y);
-                        filteredFramesDrawn++;
                     }
                 }
-            } // end of if (!isShowingSpinner) - 정상 렌더링 블록 닫기
+            } // end of video rendering block
 
             frameCount++;
-            if (producerCreated) {
-                framesAfterProducer++;
-            }
-
-            // 🔥 필터 준비 완료 체크 및 스피너 해제 (조건 완화)
-            if (isFilterPreparingRef.current) {
-                const elapsed = Date.now() - filterStartTime;
-
-                // 모델 준비 상태 확인
-                const detectorLoaded = !isEmojiOn || !!faceDetectorRef.current;
-                const segmenterLoaded = !isBgRemoveOn || !!faceBgSegmenterRef.current?.segmenter;
-                const allModelsLoaded = detectorLoaded && segmenterLoaded;
-
-                // 🔥 조건 완화: 모델만 로드되면 해제 (얼굴 감지 대기하지 않음)
-                // 타임아웃도 더 짧게 (1.5초 -> 1.0초)
-                // 🔥 중요: Producer가 생성된 후 최소 10프레임(약 300ms)은 스피너를 유지하여
-                // 다른 참가자들에게 "준비 중" 상태가 확실히 보이도록 함
-                if ((allModelsLoaded || elapsed > 1000) && producerCreated && framesAfterProducer > 10) {
-                    console.log("[turnOnCamera] Filter ready, removing spinner (elapsed:", elapsed, "ms, detector:", detectorLoaded, ", segmenter:", segmenterLoaded, ", frames:", filteredFramesDrawn, ")");
-                    setIsFilterPreparing(false);
-                    isFilterPreparingRef.current = false;
-                    // 스무딩 초기화하여 이모지가 즉시 따라오게 함
-                    if (isEmojiOn) {
-                        smoothedFaceBoxRef.current = null;
-                    }
-                }
-            }
 
             // 🔥 Producer 생성 (최초 1회) - 비디오가 준비되었을 때 생성
-            // 스피너는 위에서 이미 처리했으므로 여기서는 비디오 준비 시에만 생성
-            if (!producerCreated && !producerCreating && videoReady && !isShowingSpinner) {
+            if (!producerCreated && !producerCreating && videoReady) {
                 producerCreating = true;
                 try {
                     const transport = sendTransportRef.current;
@@ -1717,13 +1558,8 @@ function MeetingPage({ portalRoomId }) {
                 }
             }
 
-            // 🔥 필터 준비 중이고 producer가 생성되었으면 즉시 다음 프레임 그리기 (스피너 전송 보장)
-            if (isFilterPreparingRef.current && (isEmojiOn || isBgRemoveOn) && producerCreated) {
-                // Producer가 생성되었고 스피너를 그려야 하면 즉시 다음 프레임 그리기
-                canvasPipelineRafRef.current = setTimeout(drawLoop, 16); // 더 빠르게 시작 (~60fps)
-            } else {
-                canvasPipelineRafRef.current = setTimeout(drawLoop, 33); // ~30fps
-            }
+            // 다음 프레임 그리기
+            canvasPipelineRafRef.current = setTimeout(drawLoop, 33); // ~30fps
         };
 
         // Draw 루프 즉시 시작 (비동기로 실행하여 블로킹 방지)
@@ -1965,24 +1801,20 @@ function MeetingPage({ portalRoomId }) {
         const savedBgRemove = bgRemoveRef.current;
 
         if (savedEmoji || savedBgRemove) {
-            // 로컬 스트림이 준비될 때까지 대기 후 canvasPipeline 시작
+            // 🔥 빠른 canvas 파이프라인 시작 - sendTransport 준비되면 바로 시작
             const checkAndApply = async () => {
-                // 로컬 스트림이 준비될 때까지 대기 (최대 15초)
+                // sendTransport가 준비될 때까지 대기 (최대 10초, 50ms 간격으로 빠르게 체크)
                 let waited = 0;
-                while (!localStreamRef.current && waited < 15000) {
-                    await new Promise(r => setTimeout(r, 300));
-                    waited += 300;
+                while ((!sendTransportRef.current || sendTransportRef.current.closed) && waited < 10000) {
+                    await new Promise(r => setTimeout(r, 50));
+                    waited += 50;
                 }
 
-                // 추가 대기 (producer 생성 등)
-                await new Promise(r => setTimeout(r, 1000));
-
-                // canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
-                if (!canvasPipelineActiveRef.current) {
-                    console.log("[Auto-restore] Applying saved emoji/bgRemove state:", { savedEmoji, savedBgRemove });
+                // sendTransport가 준비되면 바로 turnOnCamera 호출
+                if (sendTransportRef.current && !sendTransportRef.current.closed && !canvasPipelineActiveRef.current) {
+                    console.log("[Auto-restore] sendTransport ready, applying saved emoji/bgRemove:", { savedEmoji, savedBgRemove, waited });
                     try {
-                        // ✅ 자동 복원 직후는 모델 로딩/컴파일로 UI가 멈출 수 있어 워밍업 시간을 둔다
-                        pipelineWarmupUntilRef.current = Date.now() + 2000;
+                        pipelineWarmupUntilRef.current = Date.now() + 1000;
                         await turnOnCamera();
                     } catch (e) {
                         console.warn("[Auto-restore] turnOnCamera failed:", e);
@@ -3607,6 +3439,9 @@ function MeetingPage({ portalRoomId }) {
                     screenStream = new MediaStream([consumer.track]);
                 }
 
+                // 🔥 비디오 consumer가 들어왔으면 카메라가 켜져있다는 의미
+                const isVideoConsumer = kind === "video" && !isScreen;
+
                 setParticipants((prev) => {
                     const idx = prev.findIndex((p) => String(p.id) === String(peerId));
 
@@ -3619,9 +3454,10 @@ function MeetingPage({ portalRoomId }) {
                                 name: `User-${String(peerId).slice(0, 4)}`,
                                 isMe: false,
 
-                                // ⭐ muted/cameraOff는 서버(USERS_UPDATE)가 보내줄 것이므로 기본값만 설정
+                                // 🔥 비디오 consumer가 들어왔으면 cameraOff: false
+                                // 오디오만 들어온 경우는 cameraOff: true 유지
                                 muted: true,
-                                cameraOff: true,
+                                cameraOff: isVideoConsumer ? false : true,
                                 speaking: false,
 
                                 stream: isScreen ? null : mergedCameraStream,
@@ -3652,9 +3488,9 @@ function MeetingPage({ portalRoomId }) {
                         // ✅ screen일 때만 true로 세팅 (종료는 종료 이벤트에서 false)
                         isScreenSharing: isScreen ? true : p.isScreenSharing,
 
-                        // ⭐ muted/cameraOff는 절대 변경하지 않음! 서버 상태만 사용
-                        // muted: p.muted,  // 명시적으로 유지 (사실 spread로 이미 유지됨)
-                        // cameraOff: p.cameraOff,  // 명시적으로 유지
+                        // 🔥 비디오 consumer가 들어왔으면 cameraOff: false로 설정
+                        // 오디오 consumer인 경우는 기존 상태 유지
+                        cameraOff: isVideoConsumer ? false : p.cameraOff,
 
                         isLoading: false,
                         isJoining: false,
@@ -3915,25 +3751,23 @@ function MeetingPage({ portalRoomId }) {
 
     useEffect(() => {
         const init = async () => {
-            // 🔥 저장된 이모지/배경제거 상태 확인
+            // 🔥 저장된 이모지/배경제거 설정 확인
             const savedEmoji = faceEmojiRef.current;
             const savedBgRemove = bgRemoveRef.current;
             const needFilters = !!(savedEmoji || savedBgRemove);
 
-            if (needFilters) {
-                // 🔥 필터 설정이 있으면 바로 turnOnCamera()로 canvas 파이프라인 시작
-                // startLocalMedia() 없이 직접 시작하여 쌩얼 노출 방지
-                console.log("[Init] Filter settings detected, starting with canvas pipeline directly");
+            if (needFilters && camOnRef.current) {
+                // 🔥 이모지/배경제거 설정이 있고 카메라가 켜져있으면 바로 canvas 파이프라인 시작
+                console.log("[Init] Filter settings detected, starting canvas pipeline directly");
                 try {
                     await turnOnCamera();
                 } catch (e) {
-                    console.warn("[Init] turnOnCamera for saved state failed:", e);
-                    // 실패 시 일반 모드로 fallback
-                    setIsFilterPreparing(false);
+                    console.warn("[Init] turnOnCamera failed, fallback to startLocalMedia:", e);
                     await startLocalMedia();
                 }
             } else {
-                // 필터 설정이 없으면 기존 방식대로
+                // 필터 설정이 없거나 카메라가 꺼져있으면 기존 방식대로
+                console.log("[Init] Starting local media");
                 await startLocalMedia();
             }
         };
@@ -4686,11 +4520,16 @@ function MeetingPage({ portalRoomId }) {
 
                             // ✅ 초기 sync 완료 후에는 기존 참가자에게 재접속 스피너 표시 안 함
                             // PIP 복귀 시 페이지 새로고침으로 인해 online 상태가 잠시 false일 수 있음
-                            const shouldShowReconnecting = !isMe && isOffline && !recentlyCompleted && !hasFinishedInitialSyncRef.current && !!old;
+                            // 🔥 스트림이 live 상태면 재접속 상태로 표시하지 않음 (PIP 모드 전환 시 깜빡임 방지)
+                            const hasLiveStream = currentStream && currentStream.getVideoTracks().some(t => t.readyState === "live");
+                            const shouldShowReconnecting = !isMe && isOffline && !recentlyCompleted && !hasFinishedInitialSyncRef.current && !!old && !hasLiveStream;
 
                             // ✅ 서버 online 플래그가 일시적으로 false로 튀더라도,
                             // SFU/브라우저 쪽 미디어 스트림이 살아있으면 stream을 null로 만들지 않는다.
                             const keepMediaWhileOffline = !!currentStream;
+                            // 🔥 스트림이 live 상태면 무조건 유지 (PIP 모드 전환 시 깜빡임 방지)
+                            // hasLiveStream은 위에서 이미 선언됨
+                            const shouldKeepStream = keepMediaWhileOffline || hasLiveStream || (old?.stream && old.stream.getVideoTracks().some(t => t.readyState === "live"));
 
                             const baseUser = {
                                 id: peerId,
@@ -4706,9 +4545,10 @@ function MeetingPage({ portalRoomId }) {
                                     ? !camOnRef.current
                                     : (typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true)),
 
-                                stream: (shouldShowReconnecting && !keepMediaWhileOffline) ? null : currentStream,
-                                screenStream: (shouldShowReconnecting && !keepMediaWhileOffline) ? null : (old?.screenStream ?? null),
-                                isScreenSharing: (shouldShowReconnecting && !keepMediaWhileOffline) ? false : (old?.isScreenSharing ?? false),
+                                // 🔥 스트림이 live 상태면 무조건 유지 (깜빡임 방지)
+                                stream: (shouldShowReconnecting && !shouldKeepStream) ? null : (currentStream || old?.stream || null),
+                                screenStream: (shouldShowReconnecting && !shouldKeepStream) ? null : (old?.screenStream ?? null),
+                                isScreenSharing: (shouldShowReconnecting && !shouldKeepStream) ? false : (old?.isScreenSharing ?? false),
 
                                 reaction: old?.reaction ?? null,
                                 speaking: old?.speaking ?? false,
@@ -4885,16 +4725,23 @@ function MeetingPage({ portalRoomId }) {
                     const reconnecting = data.reconnecting !== false; // 기본값은 true
                     
                     setParticipants(prev =>
-                        prev.map(p =>
-                            String(p.id) === peerId
-                                ? {
-                                    ...p,
-                                    isReconnecting: reconnecting,
-                                    isLoading: reconnecting, // 재접속 중일 때만 로딩 표시
-                                    reconnectStartedAt: reconnecting ? (p.reconnectStartedAt || Date.now()) : undefined,
-                                }
-                                : p
-                        )
+                        prev.map(p => {
+                            if (String(p.id) !== peerId) return p;
+                            
+                            // 🔥 스트림이 live 상태면 재접속 상태로 설정하지 않음 (PIP 모드 전환 시 깜빡임 방지)
+                            const hasLiveStream = p.stream && p.stream.getVideoTracks().some(t => t.readyState === "live");
+                            if (hasLiveStream && reconnecting) {
+                                console.log(`[MeetingPage] USER_RECONNECTING 무시: ${peerId} - live stream exists`);
+                                return p; // 스트림이 live 상태면 상태 변경하지 않음
+                            }
+                            
+                            return {
+                                ...p,
+                                isReconnecting: reconnecting,
+                                isLoading: reconnecting, // 재접속 중일 때만 로딩 표시
+                                reconnectStartedAt: reconnecting ? (p.reconnectStartedAt || Date.now()) : undefined,
+                            };
+                        })
                     );
                     console.log(`[MeetingPage] USER_RECONNECTING: ${peerId} = ${reconnecting}`);
                     return;

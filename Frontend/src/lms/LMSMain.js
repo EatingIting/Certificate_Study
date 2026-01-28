@@ -27,28 +27,14 @@ const LMSMain = () => {
     }, []);
 
     useEffect(() => {
-        api.get("/classrooms/my")
-            .then((res) => {
-                console.log("서버 응답 res:", res);
-                console.log("서버 응답 res.data:", res.data);
-
-                setClassList(res.data);
-            })
-            .catch((err) => {
-                console.error("클래스룸 불러오기 실패", err);
-            });
+    api.get("/classrooms/my")
+        .then((res) => {
+        setClassList(res.data);
+        })
+        .catch((err) => {
+        console.error("클래스룸 불러오기 실패", err);
+        });
     }, []);
-    // ✅ 내 클래스룸 목록 불러오기
-useEffect(() => {
-  api.get("/classrooms/my")
-    .then((res) => {
-      setClassList(res.data);
-    })
-    .catch((err) => {
-      console.error("클래스룸 불러오기 실패", err);
-    });
-}, []);
-
 
     console.log("classList:", classList, "type:", typeof classList, "isArray:", Array.isArray(classList));
 

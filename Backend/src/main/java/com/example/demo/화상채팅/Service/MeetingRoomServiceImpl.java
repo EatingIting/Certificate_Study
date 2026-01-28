@@ -23,8 +23,6 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(subjectId.getBytes(StandardCharsets.UTF_8));
 
-            // 해시 값을 UUID 형식으로 변환 (128비트)
-            // SHA-256의 첫 16바이트를 사용하여 UUID 생성
             long msb = 0;
             long lsb = 0;
             for (int i = 0; i < 8; i++) {
@@ -34,7 +32,6 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                 lsb = (lsb << 8) | (hash[i] & 0xff);
             }
 
-            // UUID 버전 4 형식으로 설정 (버전 4는 랜덤이지만, 여기서는 결정론적 해시 사용)
             msb = (msb & 0xffffffffffff0fffL) | 0x4000L; // 버전 4
             lsb = (lsb & 0x3fffffffffffffffL) | 0x8000000000000000L; // variant
 
