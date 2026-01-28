@@ -499,6 +499,11 @@ export const MeetingProvider = ({ children }) => {
         pipNoVideoSinceRef.current = null;
 
         pipPollingRef.current = setInterval(() => {
+            // 🔥 백그라운드일 때는 polling을 덜 자주 실행하거나 건너뛰기
+            if (document.hidden) {
+                return;
+            }
+
             const pipElement = document.pictureInPictureElement;
             const hasPip = !!pipElement;
 
@@ -596,6 +601,11 @@ export const MeetingProvider = ({ children }) => {
         customPipNoVideoSinceRef.current = null;
 
         const interval = setInterval(() => {
+            // 🔥 백그라운드일 때는 스트림 체크를 건너뛰기
+            if (document.hidden) {
+                return;
+            }
+
             const ok = hasLiveVideoTrack(customPipData.stream);
             if (!ok) {
                 if (!customPipNoVideoSinceRef.current) {

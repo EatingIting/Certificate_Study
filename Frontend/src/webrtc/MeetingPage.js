@@ -284,6 +284,22 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
         v.muted = true;
         v.play().catch(() => { });
+
+        // 🔥 Page Visibility API: 탭이 다시 보일 때 비디오 재생
+        const handleVisibilityChange = () => {
+            if (!document.hidden && v && v.paused && v.srcObject && shouldRenderVideo) {
+                console.log("[VideoTile] 탭이 다시 보임, 비디오 재생 시도");
+                v.play().catch((err) => {
+                    console.warn("[VideoTile] 비디오 재생 실패:", err);
+                });
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
     }, [stream, shouldRenderVideo, currentStreamId])
 
     const isSpeaking = safeUser.speaking || isSpeakingLocally;
@@ -291,6 +307,11 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const isReconnecting = safeUser.isReconnecting;
 
     const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
+
+    // 🔥 스트림이 실제로 live 상태인지 확인하여 재접속 스피너 표시 여부 결정
+    const hasLiveStream = stream && stream.getVideoTracks().some(t => t.readyState === "live");
+    // 스트림이 live 상태면 재접속 스피너를 표시하지 않음 (스트림이 정상 작동 중)
+    const shouldShowReconnecting = !safeUser.isMe && isReconnecting && !hasLiveStream;
 
     // pip 모드 여부 확인 (렌더링 시점)
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
@@ -306,7 +327,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         >
             {/* ✅ 핵심 원칙: 재접속 스피너는 원격 타일(remote tile)에만 표시 */}
             {/* 로컬 타일(!safeUser.isMe === false)은 절대 재접속 스피너를 보지 않음 */}
-            {!safeUser.isMe && isReconnecting && (
+            {/* 🔥 스트림이 live 상태면 재접속 스피너를 표시하지 않음 */}
+            {shouldShowReconnecting && (
                 <div className="reconnecting-overlay">
                     <Loader2 className="spinner" />
                     <p>재접속 중...</p>
@@ -429,8 +451,21 @@ function MeetingPage({ portalRoomId }) {
 
         console.log("[MeetingPage] ✅ 숨겨진 PIP video element 생성 완료");
 
+        // 🔥 Page Visibility API: 탭이 다시 보일 때 숨겨진 video 재생
+        const handleVisibilityChange = () => {
+            if (!document.hidden && hiddenVideo && hiddenVideo.paused && hiddenVideo.srcObject) {
+                console.log("[MeetingPage] 탭이 다시 보임, 숨겨진 PIP video 재생 시도");
+                hiddenVideo.play().catch((err) => {
+                    console.warn("[MeetingPage] 숨겨진 PIP video 재생 실패:", err);
+                });
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
         // cleanup: 컴포넌트 언마운트 시 제거
         return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
             if (pipVideoRef.current) {
                 try {
                     pipVideoRef.current.pause();
@@ -4365,6 +4400,22 @@ function MeetingPage({ portalRoomId }) {
                     // 최소 800ms는 보여주기
                     if (elapsed < 800) return p;
 
+                    // 🔥 스트림이 실제로 존재하고 live 상태면 재접속 상태 해제
+                    const hasLiveStream = p.stream && p.stream.getVideoTracks().some(t => t.readyState === "live");
+                    if (hasLiveStream) {
+                        if (reconnectHistoryRef.current.has(peerId)) {
+                            console.log(`✅ [RECONNECT COMPLETED] ${p.name} (${peerId}) - live stream detected`);
+                            reconnectHistoryRef.current.delete(peerId);
+                            reconnectCompletedTimeRef.current.set(peerId, Date.now());
+                        }
+                        return {
+                            ...p,
+                            isReconnecting: false,
+                            isLoading: false,
+                            reconnectStartedAt: undefined,
+                        };
+                    }
+
                     // ✅ 800ms 이상 경과했으면 재접속 상태 종료
                     if (reconnectHistoryRef.current.has(peerId)) {
                         console.log(`✅ [RECONNECT COMPLETED] ${p.name} (${peerId}) - elapsed=${elapsed}ms`);
@@ -4377,6 +4428,20 @@ function MeetingPage({ portalRoomId }) {
                         if (reconnectHistoryRef.current.has(peerId)) {
                             reconnectHistoryRef.current.delete(peerId);
                             reconnectCompletedTimeRef.current.set(peerId, Date.now());  // ✅ 완료 시간 기록
+                        }
+                        return {
+                            ...p,
+                            isReconnecting: false,
+                            isLoading: false,
+                            reconnectStartedAt: undefined,
+                        };
+                    }
+
+                    // 🔥 재접속 상태가 5초 이상 지속되면 자동으로 해제 (무한 스피너 방지)
+                    if (elapsed > 5000) {
+                        console.log(`⚠️ [RECONNECT TIMEOUT] ${p.name} (${peerId}) - auto-clearing after ${elapsed}ms`);
+                        if (reconnectHistoryRef.current.has(peerId)) {
+                            reconnectHistoryRef.current.delete(peerId);
                         }
                         return {
                             ...p,
@@ -4723,15 +4788,24 @@ function MeetingPage({ portalRoomId }) {
                                 (c) => String(c.appData?.peerId) === peerId && !c.closed
                             );
 
+                            // 🔥 스트림이 실제로 존재하고 live 상태인지 확인
+                            const hasLiveStream = p.stream && p.stream.getVideoTracks().some(t => t.readyState === "live");
+
+                            // 🔥 스트림이 live 상태면 재접속 상태 해제 (consumer가 없어도 스트림이 작동 중이면 OK)
+                            // 🔥 핵심 수정: 이미 isReconnecting이 true인 경우에만 유지, 새로 true로 설정하지 않음
+                            // 카메라가 꺼져 있으면(cameraOff) 재접속 상태 아님 (정상 상태)
+                            const shouldBeReconnecting = p.isMe ? false
+                                : (p.isReconnecting && !hasActiveConsumer && !hasLiveStream && !p.cameraOff);
+
                             return {
                                 ...p,
-                                // 활성 consumer가 있으면 재접속 중이 아님 (스트림이 곧 복구될 것)
-                                isReconnecting: p.isMe ? false : !hasActiveConsumer,
+                                // 스트림이 live 상태이거나 consumer가 있으면 재접속 중이 아님
+                                isReconnecting: shouldBeReconnecting,
                                 // 활성 consumer가 있으면 기존 stream 유지
-                                stream: p.isMe ? p.stream : (hasActiveConsumer ? p.stream : null),
+                                stream: p.isMe ? p.stream : (hasActiveConsumer || hasLiveStream ? p.stream : null),
                                 screenStream: p.isMe ? p.screenStream : null,
                                 isScreenSharing: p.isMe ? p.isScreenSharing : false,
-                                reconnectStartedAt: p.isMe ? undefined : (hasActiveConsumer ? undefined : (p.reconnectStartedAt || Date.now()))
+                                reconnectStartedAt: p.isMe ? undefined : (shouldBeReconnecting ? (p.reconnectStartedAt || Date.now()) : undefined)
                             };
                         });
 

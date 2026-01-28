@@ -121,6 +121,11 @@ const FloatingPip = ({
         }
 
         const checkStreamHealth = () => {
+            // 🔥 백그라운드일 때는 스트림 체크를 건너뛰기 (브라우저가 비디오를 일시 중지할 수 있음)
+            if (document.hidden) {
+                return;
+            }
+
             const video = videoRef.current;
             if (!video) return;
 
@@ -146,11 +151,15 @@ const FloatingPip = ({
             }
         };
 
-        // 500ms마다 스트림 상태 체크
+        // 500ms마다 스트림 상태 체크 (백그라운드에서는 자동으로 건너뛰어짐)
         streamCheckIntervalRef.current = setInterval(checkStreamHealth, 500);
 
         // track ended 이벤트 리스너
         const handleTrackEnded = () => {
+            // 백그라운드일 때는 즉시 체크하지 않음
+            if (document.hidden) {
+                return;
+            }
             console.log("[FloatingPip] 🔴 track ended 이벤트 감지");
             checkStreamHealth();
         };
@@ -162,6 +171,21 @@ const FloatingPip = ({
             });
         }
 
+        // 🔥 Page Visibility API: 탭이 다시 보일 때 비디오 재생
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                const video = videoRef.current;
+                if (video && video.paused && video.srcObject) {
+                    console.log("[FloatingPip] 탭이 다시 보임, 비디오 재생 시도");
+                    video.play().catch((err) => {
+                        console.warn("[FloatingPip] 비디오 재생 실패:", err);
+                    });
+                }
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
         return () => {
             if (streamCheckIntervalRef.current) {
                 clearInterval(streamCheckIntervalRef.current);
@@ -171,6 +195,7 @@ const FloatingPip = ({
                     track.removeEventListener("ended", handleTrackEnded);
                 });
             }
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
     }, [stream, isInitialized, isStreamValid, findValidStreamFromDOM, onStreamInvalid]);
 
