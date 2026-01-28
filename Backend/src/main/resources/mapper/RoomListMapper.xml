@@ -82,4 +82,62 @@
         WHERE room_id = #{roomId}
     </delete>
 
+    <!-- 관심 자격증 기반 모집방 조회 -->
+    <select id="selectRoomsByCategoryIds"
+            resultType="com.example.demo.RoomList.RoomListVO">
+
+        SELECT
+        r.room_id AS roomId,
+        r.title,
+
+        r.host_user_email AS hostUserEmail,
+        r.hostUserNickname AS hostUserNickname,
+
+        r.room_img AS roomImg,
+        r.start_date AS startDate,
+        r.max_participants AS maxParticipants,
+
+        (
+        SELECT COUNT(*)
+        FROM room_join_request rjr
+        WHERE rjr.room_id = r.room_id
+        AND rjr.status = '승인'
+        ) AS currentParticipants,
+
+        r.deadline,
+        r.gender,
+        r.created_at AS createdAt,
+
+        CASE
+        WHEN c.level = 1 THEN c.name
+        WHEN c.level = 2 THEN c.name
+        WHEN c.level = 3 THEN mid.name
+        END AS midCategoryName,
+
+        CASE
+        WHEN c.level = 3 THEN c.name
+        ELSE NULL
+        END AS subCategoryName
+
+        FROM room r
+        LEFT JOIN category c ON r.categoryId = c.id
+        LEFT JOIN category mid ON c.parent_id = mid.id
+
+        WHERE r.status = 'OPEN'
+        AND r.categoryId IN
+        <foreach collection="categoryIds"
+                 item="id"
+                 open="("
+                 separator=","
+                 close=")">
+            #{id}
+        </foreach>
+
+        ORDER BY RAND()
+        LIMIT 20
+
+    </select>
+
+
+
 </mapper>

@@ -71,33 +71,32 @@ public class SecurityConfig {
                                 "/api/users/signup",
                                 "/api/users/check-email",
                                 "/api/category/**",
-                                "/api/rooms/**",
                                 "/api/meeting-rooms/**"
                         ).permitAll()
 
-                        //웹소켓 경로
-                        .requestMatchers("/ws/**")
-                        .permitAll()
+                        .requestMatchers("/api/rooms/interest").authenticated()
+
+                        .requestMatchers("/api/rooms/**").permitAll()
+
+                        .requestMatchers("/ws/**").permitAll()
 
                         .anyRequest().authenticated()
                 )
-                
-                // 인증 실패 시 리다이렉트 대신 401 JSON 응답 반환
+
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, authException) -> {
-                            // API 요청인 경우 JSON 응답
                             if (request.getRequestURI().startsWith("/api/")) {
                                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                                 response.setContentType("application/json;charset=UTF-8");
-                                response.getWriter().write("{\"error\":\"Unauthorized\",\"message\":\"인증이 필요합니다.\"}");
+                                response.getWriter().write(
+                                        "{\"error\":\"Unauthorized\",\"message\":\"인증이 필요합니다.\"}"
+                                );
                             } else {
-                                // 일반 요청은 기존대로 리다이렉트
                                 response.sendRedirect("/login");
                             }
                         })
                 )
 
-                // OAuth 로그인 시 이메일 가져오도록 설정
                 .oauth2Login(oauth -> oauth
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(oAuth2UserService)
@@ -113,7 +112,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // CORS 설정
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
@@ -122,8 +120,8 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization", "Content-Type"));
-        config.setAllowCredentials(false); // allowCredentials와 "*" origin은 함께 사용 불가
-        config.setMaxAge(3600L); // preflight 캐시 시간
+        config.setAllowCredentials(false);
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
@@ -132,7 +130,6 @@ public class SecurityConfig {
         return source;
     }
 
-    // 비밀번호 암호화
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
