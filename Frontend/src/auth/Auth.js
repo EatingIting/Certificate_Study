@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Auth.css";
 import { login } from "../api/api";
+import { getBackendOrigin } from "../utils/backendUrl";
 const logo = require("./메인로고.png");
 
 const Auth = () => {
@@ -48,10 +49,8 @@ const Auth = () => {
 
 
     const handleOAuthLogin = (provider) => {
-        const BACKEND_URL = window.location.origin.replace(":3000", ":8080");
-
-        window.location.href =
-            `${BACKEND_URL}/oauth2/authorization/${provider}`;
+        const backendOrigin = getBackendOrigin();
+        window.location.href = `${backendOrigin}/oauth2/authorization/${provider}`;
     };
 
     return (
