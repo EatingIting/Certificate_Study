@@ -38,6 +38,20 @@ const LMSMain = () => {
                 console.error("클래스룸 불러오기 실패", err);
             });
     }, []);
+    // ✅ 내 클래스룸 목록 불러오기
+useEffect(() => {
+  api.get("/classrooms/my")
+    .then((res) => {
+      setClassList(res.data);
+    })
+    .catch((err) => {
+      console.error("클래스룸 불러오기 실패", err);
+    });
+}, []);
+
+
+    console.log("classList:", classList, "type:", typeof classList, "isArray:", Array.isArray(classList));
+
 
     return (
         <main className="lms-main">
