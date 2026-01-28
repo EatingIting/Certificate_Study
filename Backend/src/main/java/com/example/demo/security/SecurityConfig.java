@@ -69,6 +69,8 @@ public class SecurityConfig {
                                 "/api/rooms/**"
                         ).permitAll()
 
+                        .requestMatchers("/api/ai/**").permitAll() // AI API 관련 허용
+
                         //웹소켓 경로
                         .requestMatchers("/ws/**")
                         .permitAll()
