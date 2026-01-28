@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
 @Configuration
@@ -70,7 +71,8 @@ public class SecurityConfig {
                                 "/api/users/signup",
                                 "/api/users/check-email",
                                 "/api/category/**",
-                                "/api/rooms/**"
+                                "/api/rooms/**",
+                                "/api/meeting-rooms/**"
                         ).permitAll()
 
                         //웹소켓 경로
@@ -78,6 +80,21 @@ public class SecurityConfig {
                         .permitAll()
 
                         .anyRequest().authenticated()
+                )
+                
+                // 인증 실패 시 리다이렉트 대신 401 JSON 응답 반환
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            // API 요청인 경우 JSON 응답
+                            if (request.getRequestURI().startsWith("/api/")) {
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                response.setContentType("application/json;charset=UTF-8");
+                                response.getWriter().write("{\"error\":\"Unauthorized\",\"message\":\"인증이 필요합니다.\"}");
+                            } else {
+                                // 일반 요청은 기존대로 리다이렉트
+                                response.sendRedirect("/login");
+                            }
+                        })
                 )
 
                 // OAuth 로그인 시 이메일 가져오도록 설정
@@ -102,10 +119,11 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
-        config.setExposedHeaders(List.of("Authorization"));
-        config.setAllowCredentials(false);
+        config.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        config.setAllowCredentials(false); // allowCredentials와 "*" origin은 함께 사용 불가
+        config.setMaxAge(3600L); // preflight 캐시 시간
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
