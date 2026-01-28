@@ -1788,7 +1788,7 @@ body {
     justify-content: center;
     background-color: #1a1a1a; /* 살짝 어두운 배경 */
     color: #e5e5e5;
-    z-index: 10;
+    z-index: 5; /* 🔥 필터 준비중 스피너(canvas)가 보이도록 z-index 낮춤 */
     position: absolute;
     top: 0;
     left: 0;

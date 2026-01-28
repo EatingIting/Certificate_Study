@@ -1,23 +1,31 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+// StudyLeave.js (UI=StudyLeave1 그대로 + 로직=StudyLeave2 적용)
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import api from "../../api/api"; // ✅ 프로젝트 경로에 맞게 유지/수정
 import "./StudyLeave.css";
 
 function StudyLeave() {
     let navigate = useNavigate();
+    let { subjectId } = useParams(); // = roomId
 
-    // ✅ (임시) 내 역할 - 백엔드 붙이면 교체
-    let myRole = "MEMBER"; // "OWNER" | "MEMBER"
-    let isMember = myRole === "MEMBER";
+    // ✅ 서버에서 받아올 상태
+    let [loading, setLoading] = useState(true);
+    let [guardMsg, setGuardMsg] = useState("");
+    let [myRole, setMyRole] = useState(""); // "OWNER" | "MEMBER" | ""
+    let [studyName, setStudyName] = useState(""); // 확인용(가능하면 서버에서 받아옴)
 
-    // ✅ (임시) 현재 스터디 이름 (백엔드 붙이면 subjectId로 조회해서 가져오면 됨)
-    let studyName = "온실 스터디룸";
-
+    // ✅ 입력 상태 (UI는 1번 그대로)
     let [password, setPassword] = useState("");
     let [typedStudyName, setTypedStudyName] = useState("");
     let [error, setError] = useState("");
     let [isSubmitting, setIsSubmitting] = useState(false);
 
+    let isOwner = myRole === "OWNER";
+    let isMember = myRole === "MEMBER";
+
     let isStudyNameMatched = useMemo(() => {
+        // studyName을 못 받아왔을 때도 있을 수 있으니, 그 경우에는 매칭을 강제하지 않음(UX만 유지)
+        if (!(studyName || "").trim()) return typedStudyName.trim().length > 0;
         return typedStudyName.trim() === studyName.trim();
     }, [typedStudyName, studyName]);
 
@@ -25,13 +33,57 @@ function StudyLeave() {
         return password.trim().length > 0 && isStudyNameMatched && !isSubmitting;
     }, [password, isStudyNameMatched, isSubmitting]);
 
+    async function fetchContext() {
+        setLoading(true);
+        setGuardMsg("");
+        setError("");
+
+        try {
+            let res = await api.get(`/rooms/${subjectId}/context`);
+            let data = res.data || {};
+
+            setMyRole(data.myRole || "");
+
+            // room name 후보들(프로젝트별 필드 차이 대응)
+            let nameCandidate =
+                data.studyName ||
+                data.roomName ||
+                data.name ||
+                (data.room && (data.room.name || data.room.roomName)) ||
+                "";
+
+            // 못 받으면 빈 값으로 두고(입력 검증은 약화됨), placeholder에만 subjectId를 사용
+            setStudyName(nameCandidate || "");
+        } catch (err) {
+            let status = err?.response?.status;
+
+            if (status === 401) setGuardMsg("로그인이 필요합니다.");
+            else if (status === 404) setGuardMsg("스터디룸을 찾을 수 없습니다.");
+            else setGuardMsg("정보를 불러오지 못했습니다.");
+
+            setMyRole("");
+        } finally {
+            setLoading(false);
+        }
+    }
+
     let onSubmit = async () => {
+        if (isSubmitting) return;
+
+        // 방장 탈퇴 불가
+        if (isOwner) {
+            setError("방장은 탈퇴할 수 없습니다. (방장 위임이 필요합니다.)");
+            return;
+        }
+
         if (!password.trim()) {
             setError("비밀번호를 입력해 주세요.");
             return;
         }
 
-        if (!isStudyNameMatched) {
+        // studyName을 못 받아온 경우는 강제 매칭을 약하게 처리했지만,
+        // studyName이 있다면 정확히 입력하도록 유지(원본 UI 의도)
+        if ((studyName || "").trim() && !isStudyNameMatched) {
             setError(`스터디 이름을 정확히 입력해 주세요. (정확히: "${studyName}")`);
             return;
         }
@@ -45,19 +97,62 @@ function StudyLeave() {
         setError("");
 
         try {
-            // TODO: 백엔드 연결 시 탈퇴 API 호출
-            // POST /api/studies/{subjectId}/leave
-            // body: { password }
-            // (studyName은 프론트에서 검증용으로만 쓰고 서버는 subjectId로 처리하면 됨)
+            // ✅ 백엔드: DELETE /rooms/{roomId}/participants/me
+            // (백엔드가 password 검증을 안 하므로 보내지 않음 — UX용 입력만 유지)
+            await api.delete(`/rooms/${subjectId}/participants/me`);
 
-            window.alert("탈퇴 처리(임시) 완료: 백엔드 연결 후 실제 탈퇴로 변경하세요.");
+            window.alert("탈퇴가 완료되었습니다.");
             navigate("/lmsMain", { replace: true });
-        } catch (e) {
-            setError("탈퇴 처리에 실패했습니다. 비밀번호를 확인해 주세요.");
+        } catch (err) {
+            let status = err?.response?.status;
+
+            if (status === 401) setError("로그인이 필요합니다.");
+            else if (status === 403) setError("권한이 없습니다.");
+            else if (status === 400) {
+                let msg = err?.response?.data?.message || "요청을 처리할 수 없습니다.";
+                setError(msg);
+            } else {
+                setError("탈퇴 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+            }
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    useEffect(() => {
+        fetchContext();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subjectId]);
+
+    // ✅ UI 구조는 StudyLeave1 그대로 유지하되, loading/guard 처리만 추가
+    if (loading) {
+        return (
+            <div className="page slPage">
+                <div className="card slCard">
+                    <div className="slGuard">불러오는 중...</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (guardMsg) {
+        return (
+            <div className="page slPage">
+                <div className="card slCard">
+                    <div className="slGuard">{guardMsg}</div>
+                    <div className="slActions">
+                        <button
+                            type="button"
+                            className="slBtn slBtnGhost"
+                            onClick={() => navigate(-1)}
+                        >
+                            돌아가기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="page slPage">
@@ -69,6 +164,7 @@ function StudyLeave() {
                     </p>
                 </div>
 
+                {/* ✅ 원본과 동일: 멤버만 가능 / 방장은 가드 */}
                 {!isMember && (
                     <div className="slGuard">
                         스터디원만 탈퇴할 수 있습니다. (방장은 먼저 방장 위임이 필요합니다.)
@@ -106,6 +202,7 @@ function StudyLeave() {
                                     }}
                                     placeholder="비밀번호를 입력하세요"
                                     autoFocus
+                                    autoComplete="current-password"
                                 />
                             </label>
 
@@ -113,16 +210,28 @@ function StudyLeave() {
                                 <div className="slLabel">스터디 이름 입력</div>
                                 <input
                                     type="text"
-                                    className={`slInput ${typedStudyName.length > 0 ? (isStudyNameMatched ? "ok" : "bad") : ""}`}
+                                    className={`slInput ${
+                                        typedStudyName.length > 0 ? (isStudyNameMatched ? "ok" : "bad") : ""
+                                    }`}
                                     value={typedStudyName}
                                     onChange={(e) => {
                                         setTypedStudyName(e.target.value);
                                         if (error) setError("");
                                     }}
-                                    placeholder={`"${studyName}" 를 입력하세요`}
+                                    placeholder={
+                                        (studyName || "").trim()
+                                            ? `"${studyName}" 를 입력하세요`
+                                            : `"스터디(${subjectId})" 를 입력하세요`
+                                    }
                                 />
                                 <div className="slHint">
-                                    정확히 <b>{studyName}</b> 를 입력해야 탈퇴할 수 있습니다.
+                                    {(studyName || "").trim() ? (
+                                        <>
+                                            정확히 <b>{studyName}</b> 를 입력해야 탈퇴할 수 있습니다.
+                                        </>
+                                    ) : (
+                                        <>스터디 이름을 불러오지 못해도 입력 후 진행할 수 있습니다.</>
+                                    )}
                                 </div>
                             </label>
 

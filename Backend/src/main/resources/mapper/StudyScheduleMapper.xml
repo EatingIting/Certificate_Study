@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.schedule.mapper.StudyScheduleMapper">
+
+    <resultMap id="StudyScheduleMap" type="com.example.demo.schedule.vo.StudyScheduleVO">
+        <id     property="studyScheduleId" column="study_schedule_id"/>
+        <result property="roundNum"        column="round_num"/>
+        <result property="studyDate"       column="study_date"/>
+        <result property="description"     column="description"/>
+        <result property="createdAt"       column="created_at"/>
+        <result property="updatedAt"       column="updated_at"/>
+        <result property="roomId"          column="room_id"/>
+    </resultMap>
+
+    <select id="selectByRange" resultMap="StudyScheduleMap">
+        SELECT
+        study_schedule_id, round_num, study_date, description,
+        created_at, updated_at, room_id
+        FROM study_schedule
+        WHERE room_id = #{roomId}
+        AND study_date <![CDATA[>=]]> #{start}
+        AND study_date <![CDATA[<=]]> DATE_SUB(#{endExclusive}, INTERVAL 1 DAY)
+        ORDER BY study_date ASC, round_num ASC
+    </select>
+
+    <insert id="insert" parameterType="com.example.demo.schedule.vo.StudyScheduleVO"
+            useGeneratedKeys="true" keyProperty="studyScheduleId">
+        INSERT INTO study_schedule (
+        round_num, study_date, description, room_id
+        ) VALUES (
+        #{roundNum}, #{studyDate}, #{description}, #{roomId}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
+        UPDATE study_schedule
+        SET
+        round_num = #{roundNum},
+        study_date = #{studyDate},
+        description = #{description}
+        WHERE study_schedule_id = #{studyScheduleId}
+        AND room_id = #{roomId}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM study_schedule
+        WHERE study_schedule_id = #{studyScheduleId}
+        AND room_id = #{roomId}
+    </delete>
+
+</mapper>
