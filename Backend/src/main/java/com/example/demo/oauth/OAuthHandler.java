@@ -1,6 +1,6 @@
-package com.example.demo.security;
+package com.example.demo.oauth;
 
-import com.example.demo.auth.AuthService;
+import com.example.demo.jwt.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -9,6 +9,8 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationSu
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
@@ -28,16 +30,31 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
         OAuth2User oauthUser = (OAuth2User) authentication.getPrincipal();
 
         String email = oauthUser.getAttribute("email");
-        String nickname = oauthUser.getAttribute("nickname");
+        Boolean exists = oauthUser.getAttribute("exists");
+        String provider = oauthUser.getAttribute("provider");
 
-        String token = jwtTokenProvider.createAccessToken(email);
+        if (exists != null && exists) {
 
-        response.sendRedirect(
-                "http://localhost:3000/oauth-success"
-                        + "?token=" + token
-        );
+            String token = jwtTokenProvider.createAccessToken(email);
+
+            response.sendRedirect(
+                    "http://localhost:3000/oauth-success"
+                            + "?token=" + token
+            );
+        }
+
+        else {
+
+            String encodedEmail = URLEncoder.encode(
+                    email,
+                    StandardCharsets.UTF_8
+            );
+
+            response.sendRedirect(
+                    "http://localhost:3000/signup"
+                            + "?email=" + encodedEmail
+                            + "&provider=" + provider
+            );
+        }
     }
-
-
-
 }

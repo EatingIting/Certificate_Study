@@ -26,10 +26,18 @@ html, body {
     align-items: center;
 }
 
+.signup-section-label {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-align: left;
+    margin-top: 0px;
+}
+
 /* ===== 카드 컨테이너 ===== */
 .login-container {
     width: 100%;
-    max-width: 380px;
+    max-width: 600px;
     background: #ffffff;
     padding: 48px 32px;
     border-radius: 20px;

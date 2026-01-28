@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class AuthVO {
@@ -17,4 +18,6 @@ public class AuthVO {
     private String gender; // MALE / FEMALE
     private String introduction;
     private LocalDateTime createdAt;
+
+    private List<Long> interestCategoryIds;
 }
