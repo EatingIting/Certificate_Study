@@ -1,14 +1,16 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { useSearchParams, useParams } from "react-router-dom";
 
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
+import koLocale from "@fullcalendar/core/locales/ko";
 import "./Calendar.css";
 
 function Calendar() {
     let calendarRef = useRef(null);
 
+    let { subjectId } = useParams();
     let [sp, setSp] = useSearchParams();
 
     let [visibleRange, setVisibleRange] = useState(null);
@@ -16,72 +18,24 @@ function Calendar() {
 
     let [openMenuId, setOpenMenuId] = useState(null);
 
-    /* =========================
-       일반 일정(더미)
-    ========================= */
-    let initialEvents = useMemo(() => {
-        return [
-            {
-                id: "1",
-                title: "정보처리기사 접수 시작",
-                start: "2026-01-20",
-                extendedProps: { type: "REGISTRATION" },
-                backgroundColor: "#e9fadc",
-                borderColor: "#e9fadc",
-                textColor: "#2f6a2f",
-            },
-            {
-                id: "2",
-                title: "SQLD 시험",
-                start: "2026-02-02",
-                extendedProps: { type: "EXAM" },
-                backgroundColor: "#97c793",
-                borderColor: "#97c793",
-                textColor: "#ffffff",
-            },
-            {
-                id: "3",
-                title: "정처기 접수 기간",
-                start: "2026-01-20",
-                end: "2026-01-28",
-                extendedProps: { type: "REGISTRATION" },
-                backgroundColor: "#e9fadc",
-                borderColor: "#e9fadc",
-                textColor: "#2f6a2f",
-            },
-            {
-                id: "4",
-                title: "기타 일정",
-                start: "2026-01-22",
-                extendedProps: { type: "OTHER", customLabel: "서류 준비" },
-                backgroundColor: "#eef5ec",
-                borderColor: "#eef5ec",
-                textColor: "#374151",
-            },
-        ];
-    }, []);
-
-    let [events, setEvents] = useState(initialEvents);
+    // ✅ roomId 전달 방식은 프로젝트마다 달라서 흔한 키들을 순서대로 본다.
+    let roomId =
+        subjectId ||
+        sp.get("roomId") ||
+        sp.get("subjectId") ||
+        sp.get("room") ||
+        sp.get("id") ||
+        "";
 
     /* =========================
-       스터디 일정(더미)
+       일반 일정(서버 연동)
     ========================= */
-    let initialStudyEvents = useMemo(() => {
-        return [
-            {
-                id: "S1",
-                title: "스터디 1회차",
-                start: "2026-01-21",
-                extendedProps: {
-                    type: "STUDY",
-                    round: 1,
-                    description: "오리엔테이션 / 진행 방식 정하기",
-                },
-            },
-        ];
-    }, []);
+    let [events, setEvents] = useState([]);
 
-    let [studyEvents, setStudyEvents] = useState(initialStudyEvents);
+    /* =========================
+       스터디 일정(서버 연동)
+    ========================= */
+    let [studyEvents, setStudyEvents] = useState([]);
 
     /* =========================
        모달 - 일반 일정
@@ -317,7 +271,109 @@ function Calendar() {
         setForm((prev) => ({ ...prev, [key]: value }));
     };
 
-    let saveEventFromModal = () => {
+    /* =========================
+       ✅ 토큰/인증 fetch
+       - localStorage: jwt_token, token
+       - sessionStorage: accessToken
+    ========================= */
+    let getToken = () => {
+        let t = sessionStorage.getItem("accessToken") || "";
+        return t.replace(/^Bearer\s+/i, "");
+    };
+
+    let authFetch = (url, options = {}) => {
+        let token = getToken();
+
+        let headers = {
+            ...(options.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+
+        return fetch(url, {
+            ...options,
+            headers,
+            // 프로젝트가 쿠키 기반이 아니어도 있어도 무해
+            credentials: "include",
+        });
+    };
+
+    /* =========================
+       서버 호출(조회)
+       GET /api/rooms/{roomId}/schedule?start=YYYY-MM-DD&end=YYYY-MM-DD (end exclusive)
+    ========================= */
+    let fetchRangeEvents = useCallback(
+        async (startYmd, endYmdExclusive) => {
+            if (!roomId) return;
+
+            let url = `/api/rooms/${roomId}/schedule?start=${encodeURIComponent(
+                startYmd
+            )}&end=${encodeURIComponent(endYmdExclusive)}`;
+
+            let res = await authFetch(url, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            if (!res.ok) {
+                let msg = await res.text().catch(() => "");
+                throw new Error(msg || `일정 조회 실패 (${res.status})`);
+            }
+
+            // { items: [ScheduleEventResponse...] } :contentReference[oaicite:4]{index=4}
+            let data = await res.json();
+            let items = Array.isArray(data?.items) ? data.items : [];
+
+            let normal = [];
+            let study = [];
+
+            for (let i = 0; i < items.length; i++) {
+                let it = items[i];
+                let t = it?.extendedProps?.type;
+
+                // end는 exclusive로 온다 :contentReference[oaicite:5]{index=5}
+                let ev = {
+                    id: it.id,
+                    title: it.title,
+                    start: it.start,
+                    ...(it.end ? { end: it.end } : {}),
+                    extendedProps: it.extendedProps || {},
+                    ...(it.backgroundColor ? { backgroundColor: it.backgroundColor } : {}),
+                    ...(it.borderColor ? { borderColor: it.borderColor } : {}),
+                    ...(it.textColor ? { textColor: it.textColor } : {}),
+                };
+
+                if (t === "STUDY") study.push(ev);
+                else normal.push(ev);
+            }
+
+            setEvents(normal);
+            setStudyEvents(study);
+        },
+        [roomId]
+    );
+
+    useEffect(() => {
+        if (!visibleRange) return;
+        if (!roomId) return;
+
+        let startYmd = toYmd(visibleRange.start);
+        let endYmd = toYmd(visibleRange.end); // currentEnd는 exclusive
+
+        (async () => {
+            try {
+                await fetchRangeEvents(startYmd, endYmd);
+            } catch (e) {
+                console.error(e);
+            }
+        })();
+    }, [visibleRange, roomId, fetchRangeEvents]);
+
+    /* =========================
+       서버 호출(일반 일정 저장/수정/삭제)
+       POST /api/schedules
+       PUT/DELETE /api/schedules/{id}?roomId=...&userId=...
+    ========================= */
+    let saveEventFromModal = async () => {
         let title = form.title.trim();
 
         if (!title) {
@@ -337,43 +393,120 @@ function Calendar() {
             return;
         }
 
-        let extendedProps = {
-            type: form.type,
-            description: form.description.trim(),
-        };
-
-        if (form.type === "OTHER" && form.customLabel.trim()) {
-            extendedProps.customLabel = form.customLabel.trim();
+        if (!roomId) {
+            setFormError("roomId가 없습니다. (URL 쿼리로 roomId 전달 필요)");
+            return;
         }
 
-        let endExclusive = hasEnd ? toExclusiveEnd(endInclusive) : null;
+        let userId = sessionStorage.getItem("userId") || "";
+        if (!userId) {
+            setFormError("로그인 userId가 없습니다. 다시 로그인 해주세요.");
+            return;
+        }
 
-        let nextEvent = {
-            id: editingEventId ? editingEventId : String(Date.now()),
+        let payload = {
             title,
+            description: form.description.trim(),
             start: form.start,
-            ...(endExclusive ? { end: endExclusive } : {}),
-            extendedProps,
-            backgroundColor: form.colorHex,
-            borderColor: form.colorHex,
+            end: hasEnd ? form.end : "",
+            type: form.type,
+            colorHex: form.colorHex,
+            customLabel: form.type === "OTHER" ? form.customLabel.trim() : "",
             textColor: form.textColor,
         };
 
-        if (!editingEventId) {
-            setEvents((prev) => [...prev, nextEvent]);
-        } else {
-            setEvents((prev) => prev.map((e) => (e.id === editingEventId ? nextEvent : e)));
-        }
+        try {
+            if (!editingEventId) {
+                let res = await authFetch(`/api/schedules`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        roomId,
+                        userId,
+                        ...payload,
+                    }),
+                });
 
-        closeAddModal();
+                if (!res.ok) {
+                    let msg = await res.text().catch(() => "");
+                    throw new Error(msg || `일정 생성 실패 (${res.status})`);
+                }
+
+                await res.json().catch(() => null);
+            } else {
+                let scheduleId = Number(editingEventId);
+                if (!scheduleId) throw new Error("수정할 scheduleId가 숫자가 아닙니다.");
+
+                let res = await authFetch(
+                    `/api/schedules/${scheduleId}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(
+                        userId
+                    )}`,
+                    {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    }
+                );
+
+                if (!res.ok) {
+                    let msg = await res.text().catch(() => "");
+                    throw new Error(msg || `일정 수정 실패 (${res.status})`);
+                }
+            }
+
+            if (visibleRange) {
+                let startYmd = toYmd(visibleRange.start);
+                let endYmd = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd, endYmd);
+            }
+
+            closeAddModal();
+        } catch (e) {
+            console.error(e);
+            setFormError(e?.message || "저장 중 오류가 발생했습니다.");
+        }
     };
 
-    let deleteEventById = (id) => {
-        setEvents((prev) => prev.filter((e) => e.id !== id));
-        setOpenMenuId(null);
+    let deleteEventById = async (id) => {
+        try {
+            if (!roomId) return;
 
-        if (editingEventId === id) {
-            closeAddModal();
+            let userId = sessionStorage.getItem("userId") || "";
+            if (!userId) {
+                setFormError("로그인 userId가 없습니다. 다시 로그인 해주세요.");
+                return;
+            }
+
+
+            let scheduleId = Number(id);
+            if (!scheduleId) throw new Error("삭제할 scheduleId가 숫자가 아닙니다.");
+
+            let res = await authFetch(
+                `/api/schedules/${scheduleId}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(
+                    userId
+                )}`,
+                { method: "DELETE" }
+            );
+
+            if (!res.ok) {
+                let msg = await res.text().catch(() => "");
+                throw new Error(msg || `일정 삭제 실패 (${res.status})`);
+            }
+
+            setOpenMenuId(null);
+
+            if (visibleRange) {
+                let startYmd = toYmd(visibleRange.start);
+                let endYmd = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd, endYmd);
+            }
+
+            if (editingEventId === id) {
+                closeAddModal();
+            }
+        } catch (e) {
+            console.error(e);
+            setFormError(e?.message || "삭제 중 오류가 발생했습니다.");
         }
     };
 
@@ -423,7 +556,12 @@ function Calendar() {
         setStudyForm((prev) => ({ ...prev, [key]: value }));
     };
 
-    let saveStudyFromModal = () => {
+    /* =========================
+       서버 호출(스터디 저장/수정/삭제)
+       POST /api/study-schedules
+       PUT/DELETE /api/study-schedules/{id}?roomId=...
+    ========================= */
+    let saveStudyFromModal = async () => {
         let roundNum = Number(studyForm.round);
 
         if (!roundNum || roundNum < 1) {
@@ -436,34 +574,99 @@ function Calendar() {
             return;
         }
 
-        let title = `스터디 ${roundNum}회차`;
-
-        let nextStudyEvent = {
-            id: editingStudyId ? editingStudyId : `S${Date.now()}`,
-            title,
-            start: studyForm.date,
-            extendedProps: {
-                type: "STUDY",
-                round: roundNum,
-                description: studyForm.description.trim(),
-            },
-        };
-
-        if (!editingStudyId) {
-            setStudyEvents((prev) => [...prev, nextStudyEvent]);
-        } else {
-            setStudyEvents((prev) => prev.map((e) => (e.id === editingStudyId ? nextStudyEvent : e)));
+        if (!roomId) {
+            setStudyError("roomId가 없습니다. (URL 쿼리로 roomId 전달 필요)");
+            return;
         }
 
-        closeStudyModal();
+        try {
+            if (!editingStudyId) {
+                let res = await authFetch(`/api/study-schedules`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        roomId,
+                        round: roundNum,
+                        date: studyForm.date,
+                        description: studyForm.description.trim(),
+                    }),
+                });
+
+                if (!res.ok) {
+                    let msg = await res.text().catch(() => "");
+                    throw new Error(msg || `스터디 일정 생성 실패 (${res.status})`);
+                }
+
+                await res.json().catch(() => null);
+            } else {
+                let raw = String(editingStudyId);
+                let studyScheduleId = raw.startsWith("S") ? Number(raw.slice(1)) : Number(raw);
+                if (!studyScheduleId) throw new Error("수정할 studyScheduleId 파싱 실패");
+
+                let res = await authFetch(
+                    `/api/study-schedules/${studyScheduleId}?roomId=${encodeURIComponent(roomId)}`,
+                    {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            round: roundNum,
+                            date: studyForm.date,
+                            description: studyForm.description.trim(),
+                        }),
+                    }
+                );
+
+                if (!res.ok) {
+                    let msg = await res.text().catch(() => "");
+                    throw new Error(msg || `스터디 일정 수정 실패 (${res.status})`);
+                }
+            }
+
+            if (visibleRange) {
+                let startYmd = toYmd(visibleRange.start);
+                let endYmd = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd, endYmd);
+            }
+
+            closeStudyModal();
+        } catch (e) {
+            console.error(e);
+            setStudyError(e?.message || "저장 중 오류가 발생했습니다.");
+        }
     };
 
-    let deleteStudyById = (id) => {
-        setStudyEvents((prev) => prev.filter((e) => e.id !== id));
-        setOpenMenuId(null);
+    let deleteStudyById = async (id) => {
+        try {
+            if (!roomId) return;
 
-        if (editingStudyId === id) {
-            closeStudyModal();
+            let raw = String(id);
+            let studyScheduleId = raw.startsWith("S") ? Number(raw.slice(1)) : Number(raw);
+            if (!studyScheduleId) throw new Error("삭제할 studyScheduleId 파싱 실패");
+
+            let res = await authFetch(
+                `/api/study-schedules/${studyScheduleId}?roomId=${encodeURIComponent(roomId)}`,
+                { method: "DELETE" }
+            );
+
+            if (!res.ok) {
+                let msg = await res.text().catch(() => "");
+                throw new Error(msg || `스터디 일정 삭제 실패 (${res.status})`);
+            }
+
+            setOpenMenuId(null);
+
+            if (visibleRange) {
+                let startYmd = toYmd(visibleRange.start);
+                let endYmd = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd, endYmd);
+            }
+
+            if (editingStudyId === id) {
+                closeStudyModal();
+            }
+        } catch (e) {
+            console.error(e);
+            setStudyError(e?.message || "삭제 중 오류가 발생했습니다.");
         }
     };
 
@@ -472,6 +675,7 @@ function Calendar() {
     ========================= */
     useEffect(() => {
         if (sp.get("modal") === "add") openAddModal();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sp]);
 
     /* =========================
@@ -500,7 +704,7 @@ function Calendar() {
                         ref={calendarRef}
                         plugins={[dayGridPlugin, interactionPlugin]}
                         initialView="dayGridMonth"
-                        locale="ko"
+                        locale={koLocale}
                         height="100%"
                         expandRows={true}
                         fixedWeekCount={true}
@@ -762,7 +966,6 @@ function Calendar() {
                                 </label>
                             </div>
 
-                            {/* ✅ 원래 느낌: 팔레트 + 글자색 버튼 + 미리보기 */}
                             <div className="calColorRow">
                                 <div className="calColorGroup">
                                     <span className="calFieldLabel">색상</span>
@@ -783,7 +986,6 @@ function Calendar() {
                                             />
                                         ))}
 
-                                        {/* 직접 선택도 유지 */}
                                         <input
                                             type="color"
                                             className="calColorPicker"

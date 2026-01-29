@@ -138,7 +138,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                     muted,
                     cameraOff,
                     false,
-                    true   // online = true
+                    true,   // online = true
+                    false,  // mutedByHost
+                    false   // cameraOffByHost
             );
         }
 
@@ -377,11 +379,26 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             Map<String, Object> changes = inbound.getChanges();
 
             if (changes != null) {
+                // 방장이 강제로 끈 경우 참가자가 스스로 켤 수 없음 — 서버에서 무시
                 if (changes.containsKey("muted")) {
-                    sender.setMuted((Boolean) changes.get("muted"));
+                    Boolean newMuted = (Boolean) changes.get("muted");
+                    if (Boolean.TRUE.equals(newMuted)) {
+                        sender.setMuted(true);
+                    } else {
+                        if (!sender.getMutedByHost()) {
+                            sender.setMuted(false);
+                        }
+                    }
                 }
                 if (changes.containsKey("cameraOff")) {
-                    sender.setCameraOff((Boolean) changes.get("cameraOff"));
+                    Boolean newCameraOff = (Boolean) changes.get("cameraOff");
+                    if (Boolean.TRUE.equals(newCameraOff)) {
+                        sender.setCameraOff(true);
+                    } else {
+                        if (!sender.getCameraOffByHost()) {
+                            sender.setCameraOff(false);
+                        }
+                    }
                 }
             }
 
@@ -475,6 +492,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             // 방장이 아니면 무시
             if ("FORCE_MUTE".equalsIgnoreCase(type) ||
                 "FORCE_CAMERA_OFF".equalsIgnoreCase(type) ||
+                "FORCE_UNMUTE".equalsIgnoreCase(type) ||
+                "FORCE_CAMERA_ON".equalsIgnoreCase(type) ||
                 "KICK".equalsIgnoreCase(type)) {
                 System.out.println("⚠️ 방장이 아닌 사용자가 방장 권한 기능 시도: " + sender.getUserName());
                 return;
@@ -490,8 +509,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             RoomUser targetUser = findUserById(users, targetUserId);
             if (targetUser == null) return;
 
-            // 상태 변경
+            // 상태 변경 (방장 강제이므로 참가자가 스스로 켤 수 없음)
             targetUser.setMuted(true);
+            targetUser.setMutedByHost(true);
 
             // 대상에게 알림 + 전체 브로드캐스트
             String payload = objectMapper.writeValueAsString(
@@ -523,8 +543,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             RoomUser targetUser = findUserById(users, targetUserId);
             if (targetUser == null) return;
 
-            // 상태 변경
+            // 상태 변경 (방장 강제이므로 참가자가 스스로 켤 수 없음)
             targetUser.setCameraOff(true);
+            targetUser.setCameraOffByHost(true);
 
             // 대상에게 알림 + 전체 브로드캐스트
             String payload = objectMapper.writeValueAsString(
@@ -543,6 +564,62 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             }
 
             // USERS_UPDATE도 브로드캐스트
+            broadcast(roomId);
+            return;
+        }
+
+        // 마이크 강제 켜기 (방장이 허용)
+        if ("FORCE_UNMUTE".equalsIgnoreCase(type)) {
+            String targetUserId = inbound.getTargetUserId();
+            if (targetUserId == null || targetUserId.isBlank()) return;
+
+            RoomUser targetUser = findUserById(users, targetUserId);
+            if (targetUser == null) return;
+
+            targetUser.setMuted(false);
+            targetUser.setMutedByHost(false);
+
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "FORCE_UNMUTE",
+                            "targetUserId", targetUserId,
+                            "hostName", sender.getUserName()
+                    )
+            );
+            TextMessage broadcastMessage = new TextMessage(payload);
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
+            broadcast(roomId);
+            return;
+        }
+
+        // 카메라 강제 켜기 (방장이 허용)
+        if ("FORCE_CAMERA_ON".equalsIgnoreCase(type)) {
+            String targetUserId = inbound.getTargetUserId();
+            if (targetUserId == null || targetUserId.isBlank()) return;
+
+            RoomUser targetUser = findUserById(users, targetUserId);
+            if (targetUser == null) return;
+
+            targetUser.setCameraOff(false);
+            targetUser.setCameraOffByHost(false);
+
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "FORCE_CAMERA_ON",
+                            "targetUserId", targetUserId,
+                            "hostName", sender.getUserName()
+                    )
+            );
+            TextMessage broadcastMessage = new TextMessage(payload);
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
             broadcast(roomId);
             return;
         }

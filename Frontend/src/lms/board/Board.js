@@ -1,328 +1,333 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useLMS } from "../LMSContext";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import "./Board.css";
+import { BoardApi, formatKst } from "./BoardApi";
 
 function Board() {
-  let navigate = useNavigate();
-  let [sp] = useSearchParams();
-  const { isHost } = useLMS();
+    let navigate = useNavigate();
+    let [sp] = useSearchParams();
+    let { subjectId } = useParams();
 
-  // ✅ URL: /lms/1/board?category=공지
-  let queryCategory = sp.get("category"); // "공지" | "일반" | "질문" | "자료" | null
+    let roomId = subjectId;
 
-  // ===== 더미 데이터(백엔드 붙이면 여기만 교체) =====
-  let initialPosts = useMemo(() => {
-    return [
-      {
-        postId: 100,
-        category: "공지",
-        title: "필독: 게시판 이용 규칙",
-        content: "욕설/비방/광고 금지. 서로 존중하기.\n(더미 데이터)",
-        authorName: "홍길동",
-        createdAt: "2026-01-19 10:00",
-        pinned: true,
-      },
-      {
-        postId: 101,
-        category: "공지",
-        title: "이번 주 시험/접수 일정",
-        content: "접수: 1/20\n시험: 2/02\n(더미 데이터)",
-        authorName: "홍길동",
-        createdAt: "2026-01-19 10:05",
-        pinned: true,
-      },
-      {
-        postId: 5,
-        category: "자료",
-        title: "오늘 발표 자료 공유합니다",
-        content: "링크는 나중에 추가할게요.\n(더미 데이터)",
-        authorName: "홍길동",
-        createdAt: "2026-01-18 16:10",
-        pinned: false,
-      },
-      {
-        postId: 4,
-        category: "질문",
-        title: "SQLD 개정 범위 어디까지인가요?",
-        content: "정리해서 공유해주실 분?\n(더미 데이터)",
-        authorName: "홍길동",
-        createdAt: "2026-01-18 18:40",
-        pinned: false,
-      },
-      {
-        postId: 3,
-        category: "일반",
-        title: "오늘 발표 순서 확인",
-        content: "A → B → C 순서로 진행!\n(더미 데이터)",
-        authorName: "홍길동",
-        createdAt: "2026-01-18 21:20",
-        pinned: false,
-      },
-      {
-        postId: 2,
-        category: "일반",
-        title: "스터디 시간 변경 가능한가요?",
-        content: "다음 주부터 30분 늦추는 건 어떤가요?\n(더미 데이터)",
-        authorName: "홍길동",
-        createdAt: "2026-01-17 11:20",
-        pinned: false,
-      },
-      {
-        postId: 1,
-        category: "자료",
-        title: "기출 모음 PDF",
-        content: "파일은 나중에 업로드!\n(더미 데이터)",
-        authorName: "홍길동",
-        createdAt: "2026-01-16 09:10",
-        pinned: false,
-      },
-    ];
-  }, []);
+    // ✅ URL: /lms/:subjectId/board?category=공지
+    let queryCategory = sp.get("category"); // "공지" | "일반" | "질문" | "자료" | null
 
-  let [posts] = useState(initialPosts);
+    // ===== 카테고리 코드/라벨 매핑 (백엔드는 NOTICE/GENERAL/QNA/RESOURCE) =====
+    let categoryToCode = (v) => {
+        if (!v) return "";
+        if (v === "공지") return "NOTICE";
+        if (v === "일반") return "GENERAL";
+        if (v === "질문") return "QNA";
+        if (v === "자료") return "RESOURCE";
+        return v; // 이미 코드값이면 그대로
+    };
 
-  // ===== 검색 =====
-  let [keyword, setKeyword] = useState("");
+    let categoryToLabel = (v) => {
+        if (!v) return "";
+        if (v === "NOTICE") return "공지";
+        if (v === "GENERAL") return "일반";
+        if (v === "QNA") return "질문";
+        if (v === "RESOURCE") return "자료";
+        return v; // 이미 라벨이면 그대로
+    };
 
-  // ===== 페이지네이션(그룹형) =====
-  let [page, setPage] = useState(1);
-  let pageSize = 10; // 한 페이지 글 개수
-  let groupSize = 10; // 한 그룹에 보여줄 페이지 번호 개수 (1~10, 11~20 ...)
+    let queryCategoryCode = categoryToCode(queryCategory);
 
-  // 검색/카테고리 변경되면 1페이지로
-  useEffect(() => {
-    setPage(1);
-  }, [keyword, queryCategory]);
+    let [keyword, setKeyword] = useState("");
 
-  // ===== navigate: ✅ 상대경로(roomId 안 씀) =====
-  let goWrite = () => {
-    navigate("write");
-  };
+    let [page, setPage] = useState(1);
+    let pageSize = 10;
+    let groupSize = 10;
 
-  let goDetail = (postId) => {
-    navigate(String(postId));
-  };
+    let [loading, setLoading] = useState(false);
+    let [error, setError] = useState("");
+    let [forbidden, setForbidden] = useState(false);
 
-  // ===== 필터/정렬 =====
-  let normalizedKeyword = keyword.trim().toLowerCase();
+    let [pinnedPosts, setPinnedPosts] = useState([]);
+    let [listPosts, setListPosts] = useState([]);
+    let [totalPages, setTotalPages] = useState(1);
 
-  let matchesKeyword = (p) => {
-    if (!normalizedKeyword) return true;
-    let hay = `${p.title} ${p.content}`.toLowerCase();
-    return hay.includes(normalizedKeyword);
-  };
+    useEffect(() => {
+        setPage(1);
+    }, [keyword, queryCategory]);
 
-  // 고정글: 검색만 적용 (카테고리는 무시하고 상단 노출)
-  let pinnedTopPosts = useMemo(() => {
-    return posts
-      .filter((p) => !!p.pinned)
-      .filter(matchesKeyword)
-      .sort((a, b) => b.postId - a.postId);
-  }, [posts, normalizedKeyword]);
+    let normalizedKeyword = keyword.trim();
 
-  // 일반 목록: 카테고리 + 검색 적용
-  let listPosts = useMemo(() => {
-    return posts
-      .filter((p) => !p.pinned)
-      .filter(matchesKeyword)
-      .filter((p) => {
-        if (!queryCategory) return true;
-        return p.category === queryCategory;
-      })
-      .sort((a, b) => b.postId - a.postId);
-  }, [posts, queryCategory, normalizedKeyword]);
+    // ✅ 고정글: category 무시 + 검색만 적용
+    useEffect(() => {
+        if (!roomId) return;
 
-  // ===== 페이지네이션 파생값 =====
-  let totalCount = listPosts.length;
-  let totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+        let alive = true;
 
-  // page 범위 보정
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-    if (page < 1) setPage(1);
-  }, [page, totalPages]);
+        (async () => {
+            try {
+                // pinned는 목록과 독립이라 로딩 표시를 따로 두지 않고, 실패해도 리스트는 살린다.
+                let data = await BoardApi.listPosts({
+                    roomId,
+                    category: "", // ✅ 카테고리 무시
+                    keyword: normalizedKeyword,
+                    page: 1,
+                    size: 50, // pinned 몇 개 없으니 넉넉하게
+                });
 
-  // 현재 page가 속한 그룹 번호(1부터)
-  let group = Math.ceil(page / groupSize);
+                if (!alive) return;
 
-  // 그룹 시작/끝 페이지 번호
-  let groupStart = (group - 1) * groupSize + 1;
-  let groupEnd = Math.min(groupStart + groupSize - 1, totalPages);
+                let items = (data.items || [])
+                    .filter((p) => !!p.isPinned)
+                    .sort((a, b) => (b.postId || 0) - (a.postId || 0))
+                    .map((p) => ({
+                        ...p,
+                        pinned: !!p.isPinned,
+                        authorName: p.nickname,
+                        createdAtText: formatKst(p.createdAt),
+                    }));
 
-  let pageNumbers = useMemo(() => {
-    let arr = [];
-    for (let i = groupStart; i <= groupEnd; i++) arr.push(i);
-    return arr;
-  }, [groupStart, groupEnd]);
+                setPinnedPosts(items);
+            } catch {
+                if (!alive) return;
+                setPinnedPosts([]);
+            }
+        })();
 
-  // 그룹 이동
-  let goFirstGroup = () => {
-    setPage(1);
-  };
+        return () => {
+            alive = false;
+        };
+    }, [roomId, normalizedKeyword]);
 
-  let goPrevGroup = () => {
-    if (group <= 1) return;
-    let prevGroupStart = (group - 2) * groupSize + 1;
-    setPage(prevGroupStart);
-  };
+    // ✅ 일반 목록: category + keyword + paging
+    useEffect(() => {
+        if (!roomId) {
+            setError("roomId(subjectId)가 없습니다. 라우트를 확인해주세요.");
+            return;
+        }
 
-  let goNextGroup = () => {
-    let maxGroup = Math.ceil(totalPages / groupSize);
-    if (group >= maxGroup) return;
-    let nextGroupStart = group * groupSize + 1;
-    setPage(nextGroupStart);
-  };
+        let alive = true;
 
-  let goLastGroup = () => {
-    let maxGroup = Math.ceil(totalPages / groupSize);
-    let lastGroupStart = (maxGroup - 1) * groupSize + 1;
-    setPage(lastGroupStart);
-  };
+        (async () => {
+            try {
+                setLoading(true);
+                setError("");
+                setForbidden(false);
 
-  let goPage = (p) => {
-    setPage(p);
-  };
+                let data = await BoardApi.listPosts({
+                    roomId,
+                    category: categoryToCode(queryCategory),
+                    keyword: normalizedKeyword,
+                    page,
+                    size: pageSize,
+                });
 
-  // 현재 페이지 목록
-  let startIdx = (page - 1) * pageSize;
-  let pagedPosts = useMemo(() => {
-    return listPosts.slice(startIdx, startIdx + pageSize);
-  }, [listPosts, startIdx, pageSize]);
+                if (!alive) return;
 
-  // 카테고리 칩 클래스
-  let chipClass = (category) => {
-    if (category === "공지") return "bd-chip notice";
-    if (category === "일반") return "bd-chip general";
-    if (category === "질문") return "bd-chip qna";
-    if (category === "자료") return "bd-chip resource";
-    return "bd-chip";
-  };
+                let items = (data.items || []).map((p) => ({
+                    ...p,
+                    pinned: !!p.isPinned,
+                    authorName: p.nickname,
+                    createdAtText: formatKst(p.createdAt),
+                }));
 
-  let titleSuffix = queryCategory ? ` · ${queryCategory}` : "";
+                setListPosts(items);
+                setTotalPages(Math.max(1, Number(data.totalPages || 1)));
+            } catch (e) {
+                if (!alive) return;
+                setForbidden(e?.status === 403);
+                setError(e?.message || "목록 조회 중 오류");
+                setListPosts([]);
+                setTotalPages(1);
+            } finally {
+                if (!alive) return;
+                setLoading(false);
+            }
+        })();
 
-  return (
-    <div className="bd">
-      {/* 상단 헤더 */}
-      <div className="bd-head">
-        <div>
-          <h2 className="bd-title">게시판{titleSuffix}</h2>
-          <p className="bd-sub">고정글은 상단에 표시됩니다.</p>
-        </div>
+        return () => {
+            alive = false;
+        };
+    }, [roomId, queryCategory, normalizedKeyword, page]);
 
-        <div className="bd-actions">
-          {/* 공지사항 카테고리는 방장만 글쓰기 가능, 나머지는 모두 가능 */}
-          {(!queryCategory || queryCategory !== "공지" || isHost) && (
-            <button className="bd-btn" onClick={goWrite}>
-              글쓰기
-            </button>
-          )}
-        </div>
-      </div>
+    // ✅ navigate: 상대경로
+    let goWrite = () => navigate("write");
+    let goDetail = (postId) => navigate(String(postId));
 
-      {/* 게시글 목록 */}
-      <div className="bd-card">
-        <div className="bd-list">
-          {/* pinned top */}
-          {pinnedTopPosts.length > 0 &&
-            pinnedTopPosts.map((p) => (
-              <div
-                key={`pin-${p.postId}`}
-                className="bd-item pinned-top"
-                onClick={() => goDetail(p.postId)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") goDetail(p.postId);
-                }}
-              >
-                <span className={chipClass(p.category)}>{p.category}</span>
-                <div className="bd-item-title">📌 {p.title}</div>
-                <div className="bd-item-meta">
-                  {p.authorName} · {p.createdAt}
+    // page 범위 보정
+    useEffect(() => {
+        if (page > totalPages) setPage(totalPages);
+        if (page < 1) setPage(1);
+    }, [page, totalPages]);
+
+    // 그룹 페이징
+    let group = Math.ceil(page / groupSize);
+    let groupStart = (group - 1) * groupSize + 1;
+    let groupEnd = Math.min(groupStart + groupSize - 1, totalPages);
+
+    let pageNumbers = useMemo(() => {
+        let arr = [];
+        for (let i = groupStart; i <= groupEnd; i++) arr.push(i);
+        return arr;
+    }, [groupStart, groupEnd]);
+
+    let goFirstGroup = () => setPage(1);
+    let goPrevGroup = () => {
+        if (group <= 1) return;
+        let prevGroupStart = (group - 2) * groupSize + 1;
+        setPage(prevGroupStart);
+    };
+    let goNextGroup = () => {
+        let maxGroup = Math.ceil(totalPages / groupSize);
+        if (group >= maxGroup) return;
+        let nextGroupStart = group * groupSize + 1;
+        setPage(nextGroupStart);
+    };
+    let goLastGroup = () => {
+        let maxGroup = Math.ceil(totalPages / groupSize);
+        let lastGroupStart = (maxGroup - 1) * groupSize + 1;
+        setPage(lastGroupStart);
+    };
+
+    let chipClass = (category) => {
+        if (category === "공지") return "bd-chip notice";
+        if (category === "일반") return "bd-chip general";
+        if (category === "질문") return "bd-chip qna";
+        if (category === "자료") return "bd-chip resource";
+        return "bd-chip";
+    };
+
+    let titleSuffix = queryCategory ? ` · ${queryCategory}` : "";
+
+    if (forbidden) {
+        return (
+            <div className="bd">
+                <div className="bd-card">
+                    <div className="bd-sub" style={{ fontWeight: 700, marginBottom: 6 }}>
+                        접근할 수 없습니다
+                    </div>
+                    <div className="bd-sub">{error || "스터디원만 접근 가능합니다."}</div>
+
+                    <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                        <button
+                            type="button"
+                            className="bd-btn-ghost"
+                            onClick={() => navigate(`/lms/${subjectId}`)}
+                        >
+                            스터디로 돌아가기
+                        </button>
+                    </div>
                 </div>
-              </div>
-            ))}
+            </div>
+        );
+    }
 
-          {/* page list */}
-          {pagedPosts.length === 0 ? (
-            <div className="bd-sub">게시글이 없습니다.</div>
-          ) : (
-            pagedPosts.map((p) => (
-              <div
-                key={p.postId}
-                className="bd-item"
-                onClick={() => goDetail(p.postId)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") goDetail(p.postId);
-                }}
-              >
-                <span className={chipClass(p.category)}>{p.category}</span>
-                <div className="bd-item-title">{p.title}</div>
-                <div className="bd-item-meta">
-                  {p.authorName} · {p.createdAt}
+    return (
+        <div className="bd">
+            <div className="bd-head">
+                <div>
+                    <h2 className="bd-title">게시판{titleSuffix}</h2>
+                    <p className="bd-sub">고정글은 상단에 표시됩니다.</p>
                 </div>
-              </div>
-            ))
-          )}
+
+                <div className="bd-actions">
+                    <button className="bd-btn" onClick={goWrite}>
+                        글쓰기
+                    </button>
+                </div>
+            </div>
+
+            <div className="bd-card">
+                {loading && <div className="bd-sub">불러오는 중...</div>}
+                {error && <div className="bd-sub">{error}</div>}
+
+                {!loading && !error && (
+                    <div className="bd-list">
+                        {pinnedPosts.length > 0 &&
+                            pinnedPosts.map((p) => (
+                                <div
+                                    key={`pin-${p.postId}`}
+                                    className="bd-item pinned-top"
+                                    onClick={() => goDetail(p.postId)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") goDetail(p.postId);
+                                    }}
+                                >
+                                <span className={chipClass(p.category)}>
+                                    {categoryToLabel(p.category)}
+                                </span>
+                                <div className="bd-item-title">📌 {p.title}</div>
+                                    <div className="bd-item-meta">
+                                        {p.authorName} · {p.createdAtText}
+                                    </div>
+                                </div>
+                            ))}
+
+                        {listPosts.length === 0 ? (
+                            <div className="bd-sub">게시글이 없습니다.</div>
+                        ) : (
+                        listPosts.map((p) => (
+                            <div
+                                key={p.postId}
+                                className="bd-item"
+                                onClick={() => goDetail(p.postId)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") goDetail(p.postId);
+                                }}
+                            >
+                            <span className={chipClass(p.category)}>
+                                {categoryToLabel(p.category)}
+                            </span>
+                            <div className="bd-item-title">{p.title}</div>
+                                <div className="bd-item-meta">
+                                    {p.authorName} · {p.createdAtText}
+                                </div>
+                            </div>
+                        ))
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <div className="bd-card bd-bottom-search">
+                <div className="bd-toolbar">
+                    <input
+                        className="bd-search"
+                        value={keyword}
+                        onChange={(e) => setKeyword(e.target.value)}
+                        placeholder="검색 (제목/내용)"
+                    />
+                    <button className="bd-btn-ghost" onClick={() => setKeyword("")} disabled={!keyword.trim()}>
+                        초기화
+                    </button>
+                </div>
+            </div>
+
+            <div className="bd-pagination">
+                <button className="bd-page-btn" onClick={goFirstGroup} disabled={group === 1}>
+                    {"<<"}
+                </button>
+
+                <button className="bd-page-btn" onClick={goPrevGroup} disabled={group === 1}>
+                    {"<"}
+                </button>
+
+                {pageNumbers.map((p) => (
+                    <button key={p} className={`bd-page-btn ${p === page ? "active" : ""}`} onClick={() => setPage(p)}>
+                        {p}
+                    </button>
+                ))}
+
+                <button className="bd-page-btn" onClick={goNextGroup} disabled={group === Math.ceil(totalPages / groupSize)}>
+                    {">"}
+                </button>
+
+                <button className="bd-page-btn" onClick={goLastGroup} disabled={group === Math.ceil(totalPages / groupSize)}>
+                    {">>"}
+                </button>
+            </div>
         </div>
-      </div>
-
-      {/* ✅ 검색창: 목록 아래 / 페이지네이션 위 */}
-      <div className="bd-card bd-bottom-search">
-        <div className="bd-toolbar">
-          <input
-            className="bd-search"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="검색 (제목/내용)"
-          />
-          <button className="bd-btn-ghost" onClick={() => setKeyword("")} disabled={!keyword.trim()}>
-            초기화
-          </button>
-        </div>
-      </div>
-
-      {/* ✅ 페이지네이션: 아래 (<< < 1..10 > >>) */}
-      <div className="bd-pagination">
-        <button className="bd-page-btn" onClick={goFirstGroup} disabled={group === 1}>
-          {"<<"}
-        </button>
-
-        <button className="bd-page-btn" onClick={goPrevGroup} disabled={group === 1}>
-          {"<"}
-        </button>
-
-        {pageNumbers.map((p) => (
-          <button
-            key={p}
-            className={`bd-page-btn ${p === page ? "active" : ""}`}
-            onClick={() => goPage(p)}
-          >
-            {p}
-          </button>
-        ))}
-
-        <button
-          className="bd-page-btn"
-          onClick={goNextGroup}
-          disabled={group === Math.ceil(totalPages / groupSize)}
-        >
-          {">"}
-        </button>
-
-        <button
-          className="bd-page-btn"
-          onClick={goLastGroup}
-          disabled={group === Math.ceil(totalPages / groupSize)}
-        >
-          {">>"}
-        </button>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default Board;
