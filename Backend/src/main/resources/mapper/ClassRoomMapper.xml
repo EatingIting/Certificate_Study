@@ -3,10 +3,10 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.classroom.ClassRoomMapper">
+<mapper namespace="com.example.demo.모집.mapper.ClassRoomMapper">
 
     <select id="selectMyClassRooms"
-            resultType="com.example.demo.classroom.ClassRoomVO">
+            resultType="com.example.demo.모집.vo.ClassRoomVO">
 
         <!-- 내가 방장인 방 -->
         SELECT

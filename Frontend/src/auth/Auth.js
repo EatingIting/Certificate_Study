@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./Auth.css";
 import { login } from "../api/api";
 import { getBackendOrigin } from "../utils/backendUrl";
+
 const logo = require("./메인로고.png");
 
 const Auth = () => {
@@ -15,15 +16,11 @@ const Auth = () => {
         password: "",
     });
 
-    const [errors, setErrors] = useState({
-        email: "",
-        password: "",
-    });
+    const [autoLogin, setAutoLogin] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
-        setErrors((prev) => ({ ...prev, [name]: "" }));
     };
 
     const handleLogin = async () => {
@@ -31,7 +28,6 @@ const Auth = () => {
             const res = await login(form.email, form.password);
 
             let token = res.data.token;
-
             if (token.startsWith("Bearer ")) {
                 token = token.replace("Bearer ", "");
             }
@@ -40,6 +36,15 @@ const Auth = () => {
             sessionStorage.setItem("nickname", res.data.nickname);
             sessionStorage.setItem("accessToken", token);
 
+            if (autoLogin) {
+                localStorage.setItem("userId", res.data.userId);
+                localStorage.setItem("nickname", res.data.nickname);
+                localStorage.setItem("accessToken", token);
+
+                const expiresAt = Date.now() + 1000 * 60 * 60 * 24 * 30;
+                localStorage.setItem("expiresAt", expiresAt);
+            }
+
             alert("로그인 성공");
             navigate("/");
         } catch {
@@ -47,131 +52,120 @@ const Auth = () => {
         }
     };
 
-
     const handleOAuthLogin = (provider) => {
         const backendOrigin = getBackendOrigin();
         const frontendOrigin = window.location.origin;
-        window.location.href = `${backendOrigin}/oauth2/authorization/${provider}?redirect_origin=${encodeURIComponent(frontendOrigin)}`;
+
+        window.location.href = `${backendOrigin}/oauth2/authorization/${provider}?redirect_origin=${encodeURIComponent(
+            frontendOrigin
+        )}`;
     };
 
     return (
-        <>
-            <div className="login-wrapper">
-                <div className="login-container">
-                    {!showEmailLogin ? (
-                        <>
-                            <div className="logo-area">
-                                <img
-                                    src={logo}
-                                    alt="온실 로고"
-                                    onClick={() => navigate("/")}
-                                    className="onsil-logo"
-                                />
-                            </div>
+        <div className="login-wrapper">
+            <div className="login-container">
+                {!showEmailLogin ? (
+                    <>
+                        <div className="logo-area">
+                            <img
+                                src={logo}
+                                alt="온실 로고"
+                                onClick={() => navigate("/")}
+                                className="onsil-logo"
+                            />
+                        </div>
 
-                            <div className="login-title">
-                                <h3>목표에 집중하는 원격 스터디 그룹</h3>
-                                <p>시간과 장소에 구애받지 않는 학습 환경</p>
-                            </div>
-
-                            <div className="button-group">
-                                <button
-                                    className="social-btn kakao"
-                                    onClick={() => handleOAuthLogin("kakao")}
-                                >
-                                    카카오로 시작하기
-                                </button>
-
-                                <button
-                                    className="social-btn naver"
-                                    onClick={() => handleOAuthLogin("naver")}
-                                >
-                                    네이버로 시작하기
-                                </button>
-
-                                <button
-                                    className="social-btn google"
-                                    onClick={() => handleOAuthLogin("google")}
-                                >
-                                    구글로 시작하기
-                                </button>
-                            </div>
+                        <div className="button-group">
+                            <button
+                                className="social-btn kakao"
+                                onClick={() => handleOAuthLogin("kakao")}
+                            >
+                                카카오로 시작하기
+                            </button>
 
                             <button
-                                className="email-login"
-                                onClick={() => setShowEmailLogin(true)}
+                                className="social-btn naver"
+                                onClick={() => handleOAuthLogin("naver")}
                             >
-                                이메일로 시작하기 →
+                                네이버로 시작하기
                             </button>
-                        </>
-                    ) : (
-                        <>
-                            <h3 className="modal-title">이메일 로그인</h3>
-
-                            <form
-                                onSubmit={(e) => {
-                                    e.preventDefault(); // 새로고침 방지
-                                    handleLogin(); // 로그인 실행
-                                }}
-                            >
-                                <input
-                                    type="email"
-                                    name="email"
-                                    placeholder="이메일"
-                                    value={form.email}
-                                    onChange={handleChange}
-                                    className={`modal-input ${
-                                        errors.email ? "error" : ""
-                                    }`}
-                                />
-                                {errors.email && (
-                                    <p className="input-error">
-                                        {errors.email}
-                                    </p>
-                                )}
-
-                                <input
-                                    type="password"
-                                    name="password"
-                                    placeholder="비밀번호"
-                                    value={form.password}
-                                    onChange={handleChange}
-                                    className={`modal-input ${
-                                        errors.password ? "error" : ""
-                                    }`}
-                                />
-                                {errors.password && (
-                                    <p className="input-error">
-                                        {errors.password}
-                                    </p>
-                                )}
-
-                                <button
-                                    type="submit"
-                                    className="modal-login-btn"
-                                >
-                                    로그인
-                                </button>
-                            </form>
-
-                            <p className="modal-switch">
-                                아직 회원이 아니신가요?
-                                <span onClick={() => navigate("/signup")}>
-                                    회원가입
-                                </span>
-                            </p>
 
                             <button
-                                className="modal-close"
-                                onClick={() => setShowEmailLogin(false)}
+                                className="social-btn google"
+                                onClick={() => handleOAuthLogin("google")}
                             >
-                                ← 뒤로가기
+                                구글로 시작하기
                             </button>
-                        </>
-                    )}
-                </div>
+                        </div>
+
+                        <button
+                            className="email-login"
+                            onClick={() => setShowEmailLogin(true)}
+                        >
+                            이메일로 시작하기 →
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <h3 className="modal-title">이메일 로그인</h3>
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleLogin();
+                            }}
+                        >
+                            <input
+                                type="email"
+                                name="email"
+                                placeholder="이메일"
+                                value={form.email}
+                                onChange={handleChange}
+                                className="modal-input"
+                            />
+
+                            <input
+                                type="password"
+                                name="password"
+                                placeholder="비밀번호"
+                                value={form.password}
+                                onChange={handleChange}
+                                className="modal-input"
+                            />
+
+                            <label className="auto-login">
+                                <input
+                                    type="checkbox"
+                                    checked={autoLogin}
+                                    onChange={(e) =>
+                                        setAutoLogin(e.target.checked)
+                                    }
+                                />
+                                자동 로그인
+                            </label>
+
+                            <button type="submit" className="modal-login-btn">
+                                로그인
+                            </button>
+                        </form>
+
+                        <p className="modal-switch">
+                            아직 회원이 아니신가요?
+                            <span onClick={() => navigate("/signup")}>
+                                회원가입
+                            </span>
+                        </p>
+
+                        <button
+                            className="modal-close"
+                            onClick={() => setShowEmailLogin(false)}
+                        >
+                            ← 뒤로가기
+                        </button>
+                    </>
+                )}
             </div>
-        </>
+        </div>
     );
 };
 

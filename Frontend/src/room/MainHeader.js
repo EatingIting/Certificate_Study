@@ -30,12 +30,11 @@ const MainHeader = () => {
 
     const handleLogout = () => {
         sessionStorage.clear();
-        setNickname(null);
-        setIsOpen(false);
+        localStorage.clear();
 
         alert("로그아웃 되었습니다.");
 
-        navigate("/");
+        navigate("/auth");
     };
 
 
