@@ -5,6 +5,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
+import { useLMS } from "../LMSContext";
 import "./Calendar.css";
 
 function Calendar() {
@@ -17,6 +18,17 @@ function Calendar() {
     let [visibleTitle, setVisibleTitle] = useState("");
 
     let [openMenuId, setOpenMenuId] = useState(null);
+
+    const { user, room } = useLMS();
+
+    let isHost = !!(
+        user &&
+        room &&
+        user.email &&
+        room.hostUserEmail &&
+        String(user.email).trim().toLowerCase() ===
+            String(room.hostUserEmail).trim().toLowerCase()
+    );
 
     // ✅ roomId 전달 방식은 프로젝트마다 달라서 흔한 키들을 순서대로 본다.
     let roomId =
@@ -526,6 +538,8 @@ function Calendar() {
         setStudyForm({
             round: 1,
             date: "",
+            startTime: "00:00",
+            endTime: "00:00",
             description: "",
         });
 
@@ -545,6 +559,8 @@ function Calendar() {
         setStudyForm({
             round: Number(studyEvent.extendedProps?.round || 1),
             date: dateStr,
+            startTime: studyEvent.extendedProps?.startTime || "00:00",
+            endTime: studyEvent.extendedProps?.endTime || "00:00",
             description: studyEvent.extendedProps?.description || "",
         });
 
@@ -574,6 +590,16 @@ function Calendar() {
             return;
         }
 
+        if (!studyForm.startTime || !studyForm.endTime) {
+            setStudyError("시작/종료 시간을 입력해 주세요.");
+            return;
+        }
+
+        if (studyForm.endTime <= studyForm.startTime) {
+            setStudyError("종료 시간은 시작 시간 이후여야 합니다.");
+            return;
+        }
+
         if (!roomId) {
             setStudyError("roomId가 없습니다. (URL 쿼리로 roomId 전달 필요)");
             return;
@@ -588,6 +614,8 @@ function Calendar() {
                         roomId,
                         round: roundNum,
                         date: studyForm.date,
+                        startTime: studyForm.startTime,
+                        endTime: studyForm.endTime,
                         description: studyForm.description.trim(),
                     }),
                 });
@@ -611,6 +639,8 @@ function Calendar() {
                         body: JSON.stringify({
                             round: roundNum,
                             date: studyForm.date,
+                            startTime: studyForm.startTime,
+                            endTime: studyForm.endTime,
                             description: studyForm.description.trim(),
                         }),
                     }
@@ -761,27 +791,31 @@ function Calendar() {
                         </div>
 
                         <div className="calListActions">
-                            <button
-                                type="button"
-                                className="calStudyBtn"
-                                onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    openStudyAddModal();
-                                }}
-                            >
-                                스터디 일정 추가
-                            </button>
+                            {isHost && (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="calStudyBtn"
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            openStudyAddModal();
+                                        }}
+                                    >
+                                        스터디 일정 추가
+                                    </button>
 
-                            <button
-                                type="button"
-                                className="calAddBtn"
-                                onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    openAddModal();
-                                }}
-                            >
-                                일정 추가
-                            </button>
+                                    <button
+                                        type="button"
+                                        className="calAddBtn"
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            openAddModal();
+                                        }}
+                                    >
+                                        일정 추가
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -807,6 +841,21 @@ function Calendar() {
 
                             let isStudy = ev.extendedProps?.type === "STUDY";
 
+                            let startTime = ev.extendedProps?.startTime || "";
+                            let endTime = ev.extendedProps?.endTime || "";
+
+                            let timeText = "";
+
+                            if (isStudy) {
+                                let startTime = ev.extendedProps?.startTime || "";
+                                let endTime = ev.extendedProps?.endTime || "";
+                                if (startTime && endTime) timeText = `${startTime} ~ ${endTime}`;
+                                else if (startTime) timeText = startTime;
+                            }
+
+                            if (startTime && endTime) timeText = `${startTime} ~ ${endTime}`;
+                            else if (startTime) timeText = startTime;
+
                             return (
                                 <div key={ev.id} className="calItem">
                                     <div className="calItemTop">
@@ -818,6 +867,7 @@ function Calendar() {
                                             <span className="calDate">
                                                 {startStr ? fmtDate(startStr) : ""}
                                                 {endStr ? ` ~ ${fmtDate(endStr)}` : ""}
+                                                {timeText ? ` · ${timeText}` : ""}
                                             </span>
 
                                             <button
@@ -1100,6 +1150,28 @@ function Calendar() {
                                         className="calInput"
                                         value={studyForm.date}
                                         onChange={(e) => onChangeStudyForm("date", e.target.value)}
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="calRow2">
+                                <label className="calField">
+                                    <span className="calFieldLabel">시작 시간</span>
+                                    <input
+                                        type="time"
+                                        className="calInput"
+                                        value={studyForm.startTime}
+                                        onChange={(e) => onChangeStudyForm("startTime", e.target.value)}
+                                    />
+                                </label>
+
+                                <label className="calField">
+                                    <span className="calFieldLabel">종료 시간</span>
+                                    <input
+                                        type="time"
+                                        className="calInput"
+                                        value={studyForm.endTime}
+                                        onChange={(e) => onChangeStudyForm("endTime", e.target.value)}
                                     />
                                 </label>
                             </div>

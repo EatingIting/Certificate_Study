@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.example.demo.schedule.mapper.StudyScheduleMapper">
 
@@ -9,6 +9,8 @@
         <id     property="studyScheduleId" column="study_schedule_id"/>
         <result property="roundNum"        column="round_num"/>
         <result property="studyDate"       column="study_date"/>
+        <result property="startTime"       column="start_time"/>
+        <result property="endTime"         column="end_time"/>
         <result property="description"     column="description"/>
         <result property="createdAt"       column="created_at"/>
         <result property="updatedAt"       column="updated_at"/>
@@ -16,9 +18,15 @@
     </resultMap>
 
     <select id="selectByRange" resultMap="StudyScheduleMap">
-        SELECT
-        study_schedule_id, round_num, study_date, description,
-        created_at, updated_at, room_id
+        SELECT study_schedule_id,
+               round_num,
+               study_date,
+               start_time,
+               end_time,
+               description,
+               created_at,
+               updated_at,
+               room_id
         FROM study_schedule
         WHERE room_id = #{roomId}
         AND study_date <![CDATA[>=]]> #{start}
@@ -28,19 +36,29 @@
 
     <insert id="insert" parameterType="com.example.demo.schedule.vo.StudyScheduleVO"
             useGeneratedKeys="true" keyProperty="studyScheduleId">
-        INSERT INTO study_schedule (
-        round_num, study_date, description, room_id
-        ) VALUES (
-        #{roundNum}, #{studyDate}, #{description}, #{roomId}
+        INSERT INTO
+            study_schedule (room_id,
+                            round_num,
+                            study_date,
+                            start_time,
+                            end_time,
+                            description
+        ) VALUES (#{roomId},
+                  #{roundNum},
+                  #{studyDate},
+                  #{startTime},
+                  #{endTime},
+                  #{description}
         )
     </insert>
 
     <update id="update" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
         UPDATE study_schedule
-        SET
-        round_num = #{roundNum},
-        study_date = #{studyDate},
-        description = #{description}
+        SET round_num = #{roundNum},
+            study_date = #{studyDate},
+            start_time = #{startTime},
+            end_time = #{endTime},
+            description = #{description}
         WHERE study_schedule_id = #{studyScheduleId}
         AND room_id = #{roomId}
     </update>
