@@ -116,15 +116,26 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
         // 환경 변수는 개발/프로덕션 환경별로 고정값이 필요할 때만 사용
         // 동적 감지가 실패한 경우에만 환경 변수 사용
 
-        // 4순위: Origin 헤더에서 추출 (가장 신뢰할 수 있는 프론트엔드 URL)
+        // 4순위: Origin 헤더에서 추출 (OAuth 제공자 도메인이 아닌 경우만)
         if (frontUrl == null || frontUrl.isEmpty()) {
             String origin = request.getHeader("Origin");
             log.info("[OAuthHandler] 4순위 시도 - Origin: {}", origin);
             
             if (origin != null && !origin.isEmpty()) {
-                // Origin 헤더는 프론트엔드의 정확한 URL을 제공
-                frontUrl = origin;
-                log.info("[OAuthHandler] Origin에서 추출한 URL: {}", frontUrl);
+                try {
+                    java.net.URL originUrl = new java.net.URL(origin);
+                    String originHost = originUrl.getHost();
+                    
+                    // OAuth 제공자 도메인이 아닌 경우에만 사용
+                    if (!isOAuthProviderDomain(originHost)) {
+                        frontUrl = origin;
+                        log.info("[OAuthHandler] Origin에서 추출한 URL: {}", frontUrl);
+                    } else {
+                        log.warn("[OAuthHandler] Origin이 OAuth 제공자 도메인입니다: {}", originHost);
+                    }
+                } catch (Exception e) {
+                    log.warn("[OAuthHandler] Origin 파싱 실패: {}", e.getMessage());
+                }
             }
         }
 
@@ -139,28 +150,32 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
                     String refererHost = refererUrl.getHost();
                     String refererScheme = refererUrl.getProtocol();
                     
-                    // Referer가 백엔드 도메인이 아닌 경우에만 사용
-                    String backendHost = request.getServerName();
-                    if (!refererHost.equals(backendHost) && !refererHost.equals("localhost") && !refererHost.equals("127.0.0.1")) {
-                        if (refererScheme.equals("https")) {
-                            frontUrl = refererScheme + "://" + refererHost;
-                        } else {
-                            int port = refererUrl.getPort();
-                            if (port == -1) {
+                    // OAuth 제공자 도메인이 아닌 경우에만 사용
+                    if (!isOAuthProviderDomain(refererHost)) {
+                        String backendHost = request.getServerName();
+                        if (!refererHost.equals(backendHost) && !refererHost.equals("localhost") && !refererHost.equals("127.0.0.1")) {
+                            if (refererScheme.equals("https")) {
                                 frontUrl = refererScheme + "://" + refererHost;
                             } else {
+                                int port = refererUrl.getPort();
+                                if (port == -1) {
+                                    frontUrl = refererScheme + "://" + refererHost;
+                                } else {
+                                    frontUrl = refererScheme + "://" + refererHost + ":" + port;
+                                }
+                            }
+                            log.info("[OAuthHandler] Referer에서 추출한 URL: {}", frontUrl);
+                        } else if (refererHost.equals("localhost") || refererHost.equals("127.0.0.1")) {
+                            // localhost인 경우 포트 확인
+                            int port = refererUrl.getPort();
+                            if (port > 0 && port != request.getServerPort()) {
+                                // 프론트엔드 포트가 백엔드 포트와 다른 경우
                                 frontUrl = refererScheme + "://" + refererHost + ":" + port;
+                                log.info("[OAuthHandler] Referer에서 추출한 URL (포트 포함): {}", frontUrl);
                             }
                         }
-                        log.info("[OAuthHandler] Referer에서 추출한 URL: {}", frontUrl);
-                    } else if (refererHost.equals("localhost") || refererHost.equals("127.0.0.1")) {
-                        // localhost인 경우 포트 확인
-                        int port = refererUrl.getPort();
-                        if (port > 0 && port != request.getServerPort()) {
-                            // 프론트엔드 포트가 백엔드 포트와 다른 경우
-                            frontUrl = refererScheme + "://" + refererHost + ":" + port;
-                            log.info("[OAuthHandler] Referer에서 추출한 URL (포트 포함): {}", frontUrl);
-                        }
+                    } else {
+                        log.warn("[OAuthHandler] Referer가 OAuth 제공자 도메인입니다: {}", refererHost);
                     }
                 } catch (Exception e) {
                     log.warn("[OAuthHandler] Referer 파싱 실패: {}", e.getMessage());
@@ -224,5 +239,24 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
 
         log.info("[OAuthHandler] 최종 리다이렉트 URL: {}", frontUrl);
         return frontUrl;
+    }
+
+    /**
+     * OAuth 제공자 도메인인지 확인
+     */
+    private boolean isOAuthProviderDomain(String host) {
+        if (host == null || host.isEmpty()) {
+            return false;
+        }
+        
+        // 네이버, 카카오, 구글 OAuth 제공자 도메인 체크
+        return host.contains("naver.com") || 
+               host.contains("nid.naver.com") ||
+               host.contains("kakao.com") ||
+               host.contains("kauth.kakao.com") ||
+               host.contains("kapi.kakao.com") ||
+               host.contains("google.com") ||
+               host.contains("accounts.google.com") ||
+               host.contains("oauth2.googleapis.com");
     }
 }

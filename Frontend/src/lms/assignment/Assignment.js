@@ -153,7 +153,6 @@ const Assignment = () => {
     return (
         <div className="as-page">
             <div className="as-topbar">
-                {/* ✅ 여기 onClick 추가 */}
                 <button className="as-create-btn" type="button" onClick={openCreateModal}>
                     + 과제 생성
                 </button>
