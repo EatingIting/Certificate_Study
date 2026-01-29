@@ -10,6 +10,7 @@ import "./MeetingPage.css";
 import { useMeeting } from "./MeetingContext";
 import Toast from "../toast/Toast";
 import { getHostnameWithPort, getWsProtocol } from "../utils/backendUrl";
+import api from "../api/api";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
@@ -1276,15 +1277,50 @@ function MeetingPage({ portalRoomId }) {
         }
     }, []); // 마운트 시 한 번만 실행
 
+    // 사용자 정보 가져오기 (nickname 사용)
+    const [userNickname, setUserNickname] = useState(null);
+    
+    useEffect(() => {
+        // API에서 사용자 정보 가져오기
+        api.get("/users/me")
+            .then((res) => {
+                const nickname = res.data.nickname?.trim() || "";
+                const name = res.data.name?.trim() || "";
+                
+                // nickname을 우선적으로 사용하고, 없으면 name 사용
+                const displayName = nickname || name || null;
+                if (displayName) {
+                    setUserNickname(displayName);
+                    userNameRef.current = displayName;
+                    // localStorage에 userName 저장
+                    localStorage.setItem("userName", displayName);
+                }
+                if (res.data.userId) {
+                    localStorage.setItem("userId", res.data.userId);
+                    userIdRef.current = res.data.userId;
+                }
+            })
+            .catch((err) => {
+                console.error("사용자 정보 가져오기 실패", err);
+                // 실패 시 기존 로직 사용
+            });
+    }, []);
+
     if (!userIdRef.current) {
-        const savedId = localStorage.getItem("stableUserId");
-        const savedName = localStorage.getItem("stableUserName");
+        // localStorage에서 userId와 userName 가져오기
+        const savedId = localStorage.getItem("userId");
+        const savedName = localStorage.getItem("userName");
 
         const id = savedId || safeUUID();
         const name = savedName || `User-${id.slice(0, 4)}`;
 
-        localStorage.setItem("stableUserId", id);
-        localStorage.setItem("stableUserName", name);
+        // localStorage에 저장 (없으면 생성)
+        if (!savedId) {
+            localStorage.setItem("userId", id);
+        }
+        if (!savedName) {
+            localStorage.setItem("userName", name);
+        }
 
         userIdRef.current = id;
         userNameRef.current = name;
@@ -1294,7 +1330,8 @@ function MeetingPage({ portalRoomId }) {
     const mainVideoRef = useRef(null);
 
     const userId = userIdRef.current;
-    const userName = userNameRef.current;
+    // userNickname이 있으면 그것을 사용하고, 없으면 기존 userName 사용
+    const userName = userNickname || userNameRef.current;
 
     const hasAudioTrack = localStream?.getAudioTracks().length > 0;
     // const hasVideoTrack = localStream?.getVideoTracks().length > 0;

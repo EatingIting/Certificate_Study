@@ -1,15 +1,22 @@
 import "./LMSHeader.css";
-import { Bell, MessageCircle, User } from "lucide-react";
+import { Bell, MessageCircle, User, Star } from "lucide-react";
+import { useLMS } from "./LMSContext";
 
 export default function Header() {
+    const { displayName, loading, roomTitle, roomLoading, user, room } = useLMS();
+    const isHost = !!(user && room && user.email && room.hostUserEmail &&
+        String(user.email).trim().toLowerCase() === String(room.hostUserEmail).trim().toLowerCase());
+
     return (
         <header className="lms-header">
             <div className="lms-header-left">
                 <div className="logo-box" />
 
                 <div className="lms-header-text">
-                    <span className="title">정보처리기사 스터디룸</span>
-                    <p>000님 환영합니다!</p>
+                    <span className="title">
+                        {roomLoading ? "로딩 중..." : roomTitle || "undefined"}
+                    </span>
+                    <p>{loading ? "로딩 중..." : displayName ? `${displayName}님 환영합니다!` : "사용자님 환영합니다!"}</p>
                 </div>
             </div>
 
@@ -17,6 +24,12 @@ export default function Header() {
             <div className="lms-header-right">
                 <MessageCircle size={18} />
                 <Bell size={18} />
+                {isHost && (
+                    <div className="host-badge" title="방장">
+                        <Star size={18} fill="#fbbf24" color="#fbbf24" />
+                        <span className="host-text">(방장)</span>
+                    </div>
+                )}
                 <div className="profile">
                     <User size={18} />
                 </div>
