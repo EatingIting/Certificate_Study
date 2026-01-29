@@ -351,17 +351,21 @@ const RoomPage = () => {
                         <div>{(page - 1) * pageSize + idx + 1}</div>
                         <div>{room.midCategoryName ?? room.subCategoryName}</div>
                         <div className="title-col">
-                            <strong className="row-title">{room.title}</strong>
-                            {(room.subCategoryName || room.midCategoryName) && (
-                                <span className="tag">
-                                    {room.subCategoryName ?? room.midCategoryName}
-                                </span>
-                            )}
-                            {calcDday(room.deadline) && (
-                                <span className="dday">
-                                    {calcDday(room.deadline)}
-                                </span>
-                            )}
+                            <div className="title-wrap">
+                                <strong className="row-title">{room.title}</strong>
+
+                                {(room.subCategoryName || room.midCategoryName) && (
+                                    <span className="tag">
+                {room.subCategoryName ?? room.midCategoryName}
+            </span>
+                                )}
+
+                                {calcDday(room.deadline) && (
+                                    <span className="dday">
+                {calcDday(room.deadline)}
+            </span>
+                                )}
+                            </div>
                         </div>
                         <div>{room.hostUserNickname}</div>
                         <div>{room.createdAt?.slice(0, 10)}</div>

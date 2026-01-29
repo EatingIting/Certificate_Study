@@ -3,11 +3,11 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.main.MainMapper">
+<mapper namespace="com.example.demo.모집.mapper.MainMapper">
 
     <!-- 메인페이지 모집중 스터디 최신 4개 -->
     <select id="selectMainRooms"
-            resultType="com.example.demo.main.MainVO">
+            resultType="com.example.demo.모집.vo.MainVO">
 
         SELECT
             r.room_id AS roomId,
