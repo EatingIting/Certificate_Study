@@ -1984,6 +1984,12 @@ body {
     left: 0;
 }
 
+/* 하단 타일 재접속 중 스피너도 타일과 동일한 radius */
+.bottom-strip .video-tile .reconnecting-overlay,
+.strip-item .video-tile .reconnecting-overlay {
+    border-radius: 0.75rem;
+}
+
 .reconnecting-overlay p {
     margin-top: 10px;
     font-size: 0.9rem;

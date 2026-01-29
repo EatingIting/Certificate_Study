@@ -5400,13 +5400,15 @@ function MeetingPage({ portalRoomId }) {
                             }
 
                             const isMe = peerId === String(userId);
+                            const isOfflineFromServer = u.online === false;
 
                             // 스트림 복구 (React 상태 갱신 전 Ref 확인)
                             const refStream = peerStreamsRef.current.get(peerId);
                             const currentStream = old?.stream || refStream || null;
 
                             // 🔥 최우선 보호 규칙: live stream이 있으면 무조건 유지 (PIP 모드 전환 시 깜빡임 방지)
-                            if (!isMe && currentStream) {
+                            // 단, 서버가 online=false(재접속 중)로 보낸 유저는 live여도 재접속 스피너 표시
+                            if (!isMe && currentStream && !isOfflineFromServer) {
                                 const hasLiveStream = currentStream.getVideoTracks().some(t => t.readyState === "live");
                                 if (hasLiveStream) {
                                     // live stream이 있으면 재접속 상태로 표시하지 않고 스트림 유지
@@ -5436,6 +5438,7 @@ function MeetingPage({ portalRoomId }) {
 
                             // 변수 선언 순서 수정 (ReferenceError 방지)
                             const isOnline = u.online === true;
+                            if (isOnline) everOnlineRef.current.add(peerId);
                             const isOffline = u.online === false && everOnlineRef.current.has(peerId);
 
                             const completedTime = reconnectCompletedTimeRef.current.get(peerId);
@@ -5453,11 +5456,10 @@ function MeetingPage({ portalRoomId }) {
                                 }
                             }
 
-                            // ✅ 초기 sync 완료 후에는 기존 참가자에게 재접속 스피너 표시 안 함
-                            // PIP 복귀 시 페이지 새로고침으로 인해 online 상태가 잠시 false일 수 있음
-                            // 🔥 스트림이 live 상태면 재접속 상태로 표시하지 않음 (PIP 모드 전환 시 깜빡임 방지)
+                            // 🔥 새로고침 시: 서버가 online=false로 보내면 타일 유지 + "재접속 중" 스피너 표시
+                            // 서버 online=false면 무조건 재접속 스피너 (everOnlineRef 보조), live 스트림이어도 표시
                             const hasLiveStream = currentStream && currentStream.getVideoTracks().some(t => t.readyState === "live");
-                            const shouldShowReconnecting = !isMe && isOffline && !recentlyCompleted && !hasFinishedInitialSyncRef.current && !!old && !hasLiveStream;
+                            const shouldShowReconnecting = !isMe && !!old && !recentlyCompleted && (isOfflineFromServer || (isOffline && !hasLiveStream));
 
                             // ✅ 서버 online 플래그가 일시적으로 false로 튀더라도,
                             // SFU/브라우저 쪽 미디어 스트림이 살아있으면 stream을 null로 만들지 않는다.
@@ -5502,7 +5504,7 @@ function MeetingPage({ portalRoomId }) {
 
                                 isJoining: false,
                                 isReconnecting: shouldShowReconnecting,
-                                isLoading: false,
+                                isLoading: shouldShowReconnecting,
                                 lastUpdate: Date.now(),
                                 reconnectStartedAt: shouldShowReconnecting ? (old?.reconnectStartedAt ?? Date.now()) : undefined
                             };

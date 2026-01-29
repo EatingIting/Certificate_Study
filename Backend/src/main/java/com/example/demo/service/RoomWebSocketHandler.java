@@ -25,6 +25,10 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Map<String, RoomUser>> roomUsers = new ConcurrentHashMap<>();
 
     private final Map<String, Map<String, TimerTask>> leaveTimers = new ConcurrentHashMap<>();
+    /** 새로고침 등 연결 끊김 시 유저를 일시 보관 (online=false). 재접속 시 복원, 일정 시간 후 제거 */
+    private final Map<String, Map<String, RoomUser>> roomDisconnectedUsers = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, TimerTask>> roomDisconnectedTimers = new ConcurrentHashMap<>();
+    private static final long DISCONNECTED_REMOVE_MS = 60_000L;
 
     private final ObjectMapper objectMapper;
     private final MeetingRoomService meetingRoomService;
@@ -81,7 +85,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         String existingSessionId = null;
 
     /* =========================================================
-       3. 기존 유저 탐색 (재접속 판단)
+       3. 기존 유저 탐색 (재접속 판단) — users(온라인) 또는 roomDisconnectedUsers(재접속 중)
        ========================================================= */
         for (Map.Entry<String, RoomUser> e : users.entrySet()) {
             RoomUser u = e.getValue();
@@ -91,9 +95,22 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 break;
             }
         }
+        if (restoredUser == null) {
+            Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.get(roomId);
+            if (disconnectedMap != null) {
+                restoredUser = disconnectedMap.remove(userId);
+                if (restoredUser != null) {
+                    Map<String, TimerTask> disconnectedTimerMap = roomDisconnectedTimers.get(roomId);
+                    if (disconnectedTimerMap != null) {
+                        TimerTask t = disconnectedTimerMap.remove(userId);
+                        if (t != null) t.cancel();
+                    }
+                }
+            }
+        }
 
     /* =========================================================
-       4. 기존 세션 정리
+       4. 기존 세션 정리 (같은 유저가 다른 탭으로 이미 접속 중인 경우)
        ========================================================= */
         if (existingSessionId != null) {
             WebSocketSession old = sessions.get(existingSessionId);
@@ -193,16 +210,31 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             if (t != null) t.cancel();
         }
 
-        // ✅ 연결 종료 시 즉시 유저 제거 (재접속 스피너 없이 바로 퇴장)
+        // ✅ 재접속 중 스피너: 유저를 즉시 제거하지 않고 "재접속 중"으로 보관 (online=false)
+        leavingUser.setOnline(false);
+        Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+        disconnectedMap.put(userId, leavingUser);
         users.remove(session.getId());
-        System.out.println("🚪 [CONNECTION CLOSED] " + userId + " removed (refresh/disconnect — 방장 위임 안 함)");
 
-        // DB에 퇴장 시간 기록
-        meetingRoomService.handleLeave(roomId, leavingUser.getUserEmail(), leavingUser.isHost());
+        // 재접속 타이머: 일정 시간 내 재접속 없으면 목록에서 제거
+        Map<String, TimerTask> disconnectedTimerMap = roomDisconnectedTimers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+        TimerTask existing = disconnectedTimerMap.remove(userId);
+        if (existing != null) existing.cancel();
+        TimerTask removeTask = new TimerTask() {
+            @Override
+            public void run() {
+                Map<String, RoomUser> map = roomDisconnectedUsers.get(roomId);
+                if (map != null && map.remove(userId) != null) {
+                    disconnectedTimerMap.remove(userId);
+                    System.out.println("🚪 [DISCONNECTED_TIMEOUT] " + userId + " removed after " + (DISCONNECTED_REMOVE_MS / 1000) + "s");
+                    broadcast(roomId);
+                }
+            }
+        };
+        disconnectedTimerMap.put(userId, removeTask);
+        new Timer().schedule(removeTask, DISCONNECTED_REMOVE_MS);
 
-        // ❌ 연결 끊김(새로고침/네트워크 끊김) 시에는 방장 위임하지 않음.
-        // 방장 위임은 명시적 LEAVE 메시지를 보낸 시점에서만 수행 (아래 handleTextMessage "LEAVE" 참고).
-        // 원래 방장이 재접속하면 클라이언트가 isHost=true로 접속하므로 방장 권한 복귀.
+        System.out.println("🚪 [CONNECTION CLOSED] " + userId + " → 재접속 중 (online=false)");
 
         broadcast(roomId);
     }
@@ -246,15 +278,27 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /** 온라인 + 재접속 중(disconnected) 유저를 합친 목록. USERS_UPDATE는 항상 이 목록으로 보내야 타일이 사라지지 않음 */
+    private List<RoomUser> getMergedUserList(String roomId) {
+        Map<String, RoomUser> usersMap = roomUsers.get(roomId);
+        if (usersMap == null) return List.of();
+
+        List<RoomUser> onlineUsers = usersMap.values().stream().toList();
+        Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.get(roomId);
+        List<RoomUser> disconnectedUsers = disconnectedMap == null ? List.of() : disconnectedMap.values().stream().toList();
+        List<RoomUser> merged = new ArrayList<>(onlineUsers);
+        merged.addAll(disconnectedUsers);
+        merged.sort(Comparator.comparingLong(RoomUser::getJoinAt));
+        return merged;
+    }
+
     private void broadcast(String roomId) {
         Map<String, WebSocketSession> sessions = roomSessions.get(roomId);
         Map<String, RoomUser> usersMap = roomUsers.get(roomId);
 
         if (sessions == null || usersMap == null) return;
 
-        List<RoomUser> users = usersMap.values().stream()
-                .sorted(Comparator.comparingLong(RoomUser::getJoinAt))
-                .toList();
+        List<RoomUser> users = getMergedUserList(roomId);
 
         System.out.println("📢 [BROADCAST] Room: " + roomId + ", Users: " +
                 users.stream().map(u -> u.getUserName() + "(online=" + u.isOnline() + ")")
@@ -365,10 +409,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             // 상태 갱신
             sender.setSpeaking(speaking);
 
-            // USERS_UPDATE 재브로드캐스트
-            List<RoomUser> userList = users.values().stream()
-                    .sorted(Comparator.comparingLong(RoomUser::getJoinAt))
-                    .toList();
+            // USERS_UPDATE는 항상 온라인+재접속 중 유저 병합 목록으로 전송 (타일 사라짐 방지)
+            List<RoomUser> userList = getMergedUserList(roomId);
 
             String payload = objectMapper.writeValueAsString(
                     Map.of(
