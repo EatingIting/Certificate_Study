@@ -3,7 +3,7 @@ import {
     Monitor, MoreHorizontal, PanelRightClose, PanelRightOpen, Phone, PictureInPicture2, Send, Share, Smile, Users, Video, VideoOff, X,
 } from "lucide-react";
 import "pretendard/dist/web/static/pretendard.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as mediasoupClient from "mediasoup-client";
 import "./MeetingPage.css";
@@ -64,6 +64,16 @@ const UserAvatar = ({ name, size = "md", src }) => {
 
 // 🔥 전역 프레임 캐시 - VideoTile 리마운트 시에도 마지막 프레임 유지 (PIP 모드 깜빡임 방지)
 const globalFrameCache = new Map(); // peerId -> { imageData, width, height, timestamp }
+
+// 🔥 동일 비디오 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면 방지
+function getStableStreamRef(oldStream, newStream) {
+    if (!oldStream || !newStream) return newStream;
+    const oldV = oldStream.getVideoTracks?.()?.[0];
+    const newV = newStream.getVideoTracks?.()?.[0];
+    if (!oldV || !newV) return newStream;
+    if (oldV.id === newV.id) return oldStream;
+    return newStream;
+}
 
 // VideoTile 내부에서 오디오 레벨을 직접 감지
 const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false, videoRef, isFilterPreparing = false, isBrowserPipMode = false }) => {
@@ -279,12 +289,32 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const streamIdRef = useRef(null);
     const currentStreamId = stream?.id ?? null;
 
-    // 🔥 Canvas 기반 렌더링 useEffect (검은화면/흰화면 깜빡임 완전 방지)
-    useEffect(() => {
+    // 🔥 PiP 진입/복귀 시 상대 타일 검은화면 방지: 트랙 id가 바뀔 때만 "표시용" 스트림 갱신
+    // 부모가 같은 트랙의 새 MediaStream 참조를 넘겨도 srcObject/캔버스는 건드리지 않음
+    const lastDisplayStreamRef = useRef(null);
+    const displayStream = useMemo(() => {
+        const vid = stream?.getVideoTracks?.()?.[0];
+        const lastVid = lastDisplayStreamRef.current?.getVideoTracks?.()?.[0];
+        if (!stream) {
+            lastDisplayStreamRef.current = null;
+            return null;
+        }
+        if (vid && lastVid && vid.id === lastVid.id && lastDisplayStreamRef.current) {
+            return lastDisplayStreamRef.current;
+        }
+        lastDisplayStreamRef.current = stream;
+        return stream;
+    }, [stream, stream?.getVideoTracks?.()?.[0]?.id]);
+
+    // 🔥 Canvas/비디오는 displayStream 기준 (트랙이 같으면 effect 재실행 안 함)
+    const displayStreamId = displayStream?.id ?? null;
+
+    // 🔥 Canvas 기반 렌더링 useLayoutEffect (PiP 복귀 시 검은화면 방지: 페인트 전에 캐시 복원)
+    useLayoutEffect(() => {
         const v = videoEl.current;
         const canvas = displayCanvasRef.current;
-        // 🔥 전역 캐시 키 (peerId 또는 streamId 사용)
-        const cacheKey = (safeUser?.id != null ? String(safeUser.id) : "") || `stream_${currentStreamId}`;
+        // 🔥 전역 캐시 키 (peerId 우선 - 같은 참가자는 항상 같은 캐시)
+        const cacheKey = (safeUser?.id != null ? String(safeUser.id) : "") || `stream_${displayStreamId}`;
 
         if (!v || !canvas) return;
         if (!shouldRenderVideo) {
@@ -437,14 +467,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             }
             // 🔥 cleanup 시 마지막 프레임은 보존 (refs는 유지됨)
         };
-    }, [stream, shouldRenderVideo]);
+    }, [displayStream, shouldRenderVideo]);
 
-    // 🔥 srcObject 설정 useEffect (단순화 - canvas가 깜빡임 방지를 담당)
+    // 🔥 srcObject 설정: displayStream만 사용 (트랙 id가 바뀔 때만 교체 → PiP 시 상대 타일 검은화면 방지)
     useEffect(() => {
         const v = videoEl.current;
         if (!v) return;
 
-        const hasLiveStream = stream && stream.getVideoTracks().some(t => t.readyState === "live");
+        const hasLiveStream = (displayStream || stream) && (displayStream || stream).getVideoTracks().some(t => t.readyState === "live");
 
         if (!shouldRenderVideo) {
             // 렌더링하지 않을 때도 스트림이 live면 유지 (PIP 등)
@@ -454,15 +484,13 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             return;
         }
 
-        // 🔥 핵심: srcObject는 null로 설정하지 않고 직접 교체
-        // canvas가 마지막 프레임을 유지하므로 깜빡임 걱정 없음
-        const needsUpdate = streamIdRef.current !== currentStreamId || v.srcObject !== stream || !v.srcObject;
+        // 🔥 displayStream 기준으로만 교체 (트랙 id가 같으면 이미 같은 스트림 참조이므로 교체 없음)
+        const needsUpdate = displayStream && (streamIdRef.current !== displayStreamId || v.srcObject !== displayStream || !v.srcObject);
 
-        if (stream && needsUpdate) {
-            // 🔥 srcObject를 null로 설정하지 않고 바로 새 스트림으로 교체
+        if (displayStream && needsUpdate) {
             try {
-                v.srcObject = stream;
-                streamIdRef.current = currentStreamId;
+                v.srcObject = displayStream;
+                streamIdRef.current = displayStreamId;
             } catch (e) {
                 console.warn("[VideoTile] srcObject 업데이트 실패:", e);
             }
@@ -490,11 +518,11 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
         ensurePlay();
 
-        // 🔥 스트림이 live 상태인데 비디오가 재생되지 않으면 주기적으로 재시도
+        // 🔥 스트림이 live 상태인데 비디오가 재생되지 않으면 주기적으로 재시도 (displayStream 사용)
         const playRetryInterval = setInterval(() => {
             if (!v || !v.srcObject) {
-                if (hasLiveStream && v && stream) {
-                    v.srcObject = stream;
+                if (hasLiveStream && v && displayStream) {
+                    v.srcObject = displayStream;
                     v.play().catch(() => {});
                 } else {
                     clearInterval(playRetryInterval);
@@ -507,7 +535,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                 return;
             }
 
-            const hasLiveTrack = stream && stream.getVideoTracks().some(t => t.readyState === "live");
+            const hasLiveTrack = displayStream && displayStream.getVideoTracks().some(t => t.readyState === "live");
             if (hasLiveTrack && (v.paused || v.readyState < 2)) {
                 v.play().catch(() => {});
             } else if (hasLiveTrack && !v.paused) {
@@ -525,38 +553,27 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
-        // 🔥 PIP 모드 종료 시 비디오 재생 보장 (검은 화면 방지)
+        // 🔥 PIP 모드 종료 시 비디오 재생 보장 (검은 화면 방지) - displayStream 사용
         const handlePipLeave = () => {
             console.log("[VideoTile] PIP 모드 종료 감지, 비디오 재생 시도");
-            // PIP 종료 후 즉시 스트림 재연결 및 재생 시도
-            if (v && stream) {
-                // 🔥 핵심: 스트림을 즉시 재설정하고 재생 시도
+            if (v && displayStream) {
                 const forceReconnect = () => {
                     try {
-                        // 스트림이 없거나 다르면 재설정
-                        if (!v.srcObject || v.srcObject !== stream) {
-                            v.srcObject = stream;
-                            streamIdRef.current = stream.id;
+                        if (!v.srcObject || v.srcObject !== displayStream) {
+                            v.srcObject = displayStream;
+                            streamIdRef.current = displayStreamId;
                             console.log("[VideoTile] ✅ PIP 종료 후 srcObject 재설정 완료");
                         }
                     } catch (e) {
                         console.warn("[VideoTile] PIP 종료 시 srcObject 설정 실패:", e);
                     }
                 };
-                
-                // 즉시 재연결
                 forceReconnect();
-                
-                // 여러 번 재생 시도 (브라우저가 스트림을 복원할 시간 필요)
                 const retryPlay = async (attempt = 0) => {
-                    if (attempt > 15) return; // 최대 15번 시도 (더 많은 시도)
-                    if (!v || !stream) return;
-                    
-                    // 매 시도마다 스트림 확인 및 재설정
+                    if (attempt > 15) return;
+                    if (!v || !displayStream) return;
                     forceReconnect();
-                    
-                    // 스트림이 live 상태이면 재생 시도
-                    const hasLive = stream.getVideoTracks().some(t => t.readyState === "live");
+                    const hasLive = displayStream.getVideoTracks().some(t => t.readyState === "live");
                     if (!hasLive && attempt < 5) {
                         // 처음 5번은 스트림이 live가 될 때까지 대기
                         setTimeout(() => retryPlay(attempt + 1), 100);
@@ -596,7 +613,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                 v.removeEventListener("leavepictureinpicture", handlePipLeave);
             }
         };
-    }, [stream, shouldRenderVideo, currentStreamId])
+    }, [displayStream, shouldRenderVideo, displayStreamId]);
 
     const isSpeaking = safeUser.speaking || isSpeakingLocally;
     const isJoining = safeUser.isJoining;
@@ -870,6 +887,11 @@ function MeetingPage({ portalRoomId }) {
     const [participantCount, setParticipantCount] = useState(1);
     const [chatDraft, setChatDraft] = useState("");
 
+    /** 방 시작 시각(ms). 서버에서 USERS_UPDATE로 전달 → 모두 동일한 경과 시간 표시 */
+    const [roomStartedAt, setRoomStartedAt] = useState(null);
+    /** 경과 시간 표시 "00:00:00" (1초마다 갱신) */
+    const [elapsedTimeDisplay, setElapsedTimeDisplay] = useState("00:00:00");
+
     const [showReactions, setShowReactions] = useState(false);
     const [myReaction, setMyReaction] = useState(null);
 
@@ -1059,7 +1081,7 @@ function MeetingPage({ portalRoomId }) {
             // 1) Native FaceDetector(지원 시) 우선
             if (typeof window !== "undefined" && "FaceDetector" in window) {
                 try {
-                    const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
+                    const native = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
                     return { kind: "native", detector: native };
                 } catch { }
             }
@@ -1104,8 +1126,8 @@ function MeetingPage({ portalRoomId }) {
     }, []);
 
     const getFaceDetectCanvas = (videoW, videoH) => {
-        // ✅ 얼굴 탐지는 다운스케일해서 가볍게(배경제거/렌더링과 병행 시 안정성↑)
-        const MAX_W = 320;
+        // ✅ 얼굴 탐지는 다운스케일해서 가볍게(렉 방지: 256 이하로 제한)
+        const MAX_W = 256;
         const vw = Number(videoW) || 0;
         const vh = Number(videoH) || 0;
         const w = vw > 0 ? Math.min(MAX_W, vw) : MAX_W;
@@ -1182,6 +1204,7 @@ function MeetingPage({ portalRoomId }) {
     const lastGoodFrameCanvasRef = useRef(null);
     const lastGoodFrameAtRef = useRef(0);
     const canvasPipelineVideoKickTimerRef = useRef(null); // hidden video 재생 유지용
+    const canvasPipelineDrawLoopRef = useRef(null); // visibility 복귀 시 즉시 1프레임 그리기용
 
     // 🔥 3D 아바타 필터 파이프라인 refs
     const avatarFilterActiveRef = useRef(false);
@@ -1901,20 +1924,22 @@ function MeetingPage({ portalRoomId }) {
         const drawLoop = async () => {
             if (!canvasPipelineActiveRef.current) return;
 
+            const isHidden = document.hidden;
             const isBgRemoveOn = !!bgRemoveRef.current;
             const isEmojiOn = !!faceEmojiRef.current && faceModeRef.current === "emoji";
             const warmupDone = Date.now() > (pipelineWarmupUntilRef.current || 0);
 
-            // ==========================================================
-            // 1. 얼굴 감지 실행 (비동기) - 🔥 새로고침 시 바로 시작
-            // ==========================================================
-            try {
-                if (isEmojiOn) {
-                    if (!faceDetectorRef.current) ensureFaceDetector().catch(() => { });
+            // 백그라운드에서는 얼굴 감지/배경제거 추론 생략 → CPU 절약, 복귀 시 렉 방지
+            if (!isHidden) {
+                // ==========================================================
+                // 1. 얼굴 감지 실행 (비동기) - 🔥 렉 방지: 80ms 주기
+                // ==========================================================
+                try {
+                    if (isEmojiOn) {
+                        if (!faceDetectorRef.current) ensureFaceDetector().catch(() => { });
 
-                    const nowMs = Date.now();
-                    // 🔥 감지 주기: 30ms (초당 33회) - 더 빠른 감지
-                    if (faceDetectorRef.current && nowMs - lastDetectAtRef.current > 30) {
+                        const nowMs = Date.now();
+                        if (faceDetectorRef.current && nowMs - lastDetectAtRef.current > 80) {
                         lastDetectAtRef.current = nowMs;
                         if (!faceDetectInFlightRef.current) {
                             faceDetectInFlightRef.current = true;
@@ -1944,10 +1969,11 @@ function MeetingPage({ portalRoomId }) {
                 }
             } catch { }
 
-            // ==========================================================
-            // 2. 배경 제거 추론 (비동기) - 🔥 새로고침 시 바로 시작
-            // ==========================================================
-            if (isBgRemoveOn) ensureBgSegmenterForPipeline();
+                // ==========================================================
+                // 2. 배경 제거 추론 (비동기) - 백그라운드에서는 스킵
+                // ==========================================================
+                if (isBgRemoveOn) ensureBgSegmenterForPipeline();
+            }
 
             // ==========================================================
             // 🎨 그리기 단계 (Safe Rendering)
@@ -1984,7 +2010,9 @@ function MeetingPage({ portalRoomId }) {
                     ctx.fillStyle = "#000000";
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
-                canvasPipelineRafRef.current = setTimeout(drawLoop, 33);
+                const isHidden = document.hidden;
+                const nextInterval = isHidden ? 200 : (isEmojiOn || isBgRemoveOn) ? 66 : 33;
+                canvasPipelineRafRef.current = setTimeout(drawLoop, nextInterval);
                 return;
             }
 
@@ -1996,8 +2024,8 @@ function MeetingPage({ portalRoomId }) {
                 const isBgReady = !isBgRemoveOn || (isBgRemoveOn && !!faceBgSegmenterRef.current?.segmenter);
 
                 // 🖌️ 렌더링 시작 - 필터가 준비되면 정상 렌더링
-                // A. 배경 제거 (준비되었을 때만)
-                if (isBgRemoveOn && isBgReady) {
+                // A. 배경 제거 (준비되었을 때만, 백그라운드에서는 스킵해 CPU 절약)
+                if (isBgRemoveOn && isBgReady && !isHidden) {
                     if (!bgFrameCanvas) {
                         bgFrameCanvas = document.createElement("canvas");
                         bgFrameCanvas.width = canvas.width;
@@ -2137,10 +2165,12 @@ function MeetingPage({ portalRoomId }) {
                 }
             } catch {}
 
-            // 다음 프레임 그리기
-            canvasPipelineRafRef.current = setTimeout(drawLoop, 33); // ~30fps
+            // 다음 프레임: 백그라운드 200ms(CPU 절약), 포그라운드 필터 66ms(~15fps), 무필터 33ms
+            const nextInterval = isHidden ? 200 : (isEmojiOn || isBgRemoveOn) ? 66 : 33;
+            canvasPipelineRafRef.current = setTimeout(drawLoop, nextInterval);
         };
 
+        canvasPipelineDrawLoopRef.current = drawLoop;
         // Draw 루프 즉시 시작 (비동기로 실행하여 블로킹 방지)
         drawLoop();
 
@@ -2370,6 +2400,20 @@ function MeetingPage({ portalRoomId }) {
             else localStorage.removeItem("faceBgRemove");
             // 기존 sessionStorage와의 호환성을 위해 sessionStorage에도 저장
             sessionStorage.setItem("faceBgRemove", String(bgRemove));
+
+            // ✅ 서버에도 배경제거/이모지 상태 동기화 (다른 참가자 목록·복원용)
+            try {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({
+                        type: "USER_STATE_CHANGE",
+                        userId,
+                        changes: {
+                            faceEmoji: faceEmoji || null,
+                            bgRemove: !!bgRemove,
+                        },
+                    }));
+                }
+            } catch { }
         } catch { }
     }, [faceEmoji, faceMode, bgRemove]);
 
@@ -2456,7 +2500,8 @@ function MeetingPage({ portalRoomId }) {
     const stopFaceEmojiFilterCore = useCallback(async () => {
         faceFilterActiveRef.current = false;
 
-        if (faceFilterRafRef.current) {
+        if (faceFilterRafRef.current != null) {
+            clearTimeout(faceFilterRafRef.current);
             cancelAnimationFrame(faceFilterRafRef.current);
             faceFilterRafRef.current = null;
         }
@@ -3017,7 +3062,7 @@ function MeetingPage({ portalRoomId }) {
         let detectorState = null;
         if (typeof window !== "undefined" && "FaceDetector" in window) {
             try {
-                const native = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
+                const native = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
                 detectorState = { kind: "native", detector: native };
             } catch { }
         }
@@ -3359,10 +3404,9 @@ function MeetingPage({ portalRoomId }) {
             }
 
             const det = faceDetectorRef.current;
-            // 🔥 이모지 모드일 때는 얼굴 감지 간격을 짧게 (입장/새로고침 시 빠른 감지)
-            // 필터 준비 중이거나 얼굴이 아직 감지되지 않았으면 더 짧은 간격으로 감지
+            // 🔥 얼굴 감지 간격 완화(렉 방지): 50/80ms - CPU 부하 감소
             const hasDetectedFace = !!lastFaceBoxRef.current && lastFaceBoxAtRef.current && (Date.now() - lastFaceBoxAtRef.current < 1200);
-            const detectInterval = (isFilterPreparingRef.current || !hasDetectedFace) ? 30 : 50;
+            const detectInterval = (isFilterPreparingRef.current || !hasDetectedFace) ? 50 : 80;
             if (wantEmojiForDetect && shouldStartDetection && det && now - lastDetectAtRef.current > detectInterval) {
                 lastDetectAtRef.current = now;
 
@@ -3508,7 +3552,12 @@ function MeetingPage({ portalRoomId }) {
                 }
             } catch {}
 
-            faceFilterRafRef.current = requestAnimationFrame(draw);
+            // 이모지/배경제거 시 20fps로 스로틀(렉 방지), 아니면 rAF
+            if (wantBgRemove || wantEmoji) {
+                faceFilterRafRef.current = setTimeout(() => requestAnimationFrame(draw), 50);
+            } else {
+                faceFilterRafRef.current = requestAnimationFrame(draw);
+            }
         };
 
         draw();
@@ -4342,11 +4391,14 @@ function MeetingPage({ portalRoomId }) {
                     const next = [...prev];
                     const p = next[idx];
 
+                    // 🔥 camera일 때 동일 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면 방지
+                    const cameraStream = isScreen ? p.stream : getStableStreamRef(p.stream, mergedCameraStream);
+
                     next[idx] = {
                         ...p,
 
-                        // ✅ screen이면 stream 건드리지 않음, camera면 stream 갱신
-                        stream: isScreen ? p.stream : mergedCameraStream,
+                        // ✅ screen이면 stream 건드리지 않음, camera면 stream 갱신(동일 트랙 시 참조 유지)
+                        stream: isScreen ? p.stream : cameraStream,
 
                         // ✅ screen이면 screenStream 갱신(항상 새 객체), 아니면 유지
                         screenStream: isScreen ? screenStream : p.screenStream,
@@ -5285,6 +5337,9 @@ function MeetingPage({ portalRoomId }) {
             // - http: ws://{hostname}:8080/ws/room/{roomId}
             // - https: wss://{hostname}/ws/room/{roomId} (nginx 프록시)
             const base = toWsBackendUrl(`/ws/room/${wsRoomId}`, 8080);
+            // ✅ 배경제거/이모지 상태도 서버에 전달 (입장 시 복원용)
+            const initialFaceEmoji = faceEmojiRef.current || localStorage.getItem("faceEmoji") || "";
+            const initialBgRemove = bgRemoveRef.current ?? (localStorage.getItem("faceBgRemove") === "true");
             const wsUrl = `${base}` +
                 `?userId=${encodeURIComponent(userId)}` +
                 `&userName=${encodeURIComponent(userName)}` +
@@ -5292,7 +5347,9 @@ function MeetingPage({ portalRoomId }) {
                 `&muted=${!micOnRef.current}` +
                 `&cameraOff=${!camOnRef.current}` +
                 `&isHost=${isHostLocal}` +
-                `&title=${encodeURIComponent(roomTitle || "")}`;
+                `&title=${encodeURIComponent(roomTitle || "")}` +
+                (initialFaceEmoji ? `&faceEmoji=${encodeURIComponent(initialFaceEmoji)}` : "") +
+                `&bgRemove=${!!initialBgRemove}`;
 
             ws = new WebSocket(wsUrl);
             wsRef.current = ws;
@@ -5307,10 +5364,12 @@ function MeetingPage({ portalRoomId }) {
 
                     const muted = !micOnRef.current || micPermissionRef.current === "denied";
                     const cameraOff = !camOnRef.current || camPermissionRef.current === "denied";
+                    const faceEmojiState = faceEmojiRef.current || "";
+                    const bgRemoveState = !!bgRemoveRef.current;
                     ws.send(JSON.stringify({
                         type: "USER_STATE_CHANGE",
                         userId,
-                        changes: { muted, cameraOff },
+                        changes: { muted, cameraOff, faceEmoji: faceEmojiState || null, bgRemove: bgRemoveState },
                     }));
                 };
 
@@ -5374,7 +5433,24 @@ function MeetingPage({ portalRoomId }) {
                     return;
                 }
 
+                if (data.type === "ROOM_ELAPSED" && data.elapsedMs != null) {
+                    const totalSec = Math.max(0, Math.floor(Number(data.elapsedMs) / 1000));
+                    const h = Math.floor(totalSec / 3600);
+                    const m = Math.floor((totalSec % 3600) / 60);
+                    const s = totalSec % 60;
+                    setElapsedTimeDisplay([h, m, s].map((n) => String(n).padStart(2, "0")).join(":"));
+                    return;
+                }
+
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
+                    if (data.roomStartedAt != null) setRoomStartedAt(Number(data.roomStartedAt));
+                    if (data.roomElapsedMs != null) {
+                        const totalSec = Math.max(0, Math.floor(Number(data.roomElapsedMs) / 1000));
+                        const h = Math.floor(totalSec / 3600);
+                        const m = Math.floor((totalSec % 3600) / 60);
+                        const s = totalSec % 60;
+                        setElapsedTimeDisplay([h, m, s].map((n) => String(n).padStart(2, "0")).join(":"));
+                    }
                     setParticipants((prev) => {
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
                         const newServerIds = new Set(data.users.map((u) => String(u.userId)));
@@ -5412,6 +5488,8 @@ function MeetingPage({ portalRoomId }) {
                                 const hasLiveStream = currentStream.getVideoTracks().some(t => t.readyState === "live");
                                 if (hasLiveStream) {
                                     // live stream이 있으면 재접속 상태로 표시하지 않고 스트림 유지
+                                    // 🔥 동일 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면 방지
+                                    const stableStream = getStableStreamRef(old?.stream, currentStream);
                                     return {
                                         ...old,
                                         id: peerId,
@@ -5422,7 +5500,9 @@ function MeetingPage({ portalRoomId }) {
                                         cameraOff: typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true),
                                         mutedByHost: !!u.mutedByHost || !!(old?.mutedByHost),
                                         cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
-                                        stream: currentStream,
+                                        faceEmoji: u.faceEmoji != null ? u.faceEmoji : (old?.faceEmoji ?? null),
+                                        bgRemove: typeof u.bgRemove === "boolean" ? u.bgRemove : (old?.bgRemove ?? false),
+                                        stream: stableStream,
                                         screenStream: old?.screenStream ?? null,
                                         isScreenSharing: old?.isScreenSharing ?? false,
                                         reaction: old?.reaction ?? null,
@@ -5469,8 +5549,10 @@ function MeetingPage({ portalRoomId }) {
                             const shouldKeepStream = keepMediaWhileOffline || hasLiveStream || (old?.stream && old.stream.getVideoTracks().some(t => t.readyState === "live"));
                             
                             // 🔥 핵심: live stream이 있으면 절대 null로 설정하지 않음 (검은 화면 방지)
-                            const finalStream = hasLiveStream ? (currentStream || old?.stream || null) : 
+                            // 🔥 동일 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면/깜빡임 방지
+                            const rawFinal = hasLiveStream ? (currentStream || old?.stream || null) :
                                                ((shouldShowReconnecting && !shouldKeepStream) ? null : (currentStream || old?.stream || null));
+                            const finalStream = rawFinal && old?.stream ? getStableStreamRef(old.stream, rawFinal) : rawFinal;
                             const finalScreenStream = hasLiveStream ? (old?.screenStream ?? null) :
                                                       ((shouldShowReconnecting && !shouldKeepStream) ? null : (old?.screenStream ?? null));
                             const finalIsScreenSharing = hasLiveStream ? (old?.isScreenSharing ?? false) :
@@ -5493,6 +5575,8 @@ function MeetingPage({ portalRoomId }) {
                                     : (typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true)),
                                 mutedByHost: !!u.mutedByHost || !!(old?.mutedByHost),
                                 cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
+                                faceEmoji: u.faceEmoji != null ? u.faceEmoji : (old?.faceEmoji ?? null),
+                                bgRemove: typeof u.bgRemove === "boolean" ? u.bgRemove : (old?.bgRemove ?? false),
 
                                 // 🔥 핵심: live stream이 있으면 절대 null로 설정하지 않음 (검은 화면 방지)
                                 stream: finalStream,
@@ -5613,12 +5697,36 @@ function MeetingPage({ portalRoomId }) {
                         });
 
                         // -------------------------------------------------------------
-                        // 4. 최종 병합
+                        // 4. 최종 병합 - 기존 순서 유지 (PiP 시 타일 재마운트/검은화면 방지)
                         // -------------------------------------------------------------
-                        // 🔥 retainedUsers는 서버 목록에서 빠진 사용자를 보호한 결과
-                        // ghostUsers는 retainedUsers에서 추가로 필터링된 결과
-                        // 최종적으로는 updatedUsers + ghostUsers를 병합
-                        const mergedUsers = [...updatedUsers, ...ghostUsers];
+                        // 🔥 [...updatedUsers, ...ghostUsers] 시 서버에서 잠깐 빠진 참가자가 끝으로 밀려
+                        //    순서가 바뀌어 타일이 언마운트 후 재마운트되며 검은화면 발생 → prev 순서 유지
+                        const updatedMap = new Map(updatedUsers.map((u) => [String(u.id), u]));
+                        const ghostMap = new Map(ghostUsers.map((u) => [String(u.id), u]));
+                        const mergedUsers = [];
+                        const usedIds = new Set();
+                        // 1) prev 순서대로: 기존 참가자는 같은 인덱스 유지 (타일 재마운트 방지)
+                        for (const p of prev) {
+                            const id = String(p.id);
+                            const u = updatedMap.get(id) ?? ghostMap.get(id);
+                            if (u) {
+                                mergedUsers.push(u);
+                                usedIds.add(id);
+                            }
+                        }
+                        // 2) 서버에만 있는 신규 참가자 추가
+                        for (const u of updatedUsers) {
+                            const id = String(u.id);
+                            if (!usedIds.has(id)) {
+                                mergedUsers.push(u);
+                                usedIds.add(id);
+                            }
+                        }
+                        // 3) ghost만 있는 참가자(서버에서 빠졌지만 보호된 경우) 추가
+                        for (const u of ghostUsers) {
+                            const id = String(u.id);
+                            if (!usedIds.has(id)) mergedUsers.push(u);
+                        }
 
                         setActiveSpeakerId((currentSpeakerId) => {
                             const exists = mergedUsers.some((u) => String(u.id) === String(currentSpeakerId));
@@ -6350,13 +6458,28 @@ function MeetingPage({ portalRoomId }) {
         } catch { }
     };
 
+    // 방 경과 시간: 서버가 1초마다 보내는 ROOM_ELAPSED만 사용 → 모두 동일한 시간 표시 (클라이언트 시계/틱 차이 제거)
+    // roomStartedAt이 없을 때만 00:00:00 유지 (입장 직후 첫 ROOM_ELAPSED 전)
+    useEffect(() => {
+        if (roomStartedAt == null) setElapsedTimeDisplay("00:00:00");
+    }, [roomStartedAt]);
+
     const orderedParticipants = useMemo(() => {
+        // PiP/동기화 시 같은 참가자가 두 번 들어오는 버그 방지: id 기준 중복 제거
+        const seenIds = new Set();
+        const uniqueParticipants = participants.filter((p) => {
+            const id = String(p.id);
+            if (seenIds.has(id)) return false;
+            seenIds.add(id);
+            return true;
+        });
+
         const storedOrder = getStoredOrder();
         let orderChanged = false;
         let maxOrder = Math.max(0, ...Object.values(storedOrder));
 
         // 새 참가자에게 순서 부여
-        participants.forEach((p) => {
+        uniqueParticipants.forEach((p) => {
             const idStr = String(p.id);
             if (storedOrder[idStr] === undefined) {
                 maxOrder += 1;
@@ -6370,7 +6493,7 @@ function MeetingPage({ portalRoomId }) {
         }
 
         // isMe는 항상 맨 앞, 나머지는 저장된 순서대로
-        return [...participants].sort((a, b) => {
+        return [...uniqueParticipants].sort((a, b) => {
             if (a.isMe) return -1;
             if (b.isMe) return 1;
             const orderA = storedOrder[String(a.id)] ?? Infinity;
@@ -6401,7 +6524,7 @@ function MeetingPage({ portalRoomId }) {
                         <Users size={14} />
                         <span>{participants.length}명 접속 중</span>
                         <span className="badge-dot" />
-                        <span>00:24:15</span>
+                        <span>{elapsedTimeDisplay}</span>
                     </div>
                     {/* 레이아웃 전환 버튼 - 우측 상단 */}
                     <div className="floating-layout-toggle">
@@ -6426,14 +6549,22 @@ function MeetingPage({ portalRoomId }) {
                             <div className="layout-speaker">
                                 <div className={`main-stage ${isFullscreen && sidebarOpen ? "sidebar-open" : ""}`} ref={mainStageRef}>
                                     <div className="main-video-area">
-                                        {/* 🔥 PIP 모드일 때 검은 배경 + 배너, 아닐 때 VideoTile */}
-                                        {isBrowserPipMode ? (
+                                        {/* 🔥 PIP 모드일 때 배너 오버레이 표시 */}
+                                        {isBrowserPipMode && (
                                             <div className="pip-mode-overlay">
                                                 <div className="pip-mode-banner">
                                                     PiP 모드 이용중
                                                 </div>
                                             </div>
-                                        ) : (
+                                        )}
+                                        {/* 🔥 VideoTile은 항상 렌더링 (언마운트 방지 - 검은화면 깜빡임 방지) */}
+                                        {/* 🔥 PIP 모드일 때는 opacity:0으로 숨김 (display:none은 video 디코딩을 중지시켜 producer에 영향) */}
+                                        <div style={{
+                                            opacity: isBrowserPipMode ? 0 : 1,
+                                            pointerEvents: isBrowserPipMode ? 'none' : 'auto',
+                                            width: '100%',
+                                            height: '100%'
+                                        }}>
                                             <VideoTile
                                                 user={userForTile(mainUser)}
                                                 isMain
@@ -6445,7 +6576,7 @@ function MeetingPage({ portalRoomId }) {
                                                 isFilterPreparing={isFilterPreparing}
                                                 isBrowserPipMode={isBrowserPipMode}
                                             />
-                                        )}
+                                        </div>
                                         <button
                                             className="pip-btn"
                                             onClick={handleBrowserPip}
@@ -6626,11 +6757,13 @@ function MeetingPage({ portalRoomId }) {
                                                                     </div>
                                                                 </div>
                                                             ))}
-                                                            <div className="invite-section">
-                                                                <button className="invite-btn" onClick={handleInvite}>
-                                                                    <Share size={16} /> 초대하기
-                                                                </button>
-                                                            </div>
+                                                            {amIHost && (
+                                                                <div className="invite-section">
+                                                                    <button className="invite-btn" onClick={handleInvite}>
+                                                                        <Share size={16} /> 초대하기
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -6990,11 +7123,13 @@ function MeetingPage({ portalRoomId }) {
                                                                     </div>
                                                                 </div>
                                                             ))}
-                                                            <div className="invite-section">
-                                                                <button className="invite-btn" onClick={handleInvite}>
-                                                                    <Share size={16} /> 초대하기
-                                                                </button>
-                                                            </div>
+                                                            {amIHost && (
+                                                                <div className="invite-section">
+                                                                    <button className="invite-btn" onClick={handleInvite}>
+                                                                        <Share size={16} /> 초대하기
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -7211,7 +7346,7 @@ function MeetingPage({ portalRoomId }) {
                 </main>
 
                 <aside className={`meet-sidebar ${sidebarOpen && !isGridFullscreen && !isFullscreen ? "open" : ""}`}>
-                    <div className="sidebar-inner">
+                    <div className={`sidebar-inner ${!amIHost ? "sidebar-inner--guest" : ""}`}>
                         <div className="sidebar-header">
                             <h2 className="sidebar-title">참여자 목록</h2>
                         </div>
@@ -7264,15 +7399,17 @@ function MeetingPage({ portalRoomId }) {
                                                 )}
                                             </div>
                                         )}
-                                        {/* 방장이 아닌 사람에게는 ... 메뉴 미표시 */}
+                                                        {/* 방장이 아닌 사람에게는 ... 메뉴 미표시 */}
                                     </div>
                                 </div>
                             ))}
-                            <div className="invite-section">
-                                <button className="invite-btn" onClick={handleInvite}>
-                                    <Share size={16} /> 초대하기
-                                </button>
-                            </div>
+                            {amIHost && (
+                                <div className="invite-section">
+                                    <button className="invite-btn" onClick={handleInvite}>
+                                        <Share size={16} /> 초대하기
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="sidebar-chat-divider">
