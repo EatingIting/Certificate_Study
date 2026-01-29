@@ -133,6 +133,7 @@
 .at-td-session {
     width: 58px;
     text-align: center;
+    justify-content: center;
 }
 
 /* name cell */
