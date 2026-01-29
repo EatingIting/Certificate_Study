@@ -25,25 +25,49 @@ const OAuthSuccess = () => {
 
         // 사용자 정보 조회 시도
         api
-            .get("/mypage/me")
+            .get("/users/me")
             .then((res) => {
                 console.log("[OAuthSuccess] 사용자 정보 조회 성공:", res.data);
                 const user = res.data;
                 
-                // nickname 저장 (있으면)
+                // sessionStorage에 저장
+                if (user.userId) {
+                    sessionStorage.setItem("userId", user.userId);
+                }
                 if (user.nickname) {
                     sessionStorage.setItem("nickname", user.nickname);
+                }
+                if (user.email) {
+                    sessionStorage.setItem("userEmail", user.email);
+                }
+
+                // localStorage에 userId와 userName 저장
+                if (user.userId) {
+                    localStorage.setItem("userId", user.userId);
+                }
+                const userName = user.nickname || user.name || "";
+                if (userName) {
+                    localStorage.setItem("userName", userName);
                 }
 
                 alert("로그인 성공!");
 
                 // birthDate나 gender가 없으면 마이페이지로, 있으면 메인으로
-                if (!user.birthDate || !user.gender) {
-                    alert("원활한 스터디 가입을 위해 회원 정보를 마이페이지에서 수정해주세요.");
-                    window.location.href = "/room/mypage";
-                } else {
-                    window.location.href = "/";
-                }
+                // /users/me API는 birthDate와 gender를 반환하지 않으므로 /mypage/me로 다시 조회
+                api.get("/mypage/me")
+                    .then((myPageRes) => {
+                        const myPageUser = myPageRes.data;
+                        if (!myPageUser.birthDate || !myPageUser.gender) {
+                            alert("원활한 스터디 가입을 위해 회원 정보를 마이페이지에서 수정해주세요.");
+                            window.location.href = "/room/mypage";
+                        } else {
+                            window.location.href = "/";
+                        }
+                    })
+                    .catch(() => {
+                        // 마이페이지 조회 실패해도 로그인은 성공한 것으로 간주
+                        window.location.href = "/";
+                    });
             })
             .catch((error) => {
                 console.error("[OAuthSuccess] 사용자 정보 조회 실패:", error);

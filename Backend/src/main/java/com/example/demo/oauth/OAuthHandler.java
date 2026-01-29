@@ -14,9 +14,13 @@ import jakarta.servlet.http.Cookie;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Component
 public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(OAuthHandler.class);
 
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -75,48 +79,150 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
 
         // 1순위: 쿠키에서 oauth_redirect_origin 읽기
         Cookie[] cookies = request.getCookies();
+        log.info("[OAuthHandler] 쿠키 개수: {}", cookies != null ? cookies.length : 0);
+        log.info("[OAuthHandler] Request URI: {}, Scheme: {}, ServerName: {}, Host: {}", 
+                request.getRequestURI(), request.getScheme(), request.getServerName(), request.getHeader("Host"));
+        
         if (cookies != null) {
             for (Cookie cookie : cookies) {
+                log.info("[OAuthHandler] 쿠키: {} = {} (Domain: {}, Path: {})", 
+                        cookie.getName(), cookie.getValue(), cookie.getDomain(), cookie.getPath());
                 if (OAuthRedirectOriginFilter.REDIRECT_ORIGIN_COOKIE.equals(cookie.getName())) {
-                    frontUrl = cookie.getValue();
-                    // 사용 후 쿠키 삭제 (SameSite=None; Secure로 삭제해야 함)
-                    String deleteCookie = OAuthRedirectOriginFilter.REDIRECT_ORIGIN_COOKIE +
-                            "=; Path=/; Max-Age=0; HttpOnly; SameSite=None; Secure";
-                    response.addHeader("Set-Cookie", deleteCookie);
+                    // 쿠키 값 디코딩 (인코딩된 경우)
+                    try {
+                        frontUrl = java.net.URLDecoder.decode(cookie.getValue(), StandardCharsets.UTF_8);
+                    } catch (Exception e) {
+                        frontUrl = cookie.getValue(); // 디코딩 실패 시 원본 사용
+                    }
+                    log.info("[OAuthHandler] redirect_origin 쿠키 발견: {}", frontUrl);
+                    // 사용 후 쿠키 삭제 (HTTPS/HTTP에 맞게)
+                    StringBuilder deleteCookie = new StringBuilder();
+                    deleteCookie.append(OAuthRedirectOriginFilter.REDIRECT_ORIGIN_COOKIE);
+                    deleteCookie.append("=; Path=/; Max-Age=0; HttpOnly");
+                    if (OAuthRedirectOriginFilter.isSecureRequest(request)) {
+                        deleteCookie.append("; SameSite=None; Secure");
+                    } else {
+                        deleteCookie.append("; SameSite=Lax");
+                    }
+                    response.addHeader("Set-Cookie", deleteCookie.toString());
                     break;
+                }
+            }
+        } else {
+            log.warn("[OAuthHandler] 쿠키가 없습니다!");
+        }
+
+        // 2순위: 환경 변수는 동적 감지 이후에만 사용 (쿠키가 없을 때 동적 감지 우선)
+        // 환경 변수는 개발/프로덕션 환경별로 고정값이 필요할 때만 사용
+        // 동적 감지가 실패한 경우에만 환경 변수 사용
+
+        // 4순위: Origin 헤더에서 추출 (가장 신뢰할 수 있는 프론트엔드 URL)
+        if (frontUrl == null || frontUrl.isEmpty()) {
+            String origin = request.getHeader("Origin");
+            log.info("[OAuthHandler] 4순위 시도 - Origin: {}", origin);
+            
+            if (origin != null && !origin.isEmpty()) {
+                // Origin 헤더는 프론트엔드의 정확한 URL을 제공
+                frontUrl = origin;
+                log.info("[OAuthHandler] Origin에서 추출한 URL: {}", frontUrl);
+            }
+        }
+
+        // 5순위: Referer 헤더에서 추출 (OAuth 콜백 시 원래 프론트엔드 URL 추정)
+        if (frontUrl == null || frontUrl.isEmpty()) {
+            String referer = request.getHeader("Referer");
+            log.info("[OAuthHandler] 5순위 시도 - Referer: {}", referer);
+            
+            if (referer != null && !referer.isEmpty()) {
+                try {
+                    java.net.URL refererUrl = new java.net.URL(referer);
+                    String refererHost = refererUrl.getHost();
+                    String refererScheme = refererUrl.getProtocol();
+                    
+                    // Referer가 백엔드 도메인이 아닌 경우에만 사용
+                    String backendHost = request.getServerName();
+                    if (!refererHost.equals(backendHost) && !refererHost.equals("localhost") && !refererHost.equals("127.0.0.1")) {
+                        if (refererScheme.equals("https")) {
+                            frontUrl = refererScheme + "://" + refererHost;
+                        } else {
+                            int port = refererUrl.getPort();
+                            if (port == -1) {
+                                frontUrl = refererScheme + "://" + refererHost;
+                            } else {
+                                frontUrl = refererScheme + "://" + refererHost + ":" + port;
+                            }
+                        }
+                        log.info("[OAuthHandler] Referer에서 추출한 URL: {}", frontUrl);
+                    } else if (refererHost.equals("localhost") || refererHost.equals("127.0.0.1")) {
+                        // localhost인 경우 포트 확인
+                        int port = refererUrl.getPort();
+                        if (port > 0 && port != request.getServerPort()) {
+                            // 프론트엔드 포트가 백엔드 포트와 다른 경우
+                            frontUrl = refererScheme + "://" + refererHost + ":" + port;
+                            log.info("[OAuthHandler] Referer에서 추출한 URL (포트 포함): {}", frontUrl);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("[OAuthHandler] Referer 파싱 실패: {}", e.getMessage());
                 }
             }
         }
 
-        // 2순위: application.properties의 app.frontend-url
+        // 6순위: Request에서 동적 생성 (현재 요청의 호스트 기반)
         if (frontUrl == null || frontUrl.isEmpty()) {
-            frontUrl = configuredFrontendUrl;
+            String scheme = request.getScheme();
+            String hostname = request.getServerName();
+            String hostHeader = request.getHeader("Host");
+            
+            log.info("[OAuthHandler] 5순위 fallback - scheme: {}, hostname: {}, Host header: {}", 
+                    scheme, hostname, hostHeader);
+            
+            // Host 헤더가 있으면 우선 사용 (프록시 환경 대응)
+            if (hostHeader != null && !hostHeader.isEmpty()) {
+                // Host 헤더에서 포트 제거 (프론트엔드는 별도 포트 사용)
+                String hostWithoutPort = hostHeader.split(":")[0];
+                
+                // HTTPS인 경우 포트 없이, HTTP인 경우 localhost면 :3000 추가
+                if (scheme.equals("https")) {
+                    frontUrl = scheme + "://" + hostWithoutPort;
+                } else {
+                    if (hostWithoutPort.equals("localhost") || hostWithoutPort.equals("127.0.0.1")) {
+                        frontUrl = scheme + "://" + hostWithoutPort + ":3000";
+                    } else {
+                        // 다른 도메인인 경우 포트 없이 (프론트엔드가 같은 포트를 사용한다고 가정)
+                        frontUrl = scheme + "://" + hostWithoutPort;
+                    }
+                }
+            } else {
+                // Host 헤더가 없는 경우
+                if (scheme.equals("https")) {
+                    frontUrl = scheme + "://" + hostname;
+                } else {
+                    if (hostname.equals("localhost") || hostname.equals("127.0.0.1")) {
+                        frontUrl = scheme + "://" + hostname + ":3000";
+                    } else {
+                        frontUrl = scheme + "://" + hostname;
+                    }
+                }
+            }
+            log.info("[OAuthHandler] 5순위 fallback 결과: {}", frontUrl);
         }
-
-        // 3순위: 환경 변수
+        
+        // 최종 fallback: 환경 변수 또는 설정값 (동적 감지가 모두 실패한 경우에만)
         if (frontUrl == null || frontUrl.isEmpty()) {
             frontUrl = System.getenv("FRONTEND_URL");
             if (frontUrl == null || frontUrl.isEmpty()) {
                 frontUrl = System.getenv("FRONTEND_ORIGIN");
             }
-        }
-
-        // 4순위: Request에서 동적 생성 (기본값)
-        if (frontUrl == null || frontUrl.isEmpty()) {
-            String scheme = request.getScheme();
-            String hostname = request.getServerName();
-
-            if (scheme.equals("https")) {
-                frontUrl = scheme + "://" + hostname;
-            } else {
-                if (hostname.equals("localhost") || hostname.equals("127.0.0.1")) {
-                    frontUrl = scheme + "://" + hostname + ":3000";
-                } else {
-                    frontUrl = scheme + "://" + hostname;
-                }
+            if (frontUrl != null && !frontUrl.isEmpty()) {
+                log.info("[OAuthHandler] 최종 fallback - 환경변수 사용: {}", frontUrl);
+            } else if (configuredFrontendUrl != null && !configuredFrontendUrl.isEmpty()) {
+                frontUrl = configuredFrontendUrl;
+                log.info("[OAuthHandler] 최종 fallback - app.frontend-url 사용: {}", frontUrl);
             }
         }
 
+        log.info("[OAuthHandler] 최종 리다이렉트 URL: {}", frontUrl);
         return frontUrl;
     }
 }

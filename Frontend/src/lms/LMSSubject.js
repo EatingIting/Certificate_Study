@@ -26,6 +26,8 @@ import MeetingPage from "../webrtc/MeetingPage";
 import MeetingPortal from "../webrtc/MeetingPagePortal";
 import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
 import FloatingPip from "../webrtc/FloatingPip";
+import { LMSProvider } from "./LMSContext";
+import ProtectedRoute from "./ProtectedRoute";
 
 import "./LMSSubject.css";
 
@@ -272,10 +274,18 @@ function LMSSubjectInner() {
     );
 }
 
-const LMSSubject = () => (
-    <MeetingProvider>
-        <LMSSubjectInner />
-    </MeetingProvider>
-);
+const LMSSubject = () => {
+    const { subjectId } = useParams();
+    
+    return (
+        <LMSProvider roomId={subjectId}>
+            <ProtectedRoute>
+                <MeetingProvider>
+                    <LMSSubjectInner />
+                </MeetingProvider>
+            </ProtectedRoute>
+        </LMSProvider>
+    );
+};
 
 export default LMSSubject;
