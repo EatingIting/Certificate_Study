@@ -95,6 +95,7 @@ function BoardEdit() {
                 title: title.trim(),
                 content: content.trim(),
                 isPinned: category === "공지" ? !!isPinned : false,
+                pinned:   category === "공지" ? !!isPinned : false,
             });
 
             onBack();

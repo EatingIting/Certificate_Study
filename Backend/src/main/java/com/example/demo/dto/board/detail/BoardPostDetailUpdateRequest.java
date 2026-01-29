@@ -25,5 +25,7 @@ public class BoardPostDetailUpdateRequest {
     @NotBlank
     private String content;
 
+    private Boolean isPinned;
+
     private List<BoardAttachmentRequest> attachments;
 }
