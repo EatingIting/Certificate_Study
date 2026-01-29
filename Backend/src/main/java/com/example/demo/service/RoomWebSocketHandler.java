@@ -110,10 +110,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
        5. RoomUser 생성 / 복원
        ========================================================= */
         if (restoredUser != null) {
-            // 재접속
+            // 재접속 (같은 userId로 새 세션 — 기존 세션은 이미 정리됨)
             restoredUser.setExplicitlyLeft(false);
             restoredUser.setOnline(true);
             restoredUser.setUserEmail(userEmail);
+            // 원래 방장(room host)이 재접속 시 클라이언트가 isHost=true로 보내므로 방장 권한 복귀
             restoredUser.setHost(isHost);
 
             if (paramMuted != null) {
@@ -128,6 +129,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             boolean muted = paramMuted != null ? paramMuted : true;
             boolean cameraOff = paramCameraOff != null ? paramCameraOff : true;
 
+            // 신규 입장(또는 새로고침 후 재입장): isHost는 클라이언트가 room host 기준으로 전달 → 원래 방장 재접속 시 방장 복귀
             finalUser = new RoomUser(
                     userId,
                     userName,
@@ -149,6 +151,16 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
        ========================================================= */
         sessions.put(session.getId(), session);
         users.put(session.getId(), finalUser);
+
+        // 원래 방장(room host)이 입장/재입장하면 이 방에서는 이 사람만 방장이어야 함 — 나머지는 즉시 isHost=false
+        if (finalUser.isHost()) {
+            String hostUserId = finalUser.getUserId();
+            for (RoomUser u : users.values()) {
+                if (u != null && !u.getUserId().equals(hostUserId)) {
+                    u.setHost(false);
+                }
+            }
+        }
 
         broadcast(roomId);
     }
@@ -183,15 +195,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         // ✅ 연결 종료 시 즉시 유저 제거 (재접속 스피너 없이 바로 퇴장)
         users.remove(session.getId());
-        System.out.println("🚪 [LEFT] " + userId + " removed immediately");
+        System.out.println("🚪 [CONNECTION CLOSED] " + userId + " removed (refresh/disconnect — 방장 위임 안 함)");
 
         // DB에 퇴장 시간 기록
         meetingRoomService.handleLeave(roomId, leavingUser.getUserEmail(), leavingUser.isHost());
 
-        // ✅ 방장이 나갔으면 새 임시 방장 선정
-        if (leavingUser.isHost()) {
-            selectNewHost(roomId, sessions, users);
-        }
+        // ❌ 연결 끊김(새로고침/네트워크 끊김) 시에는 방장 위임하지 않음.
+        // 방장 위임은 명시적 LEAVE 메시지를 보낸 시점에서만 수행 (아래 handleTextMessage "LEAVE" 참고).
+        // 원래 방장이 재접속하면 클라이언트가 isHost=true로 접속하므로 방장 권한 복귀.
 
         broadcast(roomId);
     }
