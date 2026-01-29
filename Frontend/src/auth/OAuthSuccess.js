@@ -1,8 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import api from "../api/api";
 
 const OAuthSuccess = () => {
+    const hasRun = useRef(false);
+
     useEffect(() => {
+        if (hasRun.current) return;
+        hasRun.current = true;
+
         const params = new URLSearchParams(window.location.search);
 
         const token = params.get("token");
@@ -34,9 +39,7 @@ const OAuthSuccess = () => {
 
                 // birthDate나 gender가 없으면 마이페이지로, 있으면 메인으로
                 if (!user.birthDate || !user.gender) {
-                    alert(
-                        "원활한 스터디 가입을 위해 회원 정보를 마이페이지에서 수정해주세요."
-                    );
+                    alert("원활한 스터디 가입을 위해 회원 정보를 마이페이지에서 수정해주세요.");
                     window.location.href = "/room/mypage";
                 } else {
                     window.location.href = "/";
