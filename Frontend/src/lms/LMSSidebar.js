@@ -82,7 +82,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                 setOpenKeys((prev) => (prev.includes(parentKey) ? prev : [...prev, parentKey]));
             }
         }
-    }, [location.pathname, location.search]); // eslint 플러그인 이슈 방지: 주석 없음
+    }, [location.pathname, location.search]);
 
 
     const [localActiveMenu, setLocalActiveMenu] = useState("dashboard");
@@ -90,7 +90,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const activeMenu = activeMenuProp ?? localActiveMenu;
     const setActiveMenu = setActiveMenuProp ?? setLocalActiveMenu;
 
-    // 🔥 브라우저 PiP 요청 (사이드바 클릭 시 자동 활성화)
+    // 브라우저 PiP 요청 (사이드바 클릭 시 자동 활성화)
     const requestPipIfMeeting = useCallback(async () => {
         // roomId가 있으면 회의 중으로 간주 (isInMeeting이 false여도)
         const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("pip.roomId");
@@ -108,61 +108,86 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        // 🔥 video 요소 찾기 (화면공유 우선 → 메인 → 그 외)
-        const isValidVideoEl = (v) => {
-            const s = v?.srcObject;
-            const tracks = s?.getVideoTracks?.() ?? [];
-            return !!v && !!s && tracks.length > 0 && tracks.some((t) => t.readyState === "live");
-        };
-
-        const pickFirstValid = (selector) => {
-            const nodes = document.querySelectorAll(selector);
-            for (const v of nodes) {
-                if (isValidVideoEl(v)) return v;
+        // 🔥 메인 발표자 찾기 (비디오 트랙이 없어도 찾기)
+        const findMainPresenter = () => {
+            // 1) 메인 비디오 타일 찾기 (비디오 트랙 유무와 관계없이)
+            const mainVideo = document.querySelector('video[data-main-video="main"]');
+            if (mainVideo) {
+                const tile = mainVideo.closest(".video-tile");
+                const peerId = tile?.dataset?.peerId || mainVideo?.dataset?.peerId || "";
+                const peerName =
+                    tile?.dataset?.peerName ||
+                    mainVideo?.dataset?.peerName ||
+                    tile?.querySelector(".stream-label")?.textContent ||
+                    "참가자";
+                return { video: mainVideo, stream: mainVideo.srcObject, peerName, peerId };
             }
+
+            // 2) 메인 스테이지의 비디오 타일 찾기
+            const mainTile = document.querySelector('.main-stage .video-tile.main, .layout-speaker .video-tile.main');
+            if (mainTile) {
+                const video = mainTile.querySelector('video.video-element');
+                const peerId = mainTile?.dataset?.peerId || "";
+                const peerName =
+                    mainTile?.dataset?.peerName ||
+                    mainTile?.querySelector(".stream-label")?.textContent ||
+                    "참가자";
+                return { video, stream: video?.srcObject, peerName, peerId };
+            }
+
+            // 3) 화면공유 우선 찾기 (비디오 트랙 있는 것만)
+            const screenVideo = document.querySelector('.video-tile:not(.me) video.video-element.screen');
+            if (screenVideo && screenVideo.srcObject) {
+                const tracks = screenVideo.srcObject.getVideoTracks();
+                if (tracks.length > 0 && tracks.some((t) => t.readyState === "live")) {
+                    const tile = screenVideo.closest(".video-tile");
+                    const peerId = tile?.dataset?.peerId || screenVideo?.dataset?.peerId || "";
+                    const peerName =
+                        tile?.dataset?.peerName ||
+                        screenVideo?.dataset?.peerName ||
+                        tile?.querySelector(".stream-label")?.textContent ||
+                        "참가자";
+                    return { video: screenVideo, stream: screenVideo.srcObject, peerName, peerId };
+                }
+            }
+
             return null;
         };
 
-        const video =
-            pickFirstValid('.video-tile:not(.me) video.video-element.screen') ||
-            pickFirstValid('video[data-main-video="main"]') ||
-            pickFirstValid('.video-tile:not(.me) video.video-element') ||
-            pickFirstValid('.video-tile video.video-element');
-        
-        if (!video) {
-            console.log('[LMSSidebar] 유효한 video 요소를 찾을 수 없음');
+        const mainPresenter = findMainPresenter();
+        if (!mainPresenter) {
+            console.log('[LMSSidebar] 메인 발표자를 찾을 수 없음');
             return;
         }
 
-        const stream = video.srcObject;
-        if (!stream) {
-            console.log('[LMSSidebar] video.srcObject가 없음');
-            return;
+        const { video, stream, peerName, peerId } = mainPresenter;
+        
+        // 🔥 video 요소가 없어도 메인 발표자 정보는 있으므로 PiP 실행 가능
+        // requestBrowserPip에서 스트림이 없으면 아바타 스트림을 생성함
+        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName, peerId, hasStream: !!stream });
+        
+        // video 요소가 없으면 임시 video 요소 생성
+        let videoEl = video;
+        if (!videoEl) {
+            videoEl = document.createElement("video");
+            videoEl.style.cssText = "position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none;";
+            document.body.appendChild(videoEl);
         }
         
-        const tile = video.closest(".video-tile");
-        const peerId = tile?.dataset?.peerId || video?.dataset?.peerId || "";
-        const peerName =
-            tile?.dataset?.peerName ||
-            video?.dataset?.peerName ||
-            tile?.querySelector(".stream-label")?.textContent ||
-            "참가자";
-        
-        console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName, peerId });
-        await requestBrowserPip(video, stream, peerName, peerId);
+        await requestBrowserPip(videoEl, stream, peerName, peerId);
     }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
     const toggleParent = (key) => {
-      setOpenKeys((prev) =>
-        prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-      );
+        setOpenKeys((prev) =>
+            prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+        );
     };
 
     const navigateWithPip = async (path) => {
-      if (isInMeeting) {
-        await requestPipIfPossible();
-      }
-      navigate(path);
+        if (isInMeeting) {
+            await requestPipIfMeeting();
+        }
+        navigate(path);
     };
 
     const goChild = async (parentKey, activeKey, path) => {
@@ -555,77 +580,25 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                 className="meeting-btn"
                 type="button"
                 onClick={async () => {
-                    if (!subjectId) {
-                        console.error("[LMSSidebar] subjectId가 없습니다.");
-                        return;
-                    }
+                    if (!subjectId) return;
 
-                    console.log("[LMSSidebar] 화상채팅방 입장 요청: subjectId=", subjectId);
+                    try {
+                        // 서버에서 roomId 가져오기 (8자리)
+                        const response = await api.get(`/meeting-rooms/room-id/${subjectId}`);
+                        const roomId = response.data.roomId;
 
-                    // 최대 3번 재시도
-                    const maxRetries = 3;
-                    let roomId = null;
-
-                    for (let retryCount = 0; retryCount < maxRetries && !roomId; retryCount++) {
-                        try {
-                            const currentAttempt = retryCount + 1;
-                            console.log(`[LMSSidebar] roomId 조회 시도 ${currentAttempt}/${maxRetries}`);
-                            // 백엔드에서 subjectId 기반으로 roomId를 받아옴
-                            const response = await api.get(`/meeting-rooms/room-id/${subjectId}`);
-                            roomId = response.data?.roomId;
-
-                            if (roomId) {
-                                console.log("[LMSSidebar] roomId 조회 성공:", roomId);
-                                sessionStorage.setItem("lms.activeRoomId", roomId);
-                                sessionStorage.setItem("pip.roomId", roomId);
-                                sessionStorage.setItem("pip.subjectId", subjectId);
-                                break;
-                            } else {
-                                console.warn("[LMSSidebar] roomId가 응답에 없습니다.");
-                            }
-                        } catch (error) {
-                            const currentAttempt = retryCount + 1;
-                            const errorMessage = error.response?.data?.message || error.message || "알 수 없는 오류";
-                            const statusCode = error.response?.status;
-                            
-                            console.error(`[LMSSidebar] roomId 조회 실패 (시도 ${currentAttempt}/${maxRetries}):`, {
-                                status: statusCode,
-                                message: errorMessage,
-                                error: error
-                            });
-                            
-                            if (currentAttempt < maxRetries) {
-                                // 재시도 전 대기
-                                await new Promise(resolve => setTimeout(resolve, 1000 * currentAttempt));
-                            }
+                        if (roomId) {
+                            sessionStorage.setItem("lms.activeRoomId", roomId);
                         }
-                    }
 
-                    if (!roomId) {
-                        console.error("[LMSSidebar] roomId 조회 실패: 최대 재시도 횟수 초과. API 서버를 확인하세요.");
-                        console.error("[LMSSidebar] 디버깅 정보:", {
-                            subjectId,
-                            apiBaseURL: api.defaults.baseURL,
-                            token: sessionStorage.getItem("accessToken") ? "있음" : "없음",
-                            protocol: window.location.protocol,
-                            hostname: window.location.hostname
-                        });
-                        
-                        const errorMsg = "화상채팅방 입장에 실패했습니다.\n\n" +
-                            "가능한 원인:\n" +
-                            "1. 네트워크 연결 문제\n" +
-                            "2. 서버 응답 지연\n" +
-                            "3. 브라우저 보안 설정\n\n" +
-                            "해결 방법:\n" +
-                            "- 페이지를 새로고침하세요\n" +
-                            "- 브라우저 캐시를 삭제하세요\n" +
-                            "- 다른 브라우저로 시도해보세요";
-                        alert(errorMsg);
-                        return;
-                    }
+                        window.dispatchEvent(new Event("meeting:request-pip"));
 
-                    window.dispatchEvent(new Event("meeting:request-pip"));
-                    navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
+                        navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
+                    } catch (error) {
+                        console.error("[LMSSidebar] roomId 가져오기 실패:", error);
+                        // 에러 발생 시 기존 방식으로 fallback (하지만 이 경우는 없어야 함)
+                        alert("화상 채팅방 입장에 실패했습니다. 다시 시도해주세요.");
+                    }
                 }}
             >
                 화상 채팅방 입장하기

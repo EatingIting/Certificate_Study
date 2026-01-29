@@ -32,7 +32,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 || path.contains("/api/users/check-email")
                 || path.contains("/api/category")
                 || path.contains("/api/meeting-rooms")
-                || path.contains("/api/rooms")
                 || path.contains("/ws/");
     }
 
