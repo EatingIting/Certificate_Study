@@ -8,6 +8,7 @@ import com.example.demo.assignment.vo.AssignmentVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -74,5 +75,10 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
 
         assignmentMapper.upsertSubmission(vo);
+    }
+
+    @Override
+    public List<AssignmentSubmissionDetailResponse> getSubmissionDetails(Long assignmentId) {
+        return assignmentMapper.selectSubmissionDetails(assignmentId);
     }
 }
