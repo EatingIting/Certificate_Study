@@ -41,7 +41,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         String userId = params.get("userId");
         String userName = params.get("userName");
+        String userEmail = params.get("userEmail");
         String title = params.get("title");
+
+        // isHost 파라미터 추출
+        boolean isHost = "true".equals(params.get("isHost"));
 
         Boolean paramMuted = params.containsKey("muted")
                 ? "true".equals(params.get("muted"))
@@ -51,23 +55,12 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 ? "true".equals(params.get("cameraOff"))
                 : null;
 
-        boolean isFirstJoin =
-                !roomUsers.containsKey(roomId) ||
-                        roomUsers.get(roomId).isEmpty();
-
         if (title == null || title.isBlank()) {
             title = "제목 없음";
         }
 
-        if (isFirstJoin) {
-            meetingRoomService.handleFirstJoin(
-                    roomId,
-                    userId,
-                    title
-            );
-        } else {
-            meetingRoomService.handleJoin(roomId, userId);
-        }
+        // 방장이면 meeting_room에 저장, 모든 유저는 participant에 저장 (userEmail 사용)
+        meetingRoomService.handleJoin(roomId, userEmail, title, isHost);
 
     /* =========================================================
        2. LEAVE 타이머 취소 (재접속 대응)
@@ -120,6 +113,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             // 재접속
             restoredUser.setExplicitlyLeft(false);
             restoredUser.setOnline(true);
+            restoredUser.setUserEmail(userEmail);
+            restoredUser.setHost(isHost);
 
             if (paramMuted != null) {
                 restoredUser.setMuted(paramMuted);
@@ -136,6 +131,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             finalUser = new RoomUser(
                     userId,
                     userName,
+                    userEmail,
+                    isHost,
                     System.currentTimeMillis(),
                     false,
                     muted,
@@ -186,7 +183,54 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         users.remove(session.getId());
         System.out.println("🚪 [LEFT] " + userId + " removed immediately");
 
+        // DB에 퇴장 시간 기록
+        meetingRoomService.handleLeave(roomId, leavingUser.getUserEmail(), leavingUser.isHost());
+
+        // ✅ 방장이 나갔으면 새 임시 방장 선정
+        if (leavingUser.isHost()) {
+            selectNewHost(roomId, sessions, users);
+        }
+
         broadcast(roomId);
+    }
+
+    /**
+     * 새 임시 방장 선정 (가장 먼저 입장한 참여자)
+     */
+    private void selectNewHost(String roomId, Map<String, WebSocketSession> sessions, Map<String, RoomUser> users) {
+        if (users == null || users.isEmpty()) return;
+
+        // 가장 먼저 입장한 유저를 새 방장으로 선정
+        RoomUser newHost = users.values().stream()
+                .filter(u -> u.isOnline() && !u.isExplicitlyLeft())
+                .min(Comparator.comparingLong(RoomUser::getJoinAt))
+                .orElse(null);
+
+        if (newHost == null) return;
+
+        // 새 방장으로 설정
+        newHost.setHost(true);
+        System.out.println("👑 [NEW HOST] " + newHost.getUserName() + " 님이 새 방장이 되었습니다.");
+
+        // HOST_CHANGED 메시지 브로드캐스트
+        try {
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "HOST_CHANGED",
+                            "newHostUserId", newHost.getUserId(),
+                            "newHostUserName", newHost.getUserName()
+                    )
+            );
+
+            TextMessage message = new TextMessage(payload);
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(message);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void broadcast(String roomId) {
@@ -368,22 +412,31 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             RoomUser leaver = users.get(session.getId());
             if (leaver == null) return;
 
-            String userId = leaver.getUserId();
+            String leaverUserId = leaver.getUserId();
+            boolean wasHost = leaver.isHost();
 
             leaver.setExplicitlyLeft(true);
 
             Map<String, TimerTask> timerMap = leaveTimers.get(roomId);
             if (timerMap != null) {
-                TimerTask t = timerMap.remove(userId);
+                TimerTask t = timerMap.remove(leaverUserId);
                 if (t != null) t.cancel();
             }
 
             // ✅ 즉시 제거 (userId 기준)
             users.entrySet().removeIf(e ->
-                    userId.equals(e.getValue().getUserId())
+                    leaverUserId.equals(e.getValue().getUserId())
             );
 
             sessions.remove(session.getId());
+
+            // DB에 퇴장 시간 기록
+            meetingRoomService.handleLeave(roomId, leaver.getUserEmail(), leaver.isHost());
+
+            // ✅ 방장이 나갔으면 새 임시 방장 선정
+            if (wasHost) {
+                selectNewHost(roomId, sessions, users);
+            }
 
             broadcast(roomId);
             return;
@@ -412,5 +465,156 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             }
             return;
         }
+
+        // ============================================
+        // 방장 권한 기능: FORCE_MUTE, FORCE_CAMERA_OFF, KICK
+        // ============================================
+
+        // 방장만 사용 가능한 기능
+        if (!sender.isHost()) {
+            // 방장이 아니면 무시
+            if ("FORCE_MUTE".equalsIgnoreCase(type) ||
+                "FORCE_CAMERA_OFF".equalsIgnoreCase(type) ||
+                "KICK".equalsIgnoreCase(type)) {
+                System.out.println("⚠️ 방장이 아닌 사용자가 방장 권한 기능 시도: " + sender.getUserName());
+                return;
+            }
+        }
+
+        // 마이크 강제 끄기
+        if ("FORCE_MUTE".equalsIgnoreCase(type)) {
+            String targetUserId = inbound.getTargetUserId();
+            if (targetUserId == null || targetUserId.isBlank()) return;
+
+            // 대상 유저 찾기
+            RoomUser targetUser = findUserById(users, targetUserId);
+            if (targetUser == null) return;
+
+            // 상태 변경
+            targetUser.setMuted(true);
+
+            // 대상에게 알림 + 전체 브로드캐스트
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "FORCE_MUTE",
+                            "targetUserId", targetUserId,
+                            "hostName", sender.getUserName()
+                    )
+            );
+
+            TextMessage broadcastMessage = new TextMessage(payload);
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
+
+            // USERS_UPDATE도 브로드캐스트
+            broadcast(roomId);
+            return;
+        }
+
+        // 카메라 강제 끄기
+        if ("FORCE_CAMERA_OFF".equalsIgnoreCase(type)) {
+            String targetUserId = inbound.getTargetUserId();
+            if (targetUserId == null || targetUserId.isBlank()) return;
+
+            // 대상 유저 찾기
+            RoomUser targetUser = findUserById(users, targetUserId);
+            if (targetUser == null) return;
+
+            // 상태 변경
+            targetUser.setCameraOff(true);
+
+            // 대상에게 알림 + 전체 브로드캐스트
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "FORCE_CAMERA_OFF",
+                            "targetUserId", targetUserId,
+                            "hostName", sender.getUserName()
+                    )
+            );
+
+            TextMessage broadcastMessage = new TextMessage(payload);
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
+
+            // USERS_UPDATE도 브로드캐스트
+            broadcast(roomId);
+            return;
+        }
+
+        // 강퇴
+        if ("KICK".equalsIgnoreCase(type)) {
+            String targetUserId = inbound.getTargetUserId();
+            if (targetUserId == null || targetUserId.isBlank()) return;
+
+            // 대상 유저 찾기
+            RoomUser targetUser = findUserById(users, targetUserId);
+            if (targetUser == null) return;
+
+            // 대상의 세션 ID 찾기
+            String targetSessionId = findSessionIdByUserId(users, targetUserId);
+
+            // 강퇴 알림 브로드캐스트
+            String payload = objectMapper.writeValueAsString(
+                    Map.of(
+                            "type", "KICKED",
+                            "targetUserId", targetUserId,
+                            "targetUserName", targetUser.getUserName(),
+                            "hostName", sender.getUserName()
+                    )
+            );
+
+            TextMessage broadcastMessage = new TextMessage(payload);
+            for (WebSocketSession s : sessions.values()) {
+                if (s.isOpen()) {
+                    s.sendMessage(broadcastMessage);
+                }
+            }
+
+            // 유저 제거
+            if (targetSessionId != null) {
+                users.remove(targetSessionId);
+                WebSocketSession targetSession = sessions.remove(targetSessionId);
+                if (targetSession != null && targetSession.isOpen()) {
+                    try {
+                        targetSession.close();
+                    } catch (Exception ignore) {}
+                }
+            }
+
+            // DB에 퇴장 시간 기록
+            meetingRoomService.handleLeave(roomId, targetUser.getUserEmail(), targetUser.isHost());
+
+            // USERS_UPDATE 브로드캐스트
+            broadcast(roomId);
+            return;
+        }
+    }
+
+    /**
+     * userId로 RoomUser 찾기
+     */
+    private RoomUser findUserById(Map<String, RoomUser> users, String userId) {
+        return users.values().stream()
+                .filter(u -> userId.equals(u.getUserId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * userId로 세션 ID 찾기
+     */
+    private String findSessionIdByUserId(Map<String, RoomUser> users, String userId) {
+        for (Map.Entry<String, RoomUser> entry : users.entrySet()) {
+            if (userId.equals(entry.getValue().getUserId())) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 }
