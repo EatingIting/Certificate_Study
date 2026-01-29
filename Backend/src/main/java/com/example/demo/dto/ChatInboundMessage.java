@@ -17,4 +17,5 @@ public class ChatInboundMessage {
     private Boolean speaking;
     private String emoji;
     private Map<String, Object> changes;
+    private String targetUserId;  // 방장 권한 기능용 (FORCE_MUTE, FORCE_CAMERA_OFF, KICK)
 }

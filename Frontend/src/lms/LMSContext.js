@@ -97,6 +97,16 @@ export const LMSProvider = ({ children, roomId }) => {
           })()
         : "";
 
+    // isHost 계산: user.email === room.hostUserEmail
+    const isHost = !!(
+        user &&
+        room &&
+        user.email &&
+        room.hostUserEmail &&
+        String(user.email).trim().toLowerCase() ===
+            String(room.hostUserEmail).trim().toLowerCase()
+    );
+
     const value = {
         user,
         room,
@@ -105,6 +115,7 @@ export const LMSProvider = ({ children, roomId }) => {
         error,
         refreshUser,
         displayName,
+        isHost,
         // 편의 메서드들
         userId: user?.userId || null,
         email: user?.email || null,
