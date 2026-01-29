@@ -1,6 +1,6 @@
-package com.example.demo.chat.config;
+package com.example.demo.LMS채팅.config;
 
-import com.example.demo.chat.handler.ChatWebSocketHandler;
+import com.example.demo.LMS채팅.handler.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;

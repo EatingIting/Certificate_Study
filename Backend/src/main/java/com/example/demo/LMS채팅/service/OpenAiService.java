@@ -1,4 +1,4 @@
-package com.example.demo.chat.service; // 👈 패키지명 확인!
+package com.example.demo.LMS채팅.service; // 👈 패키지명 확인!
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

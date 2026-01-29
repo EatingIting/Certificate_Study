@@ -1,8 +1,8 @@
-package com.example.demo.chat.handler;
+package com.example.demo.LMS채팅.handler;
 
-import com.example.demo.chat.dto.ChatMessageDTO;
-import com.example.demo.chat.entity.ChatMessage;
-import com.example.demo.chat.repository.ChatMessageRepository;
+import com.example.demo.LMS채팅.dto.ChatMessageDTO;
+import com.example.demo.LMS채팅.entity.ChatMessage;
+import com.example.demo.LMS채팅.repository.ChatMessageRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
