@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLMS } from "../LMSContext";
 import "./Board.css";
 
 function Board() {
   let navigate = useNavigate();
   let [sp] = useSearchParams();
+  const { isHost } = useLMS();
 
   // ✅ URL: /lms/1/board?category=공지
   let queryCategory = sp.get("category"); // "공지" | "일반" | "질문" | "자료" | null
@@ -209,9 +211,12 @@ function Board() {
         </div>
 
         <div className="bd-actions">
-          <button className="bd-btn" onClick={goWrite}>
-            글쓰기
-          </button>
+          {/* 공지사항 카테고리는 방장만 글쓰기 가능, 나머지는 모두 가능 */}
+          {(!queryCategory || queryCategory !== "공지" || isHost) && (
+            <button className="bd-btn" onClick={goWrite}>
+              글쓰기
+            </button>
+          )}
         </div>
       </div>
 

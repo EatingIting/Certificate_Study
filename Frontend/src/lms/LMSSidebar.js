@@ -2,6 +2,7 @@ import "./LMSSidebar.css";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useState, useCallback, useEffect } from "react";
 import { useMeeting } from "../webrtc/MeetingContext";
+import { useLMS } from "./LMSContext";
 import api from "../api/api";
 
 const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuProp }) => {
@@ -11,6 +12,9 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
     // ✅ 회의 상태 (PiP 트리거용)
     const { isInMeeting, isPipMode, roomId, requestBrowserPip } = useMeeting();
+    const { user, room } = useLMS();
+    const isHost = !!(user && room && user.email && room.hostUserEmail &&
+        String(user.email).trim().toLowerCase() === String(room.hostUserEmail).trim().toLowerCase());
 
     // ✅ 초기값: 전부 열림
     let [openKeys, setOpenKeys] = useState([
@@ -484,20 +488,22 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                             >
                                 일정목록
                             </li>
-                            <li
-                                className={`submenu-item ${
-                                    activeMenu === "calendar/add" ? "active" : ""
-                                }`}
-                                onClick={() =>
-                                    goChild(
-                                        "calendar",
-                                        "calendar/add",
-                                        "calendar?modal=add"
-                                    )
-                                }
-                            >
-                                일정추가
-                            </li>
+                            {isHost === true && (
+                                <li
+                                    className={`submenu-item ${
+                                        activeMenu === "calendar/add" ? "active" : ""
+                                    }`}
+                                    onClick={() =>
+                                        goChild(
+                                            "calendar",
+                                            "calendar/add",
+                                            "calendar?modal=add"
+                                        )
+                                    }
+                                >
+                                    일정추가
+                                </li>
+                            )}
                         </ul>
                     </li>
 

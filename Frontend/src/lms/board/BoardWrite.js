@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLMS } from "../LMSContext";
 import "./Board.css";
 
 function BoardWrite() {
     let navigate = useNavigate();
     let [sp] = useSearchParams();
+    const { isHost } = useLMS();
 
     // 목록에서 넘어온 카테고리 쿼리(?)가 있으면 기본값으로 사용
     let queryCategory = sp.get("category"); // "공지" | "일반" | "질문" | "자료" | null
@@ -30,6 +32,14 @@ function BoardWrite() {
     useEffect(() => {
         setCategory(initialCategory);
     }, [initialCategory]);
+
+    // 공지사항 카테고리는 방장만 작성 가능
+    useEffect(() => {
+        if (category === "공지" && !isHost) {
+            alert("공지사항은 방장만 작성할 수 있습니다.");
+            navigate("../board");
+        }
+    }, [category, isHost, navigate]);
 
     let titleMax = 200; // DB가 VARCHAR(200)였으니 프론트도 맞춤
     let contentMax = 5000;
@@ -134,9 +144,19 @@ function BoardWrite() {
                             id="bw-category"
                             className="bd-select"
                             value={category}
-                            onChange={(e) => setCategory(e.target.value)}
+                            onChange={(e) => {
+                                // 공지사항은 방장만 선택 가능
+                                if (e.target.value === "공지" && !isHost) {
+                                    alert("공지사항은 방장만 작성할 수 있습니다.");
+                                    return;
+                                }
+                                setCategory(e.target.value);
+                            }}
+                            disabled={category === "공지" && !isHost}
                         >
-                            <option value="공지">공지</option>
+                            <option value="공지" disabled={!isHost}>
+                                공지{!isHost ? " (방장만)" : ""}
+                            </option>
                             <option value="일반">일반</option>
                             <option value="질문">질문</option>
                             <option value="자료">자료</option>
