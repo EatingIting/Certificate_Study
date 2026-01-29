@@ -1,5 +1,7 @@
 package com.example.demo.controller;
 
+import com.example.demo.auth.AuthMapper;
+import com.example.demo.auth.AuthVO;
 import com.example.demo.mypage.MyPageService;
 import com.example.demo.mypage.MyPageVO;
 import lombok.RequiredArgsConstructor;
@@ -14,11 +16,19 @@ import org.springframework.web.multipart.MultipartFile;
 public class MyPageController {
 
     private final MyPageService myPageService;
+    private final AuthMapper authMapper;
 
     @GetMapping("/me")
     public ResponseEntity<MyPageVO> getMyPage(Authentication authentication) {
-        String userId = (String) authentication.getPrincipal();
-
+        // ✅ JWT의 principal은 email이므로, email → userId 변환 필요
+        String email = authentication.getName();
+        AuthVO user = authMapper.findByEmail(email);
+        
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        String userId = user.getUserId();
         MyPageVO myPage = myPageService.getMyPage(userId);
         return ResponseEntity.ok(myPage);
     }
@@ -33,7 +43,15 @@ public class MyPageController {
             @RequestParam(required = false) String introduction,
             @RequestParam(required = false) MultipartFile profileImage
     ) {
-        String userId = (String) authentication.getPrincipal();
+        // ✅ JWT의 principal은 email이므로, email → userId 변환 필요
+        String email = authentication.getName();
+        AuthVO user = authMapper.findByEmail(email);
+        
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        String userId = user.getUserId();
 
         myPageService.updateMyPage(
                 userId,
@@ -87,6 +105,8 @@ public class MyPageController {
                 myPageService.getCompletedStudies(email)
         );
     }
+
+
 
 
 }

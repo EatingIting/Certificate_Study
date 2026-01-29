@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Auth.css";
-import logo from "./메인로고.png";
 import { login } from "../api/api";
+import { getBackendOrigin } from "../utils/backendUrl";
+const logo = require("./메인로고.png");
 
 const Auth = () => {
     const navigate = useNavigate();
@@ -26,22 +27,18 @@ const Auth = () => {
     };
 
     const handleLogin = async () => {
-        const nextErrors = { email: "", password: "" };
-
-        if (!form.email) nextErrors.email = "이메일 주소를 입력해 주세요.";
-        if (!form.password) nextErrors.password = "비밀번호를 입력해 주세요.";
-
-        setErrors(nextErrors);
-        if (nextErrors.email || nextErrors.password) return;
-
         try {
             const res = await login(form.email, form.password);
 
-            console.log("로그인 응답:", res.data);
+            let token = res.data.token;
+
+            if (token.startsWith("Bearer ")) {
+                token = token.replace("Bearer ", "");
+            }
 
             sessionStorage.setItem("userId", res.data.userId);
             sessionStorage.setItem("nickname", res.data.nickname);
-            sessionStorage.setItem("accessToken", res.data.token);
+            sessionStorage.setItem("accessToken", token);
 
             alert("로그인 성공");
             navigate("/");
@@ -50,10 +47,11 @@ const Auth = () => {
         }
     };
 
+
     const handleOAuthLogin = (provider) => {
-        // localhost 하드코딩 금지: dev에서는 setupProxy가 /oauth2를 백엔드로 프록시,
-        // 배포에서는 동일 오리진(리버스 프록시/백엔드 서빙) 기준으로 동작하도록 상대경로 사용
-        window.location.href = `/oauth2/authorization/${provider}`;
+        const backendOrigin = getBackendOrigin();
+        const frontendOrigin = window.location.origin;
+        window.location.href = `${backendOrigin}/oauth2/authorization/${provider}?redirect_origin=${encodeURIComponent(frontendOrigin)}`;
     };
 
     return (
@@ -63,7 +61,12 @@ const Auth = () => {
                     {!showEmailLogin ? (
                         <>
                             <div className="logo-area">
-                                <img src={logo} alt="온실 로고" onClick={() => navigate("/")} className="onsil-logo"/>
+                                <img
+                                    src={logo}
+                                    alt="온실 로고"
+                                    onClick={() => navigate("/")}
+                                    className="onsil-logo"
+                                />
                             </div>
 
                             <div className="login-title">
@@ -105,48 +108,55 @@ const Auth = () => {
                         <>
                             <h3 className="modal-title">이메일 로그인</h3>
 
-                            <input
-                                type="email"
-                                name="email"
-                                placeholder="이메일"
-                                value={form.email}
-                                onChange={handleChange}
-                                className={`modal-input ${
-                                    errors.email ? "error" : ""
-                                }`}
-                            />
-                            {errors.email && (
-                                <p className="input-error">{errors.email}</p>
-                            )}
-
-                            <input
-                                type="password"
-                                name="password"
-                                placeholder="비밀번호"
-                                value={form.password}
-                                onChange={handleChange}
-                                className={`modal-input ${
-                                    errors.password ? "error" : ""
-                                }`}
-                            />
-                            {errors.password && (
-                                <p className="input-error">
-                                    {errors.password}
-                                </p>
-                            )}
-
-                            <button
-                                className="modal-login-btn"
-                                onClick={handleLogin}
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault(); // 새로고침 방지
+                                    handleLogin(); // 로그인 실행
+                                }}
                             >
-                                로그인
-                            </button>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    placeholder="이메일"
+                                    value={form.email}
+                                    onChange={handleChange}
+                                    className={`modal-input ${
+                                        errors.email ? "error" : ""
+                                    }`}
+                                />
+                                {errors.email && (
+                                    <p className="input-error">
+                                        {errors.email}
+                                    </p>
+                                )}
+
+                                <input
+                                    type="password"
+                                    name="password"
+                                    placeholder="비밀번호"
+                                    value={form.password}
+                                    onChange={handleChange}
+                                    className={`modal-input ${
+                                        errors.password ? "error" : ""
+                                    }`}
+                                />
+                                {errors.password && (
+                                    <p className="input-error">
+                                        {errors.password}
+                                    </p>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    className="modal-login-btn"
+                                >
+                                    로그인
+                                </button>
+                            </form>
 
                             <p className="modal-switch">
                                 아직 회원이 아니신가요?
-                                <span
-                                    onClick={() => navigate("/signup")}
-                                >
+                                <span onClick={() => navigate("/signup")}>
                                     회원가입
                                 </span>
                             </p>

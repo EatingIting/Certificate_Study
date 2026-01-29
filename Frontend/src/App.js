@@ -5,6 +5,7 @@ import SignUp from "./auth/SignUp";
 
 import OAuthSuccess from "./auth/OAuthSuccess";
 import OAuthFail from "./auth/OAuthFail";
+import OAuthCallbackRedirect from "./auth/OAuthCallbackRedirect";
 
 import Create from "./room/roomcategorypage/Create";
 import Main from "./mainpage/Main";
@@ -28,6 +29,9 @@ function App() {
                 {/* OAuth 결과 처리 */}
                 <Route path="/oauth-success" element={<OAuthSuccess />} />
                 <Route path="/oauth-fail" element={<OAuthFail />} />
+
+                {/* OAuth 콜백: /login/* 가 React로 오면 백엔드로 다시 요청 (nginx가 /login/ 을 백엔드로 보내도록) */}
+                <Route path="/login/*" element={<OAuthCallbackRedirect />} />
 
                 {/* 화상회의 */}
                 <Route path="/meeting/:roomId" element={<MeetingPage />} />

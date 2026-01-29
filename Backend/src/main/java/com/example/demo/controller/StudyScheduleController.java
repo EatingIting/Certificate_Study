@@ -27,7 +27,7 @@ public class StudyScheduleController {
             @RequestParam String roomId,
             @Valid @RequestBody StudyScheduleUpdateRequest req
     ) {
-        studyScheduleService.update(studyScheduleId, req);
+        studyScheduleService.update(studyScheduleId, roomId, req);
     }
 
     // DELETE /api/study-schedules/{studyScheduleId}?roomId=...
