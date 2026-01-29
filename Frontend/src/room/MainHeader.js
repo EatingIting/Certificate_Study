@@ -1,8 +1,9 @@
 import "./MainHeader.css";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Outlet } from "react-router-dom";
+import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import MainSideBar from "./MainSideBar";
 import { useEffect, useRef, useState } from "react";
+import { FaBell } from "react-icons/fa";
+import api from "../api/api";
 
 const MainHeader = () => {
     const navigate = useNavigate();
@@ -13,11 +14,13 @@ const MainHeader = () => {
     const dropdownRef = useRef(null);
     const [searchText, setSearchText] = useState("");
 
+    const [hasNotification, setHasNotification] = useState(false);
+    const [latestJoinId, setLatestJoinId] = useState(null);
+
     useEffect(() => {
         setNickname(sessionStorage.getItem("nickname"));
     }, [pathname]);
 
-    // 바깥 클릭 시 드롭다운 닫기
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -28,15 +31,45 @@ const MainHeader = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    useEffect(() => {
+        const fetchNotification = async () => {
+            if (!nickname) return;
+
+            try {
+                const res = await api.get("/applications/received");
+
+                if (!Array.isArray(res.data) || res.data.length === 0) {
+                    setHasNotification(false);
+                    setLatestJoinId(null);
+                    return;
+                }
+
+                const newestJoinId = res.data[0].joinId;
+                setLatestJoinId(newestJoinId);
+
+                const lastCheckedJoinId =
+                    localStorage.getItem("lastCheckedJoinId");
+
+                if (!lastCheckedJoinId) {
+                    setHasNotification(true);
+                    return;
+                }
+
+                setHasNotification(newestJoinId !== lastCheckedJoinId);
+            } catch (e) {
+                console.error("알림 조회 실패", e);
+            }
+        };
+
+        fetchNotification();
+    }, [nickname]);
+
     const handleLogout = () => {
         sessionStorage.clear();
         localStorage.clear();
-
         alert("로그아웃 되었습니다.");
-
         navigate("/auth");
     };
-
 
     return (
         <div className="page">
@@ -70,18 +103,34 @@ const MainHeader = () => {
                 <div className="main-actions">
                     {nickname ? (
                         <div className="profile-wrapper" ref={dropdownRef}>
+                            <div
+                                className="notif-icon"
+                                onClick={() => {
+                                    if (latestJoinId) {
+                                        localStorage.setItem(
+                                            "lastCheckedJoinId",
+                                            latestJoinId
+                                        );
+                                    }
+
+                                    setHasNotification(false);
+                                    navigate("/room/my-applications");
+                                }}
+                            >
+                                <FaBell size={18} />
+                                {hasNotification && <span className="notif-dot"></span>}
+                            </div>
+
                             <span
                                 className="header-nickname clickable"
                                 onClick={() => setIsOpen((prev) => !prev)}
                             >
-                                {nickname} 님
-                            </span>
+                {nickname} 님
+              </span>
 
                             {isOpen && (
                                 <div className="dropdown">
-                                    <div className="dropdown-header">
-                                        {nickname}
-                                    </div>
+                                    <div className="dropdown-header">{nickname}</div>
 
                                     <ul>
                                         <li onClick={() => navigate("/room/mypage")}>
@@ -95,20 +144,14 @@ const MainHeader = () => {
                                         </li>
                                     </ul>
 
-                                    <div
-                                        className="dropdown-footer"
-                                        onClick={handleLogout}
-                                    >
+                                    <div className="dropdown-footer" onClick={handleLogout}>
                                         로그아웃
                                     </div>
                                 </div>
                             )}
                         </div>
                     ) : (
-                        <button
-                            className="login-btn"
-                            onClick={() => navigate("/auth")}
-                        >
+                        <button className="login-btn" onClick={() => navigate("/auth")}>
                             로그인
                         </button>
                     )}
