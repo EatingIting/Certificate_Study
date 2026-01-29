@@ -48,15 +48,27 @@ const ChatModal = ({ roomId, roomName }) => {
   const scrollRef = useRef(null); 
   const modalRef = useRef(null); 
 
-  // URL 설정
+  // =================================================================
+  // 2. 동적 URL 생성 (소켓 포트 8080 강제 지정)
+  // =================================================================
   const { apiBaseUrl, wsUrl } = useMemo(() => {
-      const host = getHostnameWithPort();
+      const host = getHostnameWithPort(); // 예: localhost:3000
       const wsProtocol = getWsProtocol(); 
       const httpProtocol = wsProtocol === 'wss' ? 'https' : 'http';
-      return { apiBaseUrl: `${httpProtocol}://${host}`, wsUrl: `${wsProtocol}://${host}` };
+
+      // 🚨 소켓은 8080 포트로 직통 연결 (프록시 우회)
+      let wsHost = host;
+      if (host.includes(":3000")) {
+          wsHost = host.replace(":3000", ":8080");
+      }
+
+      return {
+          apiBaseUrl: `${httpProtocol}://${host}`,
+          wsUrl: `${wsProtocol}://${wsHost}`
+      };
   }, []);
 
-  // 사용자 정보 (로컬/세션 둘 다 확인)
+  // 사용자 정보 가져오기 (세션/로컬 모두 확인)
   const myInfo = useMemo(() => {
     try {
         const storedUserId = localStorage.getItem("userId") || sessionStorage.getItem("userId");
@@ -80,81 +92,113 @@ const ChatModal = ({ roomId, roomName }) => {
   };
 
   // =================================================================
-  // 🟢 1. 채팅 기록 불러오기 (Session Storage 우선 적용!)
+  // 3. 지난 대화 내용 불러오기 (API)
   // =================================================================
   useEffect(() => {
     if (!isOpen || !roomId || !myInfo) return;
 
     const fetchChatHistory = async () => {
         try {
-            // 🚨 [핵심 수정] 세션 스토리지에서 먼저 찾고, 없으면 로컬 스토리지 확인
+            // 토큰 찾기 (세션 우선)
             const token = sessionStorage.getItem("accessToken") || sessionStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("token");
             
-            console.log("채팅 기록 로드 시도 - 토큰:", token ? "있음" : "없음");
-
-            const headers = {
-                "Content-Type": "application/json"
-            };
-
-            // 토큰이 있으면 헤더에 추가
-            if (token) {
-                headers["Authorization"] = `Bearer ${token}`;
-            }
-
             const res = await fetch(`${apiBaseUrl}/api/chat/rooms/${roomId}/messages`, {
                 method: "GET",
-                headers: headers
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": token ? `Bearer ${token}` : "" 
+                }
             });
 
             if (res.ok) {
                 const data = await res.json();
-                const dbMessages = data.map(msg => ({
-                    userId: msg.user_id,          
-                    userName: msg.nickname,       
-                    message: msg.messagetext,     
-                    isSticker: STICKER_LIST.includes(msg.messagetext),
-                    createdAt: msg.created_at
-                }));
+                // 데이터 변환 및 필터링
+                const dbMessages = data.map(msg => {
+                    const text = msg.message || msg.messagetext || msg.text || ""; 
+                    return {
+                        userId: msg.userId || msg.user_id,          
+                        userName: msg.userName || msg.nickname || msg.name || "알 수 없음", 
+                        message: text,     
+                        isSticker: STICKER_LIST.includes(text),
+                        createdAt: msg.createdAt || msg.created_at || new Date().toISOString()
+                    };
+                }).filter(msg => msg.message && msg.message.trim() !== ""); // 빈 메시지 제거
+                
                 setChatMessages(dbMessages);
-            } else if (res.status === 401) {
-                console.error("🚨 채팅 기록 로드 실패: 401 Unauthorized (토큰 만료/누락)");
             }
         } catch (err) { console.error("채팅 기록 로드 에러:", err); }
     };
-    
     fetchChatHistory();
   }, [isOpen, roomId, myInfo, apiBaseUrl]);
 
-  // WebSocket 연결
+  // =================================================================
+  // 🟢 4. WebSocket 연결 (중복 데이터 필터링 적용)
+  // =================================================================
   useEffect(() => {
     if (!roomId || !myInfo) return;
 
-    const socket = new WebSocket(
-        `${wsUrl}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(myInfo.userName)}`
-    );
+    const token = sessionStorage.getItem("accessToken") || sessionStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("token");
+    
+    // 소켓 주소 생성 (토큰 포함)
+    const wsUrlStr = `${wsUrl}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(myInfo.userName)}&token=${encodeURIComponent(token)}`;
+    console.log("웹소켓 연결 시도:", wsUrlStr);
+
+    const socket = new WebSocket(wsUrlStr);
+    ws.current = socket;
+
+    socket.onopen = () => {
+        console.log("✅ 웹소켓 연결 성공!");
+    };
 
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        
         if (data.type === "TALK") {
-            setChatMessages(prev => [...prev, { 
-                userId: data.userId, userName: data.userName, message: data.message, 
-                isSticker: STICKER_LIST.includes(data.message), createdAt: data.createdAt || new Date().toISOString() 
-            }]);
+            // 🚨 [핵심] 메시지 중복 방지 (State 업데이트 시 검사)
+            setChatMessages(prev => {
+                // 마지막 메시지와 내용, 보낸사람, 시간이 거의 같으면(0.5초 이내) 중복으로 간주하고 무시
+                const lastMsg = prev[prev.length - 1];
+                if (lastMsg && 
+                    lastMsg.message === data.message && 
+                    lastMsg.userId === data.userId &&
+                    (new Date().getTime() - new Date(lastMsg.createdAt).getTime() < 500)) {
+                    return prev; 
+                }
+                return [...prev, { 
+                    userId: data.userId, userName: data.userName, message: data.message, 
+                    isSticker: STICKER_LIST.includes(data.message), createdAt: data.createdAt || new Date().toISOString() 
+                }];
+            });
+
             if (!isOpen && !isAiMode) setUnreadCount(prev => prev + 1);
+
         } else if (data.type === "USERS_UPDATE") {
-            setUserList(data.users);
+            // 🚨 [핵심] 접속자 목록 중복 제거 (userId 기준)
+            const uniqueUsers = data.users.filter((v, i, a) => a.findIndex(t => (t.userId === v.userId)) === i);
+            console.log("👥 접속자 목록 갱신:", uniqueUsers);
+            setUserList(uniqueUsers);
         }
     };
 
-    ws.current = socket;
-    return () => socket.close();
-  }, [isOpen, isAiMode, myInfo, roomId, wsUrl]);
+    socket.onclose = () => {
+        console.log("🔌 웹소켓 연결 종료");
+    };
 
+    return () => {
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            socket.close();
+        }
+    };
+  }, [isOpen, roomId, myInfo, wsUrl]); // 의존성에서 apiBaseUrl 제거 (소켓 url만 의존)
+
+  // 스크롤 자동 이동
   useEffect(() => {
     if (isOpen && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [currentMessages, isOpen]);
 
-  // 이벤트 핸들러
+  // =================================================================
+  // 5. 이벤트 핸들러 (드래그, 리사이즈, 토글, 전송)
+  // =================================================================
   const handleMouseDown = (e) => {
     isDragging.current = false;
     accumulatedMove.current = 0; 
@@ -261,9 +305,6 @@ const ChatModal = ({ roomId, roomName }) => {
 
   const toggleAiMode = () => setIsAiMode(!isAiMode);
 
-  // =================================================================
-  // 🟢 2. 메시지 전송 (Session Storage 우선 적용!)
-  // =================================================================
   const handleSend = async (text = inputValue) => {
     if (!text.trim()) return;
     if (!myInfo) return;
@@ -276,10 +317,7 @@ const ChatModal = ({ roomId, roomName }) => {
         setAiMessages(prev => [...prev, { userId: 'AI_BOT', userName: 'AI 튜터', message: "...", createdAt: new Date().toISOString(), isAiResponse: true, isLoading: true }]);
 
         try {
-            // 🚨 [핵심 수정] 여기도 Session Storage를 먼저 보도록 수정했습니다.
             const token = sessionStorage.getItem("accessToken") || sessionStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("token");
-            console.log("AI 요청 전송 시도 - 토큰:", token);
-
             if (!token) throw new Error("로그인 토큰이 없습니다.");
 
             const res = await fetch(`${apiBaseUrl}/api/ai/chat`, {
@@ -307,6 +345,8 @@ const ChatModal = ({ roomId, roomName }) => {
             ws.current.send(JSON.stringify({ 
                 type: "TALK", roomId, userId: myInfo.userId, userName: myInfo.userName, message: text 
             }));
+        } else {
+            console.error("웹소켓 연결이 끊겨있어 메시지를 보낼 수 없습니다.");
         }
     }
   };
@@ -376,7 +416,6 @@ const ChatModal = ({ roomId, roomName }) => {
             <div className="sticker-menu-container">{STICKER_LIST.map((s, i) => <button key={i} className="sticker-grid-btn" onClick={() => handleSend(s)}>{s}</button>)}</div>
         )}
 
-        {/* 입력창 */}
         <div className="tc-input-area">
             {!isAiMode && <button className="tc-sticker-toggle-btn" onClick={() => setShowStickerMenu(!showStickerMenu)}>😊</button>}
             <input className="tc-input" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} placeholder="메시지 입력" />
