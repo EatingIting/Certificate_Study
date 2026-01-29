@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -37,13 +38,14 @@ public class AuthController {
 
         String token = jwtTokenProvider.createAccessToken(user.getEmail());
 
-        return ResponseEntity.ok(
-                Map.of(
-                        "userId", user.getUserId(),
-                        "nickname", user.getNickname(),
-                        "token", token
-                )
-        );
+        // HashMap을 사용하여 name 필드가 항상 포함되도록 함
+        Map<String, String> response = new HashMap<>();
+        response.put("userId", user.getUserId());
+        response.put("nickname", user.getNickname() != null ? user.getNickname() : "");
+        response.put("name", user.getName() != null ? user.getName() : "");
+        response.put("token", token);
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/signup")
@@ -59,13 +61,19 @@ public class AuthController {
         String email = authentication.getName();
 
         AuthVO user = authService.findByEmail(email);
+        
+        // 디버깅을 위한 로그
+        System.out.println("User email: " + email);
+        System.out.println("User name: " + user.getName());
+        System.out.println("User nickname: " + user.getNickname());
 
-        return ResponseEntity.ok(
-                Map.of(
-                        "userId", user.getUserId(),
-                        "email", user.getEmail(),
-                        "nickname", user.getNickname()
-                )
-        );
+        // HashMap을 사용하여 name 필드가 항상 포함되도록 함
+        Map<String, String> response = new HashMap<>();
+        response.put("userId", user.getUserId());
+        response.put("email", user.getEmail());
+        response.put("name", user.getName() != null ? user.getName() : "");
+        response.put("nickname", user.getNickname() != null ? user.getNickname() : "");
+
+        return ResponseEntity.ok(response);
     }
 }
