@@ -8,6 +8,7 @@ import Toast from "../toast/Toast";
 
 import Dashboard from "./dashboard/Dashboard";
 import Attendance from "./attendance/Attendance";
+import AttendanceAll from "./attendance/AttendanceAll";
 import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
 
@@ -219,6 +220,8 @@ function LMSSubjectInner() {
 
                         <Route path="dashboard" element={<Dashboard setActiveMenu={setActiveMenu} />} />
                         <Route path="attendance" element={<Attendance setActiveMenu={setActiveMenu} />} />
+                        <Route path="attendance/all" element={<AttendanceAll setActiveMenu={setActiveMenu} />} />
+
 
                         {/* 과제 목록 / 상세 */}
                         <Route path="assignment" element={<Assignment setActiveMenu={setActiveMenu} />} />
