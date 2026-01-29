@@ -1,7 +1,7 @@
-package com.example.demo.LMS채팅.controller;
+package com.example.demo.chat.controller;
 
-import com.example.demo.LMS채팅.entity.ChatMessage;
-import com.example.demo.LMS채팅.repository.ChatMessageRepository;
+import com.example.demo.chat.entity.ChatMessage;
+import com.example.demo.chat.repository.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
