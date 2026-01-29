@@ -1,4 +1,4 @@
-package com.example.demo.LMS채팅.dto;
+package com.example.demo.chat.dto;
 
 import lombok.Getter;
 import lombok.Setter;
