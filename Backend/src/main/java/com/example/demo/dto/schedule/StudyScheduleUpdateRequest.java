@@ -21,6 +21,14 @@ public class StudyScheduleUpdateRequest {
     @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$")
     private String date;
 
+    @NotNull
+    @Pattern(regexp = "^\\d{2}:\\d{2}$")
+    private String startTime;
+
+    @NotNull
+    @Pattern(regexp = "^\\d{2}:\\d{2}$")
+    private String endTime;
+
     @Size(max = 500)
     private String description;
 }

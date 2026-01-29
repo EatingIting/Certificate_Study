@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.apache.ibatis.type.Alias;
 
 import java.sql.Date;
+import java.sql.Time;
 import java.sql.Timestamp;
 
 @Data
@@ -21,6 +22,9 @@ public class StudyScheduleVO {
 
     private Integer roundNum; // int
     private Date studyDate;   // date
+
+    private Time startTime;   // time
+    private Time endTime;     // time
 
     private String description; // varchar(500) nullable
 
