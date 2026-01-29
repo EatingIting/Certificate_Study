@@ -50,7 +50,8 @@ const Auth = () => {
 
     const handleOAuthLogin = (provider) => {
         const backendOrigin = getBackendOrigin();
-        window.location.href = `${backendOrigin}/oauth2/authorization/${provider}`;
+        const frontendOrigin = window.location.origin;
+        window.location.href = `${backendOrigin}/oauth2/authorization/${provider}?redirect_origin=${encodeURIComponent(frontendOrigin)}`;
     };
 
     return (
