@@ -8,8 +8,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import * as mediasoupClient from "mediasoup-client";
 import "./MeetingPage.css";
 import { useMeeting } from "./MeetingContext";
+import { useLMS } from "../lms/LMSContext";
 import Toast from "../toast/Toast";
 import { getHostnameWithPort, getWsProtocol } from "../utils/backendUrl";
+import api from "../api/api";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
@@ -736,6 +738,15 @@ function MeetingPage({ portalRoomId }) {
         pipVideoRef, // 🔥 브라우저 PIP용 숨겨진 video element ref
     } = useMeeting();
 
+    // roomTitle, email, room 정보 (LMSContext에서)
+    const { roomTitle, email, user, room } = useLMS();
+    const hostUserEmail = room?.hostUserEmail || "";
+    const userEmail = (email || user?.email || sessionStorage.getItem("userEmail") || "").trim();
+    const isHostLocal =
+        !!userEmail &&
+        !!hostUserEmail &&
+        String(userEmail).toLowerCase() === String(hostUserEmail).trim().toLowerCase();
+
     useEffect(() => {
         if (!roomId || !subjectId) return;
 
@@ -864,6 +875,9 @@ function MeetingPage({ portalRoomId }) {
     // 🔥 토스트 메시지 상태
     const [toastMessage, setToastMessage] = useState("");
     const [showToast, setShowToast] = useState(false);
+
+    // 👑 방장 권한 드롭다운 메뉴 상태
+    const [hostMenuTargetId, setHostMenuTargetId] = useState(null);
 
     // 🔥 얼굴 이모지 필터
     const [faceEmoji, setFaceEmoji] = useState(() => {
@@ -1276,15 +1290,50 @@ function MeetingPage({ portalRoomId }) {
         }
     }, []); // 마운트 시 한 번만 실행
 
+    // 사용자 정보 가져오기 (nickname 사용)
+    const [userNickname, setUserNickname] = useState(null);
+    
+    useEffect(() => {
+        // API에서 사용자 정보 가져오기
+        api.get("/users/me")
+            .then((res) => {
+                const nickname = res.data.nickname?.trim() || "";
+                const name = res.data.name?.trim() || "";
+                
+                // nickname을 우선적으로 사용하고, 없으면 name 사용
+                const displayName = nickname || name || null;
+                if (displayName) {
+                    setUserNickname(displayName);
+                    userNameRef.current = displayName;
+                    // localStorage에 userName 저장
+                    localStorage.setItem("userName", displayName);
+                }
+                if (res.data.userId) {
+                    localStorage.setItem("userId", res.data.userId);
+                    userIdRef.current = res.data.userId;
+                }
+            })
+            .catch((err) => {
+                console.error("사용자 정보 가져오기 실패", err);
+                // 실패 시 기존 로직 사용
+            });
+    }, []);
+
     if (!userIdRef.current) {
-        const savedId = localStorage.getItem("stableUserId");
-        const savedName = localStorage.getItem("stableUserName");
+        // localStorage에서 userId와 userName 가져오기
+        const savedId = localStorage.getItem("userId");
+        const savedName = localStorage.getItem("userName");
 
         const id = savedId || safeUUID();
         const name = savedName || `User-${id.slice(0, 4)}`;
 
-        localStorage.setItem("stableUserId", id);
-        localStorage.setItem("stableUserName", name);
+        // localStorage에 저장 (없으면 생성)
+        if (!savedId) {
+            localStorage.setItem("userId", id);
+        }
+        if (!savedName) {
+            localStorage.setItem("userName", name);
+        }
 
         userIdRef.current = id;
         userNameRef.current = name;
@@ -1294,7 +1343,8 @@ function MeetingPage({ portalRoomId }) {
     const mainVideoRef = useRef(null);
 
     const userId = userIdRef.current;
-    const userName = userNameRef.current;
+    // userNickname이 있으면 그것을 사용하고, 없으면 기존 userName 사용
+    const userName = userNickname || userNameRef.current;
 
     const hasAudioTrack = localStream?.getAudioTracks().length > 0;
     // const hasVideoTrack = localStream?.getVideoTracks().length > 0;
@@ -1402,6 +1452,65 @@ function MeetingPage({ portalRoomId }) {
             setShowToast(true);
         }
     };
+
+    // ============================================
+    // 👑 방장 권한 기능 핸들러
+    // ============================================
+
+    // 현재 사용자가 방장인지 확인
+    const amIHost = useMemo(() => {
+        const me = participants.find(p => p.isMe);
+        return me?.isHost ?? false;
+    }, [participants]);
+
+    // 마이크 강제 끄기
+    const handleForceMute = useCallback((targetUserId) => {
+        if (!amIHost || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        wsRef.current.send(JSON.stringify({
+            type: "FORCE_MUTE",
+            targetUserId
+        }));
+        setHostMenuTargetId(null);
+    }, [amIHost]);
+
+    // 카메라 강제 끄기
+    const handleForceCameraOff = useCallback((targetUserId) => {
+        if (!amIHost || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        wsRef.current.send(JSON.stringify({
+            type: "FORCE_CAMERA_OFF",
+            targetUserId
+        }));
+        setHostMenuTargetId(null);
+    }, [amIHost]);
+
+    // 강퇴
+    const handleKick = useCallback((targetUserId) => {
+        if (!amIHost || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        const ok = window.confirm("정말 내보내시겠습니까?");
+        if (!ok) return;
+        wsRef.current.send(JSON.stringify({
+            type: "KICK",
+            targetUserId
+        }));
+        setHostMenuTargetId(null);
+    }, [amIHost]);
+
+    // 드롭다운 메뉴 토글
+    const toggleHostMenu = useCallback((targetId) => {
+        setHostMenuTargetId(prev => prev === targetId ? null : targetId);
+    }, []);
+
+    // 드롭다운 외부 클릭 시 닫기
+    useEffect(() => {
+        if (!hostMenuTargetId) return;
+        const handleClickOutside = (e) => {
+            if (!e.target.closest('.host-menu-dropdown') && !e.target.closest('.more-btn')) {
+                setHostMenuTargetId(null);
+            }
+        };
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, [hostMenuTargetId]);
 
     const turnOffCamera = async () => {
         // 1) Canvas 파이프라인 정리
@@ -5127,7 +5236,11 @@ function MeetingPage({ portalRoomId }) {
 
     // 1️⃣ Signaling WebSocket (8080)
     useEffect(() => {
-        if (!roomId) return;
+        // userEmail이 준비될 때까지 대기
+        if (!roomId || !userEmail) {
+            console.log("[WS] 대기 중 - roomId:", roomId, "userEmail:", userEmail);
+            return;
+        }
 
         let ws = null;
         let pingInterval = null; // 💓 핑 타이머 변수
@@ -5147,8 +5260,11 @@ function MeetingPage({ portalRoomId }) {
             const wsUrl = `${protocol}://${host}/ws/room/${wsRoomId}` +
                 `?userId=${encodeURIComponent(userId)}` +
                 `&userName=${encodeURIComponent(userName)}` +
+                `&userEmail=${encodeURIComponent(userEmail || "")}` +
                 `&muted=${!micOnRef.current}` +
-                `&cameraOff=${!camOnRef.current}`;
+                `&cameraOff=${!camOnRef.current}` +
+                `&isHost=${isHostLocal}` +
+                `&title=${encodeURIComponent(roomTitle || "")}`;
 
             ws = new WebSocket(wsUrl);
             wsRef.current = ws;
@@ -5334,6 +5450,8 @@ function MeetingPage({ portalRoomId }) {
                                 name: u.userName,
                                 joinAt: u.joinAt,
                                 isMe,
+                                // 👑 방장 여부 (서버에서 받은 값 사용)
+                                isHost: typeof u.host === "boolean" ? u.host : (old?.isHost ?? false),
                                 // ✅ 서버가 muted/cameraOff를 "항상" 내려주지 않는 경우가 있어,
                                 // 값이 없으면 기존 값을 유지해야 아이콘 타일로 튀지 않음.
                                 muted: isMe
@@ -5531,18 +5649,18 @@ function MeetingPage({ portalRoomId }) {
                     if (peerId === String(userId)) return; // 본인은 무시 (본인 타일에는 스피너 표시 안 함)
 
                     const reconnecting = data.reconnecting !== false; // 기본값은 true
-                    
+
                     setParticipants(prev =>
                         prev.map(p => {
                             if (String(p.id) !== peerId) return p;
-                            
+
                             // 🔥 스트림이 live 상태면 재접속 상태로 설정하지 않음 (PIP 모드 전환 시 깜빡임 방지)
                             const hasLiveStream = p.stream && p.stream.getVideoTracks().some(t => t.readyState === "live");
                             if (hasLiveStream && reconnecting) {
                                 console.log(`[MeetingPage] USER_RECONNECTING 무시: ${peerId} - live stream exists`);
                                 return p; // 스트림이 live 상태면 상태 변경하지 않음
                             }
-                            
+
                             return {
                                 ...p,
                                 isReconnecting: reconnecting,
@@ -5552,6 +5670,112 @@ function MeetingPage({ portalRoomId }) {
                         })
                     );
                     console.log(`[MeetingPage] USER_RECONNECTING: ${peerId} = ${reconnecting}`);
+                    return;
+                }
+
+                // ============================================
+                // 👑 임시 방장 선정 알림
+                // ============================================
+                if (data.type === "HOST_CHANGED") {
+                    const { newHostUserId, newHostUserName } = data;
+                    console.log(`👑 [HOST_CHANGED] 새 방장: ${newHostUserName} (${newHostUserId})`);
+
+                    // 참여자 목록에서 방장 플래그 업데이트
+                    setParticipants(prev =>
+                        prev.map(p => ({
+                            ...p,
+                            isHost: String(p.id) === String(newHostUserId)
+                        }))
+                    );
+
+                    // 토스트 메시지 표시
+                    setToastMessage(`${newHostUserName}님이 방장이 되었습니다.`);
+                    setShowToast(true);
+                    return;
+                }
+
+                // ============================================
+                // 🔇 방장이 마이크 강제 끄기
+                // ============================================
+                if (data.type === "FORCE_MUTE") {
+                    const { targetUserId, hostName } = data;
+                    console.log(`🔇 [FORCE_MUTE] ${hostName}님이 ${targetUserId}의 마이크를 껐습니다.`);
+
+                    // 내가 대상이면 마이크 끄기
+                    if (String(targetUserId) === String(userId)) {
+                        setMicOn(false);
+                        setToastMessage(`${hostName}님이 마이크를 껐습니다.`);
+                        setShowToast(true);
+                    }
+
+                    // 참여자 목록 업데이트
+                    setParticipants(prev =>
+                        prev.map(p =>
+                            String(p.id) === String(targetUserId)
+                                ? { ...p, muted: true }
+                                : p
+                        )
+                    );
+                    return;
+                }
+
+                // ============================================
+                // 📷 방장이 카메라 강제 끄기
+                // ============================================
+                if (data.type === "FORCE_CAMERA_OFF") {
+                    const { targetUserId, hostName } = data;
+                    console.log(`📷 [FORCE_CAMERA_OFF] ${hostName}님이 ${targetUserId}의 카메라를 껐습니다.`);
+
+                    // 내가 대상이면 카메라 끄기
+                    if (String(targetUserId) === String(userId)) {
+                        setCamOn(false);
+                        setToastMessage(`${hostName}님이 카메라를 껐습니다.`);
+                        setShowToast(true);
+                    }
+
+                    // 참여자 목록 업데이트
+                    setParticipants(prev =>
+                        prev.map(p =>
+                            String(p.id) === String(targetUserId)
+                                ? { ...p, cameraOff: true }
+                                : p
+                        )
+                    );
+                    return;
+                }
+
+                // ============================================
+                // 🚪 방장이 강퇴
+                // ============================================
+                if (data.type === "KICKED") {
+                    const { targetUserId, targetUserName, hostName } = data;
+                    console.log(`🚪 [KICKED] ${hostName}님이 ${targetUserName}을 강퇴했습니다.`);
+
+                    // 내가 강퇴당했으면 회의 종료
+                    if (String(targetUserId) === String(userId)) {
+                        setToastMessage(`${hostName}님이 회의에서 내보냈습니다.`);
+                        setShowToast(true);
+                        // 잠시 후 회의 종료 - isLeavingRef 설정 후 navigate로 이동
+                        setTimeout(() => {
+                            isLeavingRef.current = true;
+                            try {
+                                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                                    wsRef.current.send(JSON.stringify({ type: "LEAVE" }));
+                                }
+                            } catch {}
+                            navigate(`/lms/${subjectId}`);
+                        }, 1500);
+                        return;
+                    }
+
+                    // 다른 사람이 강퇴당했으면 토스트 표시
+                    setToastMessage(`${targetUserName}님이 회의에서 나갔습니다.`);
+                    setShowToast(true);
+
+                    // 참여자 목록에서 제거 (USERS_UPDATE에서도 처리되지만 즉시 반영)
+                    setParticipants(prev =>
+                        prev.filter(p => String(p.id) !== String(targetUserId))
+                    );
                     return;
                 }
             };
@@ -5574,7 +5798,7 @@ function MeetingPage({ portalRoomId }) {
 
             wsRef.current = null;
         };
-    }, [roomId, userId, userName]); // 의존성 배열 유지
+    }, [roomId, userId, userName, userEmail, isHostLocal, roomTitle]); // userEmail/isHostLocal 반영
 
     useEffect(() => {
         setParticipants((prev) =>
@@ -6275,14 +6499,38 @@ function MeetingPage({ portalRoomId }) {
                                                                         <UserAvatar name={p.name} />
                                                                         <div>
                                                                             <div className={`p-name ${p.isMe ? "me" : ""}`}>
-                                                                                {p.name} {p.isMe ? "(나)" : ""}
+                                                                                {p.name} {p.isMe ? "(나)" : ""} {p.isHost ? "👑" : ""}
                                                                             </div>
-                                                                            <div className="p-role">{p.isMe ? "나" : "팀원"}</div>
+                                                                            <div className="p-role">{p.isHost ? "방장" : (p.isMe ? "나" : "참여자")}</div>
                                                                         </div>
                                                                     </div>
                                                                     <div className="p-status">
                                                                         {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} />}
                                                                         {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} />}
+                                                                        {!p.isMe && amIHost && (
+                                                                            <div className="host-menu-container">
+                                                                                <button className="more-btn" onClick={() => toggleHostMenu(p.id)}>
+                                                                                    <MoreHorizontal size={16} />
+                                                                                </button>
+                                                                                {hostMenuTargetId === p.id && (
+                                                                                    <div className="host-menu-dropdown">
+                                                                                        {!p.muted && (
+                                                                                            <button onClick={() => handleForceMute(p.id)}>
+                                                                                                <MicOff size={14} /> 마이크 끄기
+                                                                                            </button>
+                                                                                        )}
+                                                                                        {!p.cameraOff && (
+                                                                                            <button onClick={() => handleForceCameraOff(p.id)}>
+                                                                                                <VideoOff size={14} /> 카메라 끄기
+                                                                                            </button>
+                                                                                        )}
+                                                                                        <button className="kick-btn" onClick={() => handleKick(p.id)}>
+                                                                                            <X size={14} /> 내보내기
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -6607,14 +6855,38 @@ function MeetingPage({ portalRoomId }) {
                                                                         <UserAvatar name={part.name} />
                                                                         <div>
                                                                             <div className={`p-name ${part.isMe ? "me" : ""}`}>
-                                                                                {part.name} {part.isMe ? "(나)" : ""}
+                                                                                {part.name} {part.isMe ? "(나)" : ""} {part.isHost ? "👑" : ""}
                                                                             </div>
-                                                                            <div className="p-role">{part.isMe ? "나" : "팀원"}</div>
+                                                                            <div className="p-role">{part.isHost ? "방장" : (part.isMe ? "나" : "참여자")}</div>
                                                                         </div>
                                                                     </div>
                                                                     <div className="p-status">
                                                                         {part.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} />}
                                                                         {part.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} />}
+                                                                        {!part.isMe && amIHost && (
+                                                                            <div className="host-menu-container">
+                                                                                <button className="more-btn" onClick={() => toggleHostMenu(part.id)}>
+                                                                                    <MoreHorizontal size={16} />
+                                                                                </button>
+                                                                                {hostMenuTargetId === part.id && (
+                                                                                    <div className="host-menu-dropdown">
+                                                                                        {!part.muted && (
+                                                                                            <button onClick={() => handleForceMute(part.id)}>
+                                                                                                <MicOff size={14} /> 마이크 끄기
+                                                                                            </button>
+                                                                                        )}
+                                                                                        {!part.cameraOff && (
+                                                                                            <button onClick={() => handleForceCameraOff(part.id)}>
+                                                                                                <VideoOff size={14} /> 카메라 끄기
+                                                                                            </button>
+                                                                                        )}
+                                                                                        <button className="kick-btn" onClick={() => handleKick(part.id)}>
+                                                                                            <X size={14} /> 내보내기
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -6852,16 +7124,40 @@ function MeetingPage({ portalRoomId }) {
                                         <UserAvatar name={p.name} />
                                         <div>
                                             <div className={`p-name ${p.isMe ? "me" : ""}`}>
-                                                {p.name} {p.isMe ? "(나)" : ""}
+                                                {p.name} {p.isMe ? "(나)" : ""} {p.isHost ? "👑" : ""}
                                             </div>
-                                            <div className="p-role">{p.isMe ? "나" : "팀원"}</div>
+                                            <div className="p-role">{p.isHost ? "방장" : (p.isMe ? "나" : "참여자")}</div>
                                         </div>
                                     </div>
                                     <div className="p-status">
                                         {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} className="icon-hidden" />}
                                         {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} className="icon-hidden" />}
-                                        {!p.isMe && (
-                                            <button className="more-btn">
+                                        {!p.isMe && amIHost && (
+                                            <div className="host-menu-container">
+                                                <button className="more-btn" onClick={() => toggleHostMenu(p.id)}>
+                                                    <MoreHorizontal size={16} />
+                                                </button>
+                                                {hostMenuTargetId === p.id && (
+                                                    <div className="host-menu-dropdown">
+                                                        {!p.muted && (
+                                                            <button onClick={() => handleForceMute(p.id)}>
+                                                                <MicOff size={14} /> 마이크 끄기
+                                                            </button>
+                                                        )}
+                                                        {!p.cameraOff && (
+                                                            <button onClick={() => handleForceCameraOff(p.id)}>
+                                                                <VideoOff size={14} /> 카메라 끄기
+                                                            </button>
+                                                        )}
+                                                        <button className="kick-btn" onClick={() => handleKick(p.id)}>
+                                                            <X size={14} /> 내보내기
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {!p.isMe && !amIHost && (
+                                            <button className="more-btn" disabled>
                                                 <MoreHorizontal size={16} />
                                             </button>
                                         )}

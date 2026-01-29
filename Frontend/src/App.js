@@ -14,6 +14,8 @@ import MeetingPage from "./webrtc/MeetingPage";
 import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
 import { MeetingProvider } from "./webrtc/MeetingContext";
+import { LMSProvider } from "./lms/LMSContext";
+import ProtectedRoute from "./lms/ProtectedRoute";
 import MainHeader from "./room/MainHeader";
 import RoomPage from "./room/roomcategorypage/RoomPage";
 import MyPage from "./room/roomcategorypage/MyPage";
@@ -46,7 +48,13 @@ function App() {
                     <Route path="/room/mypage" element={<MyPage />} />
                     <Route path="/room/my-applications" element={<MyApplications />} />
                     <Route path="/room/create" element={<Create />} />
-                    <Route path="/room/mystudy" element={<LMSMain />} />
+                    <Route path="/room/mystudy" element={
+                        <LMSProvider>
+                            <ProtectedRoute>
+                                <LMSMain />
+                            </ProtectedRoute>
+                        </LMSProvider>
+                    } />
                 </Route>
             </Routes>
         </BrowserRouter>

@@ -3,40 +3,28 @@ import ClassCard from "./ClassCard";
 import api from "../api/api";
 import "./LMSMain.css";
 import { useNavigate } from "react-router-dom";
+import { useLMS } from "./LMSContext";
 
 const LMSMain = () => {
     const [classList, setClassList] = useState([]);
-    const [loginUserEmail, setLoginUserEmail] = useState("");
     const navigate = useNavigate();
+    const { user, email, loading } = useLMS();
+
+    // ProtectedRoute에서 이미 인증 체크를 하므로 여기서는 제거
+    // useEffect는 유지하되, ProtectedRoute가 먼저 체크함
 
     useEffect(() => {
-        const token = sessionStorage.getItem("accessToken");
-
-        if (!token) {
-            alert("로그인이 필요한 페이지입니다.");
-            navigate("/auth");
-        }
-    }, [navigate]);
-
-    useEffect(() => {
-        const email = sessionStorage.getItem("userEmail");
-        console.log("세션 userEmail:", email);
-        if (email) {
-            setLoginUserEmail(email);
-        }
-    }, []);
-
-    useEffect(() => {
-    api.get("/classrooms/my")
-        .then((res) => {
-        setClassList(res.data);
-        })
-        .catch((err) => {
-        console.error("클래스룸 불러오기 실패", err);
-        });
+        api.get("/classrooms/my")
+            .then((res) => {
+                setClassList(res.data);
+            })
+            .catch((err) => {
+                console.error("클래스룸 불러오기 실패", err);
+            });
     }, []);
 
     console.log("classList:", classList, "type:", typeof classList, "isArray:", Array.isArray(classList));
+    console.log("사용자 정보:", user);
 
 
     return (
@@ -49,7 +37,7 @@ const LMSMain = () => {
                         <ClassCard
                             key={item.roomId}
                             data={item}
-                            loginUserEmail={loginUserEmail}
+                            loginUserEmail={email || ""}
                         />
                     ))
                 ) : (

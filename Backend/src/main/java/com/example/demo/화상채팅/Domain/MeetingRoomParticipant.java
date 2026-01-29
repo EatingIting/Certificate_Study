@@ -1,4 +1,4 @@
-package com.example.demo.domain;
+package com.example.demo.화상채팅.Domain;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -13,16 +13,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MeetingRoomParticipant {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "participant_id")
-    private Long participantId;
-
-    @Column(name = "room_id", length = 36, nullable = false)
-    private String roomId;
-
-    @Column(name = "user_id", length = 36, nullable = false)
-    private String userId;
+    @EmbeddedId
+    private MeetingRoomParticipantId id;
 
     @Column(name = "joined_at", nullable = false)
     private LocalDateTime joinedAt;
@@ -30,9 +22,16 @@ public class MeetingRoomParticipant {
     @Column(name = "left_at")
     private LocalDateTime leftAt;
 
-    public MeetingRoomParticipant(String roomId, String userId) {
-        this.roomId = roomId;
-        this.userId = userId;
+    public MeetingRoomParticipant(String roomId, String userEmail) {
+        this.id = new MeetingRoomParticipantId(roomId, userEmail);
+    }
+
+    public String getRoomId() {
+        return id.getRoomId();
+    }
+
+    public String getUserEmail() {
+        return id.getUserEmail();
     }
 
     @PrePersist
@@ -42,5 +41,9 @@ public class MeetingRoomParticipant {
 
     public void leave() {
         this.leftAt = LocalDateTime.now();
+    }
+
+    public void rejoin() {
+        this.leftAt = null;
     }
 }
