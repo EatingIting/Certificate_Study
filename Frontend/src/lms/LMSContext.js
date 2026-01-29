@@ -112,6 +112,7 @@ export const LMSProvider = ({ children, roomId }) => {
         nickname: user?.nickname || null,
         roomTitle: room?.title || null,
         roomId: room?.roomId || null,
+        hostUserEmail: room?.hostUserEmail || null,
     };
 
     return <LMSContext.Provider value={value}>{children}</LMSContext.Provider>;

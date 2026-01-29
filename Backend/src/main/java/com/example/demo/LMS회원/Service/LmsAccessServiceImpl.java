@@ -48,4 +48,10 @@ public class LmsAccessServiceImpl implements LmsAccessService {
         
         return !approvedRequests.isEmpty();
     }
+
+    @Override
+    public boolean isHost(String userEmail, String roomId) {
+        Room room = roomRepository.findById(roomId).orElse(null);
+        return room != null && room.getHostUserEmail().equals(userEmail);
+    }
 }
