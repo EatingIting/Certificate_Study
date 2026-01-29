@@ -3,7 +3,9 @@ package com.example.demo.security;
 import com.example.demo.jwt.JwtAuthFilter;
 import com.example.demo.jwt.JwtTokenProvider;
 import com.example.demo.oauth.OAuthHandler;
+import com.example.demo.oauth.OAuthFailHandler;
 import com.example.demo.oauth.OAuth2UserService;
+import com.example.demo.oauth.OAuthRedirectOriginFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -28,14 +30,20 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final OAuthHandler oAuthHandler;
+    private final OAuthFailHandler oAuthFailHandler;
     private final OAuth2UserService oAuth2UserService;
+    private final OAuthRedirectOriginFilter oAuthRedirectOriginFilter;
 
     public SecurityConfig(JwtTokenProvider jwtTokenProvider,
                           OAuthHandler oAuthHandler,
-                          OAuth2UserService oAuth2UserService) {
+                          OAuthFailHandler oAuthFailHandler,
+                          OAuth2UserService oAuth2UserService,
+                          OAuthRedirectOriginFilter oAuthRedirectOriginFilter) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.oAuthHandler = oAuthHandler;
+        this.oAuthFailHandler = oAuthFailHandler;
         this.oAuth2UserService = oAuth2UserService;
+        this.oAuthRedirectOriginFilter = oAuthRedirectOriginFilter;
     }
 
     @Bean
@@ -102,8 +110,13 @@ public class SecurityConfig {
                                 userInfo.userService(oAuth2UserService)
                         )
                         .successHandler(oAuthHandler)
+                        .failureHandler(oAuthFailHandler)
                 )
 
+                .addFilterBefore(
+                        oAuthRedirectOriginFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                )
                 .addFilterBefore(
                         new JwtAuthFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class
