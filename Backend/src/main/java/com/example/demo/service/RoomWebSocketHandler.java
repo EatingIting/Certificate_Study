@@ -30,6 +30,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Map<String, TimerTask>> roomDisconnectedTimers = new ConcurrentHashMap<>();
     private static final long DISCONNECTED_REMOVE_MS = 60_000L;
 
+    /** 방별 "첫 입장" 시각(ms). 가장 처음 입장한 사람 기준 경과 시간 동기화용 */
+    private final Map<String, Long> roomStartedAtMap = new ConcurrentHashMap<>();
+    /** 방별 경과 시간 브로드캐스트 타이머. 1초마다 서버 기준 elapsed 전송 → 모든 클라이언트 동일 표시 */
+    private final Map<String, Timer> roomElapsedTimers = new ConcurrentHashMap<>();
+
     private final ObjectMapper objectMapper;
     private final MeetingRoomService meetingRoomService;
 
@@ -57,6 +62,11 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         Boolean paramCameraOff = params.containsKey("cameraOff")
                 ? "true".equals(params.get("cameraOff"))
+                : null;
+
+        String paramFaceEmoji = params.get("faceEmoji");
+        Boolean paramBgRemove = params.containsKey("bgRemove")
+                ? "true".equals(params.get("bgRemove"))
                 : null;
 
         if (title == null || title.isBlank()) {
@@ -140,13 +150,22 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             if (paramCameraOff != null) {
                 restoredUser.setCameraOff(paramCameraOff);
             }
+            if (paramFaceEmoji != null) {
+                restoredUser.setFaceEmoji(paramFaceEmoji.isBlank() ? null : paramFaceEmoji);
+            }
+            if (paramBgRemove != null) {
+                restoredUser.setBgRemove(paramBgRemove);
+            }
 
             finalUser = restoredUser;
         } else {
             boolean muted = paramMuted != null ? paramMuted : true;
             boolean cameraOff = paramCameraOff != null ? paramCameraOff : true;
+            String faceEmoji = (paramFaceEmoji != null && !paramFaceEmoji.isBlank()) ? paramFaceEmoji : null;
+            boolean bgRemove = Boolean.TRUE.equals(paramBgRemove);
 
             // 신규 입장(또는 새로고침 후 재입장): isHost는 클라이언트가 room host 기준으로 전달 → 원래 방장 재접속 시 방장 복귀
+            // RoomUser 필드 순서: ..., online, faceEmoji, bgRemove, mutedByHost, cameraOffByHost
             finalUser = new RoomUser(
                     userId,
                     userName,
@@ -158,6 +177,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                     cameraOff,
                     false,
                     true,   // online = true
+                    faceEmoji,
+                    bgRemove,
                     false,  // mutedByHost
                     false   // cameraOffByHost
             );
@@ -166,6 +187,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     /* =========================================================
        6. 세션 등록 + 브로드캐스트
        ========================================================= */
+        // 가장 처음 입장한 사람 기준으로 방 시작 시각 설정 (온라인+재접속 중 모두 비었을 때만)
+        if (users.isEmpty()) {
+            Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.get(roomId);
+            if (disconnectedMap == null || disconnectedMap.isEmpty()) {
+                roomStartedAtMap.put(roomId, System.currentTimeMillis());
+                startRoomElapsedBroadcast(roomId);
+            }
+        }
         sessions.put(session.getId(), session);
         users.put(session.getId(), finalUser);
 
@@ -226,6 +255,12 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 Map<String, RoomUser> map = roomDisconnectedUsers.get(roomId);
                 if (map != null && map.remove(userId) != null) {
                     disconnectedTimerMap.remove(userId);
+                    // 온라인+재접속 중 모두 비면 방 시작 시각·경과 브로드캐스트 타이머 정리
+                    Map<String, RoomUser> usersMap = roomUsers.get(roomId);
+                    if ((usersMap == null || usersMap.isEmpty()) && (map.isEmpty())) {
+                        stopRoomElapsedBroadcast(roomId);
+                        roomStartedAtMap.remove(roomId);
+                    }
                     System.out.println("🚪 [DISCONNECTED_TIMEOUT] " + userId + " removed after " + (DISCONNECTED_REMOVE_MS / 1000) + "s");
                     broadcast(roomId);
                 }
@@ -305,12 +340,15 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                         .toList());
 
         try {
-            String payload = objectMapper.writeValueAsString(
-                    Map.of(
-                            "type", "USERS_UPDATE",
-                            "users", users
-                    )
-            );
+            Long roomStartedAt = roomStartedAtMap.get(roomId);
+            Map<String, Object> payloadMap = new HashMap<>();
+            payloadMap.put("type", "USERS_UPDATE");
+            payloadMap.put("users", users);
+            if (roomStartedAt != null) {
+                payloadMap.put("roomStartedAt", roomStartedAt);
+                payloadMap.put("roomElapsedMs", System.currentTimeMillis() - roomStartedAt);
+            }
+            String payload = objectMapper.writeValueAsString(payloadMap);
 
             TextMessage message = new TextMessage(payload);
 
@@ -323,6 +361,39 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    /** 방 경과 시간 1초마다 브로드캐스트 시작. 모든 클라이언트가 서버 기준 동일한 시간 표시 */
+    private void startRoomElapsedBroadcast(String roomId) {
+        if (roomElapsedTimers.containsKey(roomId)) return;
+        Timer timer = new Timer("room-elapsed-" + roomId, true);
+        roomElapsedTimers.put(roomId, timer);
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                Long startedAt = roomStartedAtMap.get(roomId);
+                if (startedAt == null) return;
+                Map<String, WebSocketSession> sessions = roomSessions.get(roomId);
+                if (sessions == null || sessions.isEmpty()) return;
+                long elapsedMs = Math.max(0, System.currentTimeMillis() - startedAt);
+                try {
+                    String payload = objectMapper.writeValueAsString(
+                            Map.of("type", "ROOM_ELAPSED", "elapsedMs", elapsedMs)
+                    );
+                    TextMessage message = new TextMessage(payload);
+                    for (WebSocketSession s : sessions.values()) {
+                        if (s.isOpen()) s.sendMessage(message);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }, 1000, 1000);
+    }
+
+    private void stopRoomElapsedBroadcast(String roomId) {
+        Timer timer = roomElapsedTimers.remove(roomId);
+        if (timer != null) timer.cancel();
     }
 
     private Map<String, String> getParams(WebSocketSession session) {
@@ -453,6 +524,21 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                         }
                     }
                 }
+                // 배경 제거 / 얼굴 이모지 필터 상태 동기화 (안전하게 null·타입 검사)
+                if (changes.containsKey("faceEmoji")) {
+                    Object v = changes.get("faceEmoji");
+                    sender.setFaceEmoji(v == null ? null : (v instanceof String ? (String) v : String.valueOf(v)));
+                }
+                if (changes.containsKey("bgRemove")) {
+                    Object v = changes.get("bgRemove");
+                    if (v instanceof Boolean) {
+                        sender.setBgRemove((Boolean) v);
+                    } else if (v != null && "true".equalsIgnoreCase(String.valueOf(v))) {
+                        sender.setBgRemove(true);
+                    } else if (v != null && "false".equalsIgnoreCase(String.valueOf(v))) {
+                        sender.setBgRemove(false);
+                    }
+                }
             }
 
             String payload = objectMapper.writeValueAsString(
@@ -499,6 +585,15 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             );
 
             sessions.remove(session.getId());
+
+            // 마지막 참가자가 나가면 방 시작 시각·경과 브로드캐스트 타이머 정리
+            if (users.isEmpty()) {
+                Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.get(roomId);
+                if (disconnectedMap == null || disconnectedMap.isEmpty()) {
+                    stopRoomElapsedBroadcast(roomId);
+                    roomStartedAtMap.remove(roomId);
+                }
+            }
 
             // DB에 퇴장 시간 기록
             meetingRoomService.handleLeave(roomId, leaver.getUserEmail(), leaver.isHost());

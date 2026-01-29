@@ -188,35 +188,76 @@ export const MeetingProvider = ({ children }) => {
         return pipStableStreamRef.current;
     }, []);
 
+    // 🔥 clone된 트랙 관리용 ref (메모리 누수 방지)
+    const clonedTracksRef = useRef([]);
+
     const syncPipStableStreamFrom = useCallback((srcStream) => {
         if (!srcStream) return null;
         const dst = ensurePipStableStream();
 
         // 🔥 소스 스트림의 트랙 ID들 수집
         const srcTrackIds = new Set(srcStream.getTracks().map(t => t.id));
-        const dstTrackIds = new Set(dst.getTracks().map(t => t.id));
 
-        // 🔥 이미 동일한 트랙이면 교체 불필요 (안정성 향상)
-        const sameTrackIds = [...srcTrackIds].every(id => dstTrackIds.has(id)) &&
-                             [...dstTrackIds].every(id => srcTrackIds.has(id));
-        if (sameTrackIds && dst.getTracks().length > 0) {
+        // 🔥 이미 동일한 원본 트랙 ID에서 clone된 트랙이 있는지 확인
+        // (clone된 트랙은 다른 ID를 가지므로, 원본 ID를 기준으로 비교)
+        const dstOriginalIds = new Set();
+        dst.getTracks().forEach(t => {
+            // clone된 트랙의 원본 ID는 label 또는 별도 추적 필요
+            // 여기서는 트랙이 live 상태인지만 확인
+            if (t.readyState === "live") {
+                dstOriginalIds.add(t._originalId || t.id);
+            }
+        });
+
+        // 🔥 이미 동일한 원본 트랙에서 clone된 트랙이 있고 live 상태면 교체 불필요
+        const sameSource = [...srcTrackIds].every(id => dstOriginalIds.has(id)) &&
+                          dst.getTracks().length > 0 &&
+                          dst.getTracks().every(t => t.readyState === "live");
+        if (sameSource) {
             return dst;
         }
 
-        // 기존 트랙 제거
-        dst.getTracks().forEach((t) => {
+        // 🔥 순서 중요: 새 clone 생성 → dst에 추가 → 기존 트랙 제거 → 기존 clone stop
+        // 이 순서를 지켜야 PIP에서 잠시라도 빈 상태가 되지 않음
+
+        // 1. 새 clone 먼저 생성
+        const newClonedTracks = [];
+        srcStream.getTracks().forEach((t) => {
+            try {
+                const clonedTrack = t.clone();
+                clonedTrack._originalId = t.id;
+                newClonedTracks.push(clonedTrack);
+            } catch { }
+        });
+
+        // 2. 🔥 새 clone을 먼저 dst에 추가 (stream이 비어있는 순간 방지)
+        newClonedTracks.forEach((clonedTrack) => {
+            try {
+                dst.addTrack(clonedTrack);
+            } catch { }
+        });
+
+        // 3. 기존 트랙 제거 (새 트랙이 이미 추가된 후 제거 - stream이 비지 않음)
+        const oldTracks = [...dst.getTracks()].filter(t => !newClonedTracks.includes(t));
+        oldTracks.forEach((t) => {
             try { dst.removeTrack(t); } catch { }
         });
 
-        // 🔥 새 트랙 추가 (원본 트랙 직접 사용 - clone하면 별도 트랙이 되어 동기화 문제 발생)
-        srcStream.getTracks().forEach((t) => {
-            try {
-                // 🔥 이미 dst에 있는 트랙인지 확인 후 추가
-                if (!dst.getTracks().find(existing => existing.id === t.id)) {
-                    dst.addTrack(t);
-                }
-            } catch { }
-        });
+        // 4. 기존 clone된 트랙 정리 (stop 호출하여 리소스 해제)
+        // 🔥 새 트랙이 이미 추가된 후에 stop하므로 검은화면 방지
+        const oldClonedTracks = clonedTracksRef.current;
+        clonedTracksRef.current = newClonedTracks;
+
+        // 약간의 딜레이 후 기존 트랙 stop (안전하게)
+        setTimeout(() => {
+            oldClonedTracks.forEach(t => {
+                try {
+                    if (t.readyState === "live") {
+                        t.stop();
+                    }
+                } catch { }
+            });
+        }, 100);
 
         return dst;
     }, [ensurePipStableStream]);

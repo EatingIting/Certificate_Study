@@ -2210,6 +2210,12 @@ body.fullscreen-active .meet-sidebar {
   scrollbar-color: #d1d5db transparent;
 }
 
+/* 방장이 아닐 때: 초대하기 영역 없음 → 참여자 영역 축소, 채팅창 위로 */
+.sidebar-inner--guest .participants-area {
+  max-height: 300px;
+  min-height: 300px;
+}
+
 .participants-area::-webkit-scrollbar {
   width: 6px;
 }
