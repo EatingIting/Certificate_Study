@@ -1,4 +1,4 @@
-package com.example.demo.chat.entity;
+package com.example.demo.LMS채팅.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

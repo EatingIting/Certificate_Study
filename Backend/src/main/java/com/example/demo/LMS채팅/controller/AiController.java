@@ -1,6 +1,6 @@
-package com.example.demo.chat.controller;
+package com.example.demo.LMS채팅.controller;
 
-import com.example.demo.chat.service.OpenAiService; // 👈 import 변경
+import com.example.demo.LMS채팅.service.OpenAiService; // 👈 import 변경
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
