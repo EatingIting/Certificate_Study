@@ -42,6 +42,7 @@ function Board() {
 
     let [loading, setLoading] = useState(false);
     let [error, setError] = useState("");
+    let [forbidden, setForbidden] = useState(false);
 
     let [pinnedPosts, setPinnedPosts] = useState([]);
     let [listPosts, setListPosts] = useState([]);
@@ -78,7 +79,7 @@ function Board() {
                     .map((p) => ({
                         ...p,
                         pinned: !!p.isPinned,
-                        authorName: p.userId,
+                        authorName: p.nickname,
                         createdAtText: formatKst(p.createdAt),
                     }));
 
@@ -107,6 +108,7 @@ function Board() {
             try {
                 setLoading(true);
                 setError("");
+                setForbidden(false);
 
                 let data = await BoardApi.listPosts({
                     roomId,
@@ -121,7 +123,7 @@ function Board() {
                 let items = (data.items || []).map((p) => ({
                     ...p,
                     pinned: !!p.isPinned,
-                    authorName: p.userId,
+                    authorName: p.nickname,
                     createdAtText: formatKst(p.createdAt),
                 }));
 
@@ -129,6 +131,7 @@ function Board() {
                 setTotalPages(Math.max(1, Number(data.totalPages || 1)));
             } catch (e) {
                 if (!alive) return;
+                setForbidden(e?.status === 403);
                 setError(e?.message || "목록 조회 중 오류");
                 setListPosts([]);
                 setTotalPages(1);
@@ -191,6 +194,29 @@ function Board() {
     };
 
     let titleSuffix = queryCategory ? ` · ${queryCategory}` : "";
+
+    if (forbidden) {
+        return (
+            <div className="bd">
+                <div className="bd-card">
+                    <div className="bd-sub" style={{ fontWeight: 700, marginBottom: 6 }}>
+                        접근할 수 없습니다
+                    </div>
+                    <div className="bd-sub">{error || "스터디원만 접근 가능합니다."}</div>
+
+                    <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                        <button
+                            type="button"
+                            className="bd-btn-ghost"
+                            onClick={() => navigate(`/lms/${subjectId}`)}
+                        >
+                            스터디로 돌아가기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bd">

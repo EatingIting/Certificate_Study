@@ -2,15 +2,16 @@ const API_BASE = ""; // proxy 쓰면 비워둬도 됨 (ex: localhost:3000 → 80
 
 export const formatKst = (ts) => {
     if (!ts) return "";
+
     let d = new Date(ts);
     if (Number.isNaN(d.getTime())) return String(ts);
 
-    let pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(
-        d.getMinutes()
-    )}`;
-};
+    // ✅ 강제로 +9시간
+    d.setHours(d.getHours() + 9);
 
+    let pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 /** JWT 토큰 가져오기 */
 const getToken = () => {
@@ -37,22 +38,31 @@ const request = async (path, options = {}) => {
     });
 
     if (!res.ok) {
-        // 로그인 안 됐을 때
-        if (res.status === 401) {
-            throw new Error("로그인이 필요합니다.");
+        let text = await res.text().catch(() => "");
+        let ct = res.headers.get("content-type") || "";
+
+        let data = null;
+        if (ct.includes("application/json")) {
+            try { data = text ? JSON.parse(text) : null; } catch {}
+        } else {
+            // 혹시 JSON 문자열인데 content-type이 이상한 경우도 대비
+            try { data = text ? JSON.parse(text) : null; } catch {}
         }
-        throw new Error("요청 실패");
+
+        let msg = data?.message || data?.error || text || `요청 실패 (${res.status})`;
+
+        let err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
     }
 
-    // 바디가 없을 수 있음(DELETE/PUT 등)
     if (res.status === 204) return null;
 
-    // 200인데도 body가 비어있는 케이스가 있음(지금 너 상황)
-    const text = await res.text();
+    let text = await res.text();
     if (!text) return null;
 
-    // JSON이면 파싱, 아니면 그대로 반환
-    const ct = res.headers.get("content-type") || "";
+    let ct = res.headers.get("content-type") || "";
     if (ct.includes("application/json")) return JSON.parse(text);
 
     return text;

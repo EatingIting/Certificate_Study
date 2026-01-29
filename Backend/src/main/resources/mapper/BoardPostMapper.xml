@@ -9,6 +9,10 @@
         <id     property="postId"    column="post_id"/>
         <result property="roomId"    column="room_id"/>
         <result property="userId"    column="user_id"/>
+
+        <!-- ✅ 추가 -->
+        <result property="nickname"  column="nickname"/>
+
         <result property="category"  column="category"/>
         <result property="title"     column="title"/>
         <result property="content"   column="content"/>
@@ -21,21 +25,24 @@
 
     <select id="selectPostList" resultMap="PostMap">
         SELECT
-        post_id, room_id, user_id, category, title, content,
-        is_pinned, view_count, created_at, updated_at, deleted_at
-        FROM board_posts
-        WHERE deleted_at IS NULL
-        AND room_id = #{roomId}
+        p.post_id, p.room_id, p.user_id,
+        COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+        p.category, p.title, p.content,
+        p.is_pinned, p.view_count, p.created_at, p.updated_at, p.deleted_at
+        FROM board_posts p
+        LEFT JOIN users u ON u.user_id = p.user_id
+        WHERE p.deleted_at IS NULL
+        AND p.room_id = #{roomId}
         <if test="category != null and category != ''">
-            AND category = #{category}
+            AND p.category = #{category}
         </if>
         <if test="keyword != null and keyword != ''">
             AND (
-            title LIKE CONCAT('%', #{keyword}, '%')
-            OR content LIKE CONCAT('%', #{keyword}, '%')
+            p.title LIKE CONCAT('%', #{keyword}, '%')
+            OR p.content LIKE CONCAT('%', #{keyword}, '%')
             )
         </if>
-        ORDER BY is_pinned DESC, post_id DESC
+        ORDER BY p.is_pinned DESC, p.post_id DESC
         LIMIT #{size} OFFSET #{offset}
     </select>
 
@@ -57,11 +64,14 @@
 
     <select id="selectPostById" resultMap="PostMap">
         SELECT
-            post_id, room_id, user_id, category, title, content,
-            is_pinned, view_count, created_at, updated_at, deleted_at
-        FROM board_posts
-        WHERE post_id = #{postId}
-          AND deleted_at IS NULL
+            p.post_id, p.room_id, p.user_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            p.category, p.title, p.content,
+            p.is_pinned, p.view_count, p.created_at, p.updated_at, p.deleted_at
+        FROM board_posts p
+                 LEFT JOIN users u ON u.user_id = p.user_id
+        WHERE p.post_id = #{postId}
+          AND p.deleted_at IS NULL
     </select>
 
     <update id="incrementViewCount">
@@ -111,6 +121,33 @@
         SET is_pinned = #{isPinned}
         WHERE post_id = #{postId}
           AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
+    <!-- 공지글: 방장 전용 수정 (작성자(user_id) 조건 없음) -->
+    <update id="updatePostByHost" parameterType="com.example.demo.board.vo.BoardPostVO">
+        UPDATE board_posts
+        SET
+            title = #{title},
+            content = #{content},
+            is_pinned = #{isPinned}
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </update>
+
+    <!-- 공지글: 방장 전용 삭제 -->
+    <update id="softDeletePostByHost">
+        UPDATE board_posts
+        SET deleted_at = NOW()
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </update>
+
+    <!-- 공지글: 방장 전용 고정 -->
+    <update id="updatePinnedByHost">
+        UPDATE board_posts
+        SET is_pinned = #{isPinned}
+        WHERE post_id = #{postId}
           AND deleted_at IS NULL
     </update>
 
