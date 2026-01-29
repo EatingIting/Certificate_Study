@@ -1,26 +1,20 @@
-package com.example.demo.domain;
+package com.example.demo.화상채팅.Domain;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
-import org.springframework.cglib.core.Local;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name="MeetingRoom")
+@Table(name = "MeetingRoom")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MeetingRoom {
 
-    @Id
-    @Column(name = "room_id", length = 36)
-    private String roomId;
-
-    @Column(name = "host_user_id", length = 36, nullable = false)
-    private String hostUserId;
+    @EmbeddedId
+    private MeetingRoomId id;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -31,10 +25,17 @@ public class MeetingRoom {
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
 
-    public MeetingRoom(String roomId, String hostUserId, String title) {
-        this.roomId = roomId;
-        this.hostUserId = hostUserId;
+    public MeetingRoom(String roomId, String hostUserEmail, String title) {
+        this.id = new MeetingRoomId(roomId, hostUserEmail);
         this.title = title;
+    }
+
+    public String getRoomId() {
+        return id.getRoomId();
+    }
+
+    public String getHostUserEmail() {
+        return id.getHostUserEmail();
     }
 
     @PrePersist
@@ -42,5 +43,11 @@ public class MeetingRoom {
         this.createdAt = LocalDateTime.now();
     }
 
+    public void endMeeting() {
+        this.endedAt = LocalDateTime.now();
+    }
 
+    public void rejoin() {
+        this.endedAt = null;
+    }
 }

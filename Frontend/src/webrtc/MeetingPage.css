@@ -2391,9 +2391,57 @@ body.fullscreen-active .meet-sidebar {
 .icon-red { color: var(--danger-color); }
 
 .more-btn {
-  background: none; border: none; cursor: pointer; color: #9ca3af; opacity: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  opacity: 0;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease, opacity 0.15s ease, color 0.15s ease;
 }
+.more-btn:hover { background: #e5e7eb; color: #6b7280; }
+.more-btn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; opacity: 1; }
+.more-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .participant-card:hover .more-btn { opacity: 1; }
+
+/* 👑 방장 권한 드롭다운 메뉴 */
+.host-menu-container { position: relative; }
+
+.host-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  padding: 6px;
+  margin-top: 6px;
+}
+
+.host-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.host-menu-dropdown button:hover { background: #f3f4f6; }
+.host-menu-dropdown button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+
+.host-menu-dropdown button.kick-btn { color: #dc2626; }
+.host-menu-dropdown button.kick-btn:hover { background: #fef2f2; }
 
 .invite-section {
   margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);

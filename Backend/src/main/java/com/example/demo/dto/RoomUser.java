@@ -11,6 +11,8 @@ import lombok.Setter;
 public class RoomUser {
     private String userId;
     private String userName;
+    private String userEmail;
+    private boolean isHost;
     private long joinAt;
     private boolean speaking;
     private boolean muted;

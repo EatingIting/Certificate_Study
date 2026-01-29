@@ -6,6 +6,7 @@ import com.example.demo.oauth.OAuthHandler;
 import com.example.demo.oauth.OAuthFailHandler;
 import com.example.demo.oauth.OAuth2UserService;
 import com.example.demo.oauth.OAuthRedirectOriginFilter;
+import com.example.demo.oauth.HttpCookieOAuth2AuthorizationRequestRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -33,17 +34,20 @@ public class SecurityConfig {
     private final OAuthFailHandler oAuthFailHandler;
     private final OAuth2UserService oAuth2UserService;
     private final OAuthRedirectOriginFilter oAuthRedirectOriginFilter;
+    private final HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
 
     public SecurityConfig(JwtTokenProvider jwtTokenProvider,
                           OAuthHandler oAuthHandler,
                           OAuthFailHandler oAuthFailHandler,
                           OAuth2UserService oAuth2UserService,
-                          OAuthRedirectOriginFilter oAuthRedirectOriginFilter) {
+                          OAuthRedirectOriginFilter oAuthRedirectOriginFilter,
+                          HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.oAuthHandler = oAuthHandler;
         this.oAuthFailHandler = oAuthFailHandler;
         this.oAuth2UserService = oAuth2UserService;
         this.oAuthRedirectOriginFilter = oAuthRedirectOriginFilter;
+        this.cookieAuthorizationRequestRepository = cookieAuthorizationRequestRepository;
     }
 
     @Bean
@@ -84,6 +88,14 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/rooms/interest").authenticated()
 
+                        // LMS 관련 API는 인증 필수
+                        .requestMatchers("/api/classrooms/**").authenticated()
+                        .requestMatchers("/api/board/**").authenticated()
+                        .requestMatchers("/api/schedules/**").authenticated()
+                        .requestMatchers("/api/study-schedules/**").authenticated()
+                        .requestMatchers("/api/rooms/{roomId}/schedule/**").authenticated()
+                        .requestMatchers("/api/users/me").authenticated()
+
                         .requestMatchers("/api/rooms/**").permitAll()
 
                         .requestMatchers("/ws/**").permitAll()
@@ -106,6 +118,9 @@ public class SecurityConfig {
                 )
 
                 .oauth2Login(oauth -> oauth
+                        .authorizationEndpoint(authorization ->
+                                authorization.authorizationRequestRepository(cookieAuthorizationRequestRepository)
+                        )
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(oAuth2UserService)
                         )

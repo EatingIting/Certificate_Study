@@ -36,9 +36,16 @@ const Auth = () => {
                 token = token.replace("Bearer ", "");
             }
 
+            // sessionStorage에 저장
             sessionStorage.setItem("userId", res.data.userId);
             sessionStorage.setItem("nickname", res.data.nickname);
             sessionStorage.setItem("accessToken", token);
+            sessionStorage.setItem("userEmail", form.email);
+
+            // localStorage에 userId와 userName 저장
+            localStorage.setItem("userId", res.data.userId);
+            const userName = res.data.nickname || res.data.name || "";
+            localStorage.setItem("userName", userName);
 
             alert("로그인 성공");
             navigate("/");

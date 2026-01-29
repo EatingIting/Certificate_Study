@@ -66,6 +66,22 @@
     cursor: pointer;
 }
 
+.host-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background-color: #fef3c7;
+    border-radius: 12px;
+    border: 1px solid #fbbf24;
+}
+
+.host-badge .host-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: #92400e;
+}
+
 .profile {
     width: 32px;
     height: 32px;
