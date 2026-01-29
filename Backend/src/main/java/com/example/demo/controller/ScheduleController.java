@@ -28,7 +28,7 @@ public class ScheduleController {
             @RequestParam String userId,
             @Valid @RequestBody ScheduleUpdateRequest req
     ) {
-        scheduleService.update(scheduleId, req);
+        scheduleService.update(scheduleId, roomId, userId, req);
     }
 
     // DELETE /api/schedules/{scheduleId}?roomId=...&userId=...

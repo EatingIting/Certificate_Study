@@ -53,12 +53,9 @@ body {
 /* LMS 레이아웃 내부에서 사용될 때 */
 .subject-content .meet-layout {
   height: auto;
-  min-height: calc(100vh - 60px - 32px); /* 헤더 + 패딩 고려 */
   width: 100%;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  overflow-y: auto;
-  overflow-x: hidden;
 }
 
 .meet-main {
@@ -74,6 +71,22 @@ body {
 /* LMS 내부에서 meet-main */
 .subject-content .meet-main {
   overflow: visible;
+}
+
+/* LMS 내부에서 사이드바 - 비디오 영역 높이에 맞추되 채팅이 페이지를 늘리지 않도록 */
+.subject-content .meet-sidebar {
+  height: auto;
+  align-self: stretch;
+  position: relative;
+}
+
+.subject-content .sidebar-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
 }
 
 /* --- Floating Header (숨김 처리) --- */
@@ -239,6 +252,12 @@ body {
 
   overflow: visible;
   position: relative;
+}
+
+/* 하단 스트립이 테두리가 잘리지 않도록 meet-stage의 하단 패딩 조정 */
+.layout-speaker .meet-stage,
+.subject-content .meet-stage {
+  padding-bottom: calc(6rem + 16px); /* 하단 스트립의 상단 패딩만큼 추가하여 테두리가 잘리지 않도록 */
 }
 
 /* LMS 내부에서 meet-stage */
@@ -438,6 +457,18 @@ body {
   border-radius: 0;
 }
 
+/* 전체화면 모드에서 화면공유 비디오 타일은 overflow visible */
+.main-stage:fullscreen .video-tile.screen-share,
+.main-stage:fullscreen .video-tile:has(.video-element.screen) {
+  overflow: visible;
+}
+
+.main-stage:fullscreen .video-content.screen-share,
+.main-stage:fullscreen .video-content:has(.video-element.screen) {
+  overflow: visible;
+  background: #000;
+}
+
 /* 전체화면 모드의 참가자 스트립 */
 .fullscreen-strip {
   display: none;
@@ -608,12 +639,13 @@ body {
 
   z-index: 1500;
   transition: transform 0.35s ease, opacity 0.25s ease;
+  pointer-events: auto;
 }
 
 .fullscreen-media-controls.hidden {
   transform: translate(-50%, 60px);
   opacity: 0;
-  pointer-events: none;
+  /* pointer-events: none; */
 }
 
 .fullscreen-media-controls.visible {
@@ -717,7 +749,7 @@ body {
 
 /* 🔥 전체화면에서 사이드바 열릴 때 메인 스테이지 부드럽게 밀기 */
 .main-stage {
-  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-right 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .main-stage.sidebar-open {
@@ -726,7 +758,7 @@ body {
 
 /* 🔥 전체화면에서 main-video-area도 함께 transition */
 .main-stage.sidebar-open .main-video-area {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .fullscreen-sidebar {
@@ -745,7 +777,7 @@ body {
   border-left: 1px solid rgba(0, 0, 0, 0.1);
 
   overflow: hidden;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .fullscreen-sidebar.open {
@@ -805,6 +837,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0; /* flex 컨테이너 내에서 스크롤 가능하도록 */
 }
 
 .fullscreen-chat-input-area {
@@ -816,10 +849,33 @@ body {
 
 /* 전체화면 참여자 영역 */
 .fullscreen-participants-area {
-  flex: 1;
   overflow-y: auto;
   padding: 16px;
   background: #f9fafb;
+  flex-shrink: 0;
+  /* 최대 4명만 보이도록 높이 제한 */
+  max-height: 360px;
+  min-height: 360px;
+  /* 스크롤바 스타일 */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.fullscreen-participants-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.fullscreen-participants-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.fullscreen-participants-area::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.fullscreen-participants-area::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 .fullscreen-participants-area .participant-card {
@@ -836,7 +892,7 @@ body {
   border: 3px solid var(--brand-color);
   border-radius: 1rem;
   overflow: hidden;
-  transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: right 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 /* 전체화면 모드에서 사이드바 열림 시 비디오 영역이 왼쪽으로 밀림 */
@@ -854,9 +910,17 @@ body {
     aspect-ratio: auto;
 }
 
-.main-stage.screen-share-active .video-tile {
+.main-stage.screen-share-active .video-tile,
+.main-stage.screen-share-active .video-tile.screen-share {
     border: 3px solid #ff4d4d;
     box-shadow: 0 0 15px rgba(255, 77, 77, 0.3);
+    overflow: visible;
+}
+
+.main-stage.screen-share-active .video-content,
+.main-stage.screen-share-active .video-content.screen-share {
+    overflow: visible;
+    background: #000;
 }
 
 .main-stage .video-tile {
@@ -867,16 +931,52 @@ body {
 }
 
 .bottom-strip {
-  height: 170px;
-  min-height: 170px;
+  height: 190px; /* 높이를 늘려서 아이콘이 보이도록 */
+  min-height: 190px;
   flex-shrink: 0;
   display: flex;
   gap: 1rem;
 
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible; /* 아이콘이 잘리지 않도록 visible로 변경 */
+  scroll-behavior: smooth;
+  cursor: grab;
 
-  padding: 12px 2px 0.5rem 2px;
+  padding: 16px 2px 1rem 2px; /* 상단 패딩을 늘려서 테두리가 잘리지 않도록 */
   margin-top: 1rem;
+  position: relative; /* 위치 고정을 위해 */
+
+  /* 스크롤바 숨기기 (필요할 때만 표시) */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.bottom-strip::-webkit-scrollbar {
+  height: 6px;
+}
+
+.bottom-strip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bottom-strip::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+/* 스크롤 가능할 때만 스크롤바 표시 (호버 시) */
+.bottom-strip:hover::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+
+.bottom-strip:hover::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* 드래그 중일 때 커서 변경 */
+.bottom-strip:active {
+  cursor: grabbing;
 }
 
 /* LMS 내부에서 bottom-strip */
@@ -886,14 +986,19 @@ body {
 }
 
 .bottom-strip .strip-item {
-  height: 140px;
-  min-height: 140px;
-  max-height: 140px;
+  height: 160px; /* 높이를 늘려서 아이콘이 보이도록 */
+  min-height: 160px;
+  max-height: 160px;
+  overflow: visible; /* 아이콘이 잘리지 않도록 */
+  padding-bottom: 20px; /* 하단 패딩 추가하여 아이콘이 보이도록 */
+  position: relative; /* 위치 고정을 위해 */
+  margin-top: 0; /* 상단 마진 제거하여 위치 고정 */
 }
 
 .bottom-strip .video-tile {
   height: 100%;
   background: transparent;
+  overflow: visible; /* 아이콘이 잘리지 않도록 */
 }
 
 /* main 효과는 그림자만 남기고 레이아웃 영향 제거 */
@@ -903,6 +1008,7 @@ body {
 
 .bottom-strip .video-content {
   padding: 0;
+  overflow: visible; /* 아이콘이 잘리지 않도록 */
 }
 
 .strip-item {
@@ -910,7 +1016,7 @@ body {
   height: auto;
   min-height: 140px;
   flex-shrink: 0;
-  cursor: pointer;
+  cursor: grab;
   transition: transform 0.2s;
   
   /* 세로 정렬 (비디오 위, 이름 아래) */
@@ -919,8 +1025,17 @@ body {
   gap: 4px; /* 비디오와 이름 사이 간격 */
 }
 
+.strip-item:active {
+  cursor: grabbing;
+}
+
 .strip-item:hover {
   transform: translateY(-5px); /* 마우스 호버시 살짝 위로 */
+}
+
+/* 하단 스트립의 strip-item은 호버 시에도 테두리가 잘리지 않도록 */
+.bottom-strip .strip-item:hover {
+  transform: translateY(-3px); /* 호버 시 이동 거리를 줄여서 테두리가 잘리지 않도록 */
 }
 
 .strip-item .video-content {
@@ -939,6 +1054,10 @@ body {
   border-radius: 0.75rem;
   border: none;
   box-shadow: none;
+}
+
+.strip-item .video-tile .video-element {
+  border-radius: 0.75rem; /* 타일 테두리와 동일하게 */
 }
 
 .strip-name {
@@ -1123,11 +1242,16 @@ body {
 }
 
 .grid-fullscreen-strip .strip-item .video-tile .video-content {
-  border-radius: 8px;
+  border-radius: 10px; /* 타일 테두리와 동일하게 */
+}
+
+.grid-fullscreen-strip .strip-item .video-tile .video-element {
+  border-radius: 10px; /* 비디오 요소도 타일 테두리와 동일하게 */
 }
 
 .grid-fullscreen-strip .strip-item .video-tile .camera-off-placeholder {
   gap: 0.25rem;
+  border-radius: 10px; /* 그리드 전체화면 스트립 타일 테두리와 동일하게 */
 }
 
 .grid-fullscreen-strip .strip-item .video-tile .user-avatar {
@@ -1359,12 +1483,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.grid-fullscreen-chat-area,
-.grid-fullscreen-participants-area {
-  flex: 1;
-  overflow-y: auto;
+  min-height: 0; /* flex 컨테이너 내에서 스크롤 가능하도록 */
 }
 
 .grid-fullscreen-chat-input-area {
@@ -1375,10 +1494,33 @@ body {
 
 /* 그리드 전체화면 참여자 영역 */
 .grid-fullscreen-participants-area {
-  flex: 1;
   overflow-y: auto;
   padding: 16px;
   background: #f9fafb;
+  flex-shrink: 0;
+  /* 최대 4명만 보이도록 높이 제한 */
+  max-height: 360px;
+  min-height: 360px;
+  /* 스크롤바 스타일 */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.grid-fullscreen-participants-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.grid-fullscreen-participants-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.grid-fullscreen-participants-area::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.grid-fullscreen-participants-area::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 .grid-fullscreen-participants-area .participant-card {
@@ -1441,7 +1583,7 @@ body {
   right: 0;
   bottom: 0 !important;
   border-radius: 0;
-  transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: right 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
   overflow: hidden;
 }
 
@@ -1453,7 +1595,7 @@ body {
   align-items: center;
   justify-content: center;
   background: #000;
-  transition: margin-right 0.3s ease;
+  transition: margin-right 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .grid-fullscreen-video-area .video-tile {
@@ -1462,6 +1604,18 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 0;
+}
+
+/* 그리드 전체화면 모드에서 화면공유 비디오 타일은 overflow visible */
+.grid-fullscreen-video-area .video-tile.screen-share,
+.grid-fullscreen-video-area .video-tile:has(.video-element.screen) {
+  overflow: visible;
+}
+
+.grid-fullscreen-video-area .video-content.screen-share,
+.grid-fullscreen-video-area .video-content:has(.video-element.screen) {
+  overflow: visible;
+  background: #000;
 }
 
 /* 사이드바 열릴 때 비디오 영역이 왼쪽으로 밀림 - 반드시 기본 스타일 뒤에 위치 */
@@ -1515,7 +1669,7 @@ body {
   border-left: 1px solid rgba(0, 0, 0, 0.1);
 
   overflow: hidden;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .grid-fullscreen-container.active .grid-fullscreen-sidebar.open {
@@ -1543,6 +1697,13 @@ body {
   box-shadow: none;
 }
 
+/* 화면공유 비디오 타일은 overflow를 visible로 하여 전체 화면이 보이도록 */
+.video-tile.screen-share,
+.video-tile:has(.video-element.screen),
+.video-tile-wrapper:has(.video-element.screen) .video-tile {
+  overflow: visible;
+}
+
 .video-content {
   position: relative;
   width: 100%;
@@ -1552,6 +1713,13 @@ body {
   border-radius: 1rem;
 }
 
+/* 화면공유 비디오 콘텐츠도 overflow를 visible로 */
+.video-content.screen-share,
+.video-content:has(.video-element.screen) {
+  overflow: visible;
+  background: #000;
+}
+
 .video-tile.main {
   box-shadow: none;
 }
@@ -1559,6 +1727,11 @@ body {
 .video-tile:not(.main) .camera-off-placeholder {
   transform: none;
   gap: 0.25rem;
+}
+
+/* 메인 타일의 camera-off-placeholder는 transform을 사용하여 정중앙 배치 */
+.video-tile.main .camera-off-placeholder {
+  transform: translate(-50%, -50%) !important;
 }
 
 .video-tile:not(.main) .stream-label {
@@ -1633,11 +1806,15 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: 1rem; /* 비디오 타일 테두리와 동일하게 둥글게 */
 }
 
 .video-element.screen {
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     background-color: black;
+    border-radius: 1rem; /* 화면공유 비디오도 둥글게 */
 }
 
 .video-element.hidden {
@@ -1652,10 +1829,15 @@ body {
 }
 
 .stream-label {
-  margin-top: 1rem;
+  margin-top: 0; /* 기본값 제거 */
   font-size: 1.125rem;
   font-weight: 600;
   z-index: 1;
+}
+
+/* 메인 타일이 아닌 경우에만 margin-top 적용 */
+.video-tile:not(.main) .stream-label {
+  margin-top: 0.5rem;
 }
 
 .camera-off-placeholder {
@@ -1666,11 +1848,48 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem; /* 아바타와 이름 사이 간격 */
+  border-radius: 1rem; /* 비디오 타일 테두리와 동일하게 둥글게 */
+}
+
+/* 메인 타일의 아바타는 정중앙에 배치 - 인라인 스타일도 덮어쓰기 */
+.main-stage .video-tile.main .camera-off-placeholder,
+.layout-speaker .video-tile.main .camera-off-placeholder,
+.video-tile.main .camera-off-placeholder,
+.main-video-area .video-tile.main .camera-off-placeholder {
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 0.75rem !important; /* 메인 타일은 조금 더 넓은 간격 */
+  padding: 0 !important; /* 패딩 제거하여 정중앙 배치 */
+  padding-top: 0 !important; /* padding-top 강제 제거 */
+  margin: 0 !important; /* 마진 제거 */
+  position: absolute !important; /* 인라인 스타일의 relative를 덮어쓰기 */
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important; /* 정확한 중앙 배치 */
+  width: auto !important;
+  height: auto !important;
+  z-index: 1 !important; /* 인라인 스타일의 zIndex 유지 */
+  border-radius: 1rem !important; /* 메인 타일 테두리와 동일하게 둥글게 */
+}
+
+.video-tile.main .camera-off-placeholder .stream-label,
+.main-stage .video-tile.main .camera-off-placeholder .stream-label {
+  margin-top: 0 !important; /* margin-top 강제 제거하여 정중앙 배치 */
+  margin-bottom: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.video-tile.main .camera-off-placeholder .user-avatar,
+.main-stage .video-tile.main .camera-off-placeholder .user-avatar {
+  margin: 0 !important; /* 아바타 마진 제거 */
 }
 
 .bottom-strip .camera-off-placeholder {
   justify-content: center;
   padding-top: 1.5rem;
+  border-radius: 0.75rem; /* 하단 스트립 타일 테두리와 동일하게 */
 }
 
 .bottom-strip .stream-label {
@@ -1689,7 +1908,14 @@ body {
 
   background: none;
   padding: 0;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+/* 하단 스트립의 비디오 타일에서 아이콘이 잘리지 않도록 조정 */
+.bottom-strip .video-overlay {
+  bottom: 0px; /* 비디오 타일 하단에 정확히 위치 */
+  left: 4px;
+  z-index: 10; /* 다른 요소 위에 표시되도록 */
 }
 
 .media-status {
@@ -1954,10 +2180,12 @@ body {
   background: #fff;
   position: relative;
   z-index: 30;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
   box-shadow: -4px 0 25px rgba(0,0,0,0.05);
   overflow: hidden;
   border-left: none;
+  min-height: 0;
+  height: 100%;
 }
 
 .meet-sidebar.open {
@@ -1975,6 +2203,8 @@ body.fullscreen-active .meet-sidebar {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .sidebar-header {
@@ -1992,14 +2222,70 @@ body.fullscreen-active .meet-sidebar {
 .close-btn:hover { color: #4b5563; }
 
 /* Chat & Participants Area */
-.chat-area, .participants-area {
+.participants-area {
+  overflow-y: auto;
+  padding: 1rem;
+  background: #f9fafb;
+  flex-shrink: 0;
+  /* 최대 4명만 보이도록 높이 제한 
+     카드 높이: padding(12px*2) + content(40-48px) = 64-72px
+     margin-bottom: 8px
+     4개 카드: (64-72px + 8px) * 4 = 288-320px
+     padding(상하): 32px, section-label: 24px
+     총: 약 344-376px → 360px로 설정 */
+  max-height: 360px;
+  min-height: 360px;
+  /* 스크롤바 스타일 */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.participants-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.participants-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.participants-area::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.participants-area::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.chat-area {
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
   background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
 }
 
-.chat-area { display: flex; flex-direction: column; gap: 1rem; }
+/* 참여자 목록 / 채팅 구분선 */
+.sidebar-chat-divider {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.sidebar-chat-divider span {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 
 .chat-msg { display: flex; flex-direction: column; }
 .chat-msg.me { align-items: flex-end; }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../../api/api";
 import "./MyPage.css";
 import { useNavigate } from "react-router-dom";
 
@@ -43,13 +43,13 @@ const MyPage = () => {
         fetchProfile();
         fetchStudies();
 
-        axios.get("/api/category").then((res) => setAllCategories(res.data));
-        axios.get("/api/category/main").then((res) => setMainCategories(res.data));
+        api.get("/category").then((res) => setAllCategories(res.data));
+        api.get("/category/main").then((res) => setMainCategories(res.data));
 
         const token = sessionStorage.getItem("accessToken");
 
-        axios
-            .get("/api/mypage/interests", {
+        api
+            .get("/mypage/interests", {
                 headers: { Authorization: `Bearer ${token}` },
             })
             .then((res) => {
@@ -80,7 +80,7 @@ const MyPage = () => {
         try {
             const token = sessionStorage.getItem("accessToken");
 
-            const res = await axios.get("/api/mypage/me", {
+            const res = await api.get("/mypage/me", {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -96,13 +96,13 @@ const MyPage = () => {
         try {
             const token = sessionStorage.getItem("accessToken");
 
-            const joinedRes = await axios.get("/api/mypage/me/studies/joined", {
+            const joinedRes = await api.get("/mypage/me/studies/joined", {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
             });
 
-            const completedRes = await axios.get("/api/mypage/me/studies/completed", {
+            const completedRes = await api.get("/mypage/me/studies/completed", {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -151,14 +151,14 @@ const MyPage = () => {
                 formData.append("profileImage", draft.profileImg);
             }
 
-            await axios.put("/api/mypage/me", formData, {
+            await api.put("/mypage/me", formData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     "Content-Type": "multipart/form-data",
                 },
             });
 
-            await axios.put("/api/mypage/interests", tempInterestCategories, {
+            await api.put("/mypage/interests", tempInterestCategories, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -237,7 +237,7 @@ const MyPage = () => {
         try {
             const token = sessionStorage.getItem("accessToken");
 
-            await axios.put("/api/mypage/interests", tempInterestCategories, {
+            await api.put("/mypage/interests", tempInterestCategories, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
@@ -256,7 +256,7 @@ const MyPage = () => {
         try {
             const token = sessionStorage.getItem("accessToken");
 
-            await axios.delete("/api/mypage/me", {
+            await api.delete("/mypage/me", {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },

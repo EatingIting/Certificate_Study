@@ -1,529 +1,566 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import { useSearchParams, useParams } from "react-router-dom";
+
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import axios from "axios";
 import "./Calendar.css";
-
-function toYmd(dateObj) {
-    if (!dateObj) return "";
-    let y = dateObj.getFullYear();
-    let m = String(dateObj.getMonth() + 1).padStart(2, "0");
-    let d = String(dateObj.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-}
-
-function safeTrim(v) {
-    if (v === null || v === undefined) return "";
-    return String(v).trim();
-}
-
-function isBlank(v) {
-    return safeTrim(v).length === 0;
-}
 
 function Calendar() {
     let calendarRef = useRef(null);
 
-    // ===== API / auth (임시) =====
-    // 네 프로젝트에 맞게 바꿔도 됨
-    let API_BASE = "http://localhost:8080";
-    let roomId = localStorage.getItem("roomId") || "";
-    let userId = localStorage.getItem("userId") || "";
+    let [sp, setSp] = useSearchParams();
 
-    // ===== State =====
+    let { subjectId } = useParams();
+
+    // roomId는 라우트 파라미터(subjectId) 또는 쿼리(roomId/subjectId)에서 가져온다.
+    let roomId = useMemo(() => {
+        return subjectId || sp.get("roomId") || sp.get("subjectId") || "";
+    }, [subjectId, sp]);
+
     let [visibleRange, setVisibleRange] = useState(null);
-
-    let [events, setEvents] = useState([]);
-    let [studyEvents, setStudyEvents] = useState([]);
+    let [visibleTitle, setVisibleTitle] = useState("");
 
     let [openMenuId, setOpenMenuId] = useState(null);
+    let [isLoadingRemote, setIsLoadingRemote] = useState(false);
+    let [remoteError, setRemoteError] = useState("");
 
-    // 일반 일정 모달
-    let [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    /* =========================
+       일반 일정(더미)
+    ========================= */
+    let initialEvents = useMemo(() => {
+        return [
+            {
+                id: "1",
+                title: "정보처리기사 접수 시작",
+                start: "2026-01-20",
+                end: "2026-01-23",
+                backgroundColor: "#e9fadc",
+                borderColor: "#e9fadc",
+                textColor: "#2f6a2f",
+                extendedProps: {
+                    type: "REGISTRATION",
+                    customLabel: "접수",
+                },
+            },
+            {
+                id: "2",
+                title: "정보처리기사 시험",
+                start: "2026-01-25",
+                backgroundColor: "#97c793",
+                borderColor: "#97c793",
+                textColor: "#ffffff",
+                extendedProps: {
+                    type: "EXAM",
+                },
+            },
+            {
+                id: "3",
+                title: "정보처리기사 발표",
+                start: "2026-01-30",
+                backgroundColor: "#a5dea0",
+                borderColor: "#a5dea0",
+                textColor: "#1f2937",
+                extendedProps: {
+                    type: "RESULT",
+                },
+            },
+        ];
+    }, []);
+
+    let [events, setEvents] = useState(initialEvents);
+
+    /* =========================
+       스터디 일정(더미)
+    ========================= */
+    let initialStudyEvents = useMemo(() => {
+        return [
+            {
+                id: "S1",
+                title: "스터디 1회차",
+                start: "2026-01-21",
+                extendedProps: {
+                    type: "STUDY",
+                    round: 1,
+                },
+            },
+            {
+                id: "S2",
+                title: "스터디 2회차",
+                start: "2026-01-24",
+                extendedProps: {
+                    type: "STUDY",
+                    round: 2,
+                },
+            },
+        ];
+    }, []);
+
+    let [studyEvents, setStudyEvents] = useState(initialStudyEvents);
+
+    /* =========================
+       UI 상태
+    ========================= */
+    let [isAddOpen, setIsAddOpen] = useState(false);
+    let [isStudyAddOpen, setIsStudyAddOpen] = useState(false);
+
     let [editingEventId, setEditingEventId] = useState(null);
+    let [editingStudyId, setEditingStudyId] = useState(null);
+
     let [formError, setFormError] = useState("");
+
     let [form, setForm] = useState({
         title: "",
-        description: "",
         start: "",
         end: "",
-        type: "ETC",
+        type: "OTHER",
         customLabel: "",
-        colorHex: "#3b82f6",
-        textColor: "#ffffff"
     });
 
-    // 스터디 일정 모달
-    let [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
-    let [editingStudyId, setEditingStudyId] = useState(null);
-    let [studyError, setStudyError] = useState("");
     let [studyForm, setStudyForm] = useState({
         round: "",
         date: "",
-        description: ""
+        description: "",
     });
 
-    // ===== Derived =====
-    let allEvents = useMemo(() => {
-        return [...events, ...studyEvents];
-    }, [events, studyEvents]);
+    /* =========================
+       유틸
+    ========================= */
+    let clamp = (v) => (v == null ? "" : String(v));
+    let parseYmd = (v) => clamp(v).slice(0, 10);
 
-    // 날짜별 회차 맵: { "YYYY-MM-DD": [1,2,3] }
-    let studyRoundsByDate = useMemo(() => {
-        let map = {};
-        for (let i = 0; i < studyEvents.length; i++) {
-            let ev = studyEvents[i];
-            let start = ev?.start;
-            let dateKey = "";
+    let getTypeLabel = (ev) => {
+        let t = ev.extendedProps?.type;
+        if (t === "REGISTRATION") return ev.extendedProps?.customLabel || "접수";
+        if (t === "EXAM") return "시험";
+        if (t === "RESULT") return "발표";
+        if (t === "OTHER") return ev.extendedProps?.customLabel || "기타";
+        if (t === "STUDY") return `스터디`;
+        return "일정";
+    };
 
-            if (typeof start === "string") {
-                dateKey = start.slice(0, 10);
-            } else if (start instanceof Date) {
-                dateKey = toYmd(start);
-            }
+    let eventClassNames = (arg) => {
+        let t = arg.event.extendedProps?.type;
+        if (t === "STUDY") return ["calEvent", "study"];
+        if (t === "REGISTRATION") return ["calEvent", "reg"];
+        if (t === "EXAM") return ["calEvent", "exam"];
+        if (t === "RESULT") return ["calEvent", "result"];
+        return ["calEvent", "other"];
+    };
 
-            if (!dateKey) continue;
+    /* =========================
+       서버 조회(캘린더 이벤트)
+       - 더미는 유지하되, roomId + visibleRange가 잡히면 서버 데이터를 우선 사용
+       - "CSS가 안 먹는 것처럼 보이는" 문제는 대부분 type/extendedProps 불일치라 정규화로 해결
+    ========================= */
+    let toYmd = (d) => {
+        let y = d.getFullYear();
+        let m = String(d.getMonth() + 1).padStart(2, "0");
+        let day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    };
 
-            let round = ev?.extendedProps?.round;
-            if (!map[dateKey]) map[dateKey] = [];
-            if (round && !map[dateKey].includes(round)) map[dateKey].push(round);
+    let normalizeEvent = (ev) => {
+        let ext = ev?.extendedProps && typeof ev.extendedProps === "object" ? ev.extendedProps : {};
+        let rawType = ext.type || ev?.type || "OTHER";
+        let upper = String(rawType).toUpperCase();
+
+        if (upper !== "STUDY" && upper !== "REGISTRATION" && upper !== "EXAM" && upper !== "RESULT") {
+            upper = "OTHER";
         }
 
-        // 정렬
-        let keys = Object.keys(map);
-        for (let k = 0; k < keys.length; k++) {
-            map[keys[k]].sort((a, b) => a - b);
-        }
-        return map;
-    }, [studyEvents]);
+        // 색상이 없을 때도 더미와 비슷한 톤을 유지(커스텀 CSS 클래스가 핵심이지만, 기본 컬러도 보정)
+        let defaults = {
+            REGISTRATION: { bg: "#e9fadc", text: "#2f6a2f" },
+            EXAM: { bg: "#97c793", text: "#ffffff" },
+            RESULT: { bg: "#a5dea0", text: "#1f2937" },
+            OTHER: { bg: "#eef5ec", text: "#374151" },
+            STUDY: { bg: "#e9fadc", text: "#2f6a2f" },
+        };
 
-    // ===== Helpers =====
-    function typeLabel(type, customLabel) {
-        if (type === "STUDY") return "스터디";
-        if (type === "EXAM") return "시험";
-        if (type === "PRESENTATION") return "발표";
-        if (type === "ASSIGNMENT") return "과제";
-        if (type === "OTHER") return safeTrim(customLabel) || "기타";
-        return "기타";
-    }
+        let d = defaults[upper] || defaults.OTHER;
 
-    async function reloadRange() {
-        if (!visibleRange) return;
-        if (isBlank(roomId)) return;
+        return {
+            ...ev,
+            extendedProps: { ...ext, type: upper },
+            backgroundColor: ev?.backgroundColor || ev?.color || d.bg,
+            borderColor: ev?.borderColor || ev?.color || d.bg,
+            textColor: ev?.textColor || d.text,
+        };
+    };
+
+    useEffect(() => {
+        if (!roomId) return;
+        if (!visibleRange?.start || !visibleRange?.end) return;
 
         let start = toYmd(visibleRange.start);
-        let end = toYmd(visibleRange.end); // 보통 FullCalendar의 end는 exclusive 성격
+        let end = toYmd(visibleRange.end); // FullCalendar currentEnd는 exclusive
 
-        try {
-            let res = await axios.get(`${API_BASE}/api/rooms/${roomId}/schedule`, {
-                params: { start, end }
-            });
+        let ignore = false;
 
-            let items = res.data?.items || [];
+        (async () => {
+            try {
+                setIsLoadingRemote(true);
+                setRemoteError("");
 
-            let nextEvents = [];
-            let nextStudy = [];
+                let res = await fetch(`/api/rooms/${roomId}/schedule?start=${start}&end=${end}`, {
+                    credentials: "include",
+                });
 
-            for (let i = 0; i < items.length; i++) {
-                let ev = items[i];
-                let t = ev?.extendedProps?.type;
+                if (!res.ok) {
+                    throw new Error(`일정 조회 실패 (${res.status})`);
+                }
 
-                if (t === "STUDY") nextStudy.push(ev);
-                else nextEvents.push(ev);
+                let data = await res.json();
+                let items = Array.isArray(data?.items) ? data.items : [];
+                let normalized = items.map(normalizeEvent);
+
+                if (ignore) return;
+
+                setStudyEvents(normalized.filter((e) => e?.extendedProps?.type === "STUDY"));
+                setEvents(normalized.filter((e) => e?.extendedProps?.type !== "STUDY"));
+            } catch (e) {
+                if (!ignore) setRemoteError(e?.message || "일정 조회 중 오류");
+            } finally {
+                if (!ignore) setIsLoadingRemote(false);
             }
+        })();
 
-            setEvents(nextEvents);
-            setStudyEvents(nextStudy);
-        } catch (e) {
-            console.error(e);
-        }
-    }
+        return () => {
+            ignore = true;
+        };
+    }, [roomId, visibleRange]);
 
-    // ===== Load when visibleRange changes =====
-    useEffect(() => {
-        reloadRange();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visibleRange, roomId]);
+    /* =========================
+       URL 쿼리
+    ========================= */
+    let goListView = () => {
+        let next = new URLSearchParams(sp);
+        next.delete("modal");
+        next.set("view", "list");
+        setSp(next, { replace: true });
+    };
 
-    // ===== Calendar handlers =====
-    function handleDatesSet(arg) {
-        // arg.view.currentStart/currentEnd
-        // currentEnd는 보통 "다음 달 1일" 같은 배타 범위로 들어옴
-        setVisibleRange({
-            start: arg?.view?.currentStart || null,
-            end: arg?.view?.currentEnd || null
-        });
-    }
-
-    function handleDateClick(info) {
-        // 날짜 클릭 시: 일반 일정 모달 기본값 세팅
-        let dateStr = info?.dateStr || "";
-        setEditingEventId(null);
+    /* =========================
+       일반 일정 모달
+    ========================= */
+    let closeAddModal = () => {
+        setIsAddOpen(false);
         setFormError("");
+        setEditingEventId(null);
+
         setForm({
             title: "",
-            description: "",
-            start: dateStr,
+            start: "",
             end: "",
-            type: "ETC",
+            type: "OTHER",
             customLabel: "",
-            colorHex: "#3b82f6",
-            textColor: "#ffffff"
         });
-        setIsAddModalOpen(true);
-    }
+    };
 
-    function eventClassNames(arg) {
-        let t = arg?.event?.extendedProps?.type;
-        if (t === "STUDY") return ["calEvent", "study"];
-        return ["calEvent"];
-    }
-
-    function dayCellContent(arg) {
-        // 날짜칸 상단에 회차 표시(스터디)
-        // arg.date: Date
-        let key = toYmd(arg.date);
-        let rounds = studyRoundsByDate[key] || [];
-
-        return (
-            <div className="calDayCell">
-                <div className="calDayTop">
-                    <span className="calDayNumber">{arg.dayNumberText}</span>
-                    {rounds.length > 0 ? (
-                        <span className="calStudyRounds">
-                            {rounds.map((r, idx) => (
-                                <span key={`${key}-${r}`}>
-                                    {r}회차{idx < rounds.length - 1 ? " " : ""}
-                                </span>
-                            ))}
-                        </span>
-                    ) : null}
-                </div>
-            </div>
-        );
-    }
-
-    // ===== Modal open/close =====
-    function closeAddModal() {
-        setIsAddModalOpen(false);
+    let openAddModal = (dateStr) => {
+        setIsAddOpen(true);
+        setFormError("");
         setEditingEventId(null);
+
+        setForm((prev) => {
+            return {
+                ...prev,
+                title: "",
+                start: dateStr || "",
+                end: "",
+                type: "OTHER",
+                customLabel: "",
+            };
+        });
+    };
+
+    let openEditModal = (eventId) => {
+        let target = events.find((e) => e.id === eventId);
+        if (!target) return;
+
+        setIsAddOpen(true);
         setFormError("");
-    }
-
-    function closeStudyModal() {
-        setIsStudyModalOpen(false);
-        setEditingStudyId(null);
-        setStudyError("");
-    }
-
-    // ===== CRUD: Schedule (일반 일정) =====
-    async function saveEventFromModal() {
-        setFormError("");
-
-        let title = safeTrim(form.title);
-        if (isBlank(title)) {
-            setFormError("제목을 입력해 주세요.");
-            return;
-        }
-        if (isBlank(form.start)) {
-            setFormError("시작일을 선택해 주세요.");
-            return;
-        }
-        if (isBlank(roomId) || isBlank(userId)) {
-            setFormError("roomId/userId가 없습니다. 로그인/방 선택 로직을 확인해 주세요.");
-            return;
-        }
-
-        // end는 선택: 비어있으면 start로 처리(백엔드에서도 동일 규칙이면 안정적)
-        let start = form.start;
-        let end = isBlank(form.end) ? "" : form.end;
-
-        try {
-            if (!editingEventId) {
-                // CREATE
-                let body = {
-                    roomId,
-                    userId,
-                    title,
-                    description: safeTrim(form.description),
-                    start,
-                    end,
-                    type: form.type,
-                    colorHex: form.colorHex,
-                    textColor: form.textColor,
-                    customLabel: safeTrim(form.customLabel)
-                };
-
-                await axios.post(`${API_BASE}/api/schedules`, body);
-            } else {
-                // UPDATE
-                let body = {
-                    title,
-                    description: safeTrim(form.description),
-                    start,
-                    end,
-                    type: form.type,
-                    colorHex: form.colorHex,
-                    customLabel: safeTrim(form.customLabel)
-                };
-
-                await axios.put(`${API_BASE}/api/schedules/${editingEventId}`, body, {
-                    params: { roomId, userId }
-                });
-            }
-
-            closeAddModal();
-            await reloadRange();
-        } catch (e) {
-            console.error(e);
-            setFormError("저장에 실패했습니다.");
-        }
-    }
-
-    async function deleteEventById(id) {
-        if (isBlank(roomId) || isBlank(userId)) return;
-
-        try {
-            await axios.delete(`${API_BASE}/api/schedules/${id}`, {
-                params: { roomId, userId }
-            });
-
-            setOpenMenuId(null);
-            if (editingEventId === id) closeAddModal();
-            await reloadRange();
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    function openEditEvent(ev) {
-        let id = ev?.id;
-        setEditingEventId(id);
-        setFormError("");
+        setEditingEventId(eventId);
 
         setForm({
-            title: ev?.title || "",
-            description: ev?.extendedProps?.description || "",
-            start: (ev?.start || "").slice ? ev.start.slice(0, 10) : ev?.start || "",
-            end: (ev?.end || "").slice ? ev.end.slice(0, 10) : ev?.end || "",
-            type: ev?.extendedProps?.type || "ETC",
-            customLabel: ev?.extendedProps?.customLabel || "",
-            colorHex: ev?.backgroundColor || ev?.color || "#3b82f6",
-            textColor: ev?.textColor || "#ffffff"
+            title: clamp(target.title),
+            start: parseYmd(target.start),
+            end: parseYmd(target.end),
+            type: target.extendedProps?.type || "OTHER",
+            customLabel: clamp(target.extendedProps?.customLabel || ""),
+        });
+    };
+
+    let saveNormalEventLocalOnly = () => {
+        // 서버 저장은 아직 연결 안 한 상태. (요청하면 이 부분도 API로 붙여줄게)
+        let title = clamp(form.title).trim();
+        let start = clamp(form.start).trim();
+        if (!title || !start) {
+            setFormError("제목과 시작일은 필수야.");
+            return;
+        }
+
+        let end = clamp(form.end).trim();
+        let type = clamp(form.type).trim() || "OTHER";
+        let customLabel = clamp(form.customLabel).trim();
+
+        let nextEv = normalizeEvent({
+            id: editingEventId || String(Date.now()),
+            title,
+            start,
+            end: end || null,
+            extendedProps: {
+                type,
+                customLabel,
+            },
         });
 
-        setIsAddModalOpen(true);
+        if (editingEventId) {
+            setEvents((prev) => prev.map((e) => (e.id === editingEventId ? nextEv : e)));
+        } else {
+            setEvents((prev) => [nextEv, ...prev]);
+        }
+
+        closeAddModal();
+    };
+
+    let deleteNormalEventLocalOnly = (eventId) => {
+        setEvents((prev) => prev.filter((e) => e.id !== eventId));
         setOpenMenuId(null);
-    }
+    };
 
-    // ===== CRUD: StudySchedule (스터디 일정) =====
-    async function saveStudyFromModal() {
-        setStudyError("");
-
-        let roundNum = Number(studyForm.round);
-        if (!roundNum || roundNum < 1) {
-            setStudyError("회차는 1 이상의 숫자여야 합니다.");
-            return;
-        }
-        if (isBlank(studyForm.date)) {
-            setStudyError("날짜를 선택해 주세요.");
-            return;
-        }
-        if (isBlank(roomId)) {
-            setStudyError("roomId가 없습니다. 방 선택 로직을 확인해 주세요.");
-            return;
-        }
-
-        try {
-            if (!editingStudyId) {
-                // CREATE
-                let body = {
-                    roomId,
-                    round: roundNum,
-                    date: studyForm.date,
-                    description: safeTrim(studyForm.description)
-                };
-                await axios.post(`${API_BASE}/api/study-schedules`, body);
-            } else {
-                // UPDATE
-                let body = {
-                    round: roundNum,
-                    date: studyForm.date,
-                    description: safeTrim(studyForm.description)
-                };
-
-                await axios.put(`${API_BASE}/api/study-schedules/${editingStudyId}`, body, {
-                    params: { roomId }
-                });
-            }
-
-            closeStudyModal();
-            await reloadRange();
-        } catch (e) {
-            console.error(e);
-            setStudyError("저장에 실패했습니다.");
-        }
-    }
-
-    async function deleteStudyById(id) {
-        if (isBlank(roomId)) return;
-
-        try {
-            await axios.delete(`${API_BASE}/api/study-schedules/${id}`, {
-                params: { roomId }
-            });
-
-            setOpenMenuId(null);
-            if (editingStudyId === id) closeStudyModal();
-            await reloadRange();
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    function openCreateStudy(dateStr) {
+    /* =========================
+       스터디 일정 모달
+    ========================= */
+    let closeStudyModal = () => {
+        setIsStudyAddOpen(false);
+        setFormError("");
         setEditingStudyId(null);
-        setStudyError("");
+
+        setStudyForm({
+            round: "",
+            date: "",
+            description: "",
+        });
+    };
+
+    let openStudyAddModal = (dateStr) => {
+        setIsStudyAddOpen(true);
+        setFormError("");
+        setEditingStudyId(null);
+
         setStudyForm({
             round: "",
             date: dateStr || "",
-            description: ""
+            description: "",
         });
-        setIsStudyModalOpen(true);
-        setOpenMenuId(null);
-    }
+    };
 
-    function openEditStudy(ev) {
-        setEditingStudyId(ev?.id);
-        setStudyError("");
+    let openStudyEditModal = (studyId) => {
+        let target = studyEvents.find((e) => e.id === studyId);
+        if (!target) return;
 
-        let start = ev?.start || "";
-        let date = "";
-        if (typeof start === "string") date = start.slice(0, 10);
-        else if (start instanceof Date) date = toYmd(start);
+        setIsStudyAddOpen(true);
+        setFormError("");
+        setEditingStudyId(studyId);
 
         setStudyForm({
-            round: ev?.extendedProps?.round || "",
-            date,
-            description: ev?.extendedProps?.description || ""
+            round: clamp(target.extendedProps?.round || ""),
+            date: parseYmd(target.start),
+            description: clamp(target.extendedProps?.description || ""),
+        });
+    };
+
+    let saveStudyEventLocalOnly = () => {
+        let round = Number(studyForm.round);
+        let date = clamp(studyForm.date).trim();
+        if (!round || round < 1 || !date) {
+            setFormError("회차(1 이상)와 날짜는 필수야.");
+            return;
+        }
+
+        let description = clamp(studyForm.description).trim();
+
+        let nextEv = normalizeEvent({
+            id: editingStudyId || `S${Date.now()}`,
+            title: `스터디 ${round}회차`,
+            start: date,
+            extendedProps: {
+                type: "STUDY",
+                round,
+                description,
+            },
         });
 
-        setIsStudyModalOpen(true);
+        if (editingStudyId) {
+            setStudyEvents((prev) => prev.map((e) => (e.id === editingStudyId ? nextEv : e)));
+        } else {
+            setStudyEvents((prev) => [nextEv, ...prev]);
+        }
+
+        closeStudyModal();
+    };
+
+    let deleteStudyEventLocalOnly = (studyId) => {
+        setStudyEvents((prev) => prev.filter((e) => e.id !== studyId));
         setOpenMenuId(null);
-    }
+    };
 
-    // ===== UI: Right list (events grouped by date) =====
-    let monthlyEvents = useMemo(() => {
-        // allEvents를 start 기준으로 정렬해서 리스트용으로 사용
-        let list = [...allEvents];
-        list.sort((a, b) => {
-            let sa = a?.start || "";
-            let sb = b?.start || "";
-            return String(sa).localeCompare(String(sb));
-        });
-        return list;
-    }, [allEvents]);
+    /* =========================
+       외부 클릭 시 메뉴 닫기
+    ========================= */
+    useEffect(() => {
+        let onDoc = (e) => {
+            let el = e.target;
+            if (!el?.closest) return;
+            if (el.closest(".calMenu")) return;
+            if (el.closest(".calDotsBtn")) return;
+            setOpenMenuId(null);
+        };
 
-    // ===== Render =====
+        document.addEventListener("mousedown", onDoc);
+        return () => document.removeEventListener("mousedown", onDoc);
+    }, []);
+
+    /* =========================
+       렌더
+    ========================= */
+    let view = sp.get("view") || "calendar";
+
+    let allForList = useMemo(() => {
+        let merged = [...events, ...studyEvents];
+        merged.sort((a, b) => (clamp(a.start) > clamp(b.start) ? 1 : -1));
+        return merged;
+    }, [events, studyEvents]);
+
     return (
-        <div className="calendarWrap">
-            <div className="calendarLeft">
-                <FullCalendar
-                    ref={calendarRef}
-                    plugins={[dayGridPlugin, interactionPlugin]}
-                    initialView="dayGridMonth"
-                    height="auto"
-                    fixedWeekCount={false}
-                    showNonCurrentDates={true}
-                    dayMaxEvents={true}
-                    datesSet={handleDatesSet}
-                    dateClick={handleDateClick}
-                    events={allEvents}
-                    eventClassNames={eventClassNames}
-                    dayCellContent={dayCellContent}
-                />
-            </div>
-
-            <div className="calendarRight">
-                <div className="calRightHeader">
-                    <div className="calRightTitle">이번 달 일정</div>
-                    <div className="calRightActions">
-                        <button
-                            className="calBtn calBtnPrimary"
-                            onClick={() => openCreateStudy(toYmd(new Date()))}
-                        >
-                            스터디 회차 추가
-                        </button>
-                        <button
-                            className="calBtn"
-                            onClick={() => {
-                                setEditingEventId(null);
-                                setFormError("");
-                                setForm({
-                                    title: "",
-                                    description: "",
-                                    start: toYmd(new Date()),
-                                    end: "",
-                                    type: "ETC",
-                                    customLabel: "",
-                                    colorHex: "#3b82f6",
-                                    textColor: "#ffffff"
-                                });
-                                setIsAddModalOpen(true);
-                            }}
-                        >
-                            일정 추가
-                        </button>
+        <div className="calWrap">
+            <div className="calTop">
+                <div className="calTitleBox">
+                    <div className="calTitle">일정</div>
+                    <div className="calSub">
+                        {visibleTitle ? visibleTitle : ""}
+                        {roomId ? <span className="calRoomHint"> (room: {roomId})</span> : null}
                     </div>
                 </div>
 
-                <div className="calList">
-                    {monthlyEvents.length === 0 ? (
-                        <div className="calEmpty">표시할 일정이 없습니다.</div>
-                    ) : (
-                        monthlyEvents.map((ev) => {
-                            let isStudy = ev?.extendedProps?.type === "STUDY";
-                            let label = typeLabel(ev?.extendedProps?.type, ev?.extendedProps?.customLabel);
+                <div className="calTopActions">
+                    <button type="button" className="calBtn" onClick={() => openAddModal("")}>
+                        일반 일정 추가
+                    </button>
+                    <button type="button" className="calBtn calBtnGhost" onClick={() => openStudyAddModal("")}>
+                        스터디 일정 추가
+                    </button>
+                    <button type="button" className="calBtn calBtnGhost" onClick={goListView}>
+                        목록 보기
+                    </button>
+                </div>
+            </div>
 
-                            return (
-                                <div key={ev.id} className="calListItem">
-                                    <div className="calListMain">
-                                        <div className="calListTop">
-                                            <span className={`calBadge ${isStudy ? "study" : ""}`}>
-                                                {label}
-                                            </span>
-                                            <span className="calDate">
-                                                {(ev.start || "").slice ? ev.start.slice(0, 10) : ev.start}
-                                            </span>
+            <div className="calBody">
+                <div className="calMain">
+                    <FullCalendar
+                        ref={calendarRef}
+                        plugins={[dayGridPlugin, interactionPlugin]}
+                        initialView="dayGridMonth"
+                        fixedWeekCount={false}
+                        height="auto"
+                        selectable={true}
+                        eventClassNames={eventClassNames}
+                        events={[...events, ...studyEvents]}
+                        dateClick={(info) => {
+                            // 더블클릭 느낌으로: 스터디/일반은 버튼으로도 추가 가능
+                            openAddModal(info.dateStr);
+                        }}
+                        eventClick={(info) => {
+                            let id = info?.event?.id;
+                            if (!id) return;
+                            // 클릭하면 메뉴 열기
+                            setOpenMenuId(id);
+                        }}
+                        customButtons={{
+                            myToday: {
+                                text: "오늘로 이동",
+                                click: () => {
+                                    let api = calendarRef.current?.getApi?.();
+                                    api?.today();
+                                },
+                            },
+                        }}
+                        headerToolbar={{
+                            left: "prev",
+                            center: "title myToday",
+                            right: "next",
+                        }}
+                        datesSet={(info) => {
+                            setVisibleRange({
+                                start: info.view.currentStart,
+                                end: info.view.currentEnd,
+                            });
+                            setVisibleTitle(info.view.title || "");
+                        }}
+                    />
+                </div>
+
+                <div className="calSide">
+                    <div className="calSideHeader">
+                        <div className="calSideTitle">이번 달 일정</div>
+                        <div className="calSideMeta">
+                            {isLoadingRemote ? <span className="calMetaLoading">불러오는 중...</span> : null}
+                            {remoteError ? <span className="calMetaError">{remoteError}</span> : null}
+                        </div>
+                    </div>
+
+                    <div className="calListBody">
+                        {allForList.length === 0 ? (
+                            <div className="calEmpty">일정이 없어.</div>
+                        ) : (
+                            allForList.map((ev) => {
+                                let isStudy = ev.extendedProps?.type === "STUDY";
+                                let id = ev.id;
+
+                                return (
+                                    <div key={id} className={`calItem ${isStudy ? "isStudy" : ""}`}>
+                                        <div className="calItemLeft">
+                                            <div className={`calBadge ${clamp(ev.extendedProps?.type)}`}>
+                                                {getTypeLabel(ev)}
+                                            </div>
+                                            <div className="calItemTitle">{ev.title}</div>
+                                            <div className="calItemDate">
+                                                {parseYmd(ev.start)}
+                                                {ev.end ? ` ~ ${parseYmd(ev.end)}` : ""}
+                                            </div>
                                         </div>
 
-                                        <div className="calListTitleRow">
-                                            <span className="calListTitle">{ev.title}</span>
-
+                                        <div className="calItemRight">
                                             <button
-                                                className="calKebab"
-                                                onClick={() => setOpenMenuId(openMenuId === ev.id ? null : ev.id)}
+                                                type="button"
+                                                className="calDotsBtn"
+                                                onClick={() => setOpenMenuId((prev) => (prev === id ? null : id))}
                                             >
                                                 ⋮
                                             </button>
 
-                                            {openMenuId === ev.id ? (
+                                            {openMenuId === id ? (
                                                 <div className="calMenu">
                                                     <button
-                                                        className="calMenuItem"
+                                                        type="button"
+                                                        className="calMenuBtn"
                                                         onClick={() => {
-                                                            if (isStudy) openEditStudy(ev);
-                                                            else openEditEvent(ev);
+                                                            setOpenMenuId(null);
+                                                            if (isStudy) openStudyEditModal(id);
+                                                            else openEditModal(id);
                                                         }}
                                                     >
                                                         수정
                                                     </button>
                                                     <button
-                                                        className="calMenuItem danger"
+                                                        type="button"
+                                                        className="calMenuBtn calMenuDanger"
                                                         onClick={() => {
-                                                            if (isStudy) deleteStudyById(ev.id);
-                                                            else deleteEventById(ev.id);
+                                                            if (isStudy) deleteStudyEventLocalOnly(id);
+                                                            else deleteNormalEventLocalOnly(id);
                                                         }}
                                                     >
                                                         삭제
@@ -531,192 +568,152 @@ function Calendar() {
                                                 </div>
                                             ) : null}
                                         </div>
-
-                                        {ev?.extendedProps?.description ? (
-                                            <div className="calListDesc">{ev.extendedProps.description}</div>
-                                        ) : null}
                                     </div>
-                                </div>
-                            );
-                        })
-                    )}
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* ===== 일반 일정 모달 ===== */}
-            {isAddModalOpen ? (
-                <div className="calModalOverlay" onClick={closeAddModal}>
-                    <div className="calModal" onClick={(e) => e.stopPropagation()}>
+            {isAddOpen ? (
+                <div className="calModalOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeAddModal()}>
+                    <div className="calModal">
                         <div className="calModalHeader">
-                            <div className="calModalTitle">
-                                {editingEventId ? "일정 수정" : "일정 추가"}
-                            </div>
-                            <button className="calModalClose" onClick={closeAddModal}>
-                                ✕
+                            <div className="calModalTitle">{editingEventId ? "일정 수정" : "일정 추가"}</div>
+                            <button type="button" className="calX" onClick={closeAddModal}>
+                                ×
                             </button>
                         </div>
 
                         <div className="calModalBody">
-                            {formError ? <div className="calError">{formError}</div> : null}
+                            {formError ? <div className="calFormError">{formError}</div> : null}
 
-                            <label className="calField">
-                                <span className="calFieldLabel">제목</span>
+                            <div className="calField">
+                                <label className="calLabel">제목</label>
                                 <input
                                     className="calInput"
                                     value={form.title}
-                                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                                    onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+                                    placeholder="예) 정보처리기사 접수"
                                 />
-                            </label>
+                            </div>
 
-                            <label className="calField">
-                                <span className="calFieldLabel">설명</span>
-                                <textarea
-                                    className="calTextarea"
-                                    value={form.description}
-                                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                                />
-                            </label>
-
-                            <div className="calRow">
-                                <label className="calField">
-                                    <span className="calFieldLabel">시작일</span>
+                            <div className="calFieldRow">
+                                <div className="calField">
+                                    <label className="calLabel">시작일</label>
                                     <input
                                         type="date"
                                         className="calInput"
                                         value={form.start}
-                                        onChange={(e) => setForm({ ...form, start: e.target.value })}
+                                        onChange={(e) => setForm((p) => ({ ...p, start: e.target.value }))}
                                     />
-                                </label>
+                                </div>
 
-                                <label className="calField">
-                                    <span className="calFieldLabel">종료일(선택)</span>
+                                <div className="calField">
+                                    <label className="calLabel">종료일(선택)</label>
                                     <input
                                         type="date"
                                         className="calInput"
                                         value={form.end}
-                                        onChange={(e) => setForm({ ...form, end: e.target.value })}
+                                        onChange={(e) => setForm((p) => ({ ...p, end: e.target.value }))}
                                     />
-                                </label>
+                                </div>
                             </div>
 
-                            <div className="calRow">
-                                <label className="calField">
-                                    <span className="calFieldLabel">유형</span>
+                            <div className="calFieldRow">
+                                <div className="calField">
+                                    <label className="calLabel">유형</label>
                                     <select
                                         className="calSelect"
                                         value={form.type}
-                                        onChange={(e) => setForm({ ...form, type: e.target.value })}
+                                        onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
                                     >
-                                        <option value="ASSIGNMENT">과제</option>
+                                        <option value="OTHER">기타</option>
+                                        <option value="REGISTRATION">접수</option>
                                         <option value="EXAM">시험</option>
-                                        <option value="PRESENTATION">발표</option>
-                                        <option value="OTHER">기타(직접 입력)</option>
-                                        <option value="ETC">기타</option>
+                                        <option value="RESULT">발표</option>
                                     </select>
-                                </label>
+                                </div>
 
-                                {form.type === "OTHER" ? (
-                                    <label className="calField">
-                                        <span className="calFieldLabel">기타 라벨</span>
-                                        <input
-                                            className="calInput"
-                                            value={form.customLabel}
-                                            onChange={(e) => setForm({ ...form, customLabel: e.target.value })}
-                                        />
-                                    </label>
-                                ) : null}
-                            </div>
-
-                            <div className="calRow">
-                                <label className="calField">
-                                    <span className="calFieldLabel">배경색</span>
+                                <div className="calField">
+                                    <label className="calLabel">라벨(선택)</label>
                                     <input
-                                        type="color"
-                                        className="calColor"
-                                        value={form.colorHex}
-                                        onChange={(e) => setForm({ ...form, colorHex: e.target.value })}
+                                        className="calInput"
+                                        value={form.customLabel}
+                                        onChange={(e) => setForm((p) => ({ ...p, customLabel: e.target.value }))}
+                                        placeholder="예) 원서접수"
                                     />
-                                </label>
-
-                                <label className="calField">
-                                    <span className="calFieldLabel">글자색</span>
-                                    <input
-                                        type="color"
-                                        className="calColor"
-                                        value={form.textColor}
-                                        onChange={(e) => setForm({ ...form, textColor: e.target.value })}
-                                    />
-                                </label>
+                                </div>
                             </div>
                         </div>
 
                         <div className="calModalFooter">
-                            <button className="calBtn" onClick={closeAddModal}>
+                            <button type="button" className="calBtn calBtnGhost" onClick={closeAddModal}>
                                 취소
                             </button>
-                            <button className="calBtn calBtnPrimary" onClick={saveEventFromModal}>
-                                저장
+                            <button type="button" className="calBtn" onClick={saveNormalEventLocalOnly}>
+                                저장(로컬)
                             </button>
                         </div>
                     </div>
                 </div>
             ) : null}
 
-            {/* ===== 스터디 모달 ===== */}
-            {isStudyModalOpen ? (
-                <div className="calModalOverlay" onClick={closeStudyModal}>
-                    <div className="calModal" onClick={(e) => e.stopPropagation()}>
+            {/* ===== 스터디 일정 모달 ===== */}
+            {isStudyAddOpen ? (
+                <div className="calModalOverlay" onMouseDown={(e) => e.target === e.currentTarget && closeStudyModal()}>
+                    <div className="calModal">
                         <div className="calModalHeader">
-                            <div className="calModalTitle">
-                                {editingStudyId ? "스터디 회차 수정" : "스터디 회차 추가"}
-                            </div>
-                            <button className="calModalClose" onClick={closeStudyModal}>
-                                ✕
+                            <div className="calModalTitle">{editingStudyId ? "스터디 일정 수정" : "스터디 일정 추가"}</div>
+                            <button type="button" className="calX" onClick={closeStudyModal}>
+                                ×
                             </button>
                         </div>
 
                         <div className="calModalBody">
-                            {studyError ? <div className="calError">{studyError}</div> : null}
+                            {formError ? <div className="calFormError">{formError}</div> : null}
 
-                            <div className="calRow">
-                                <label className="calField">
-                                    <span className="calFieldLabel">회차</span>
+                            <div className="calFieldRow">
+                                <div className="calField">
+                                    <label className="calLabel">회차</label>
                                     <input
-                                        type="number"
                                         className="calInput"
                                         value={studyForm.round}
-                                        onChange={(e) => setStudyForm({ ...studyForm, round: e.target.value })}
-                                        min="1"
+                                        onChange={(e) => setStudyForm((p) => ({ ...p, round: e.target.value }))}
+                                        placeholder="예) 1"
                                     />
-                                </label>
+                                </div>
 
-                                <label className="calField">
-                                    <span className="calFieldLabel">날짜</span>
+                                <div className="calField">
+                                    <label className="calLabel">날짜</label>
                                     <input
                                         type="date"
                                         className="calInput"
                                         value={studyForm.date}
-                                        onChange={(e) => setStudyForm({ ...studyForm, date: e.target.value })}
+                                        onChange={(e) => setStudyForm((p) => ({ ...p, date: e.target.value }))}
                                     />
-                                </label>
+                                </div>
                             </div>
 
-                            <label className="calField">
-                                <span className="calFieldLabel">설명</span>
+                            <div className="calField">
+                                <label className="calLabel">설명(선택)</label>
                                 <textarea
                                     className="calTextarea"
                                     value={studyForm.description}
-                                    onChange={(e) => setStudyForm({ ...studyForm, description: e.target.value })}
+                                    onChange={(e) => setStudyForm((p) => ({ ...p, description: e.target.value }))}
+                                    placeholder="예) 챕터 3 문제풀이"
                                 />
-                            </label>
+                            </div>
                         </div>
 
                         <div className="calModalFooter">
-                            <button className="calBtn" onClick={closeStudyModal}>
+                            <button type="button" className="calBtn calBtnGhost" onClick={closeStudyModal}>
                                 취소
                             </button>
-                            <button className="calBtn calBtnPrimary" onClick={saveStudyFromModal}>
-                                저장
+                            <button type="button" className="calBtn" onClick={saveStudyEventLocalOnly}>
+                                저장(로컬)
                             </button>
                         </div>
                     </div>

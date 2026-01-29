@@ -114,7 +114,7 @@ function BoardDetail() {
     };
 
     let onDeleteComment = async (commentId) => {
-    let ok = window.confirm("댓글을 삭제할까요?");
+        let ok = window.confirm("댓글을 삭제할까요?");
         if (!ok) return;
 
         try {
