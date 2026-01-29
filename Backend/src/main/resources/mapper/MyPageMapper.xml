@@ -9,7 +9,7 @@
     <select id="findByUserId" resultType="com.example.demo.mypage.MyPageVO">
         SELECT *
         FROM users
-        WHERE email = #{userId}
+        WHERE user_id = #{userId}
     </select>
 
     <!-- 내 정보 수정 -->
@@ -21,7 +21,7 @@
             gender = #{gender},
             introduction = #{introduction},
             profile_img = #{profileImg}
-        WHERE email = #{userId}
+        WHERE user_id = #{userId}
     </update>
 
 

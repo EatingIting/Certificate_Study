@@ -13,7 +13,8 @@
             host_user_email,
             room_id,
             status,
-            apply_message
+            apply_message,
+            requested_at
         )
         VALUES (
                    UUID(),
@@ -21,9 +22,29 @@
                    #{hostUserEmail},
                    #{roomId},
                    '신청중',
-                   #{applyMessage}
+                   #{applyMessage},
+                   NOW()
                )
     </insert>
+
+    <!-- 신청 상태 조회 -->
+    <select id="findStatus" resultType="string">
+        SELECT status
+        FROM room_join_request
+        WHERE request_user_email = #{requestUserEmail}
+          AND room_id = #{roomId}
+    </select>
+
+    <!-- 거절된 신청 재신청 처리 -->
+    <update id="reapply">
+        UPDATE room_join_request
+        SET status = '신청중',
+            apply_message = #{applyMessage},
+            requested_at = NOW()
+        WHERE request_user_email = #{requestUserEmail}
+          AND room_id = #{roomId}
+          AND status = '거절'
+    </update>
 
     <!-- 내가 신청한 스터디 -->
     <select id="selectSent"

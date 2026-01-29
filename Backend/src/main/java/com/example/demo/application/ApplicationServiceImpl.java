@@ -70,7 +70,7 @@ public class ApplicationServiceImpl implements ApplicationService {
             String applyMessage
     ) {
 
-        // ✅ 성별 제한 검사
+        // 성별 제한 검사
         String userGender =
                 applicationMapper.getUserGender(requestUserEmail);
 
@@ -81,26 +81,43 @@ public class ApplicationServiceImpl implements ApplicationService {
             throw new IllegalStateException("성별 제한으로 신청할 수 없습니다.");
         }
 
-        // 중복 체크
-        int exists =
-                applicationMapper.existsActiveApplication(roomId, requestUserEmail);
+        // 현재 신청 상태 조회
+        String status =
+                applicationMapper.findStatus(roomId, requestUserEmail);
 
-        if (exists > 0) {
-            throw new IllegalStateException("이미 신청 중이거나 승인된 스터디입니다.");
+        // 신청한 적 없음 → insert
+        if (status == null) {
+
+            int result = applicationMapper.insertApplication(
+                    UUID.randomUUID().toString(),
+                    requestUserEmail,
+                    requestUserNickname,
+                    roomId,
+                    applyMessage
+            );
+
+            if (result == 0) {
+                throw new IllegalStateException("본인이 작성한 스터디에는 신청할 수 없습니다.");
+            }
+
+            return;
         }
 
-        // 신청 insert
-        int result = applicationMapper.insertApplication(
-                UUID.randomUUID().toString(),
-                requestUserEmail,
-                requestUserNickname,
-                roomId,
-                applyMessage
-        );
+        // 거절 상태면 → update로 재신청
+        if ("거절".equals(status)) {
 
-        if (result == 0) {
-            throw new IllegalStateException("본인이 작성한 스터디에는 신청할 수 없습니다.");
+            applicationMapper.reapply(
+                    roomId,
+                    requestUserEmail,
+                    applyMessage
+            );
+
+            return;
         }
+
+        // 신청중 또는 승인 상태면 재신청 불가
+        throw new IllegalStateException("이미 신청 중이거나 승인된 스터디입니다.");
     }
+
 
 }

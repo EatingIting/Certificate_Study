@@ -43,14 +43,21 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
+            System.out.println("검증 토큰: " + token);
+
             Jwts.parser()
                     .setSigningKey(key)
                     .parseClaimsJws(token);
+
+            System.out.println("토큰 검증 성공!");
             return true;
+
         } catch (Exception e) {
+            System.out.println("토큰 검증 실패: " + e.getMessage());
             return false;
         }
     }
+
 
     public Authentication getAuthentication(String token) {
         Claims claims = Jwts.parser()
@@ -66,4 +73,6 @@ public class JwtTokenProvider {
                 List.of(new SimpleGrantedAuthority("ROLE_USER"))
         );
     }
+
+
 }
