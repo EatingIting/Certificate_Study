@@ -10,7 +10,7 @@ import "./MeetingPage.css";
 import { useMeeting } from "./MeetingContext";
 import { useLMS } from "../lms/LMSContext";
 import Toast from "../toast/Toast";
-import { getHostnameWithPort, getWsProtocol } from "../utils/backendUrl";
+import { toWsBackendUrl, getWsProtocol } from "../utils/backendUrl";
 import api from "../api/api";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -835,6 +835,11 @@ function MeetingPage({ portalRoomId }) {
         return saved !== null ? saved === "true" : true;
     });
 
+    /** 방장이 강제로 마이크를 끈 경우 — 스스로 마이크 켤 수 없음 */
+    const [mutedByHostMe, setMutedByHostMe] = useState(false);
+    /** 방장이 강제로 카메라를 끈 경우 — 스스로 카메라 켤 수 없음 */
+    const [cameraOffByHostMe, setCameraOffByHostMe] = useState(false);
+
     const [micPermission, setMicPermission] = useState("prompt");
     const [camPermission, setCamPermission] = useState("prompt");
 
@@ -1352,8 +1357,8 @@ function MeetingPage({ portalRoomId }) {
     const micMuted = !hasAudioTrack || !micOn;
     const camMuted = !camOn;
 
-    const micDisabled = micPermission !== "granted";
-    const camDisabled = camPermission !== "granted";
+    const micDisabled = micPermission !== "granted" || mutedByHostMe;
+    const camDisabled = camPermission !== "granted" || cameraOffByHostMe;
 
     const faceEmojis = useMemo(
         () => ["🤖", "👽", "👻", "😺", "😸", "😹", "🙈", "🙉", "🙊", "🐵"],
@@ -1457,6 +1462,12 @@ function MeetingPage({ portalRoomId }) {
     // 👑 방장 권한 기능 핸들러
     // ============================================
 
+    const showToastMsg = useCallback((msg) => {
+        if (!msg) return;
+        setToastMessage(String(msg));
+        setShowToast(true);
+    }, []);
+
     // 현재 사용자가 방장인지 확인
     const amIHost = useMemo(() => {
         const me = participants.find(p => p.isMe);
@@ -1465,35 +1476,86 @@ function MeetingPage({ portalRoomId }) {
 
     // 마이크 강제 끄기
     const handleForceMute = useCallback((targetUserId) => {
-        if (!amIHost || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        if (!amIHost) return showToastMsg("방장만 사용할 수 있습니다.");
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return showToastMsg("서버 연결이 아직 준비되지 않았습니다.");
+
+        // UI 즉시 반영 (낙관적 업데이트)
+        setParticipants((prev) =>
+            prev.map((p) => (String(p.id) === String(targetUserId) ? { ...p, muted: true, mutedByHost: true } : p))
+        );
+
         wsRef.current.send(JSON.stringify({
             type: "FORCE_MUTE",
             targetUserId
         }));
         setHostMenuTargetId(null);
-    }, [amIHost]);
+    }, [amIHost, showToastMsg]);
 
     // 카메라 강제 끄기
     const handleForceCameraOff = useCallback((targetUserId) => {
-        if (!amIHost || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        if (!amIHost) return showToastMsg("방장만 사용할 수 있습니다.");
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return showToastMsg("서버 연결이 아직 준비되지 않았습니다.");
+
+        // UI 즉시 반영 (낙관적 업데이트)
+        setParticipants((prev) =>
+            prev.map((p) => (String(p.id) === String(targetUserId) ? { ...p, cameraOff: true, cameraOffByHost: true } : p))
+        );
+
         wsRef.current.send(JSON.stringify({
             type: "FORCE_CAMERA_OFF",
             targetUserId
         }));
         setHostMenuTargetId(null);
-    }, [amIHost]);
+    }, [amIHost, showToastMsg]);
+
+    // 마이크 강제 켜기 (방장이 허용)
+    const handleForceUnmute = useCallback((targetUserId) => {
+        if (!amIHost) return showToastMsg("방장만 사용할 수 있습니다.");
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return showToastMsg("서버 연결이 아직 준비되지 않았습니다.");
+
+        setParticipants((prev) =>
+            prev.map((p) => (String(p.id) === String(targetUserId) ? { ...p, muted: false, mutedByHost: false } : p))
+        );
+
+        wsRef.current.send(JSON.stringify({
+            type: "FORCE_UNMUTE",
+            targetUserId
+        }));
+        setHostMenuTargetId(null);
+    }, [amIHost, showToastMsg]);
+
+    // 카메라 강제 켜기 (방장이 허용)
+    const handleForceCameraOn = useCallback((targetUserId) => {
+        if (!amIHost) return showToastMsg("방장만 사용할 수 있습니다.");
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return showToastMsg("서버 연결이 아직 준비되지 않았습니다.");
+
+        setParticipants((prev) =>
+            prev.map((p) => (String(p.id) === String(targetUserId) ? { ...p, cameraOff: false, cameraOffByHost: false } : p))
+        );
+
+        wsRef.current.send(JSON.stringify({
+            type: "FORCE_CAMERA_ON",
+            targetUserId
+        }));
+        setHostMenuTargetId(null);
+    }, [amIHost, showToastMsg]);
 
     // 강퇴
     const handleKick = useCallback((targetUserId) => {
-        if (!amIHost || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        if (!amIHost) return showToastMsg("방장만 사용할 수 있습니다.");
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return showToastMsg("서버 연결이 아직 준비되지 않았습니다.");
         const ok = window.confirm("정말 내보내시겠습니까?");
         if (!ok) return;
+
+        // UI 즉시 반영 (낙관적 업데이트)
+        setParticipants((prev) => prev.filter((p) => String(p.id) !== String(targetUserId)));
+
         wsRef.current.send(JSON.stringify({
             type: "KICK",
             targetUserId
         }));
         setHostMenuTargetId(null);
-    }, [amIHost]);
+    }, [amIHost, showToastMsg]);
 
     // 드롭다운 메뉴 토글
     const toggleHostMenu = useCallback((targetId) => {
@@ -4389,6 +4451,7 @@ function MeetingPage({ portalRoomId }) {
     };
 
     const toggleMic = async () => {
+        if (mutedByHostMe) return; // 방장이 강제로 끈 경우 스스로 켤 수 없음
         const newVal = !micOn;
         setMicOn(newVal);
         localStorage.setItem("micOn", String(newVal)); // 문자열로 저장
@@ -5236,9 +5299,10 @@ function MeetingPage({ portalRoomId }) {
 
     // 1️⃣ Signaling WebSocket (8080)
     useEffect(() => {
-        // userEmail이 준비될 때까지 대기
-        if (!roomId || !userEmail) {
-            console.log("[WS] 대기 중 - roomId:", roomId, "userEmail:", userEmail);
+        // userEmail/hostUserEmail이 준비될 때까지 대기
+        // (방장 판정(isHostLocal)을 정확히 하기 위해 room.hostUserEmail 로딩을 기다림)
+        if (!roomId || !userEmail || !hostUserEmail) {
+            console.log("[WS] 대기 중 - roomId:", roomId, "userEmail:", userEmail, "hostUserEmail:", hostUserEmail);
             return;
         }
 
@@ -5254,10 +5318,12 @@ function MeetingPage({ portalRoomId }) {
             // ✅ https ? wss : ws
             // ✅ nginx 리버스 프록시를 통해 연결 (포트 생략 → 443/80 기본 포트 사용)
             // ✅ 같은 URL이면 같은 방: WebSocket roomId는 URL의 roomId를 그대로 사용
-            const protocol = getWsProtocol();
-            const host = getHostnameWithPort(); // ✅ hostname(IP) + (있으면) port
             const wsRoomId = roomId;
-            const wsUrl = `${protocol}://${host}/ws/room/${wsRoomId}` +
+            // ✅ dev(http)에서도 백엔드(8080)로 WS 연결되게 고정
+            // - http: ws://{hostname}:8080/ws/room/{roomId}
+            // - https: wss://{hostname}/ws/room/{roomId} (nginx 프록시)
+            const base = toWsBackendUrl(`/ws/room/${wsRoomId}`, 8080);
+            const wsUrl = `${base}` +
                 `?userId=${encodeURIComponent(userId)}` +
                 `&userName=${encodeURIComponent(userName)}` +
                 `&userEmail=${encodeURIComponent(userEmail || "")}` +
@@ -5391,6 +5457,8 @@ function MeetingPage({ portalRoomId }) {
                                         isMe: false,
                                         muted: typeof u.muted === "boolean" ? u.muted : (old?.muted ?? false),
                                         cameraOff: typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true),
+                                        mutedByHost: !!u.mutedByHost || !!(old?.mutedByHost),
+                                        cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
                                         stream: currentStream,
                                         screenStream: old?.screenStream ?? null,
                                         isScreenSharing: old?.isScreenSharing ?? false,
@@ -5460,6 +5528,8 @@ function MeetingPage({ portalRoomId }) {
                                 cameraOff: isMe
                                     ? !camOnRef.current
                                     : (typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true)),
+                                mutedByHost: !!u.mutedByHost || !!(old?.mutedByHost),
+                                cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
 
                                 // 🔥 핵심: live stream이 있으면 절대 null로 설정하지 않음 (검은 화면 방지)
                                 stream: finalStream,
@@ -5495,6 +5565,13 @@ function MeetingPage({ portalRoomId }) {
                                 isLoading: !shouldStopLoading && baseUser.isLoading
                             };
                         });
+
+                        // 방장 강제 마이크/카메라 상태 동기화 (본인)
+                        const meUser = data.users.find((u) => String(u.userId) === String(userId));
+                        if (meUser) {
+                            setMutedByHostMe(!!meUser.mutedByHost);
+                            setCameraOffByHostMe(!!meUser.cameraOffByHost);
+                        }
 
                         // -------------------------------------------------------------
                         // 2. [서버 목록에서 빠진 사용자 보호] - PIP 모드 전환 시 타일 깜빡임 방지
@@ -5701,9 +5778,10 @@ function MeetingPage({ portalRoomId }) {
                     const { targetUserId, hostName } = data;
                     console.log(`🔇 [FORCE_MUTE] ${hostName}님이 ${targetUserId}의 마이크를 껐습니다.`);
 
-                    // 내가 대상이면 마이크 끄기
+                    // 내가 대상이면 마이크 끄기 + 스스로 켤 수 없음
                     if (String(targetUserId) === String(userId)) {
                         setMicOn(false);
+                        setMutedByHostMe(true);
                         setToastMessage(`${hostName}님이 마이크를 껐습니다.`);
                         setShowToast(true);
                     }
@@ -5712,7 +5790,7 @@ function MeetingPage({ portalRoomId }) {
                     setParticipants(prev =>
                         prev.map(p =>
                             String(p.id) === String(targetUserId)
-                                ? { ...p, muted: true }
+                                ? { ...p, muted: true, mutedByHost: true }
                                 : p
                         )
                     );
@@ -5726,9 +5804,10 @@ function MeetingPage({ portalRoomId }) {
                     const { targetUserId, hostName } = data;
                     console.log(`📷 [FORCE_CAMERA_OFF] ${hostName}님이 ${targetUserId}의 카메라를 껐습니다.`);
 
-                    // 내가 대상이면 카메라 끄기
+                    // 내가 대상이면 카메라 끄기 + 스스로 켤 수 없음
                     if (String(targetUserId) === String(userId)) {
                         setCamOn(false);
+                        setCameraOffByHostMe(true);
                         setToastMessage(`${hostName}님이 카메라를 껐습니다.`);
                         setShowToast(true);
                     }
@@ -5737,7 +5816,57 @@ function MeetingPage({ portalRoomId }) {
                     setParticipants(prev =>
                         prev.map(p =>
                             String(p.id) === String(targetUserId)
-                                ? { ...p, cameraOff: true }
+                                ? { ...p, cameraOff: true, cameraOffByHost: true }
+                                : p
+                        )
+                    );
+                    return;
+                }
+
+                // 방장이 마이크 켜기 허용
+                if (data.type === "FORCE_UNMUTE") {
+                    const { targetUserId, hostName } = data;
+                    console.log(`🔊 [FORCE_UNMUTE] ${hostName}님이 ${targetUserId}의 마이크를 켜 주었습니다.`);
+
+                    if (String(targetUserId) === String(userId)) {
+                        setMutedByHostMe(false);
+                        setMicOn(true);
+                        setToastMessage(`${hostName}님이 마이크를 켜 주었습니다.`);
+                        setShowToast(true);
+                        // 실제 오디오 트랙 활성화
+                        const audioProducer = producersRef.current?.get?.("audio");
+                        if (audioProducer?.track) audioProducer.track.enabled = true;
+                        const at = localStreamRef.current?.getAudioTracks?.()[0];
+                        if (at) at.enabled = true;
+                    }
+
+                    setParticipants(prev =>
+                        prev.map(p =>
+                            String(p.id) === String(targetUserId)
+                                ? { ...p, muted: false, mutedByHost: false }
+                                : p
+                        )
+                    );
+                    return;
+                }
+
+                // 방장이 카메라 켜기 허용
+                if (data.type === "FORCE_CAMERA_ON") {
+                    const { targetUserId, hostName } = data;
+                    console.log(`📷 [FORCE_CAMERA_ON] ${hostName}님이 ${targetUserId}의 카메라를 켜 주었습니다.`);
+
+                    if (String(targetUserId) === String(userId)) {
+                        setCameraOffByHostMe(false);
+                        setCamOn(true);
+                        setToastMessage(`${hostName}님이 카메라를 켜 주었습니다.`);
+                        setShowToast(true);
+                        turnOnCamera().catch((e) => console.warn("[FORCE_CAMERA_ON] turnOnCamera failed:", e));
+                    }
+
+                    setParticipants(prev =>
+                        prev.map(p =>
+                            String(p.id) === String(targetUserId)
+                                ? { ...p, cameraOff: false, cameraOffByHost: false }
                                 : p
                         )
                     );
@@ -6514,14 +6643,22 @@ function MeetingPage({ portalRoomId }) {
                                                                                 </button>
                                                                                 {hostMenuTargetId === p.id && (
                                                                                     <div className="host-menu-dropdown">
-                                                                                        {!p.muted && (
+                                                                                        {!p.muted ? (
                                                                                             <button onClick={() => handleForceMute(p.id)}>
                                                                                                 <MicOff size={14} /> 마이크 끄기
                                                                                             </button>
+                                                                                        ) : (
+                                                                                            <button onClick={() => handleForceUnmute(p.id)}>
+                                                                                                <Mic size={14} /> 마이크 켜기
+                                                                                            </button>
                                                                                         )}
-                                                                                        {!p.cameraOff && (
+                                                                                        {!p.cameraOff ? (
                                                                                             <button onClick={() => handleForceCameraOff(p.id)}>
                                                                                                 <VideoOff size={14} /> 카메라 끄기
+                                                                                            </button>
+                                                                                        ) : (
+                                                                                            <button onClick={() => handleForceCameraOn(p.id)}>
+                                                                                                <Video size={14} /> 카메라 켜기
                                                                                             </button>
                                                                                         )}
                                                                                         <button className="kick-btn" onClick={() => handleKick(p.id)}>
@@ -6870,14 +7007,22 @@ function MeetingPage({ portalRoomId }) {
                                                                                 </button>
                                                                                 {hostMenuTargetId === part.id && (
                                                                                     <div className="host-menu-dropdown">
-                                                                                        {!part.muted && (
+                                                                                        {!part.muted ? (
                                                                                             <button onClick={() => handleForceMute(part.id)}>
                                                                                                 <MicOff size={14} /> 마이크 끄기
                                                                                             </button>
+                                                                                        ) : (
+                                                                                            <button onClick={() => handleForceUnmute(part.id)}>
+                                                                                                <Mic size={14} /> 마이크 켜기
+                                                                                            </button>
                                                                                         )}
-                                                                                        {!part.cameraOff && (
+                                                                                        {!part.cameraOff ? (
                                                                                             <button onClick={() => handleForceCameraOff(part.id)}>
                                                                                                 <VideoOff size={14} /> 카메라 끄기
+                                                                                            </button>
+                                                                                        ) : (
+                                                                                            <button onClick={() => handleForceCameraOn(part.id)}>
+                                                                                                <Video size={14} /> 카메라 켜기
                                                                                             </button>
                                                                                         )}
                                                                                         <button className="kick-btn" onClick={() => handleKick(part.id)}>
@@ -7139,14 +7284,22 @@ function MeetingPage({ portalRoomId }) {
                                                 </button>
                                                 {hostMenuTargetId === p.id && (
                                                     <div className="host-menu-dropdown">
-                                                        {!p.muted && (
+                                                        {!p.muted ? (
                                                             <button onClick={() => handleForceMute(p.id)}>
                                                                 <MicOff size={14} /> 마이크 끄기
                                                             </button>
+                                                        ) : (
+                                                            <button onClick={() => handleForceUnmute(p.id)}>
+                                                                <Mic size={14} /> 마이크 켜기
+                                                            </button>
                                                         )}
-                                                        {!p.cameraOff && (
+                                                        {!p.cameraOff ? (
                                                             <button onClick={() => handleForceCameraOff(p.id)}>
                                                                 <VideoOff size={14} /> 카메라 끄기
+                                                            </button>
+                                                        ) : (
+                                                            <button onClick={() => handleForceCameraOn(p.id)}>
+                                                                <Video size={14} /> 카메라 켜기
                                                             </button>
                                                         )}
                                                         <button className="kick-btn" onClick={() => handleKick(p.id)}>

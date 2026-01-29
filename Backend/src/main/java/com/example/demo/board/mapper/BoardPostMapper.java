@@ -43,4 +43,10 @@ public interface BoardPostMapper {
             @Param("userId") String userId,
             @Param("isPinned") boolean isPinned
     );
+
+    int updatePostByHost(BoardPostVO post);
+
+    int softDeletePostByHost(@Param("postId") long postId);
+
+    int updatePinnedByHost(@Param("postId") long postId, @Param("isPinned") boolean isPinned);
 }
