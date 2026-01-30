@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -49,5 +50,25 @@ public class AssignmentController {
         assignmentService.submitAssignment(assignmentId, userId, submitTitle, memo, file);
         return ResponseEntity.ok().build();
     }
+
+    //과제 상세(로그인 붙으면 이걸로)
+//    @GetMapping("/assignments/{assignmentId}/submissions")
+//    public ResponseEntity<List<
+//            AssignmentSubmissionDetailResponse>> getSubmissionDetails(
+//            @PathVariable Long assignmentId
+//    ) {
+//        return ResponseEntity.ok(assignmentService.getSubmissionDetails(assignmentId));
+//    }
+
+    @GetMapping("/assignments/{assignmentId}/submissions")
+    public ResponseEntity<List<AssignmentSubmissionDetailResponse>> getSubmissionDetails(
+            @PathVariable Long assignmentId,
+            @RequestParam(required = false) String userId // ✅ 임시
+    ) {
+        return ResponseEntity.ok(
+                assignmentService.getSubmissionDetails(assignmentId)
+        );
+    }
+
 
 }

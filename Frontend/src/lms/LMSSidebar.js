@@ -53,10 +53,13 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             else nextActive = "assignment/list";
         }
 
-        if (last === "attendance") {
-            if (sp.get("scope") === "all") nextActive = "attendance/all";
-            else nextActive = "attendance/my";
+        // 출석 라우트 동기화
+        if (path.includes("/attendance/all")) {
+        nextActive = "attendance/all";
+        } else if (path.includes("/attendance")) {
+        nextActive = "attendance/my";
         }
+
 
         if (last === "board") {
             let category = sp.get("category");
@@ -276,7 +279,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                     goChild(
                                         "attendance",
                                         "attendance/my",
-                                        "attendance?scope=my"
+                                        "attendance"
                                     )
                                 }
                             >
@@ -290,7 +293,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                     goChild(
                                         "attendance",
                                         "attendance/all",
-                                        "attendance?scope=all"
+                                        "attendance/all"
                                     )
                                 }
                             >
