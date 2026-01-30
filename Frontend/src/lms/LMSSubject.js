@@ -247,10 +247,9 @@ function LMSSubjectInner() {
                         <Routes>
                             <Route index element={<Navigate to="dashboard" replace />} />
 
-                        <Route path="dashboard" element={<Dashboard setActiveMenu={setActiveMenu} />} />
-                        <Route path="attendance" element={<Attendance setActiveMenu={setActiveMenu} />} />
-                        <Route path="attendance/all" element={<AttendanceAll setActiveMenu={setActiveMenu} />} />
-
+                            <Route path="dashboard" element={<Dashboard setActiveMenu={setActiveMenu} />} />
+                            <Route path="attendance" element={<Attendance setActiveMenu={setActiveMenu} />} />
+                            <Route path="attendance/all" element={<AttendanceAll setActiveMenu={setActiveMenu} />} />
 
                             <Route path="assignment" element={<Assignment setActiveMenu={setActiveMenu} />} />
                             <Route path="assignment/:id" element={<AssignmentDetail />} />
