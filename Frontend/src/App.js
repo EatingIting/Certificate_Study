@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
 
 import Auth from "./auth/Auth";
 import SignUp from "./auth/SignUp";
@@ -13,14 +14,34 @@ import MyApplications from "./room/roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
 import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
-import { MeetingProvider } from "./webrtc/MeetingContext";
-import { LMSProvider } from "./lms/LMSContext";
-import ProtectedRoute from "./lms/ProtectedRoute";
 import MainHeader from "./room/MainHeader";
 import RoomPage from "./room/roomcategorypage/RoomPage";
 import MyPage from "./room/roomcategorypage/MyPage";
 
 function App() {
+
+    // 자동로그인 복원 코드
+    useEffect(() => {
+        const token = localStorage.getItem("accessToken");
+        const expiresAt = localStorage.getItem("expiresAt");
+
+        // localStorage에 토큰 없으면 자동로그인 아님
+        if (!token) return;
+
+        // 만료 체크 (30일 지났으면 삭제)
+        if (expiresAt && Date.now() > Number(expiresAt)) {
+            localStorage.clear();
+            return;
+        }
+
+        // localStorage → sessionStorage 복원
+        sessionStorage.setItem("accessToken", token);
+        sessionStorage.setItem("userId", localStorage.getItem("userId"));
+        sessionStorage.setItem("nickname", localStorage.getItem("nickname"));
+
+        console.log("자동 로그인 복원 완료");
+    }, []);
+
     return (
         <BrowserRouter>
             <Routes>
@@ -32,7 +53,7 @@ function App() {
                 <Route path="/oauth-success" element={<OAuthSuccess />} />
                 <Route path="/oauth-fail" element={<OAuthFail />} />
 
-                {/* OAuth 콜백: /login/* 가 React로 오면 백엔드로 다시 요청 (nginx가 /login/ 을 백엔드로 보내도록) */}
+                {/* OAuth 콜백 */}
                 <Route path="/login/*" element={<OAuthCallbackRedirect />} />
 
                 {/* 화상회의 */}
@@ -46,7 +67,10 @@ function App() {
                     <Route path="/" element={<Main />} />
                     <Route path="/room" element={<RoomPage />} />
                     <Route path="/room/mypage" element={<MyPage />} />
-                    <Route path="/room/my-applications" element={<MyApplications />} />
+                    <Route
+                        path="/room/my-applications"
+                        element={<MyApplications />}
+                    />
                     <Route path="/room/create" element={<Create />} />
                     <Route path="/room/mystudy" element={
                         <LMSProvider>

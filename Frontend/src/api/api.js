@@ -25,7 +25,10 @@ const api = axios.create({
 
 api.interceptors.request.use(
     (config) => {
-        const token = sessionStorage.getItem("accessToken");
+
+        const token =
+            sessionStorage.getItem("accessToken") ||
+            localStorage.getItem("accessToken");
 
         if (token) {
             config.headers = {
@@ -38,6 +41,7 @@ api.interceptors.request.use(
     },
     (error) => Promise.reject(error)
 );
+
 
 // 응답 인터셉터: 인증 실패 시 처리
 api.interceptors.response.use(
