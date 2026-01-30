@@ -400,3 +400,63 @@ html, body {
 .interest-add-btn:active {
     transform: scale(0.98);
 }
+
+/* ===== 자동 로그인 체크박스 ===== */
+.auto-login {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    margin-top: 6px;
+    margin-bottom: 12px;
+
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+
+    cursor: pointer;
+    user-select: none;
+}
+
+/* 체크박스 커스텀 */
+.auto-login input[type="checkbox"] {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+
+    cursor: pointer;
+    position: relative;
+
+    transition: all 0.2s ease;
+}
+
+/* 체크 상태 */
+.auto-login input[type="checkbox"]:checked {
+    background-color: #97c793;
+    border-color: #97c793;
+}
+
+/* 체크 표시 */
+.auto-login input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+
+    left: 4px;
+    top: 1px;
+
+    width: 4px;
+    height: 8px;
+
+    border: solid white;
+    border-width: 0 2px 2px 0;
+
+    transform: rotate(45deg);
+}
+
+/* hover 효과 */
+.auto-login input[type="checkbox"]:hover {
+    border-color: #97c793;
+}

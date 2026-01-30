@@ -412,3 +412,129 @@
   }
 }
 
+/* =========================
+   BoardDetail 전용(상세만)
+   ========================= */
+
+/* 작성자 / 작성일 / 조회수: 너무 붙는 문제 해결 */
+.bd.bd-detail .bd-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;          /* 세로/가로 간격 */
+  margin-top: 12px;
+  margin-bottom: 16px;    /* 아래(본문)와 간격 */
+}
+
+/* 본문과 댓글 입력 영역이 너무 붙는 문제 */
+.bd.bd-detail .bd-detail-body {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: pre-wrap;  /* 줄바꿈 자연스럽게 */
+  line-height: 1.7;
+}
+
+/* 댓글 작성 영역: 본문과 간격 더 벌리기 */
+.bd.bd-detail .bd-comment-compose {
+  margin-top: 18px;       /* 본문 아래 띄우기 */
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 댓글 입력창 크기 고정 */
+.bd.bd-detail .bd-comment-compose .bd-input {
+  height: 96px;           /* 고정 높이 */
+  max-height: 96px;
+  min-height: 96px;
+  resize: none;           /* 사용자가 늘리는 거 방지 */
+  overflow: auto;
+}
+
+/* =========================
+   BoardDetail 댓글 구분 강화
+   ========================= */
+
+/* 댓글 작성 영역을 ‘박스’로 분리 */
+.bd.bd-detail .bd-comment-compose {
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f6faf3; /* 카드와 톤 차이 */
+}
+
+/* 댓글 입력창은 고정 높이 + 박스 안에 붙게 */
+.bd.bd-detail .bd-comment-compose .bd-input {
+  height: 96px;
+  max-height: 96px;
+  min-height: 96px;
+  resize: none;
+  overflow: auto;
+}
+
+/* 댓글 카드만 살짝 다른 배경/그림자 제거해서 ‘중첩 카드’ 느낌 제거 */
+.bd.bd-detail .bd-comment-card {
+  background: #fbfdf9;        /* 바깥 카드(#fff)와 톤 차이 */
+  box-shadow: none;           /* 중첩 카드 그림자 제거 */
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+/* 댓글 카드 내부 meta(작성자/작성일)도 살짝 분리감 */
+.bd.bd-detail .bd-comment-card .bd-detail-meta {
+  gap: 6px 14px;
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
+/* =========================
+   BoardDetail 댓글 meta 정렬
+   ========================= */
+
+.bd.bd-detail .bd-comment-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+/* 작성자 (왼쪽) */
+.bd.bd-detail .bd-comment-author {
+  font-weight: 600;
+  color: #333;
+}
+
+/* =========================
+   BoardDetail 댓글 날짜 우상단 고정
+   ========================= */
+
+/* 댓글 카드 기준 */
+.bd.bd-detail .bd-card.bd-comment-card {
+  position: relative;
+  background: #fbfdf9;
+  box-shadow: none;
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+/* 메타 영역 */
+.bd.bd-detail .bd-card.bd-comment-card .bd-comment-meta {
+  padding-right: 110px;   /* 날짜 자리 확보 */
+  margin-bottom: 8px;
+}
+
+/* 작성자 */
+.bd.bd-detail .bd-card.bd-comment-card .bd-comment-author {
+  font-weight: 600;
+  color: #333;
+}
+
+/* 날짜: 카드 내부 우상단 */
+.bd.bd-detail .bd-card.bd-comment-card .bd-comment-date {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}

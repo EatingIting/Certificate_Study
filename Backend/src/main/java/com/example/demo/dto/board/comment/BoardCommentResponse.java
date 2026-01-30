@@ -12,6 +12,8 @@ public class BoardCommentResponse {
     private Long commentId;
     private Long postId;
     private String userId;
+    private String nickname;
+
     private String content;
 
     private Timestamp createdAt;

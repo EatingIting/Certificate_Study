@@ -126,3 +126,31 @@
 .dropdown-footer:hover {
     background-color: #fbe9e7;
 }
+
+.profile-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.notif-icon {
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+    margin-right: 5px;
+}
+
+.notif-dot {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 14px;
+    height: 14px;
+    background-color: red;
+    border-radius: 50%;
+    border: 2px solid white;
+    z-index: 9999;
+}
