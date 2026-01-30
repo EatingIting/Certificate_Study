@@ -1,8 +1,7 @@
 package com.example.demo.attendance.service;
 
-import com.example.demo.attendance.dto.AttendanceResponseVO;
+import com.example.demo.attendance.dto.AttendanceSummaryResponse;
 
 public interface AttendanceService {
-    AttendanceResponseVO getMyAttendance(String studyRoomId, String userEmail);
-    AttendanceResponseVO getAllAttendance(String studyRoomId);
+    AttendanceSummaryResponse getAttendance(String subjectId, String userEmail, String scope);
 }
