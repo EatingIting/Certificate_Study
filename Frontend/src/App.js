@@ -14,6 +14,8 @@ import MyApplications from "./room/roomcategorypage/MyApplications";
 import MeetingPage from "./webrtc/MeetingPage";
 import LMSMain from "./lms/LMSMain";
 import LMSSubject from "./lms/LMSSubject";
+import { LMSProvider } from "./lms/LMSContext";
+import ProtectedRoute from "./lms/ProtectedRoute";
 import MainHeader from "./room/MainHeader";
 import RoomPage from "./room/roomcategorypage/RoomPage";
 import MyPage from "./room/roomcategorypage/MyPage";

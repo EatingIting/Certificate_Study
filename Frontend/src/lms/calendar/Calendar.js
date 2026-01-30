@@ -16,6 +16,9 @@ function Calendar() {
     let [visibleRange, setVisibleRange] = useState(null);
     let [visibleTitle, setVisibleTitle] = useState("");
 
+    /** 클릭한 날짜(YYYY-MM-DD). 있으면 오른쪽 리스트는 해당 날짜 일정만 표시 */
+    let [selectedDate, setSelectedDate] = useState(null);
+
     let [openMenuId, setOpenMenuId] = useState(null);
 
     // ✅ roomId 전달 방식은 프로젝트마다 달라서 흔한 키들을 순서대로 본다.
@@ -65,6 +68,8 @@ function Calendar() {
     let [studyForm, setStudyForm] = useState({
         round: 1,
         date: "",
+        startTime: "09:00",
+        endTime: "11:00",
         description: "",
     });
 
@@ -123,8 +128,13 @@ function Calendar() {
         return [...events, ...studyEvents];
     }, [events, studyEvents]);
 
+    /* 달력 그리드·+N개 팝업에는 일반 일정만 (스터디는 날짜칸 회차로만 표시) */
+    let calendarEvents = useMemo(() => {
+        return allEvents.filter((ev) => ev.extendedProps?.type !== "STUDY");
+    }, [allEvents]);
+
     /* =========================
-       날짜 상단 "회차" 맵
+       날짜 상단 "회차 + 시간대" 맵 (회차별 startTime, endTime 포함)
     ========================= */
     let studyRoundsByDate = useMemo(() => {
         let map = {};
@@ -132,43 +142,69 @@ function Calendar() {
         for (let i = 0; i < studyEvents.length; i++) {
             let ev = studyEvents[i];
 
-            let ymd =
-                typeof ev.start === "string"
-                    ? ev.start
-                    : ev.startStr?.slice(0, 10);
+            let rawStart =
+                typeof ev.start === "string" ? ev.start : ev.startStr || "";
+            let ymd = rawStart.slice(0, 10);
 
-            if (!ymd) continue;
+            if (ymd.length !== 10) continue;
 
             let round = Number(ev.extendedProps?.round);
             if (!round) continue;
 
+            let startTime = ev.extendedProps?.startTime || "";
+            let endTime = ev.extendedProps?.endTime || "";
+            if (!/^\d{2}:\d{2}$/.test(startTime)) startTime = "";
+            if (!/^\d{2}:\d{2}$/.test(endTime)) endTime = "";
+
             if (!map[ymd]) map[ymd] = [];
-            map[ymd].push(round);
+            map[ymd].push({ round, startTime, endTime });
         }
 
         for (let key in map) {
-            map[key] = Array.from(new Set(map[key])).sort((a, b) => a - b);
+            let arr = map[key];
+            map[key] = arr
+                .sort((a, b) => a.round - b.round)
+                .filter(
+                    (item, idx, self) =>
+                        self.findIndex((x) => x.round === item.round) === idx
+                );
         }
 
         return map;
     }, [studyEvents]);
 
     /* =========================
-       오른쪽 리스트
+       오른쪽 리스트 (선택한 날짜가 있으면 해당 날짜만, 없으면 월간)
     ========================= */
     let monthlyEvents = useMemo(() => {
-        if (!visibleRange) return allEvents;
+        let list = allEvents;
+        if (visibleRange && !selectedDate) {
+            list = allEvents.filter((ev) => overlaps(ev, visibleRange));
+        }
+        if (selectedDate) {
+            list = allEvents.filter((ev) => {
+                let startStr = typeof ev.start === "string" ? ev.start : ev.startStr?.slice(0, 10);
+                if (!startStr) return false;
+                let startYmd = startStr.slice(0, 10);
+                if (startYmd === selectedDate) return true;
+                if (ev.end) {
+                    let endStr = typeof ev.end === "string" ? ev.end : ev.endStr?.slice(0, 10);
+                    let endInclusive = endStr ? toInclusiveEnd(endStr) : null;
+                    if (endInclusive && selectedDate >= startYmd && selectedDate <= endInclusive)
+                        return true;
+                }
+                return false;
+            });
+        }
 
-        let filtered = allEvents.filter((ev) => overlaps(ev, visibleRange));
-
-        filtered.sort((a, b) => {
+        list.sort((a, b) => {
             let aS = a.start instanceof Date ? a.start : toDate(a.start);
             let bS = b.start instanceof Date ? b.start : toDate(b.start);
             return aS - bS;
         });
-
-        return filtered;
-    }, [allEvents, visibleRange]);
+        // 오른쪽 일정 목록에서는 스터디 일정 제외
+        return list.filter((ev) => ev.extendedProps?.type !== "STUDY");
+    }, [allEvents, visibleRange, selectedDate]);
 
     /* =========================
        라벨/스타일
@@ -519,18 +555,37 @@ function Calendar() {
         setStudyError("");
     };
 
-    let openStudyAddModal = () => {
+    let openStudyAddModal = async () => {
         setEditingStudyId(null);
         setOpenMenuId(null);
 
         setStudyForm({
             round: 1,
             date: "",
+            startTime: "09:00",
+            endTime: "11:00",
             description: "",
         });
 
         setStudyError("");
         setIsStudyOpen(true);
+
+        // 이미 등록된 회차와 겹치지 않도록 다음 회차 번호 제안
+        if (roomId) {
+            try {
+                let res = await authFetch(
+                    `/api/study-schedules/next-round?roomId=${encodeURIComponent(roomId)}`
+                );
+                if (res.ok) {
+                    let nextRound = await res.json();
+                    if (typeof nextRound === "number" && nextRound >= 1) {
+                        setStudyForm((prev) => ({ ...prev, round: nextRound }));
+                    }
+                }
+            } catch (e) {
+                // 무시
+            }
+        }
     };
 
     let openStudyEditModal = (studyEvent) => {
@@ -541,10 +596,18 @@ function Calendar() {
             typeof studyEvent.start === "string"
                 ? studyEvent.start
                 : studyEvent.startStr?.slice(0, 10) || "";
+        if (dateStr.length > 10) dateStr = dateStr.slice(0, 10);
+
+        let startTime = studyEvent.extendedProps?.startTime || "09:00";
+        let endTime = studyEvent.extendedProps?.endTime || "11:00";
+        if (!/^\d{2}:\d{2}$/.test(startTime)) startTime = "09:00";
+        if (!/^\d{2}:\d{2}$/.test(endTime)) endTime = "11:00";
 
         setStudyForm({
             round: Number(studyEvent.extendedProps?.round || 1),
             date: dateStr,
+            startTime,
+            endTime,
             description: studyEvent.extendedProps?.description || "",
         });
 
@@ -574,6 +637,15 @@ function Calendar() {
             return;
         }
 
+        let startTime = studyForm.startTime?.trim() || "09:00";
+        let endTime = studyForm.endTime?.trim() || "11:00";
+        if (startTime.length === 5) startTime = startTime + ":00";
+        if (endTime.length === 5) endTime = endTime + ":00";
+        if (startTime >= endTime) {
+            setStudyError("종료 시간은 시작 시간보다 이후여야 합니다.");
+            return;
+        }
+
         if (!roomId) {
             setStudyError("roomId가 없습니다. (URL 쿼리로 roomId 전달 필요)");
             return;
@@ -582,15 +654,17 @@ function Calendar() {
         try {
             if (!editingStudyId) {
                 let res = await authFetch(`/api/study-schedules`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        roomId,
-                        round: roundNum,
-                        date: studyForm.date,
-                        description: studyForm.description.trim(),
-                    }),
-                });
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            roomId,
+                            round: roundNum,
+                            date: studyForm.date,
+                            startTime: studyForm.startTime?.trim() || "09:00",
+                            endTime: studyForm.endTime?.trim() || "11:00",
+                            description: studyForm.description.trim(),
+                        }),
+                    });
 
                 if (!res.ok) {
                     let msg = await res.text().catch(() => "");
@@ -611,6 +685,8 @@ function Calendar() {
                         body: JSON.stringify({
                             round: roundNum,
                             date: studyForm.date,
+                            startTime: studyForm.startTime?.trim() || "09:00",
+                            endTime: studyForm.endTime?.trim() || "11:00",
                             description: studyForm.description.trim(),
                         }),
                     }
@@ -709,9 +785,27 @@ function Calendar() {
                         expandRows={true}
                         fixedWeekCount={true}
                         showNonCurrentDates={true}
-                        dayMaxEventRows={2}
-                        events={allEvents}
+                        dayMaxEventRows={1}
+                        events={calendarEvents}
+                        dateClick={(info) => {
+                            let ymd = toYmd(info.date);
+                            setSelectedDate((prev) => (prev === ymd ? null : ymd));
+                        }}
+                        dayCellClassNames={(arg) => {
+                            let ymd = toYmd(arg.date);
+                            return selectedDate === ymd ? ["calDaySelected"] : [];
+                        }}
                         eventClassNames={eventClassNames}
+                        eventContent={(arg) => {
+                            if (arg.event.extendedProps?.type === "STUDY") {
+                                let r = arg.event.extendedProps?.round;
+                                let s = arg.event.extendedProps?.startTime;
+                                let e = arg.event.extendedProps?.endTime;
+                                let timePart = s && e ? ` ${s} ~ ${e}` : "";
+                                return `${r != null ? r : ""}회차${timePart}`.trim();
+                            }
+                            return arg.event.title || "";
+                        }}
                         customButtons={{
                             myToday: {
                                 text: "오늘로 이동",
@@ -733,34 +827,49 @@ function Calendar() {
                             });
                             setVisibleTitle(info.view.title || "");
                         }}
-                        /* 날짜칸 상단: 날짜 숫자 + 스터디 회차 */
+                        /* 날짜칸 상단: 날짜 숫자 + 스터디 회차 + 시간대 */
                         dayCellContent={(arg) => {
                             let ymd = toYmd(arg.date);
-                            let rounds = studyRoundsByDate[ymd];
-
-                            let roundText = "";
-                            if (rounds && rounds.length > 0) {
-                                roundText = rounds.length === 1 ? `${rounds[0]}회차` : `${rounds.join(",")}회차`;
-                            }
+                            let items = studyRoundsByDate[ymd];
 
                             return (
                                 <div className="calDayTopRow">
                                     <span className="calDayNum">{arg.date.getDate()}</span>
-                                    {roundText ? <span className="calDayStudyRound">{roundText}</span> : null}
+                                    {items && items.length > 0 ? (
+                                        <div className="calDayStudyRounds">
+                                            {items.map((item) => (
+                                                <div key={item.round} className="calDayStudyRoundWrap">
+                                                    <span className="calDayStudyRound">{item.round}회차</span>
+                                                    {item.startTime && item.endTime ? (
+                                                        <span className="calDayStudyTime">
+                                                            {item.startTime} ~ {item.endTime}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : null}
                                 </div>
                             );
                         }}
                     />
                 </div>
 
-                {/* 오른쪽: 월간 일정 목록 */}
+                {/* 오른쪽: 월간 일정 목록 (날짜 클릭 시 해당 날짜만) */}
                 <div className="card calCard calListCard">
                     <div className="calListHead">
-                        <div className="cardTitle calListTitle">
-                            {visibleTitle ? `${visibleTitle} 일정` : "이번 달 일정"}
-                        </div>
-
-                        <div className="calListActions">
+                        <div className="calListHeadRow">
+                            <div className="cardTitle calListTitle">
+                                {selectedDate
+                                    ? (() => {
+                                            let [y, m, d] = selectedDate.split("-").map(Number);
+                                            return `${y}년 ${m}월 ${d}일 일정`;
+                                        })()
+                                    : visibleTitle
+                                    ? `${visibleTitle} 일정`
+                                    : "이번 달 일정"}
+                            </div>
+                            <div className="calListActions">
                             <button
                                 type="button"
                                 className="calStudyBtn"
@@ -773,16 +882,31 @@ function Calendar() {
                             </button>
 
                             <button
-                                type="button"
-                                className="calAddBtn"
-                                onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    openAddModal();
-                                }}
-                            >
-                                일정 추가
-                            </button>
+                                    type="button"
+                                    className="calAddBtn"
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        openAddModal();
+                                    }}
+                                >
+                                    일정 추가
+                                </button>
+                            </div>
                         </div>
+                        {selectedDate && (
+                            <div className="calListShowAllRow">
+                                <button
+                                    type="button"
+                                    className="calShowAllBtn"
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedDate(null);
+                                    }}
+                                >
+                                    전체 보기
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div
@@ -793,7 +917,11 @@ function Calendar() {
                         }}
                     >
                         {monthlyEvents.length === 0 && (
-                            <div className="calEmpty">이번 달에 등록된 일정이 없습니다.</div>
+                            <div className="calEmpty">
+                                {selectedDate
+                                    ? "해당 날짜에 등록된 일정이 없습니다."
+                                    : "이번 달에 등록된 일정이 없습니다."}
+                            </div>
                         )}
 
                         {monthlyEvents.map((ev) => {
@@ -1100,6 +1228,28 @@ function Calendar() {
                                         className="calInput"
                                         value={studyForm.date}
                                         onChange={(e) => onChangeStudyForm("date", e.target.value)}
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="calRow2">
+                                <label className="calField">
+                                    <span className="calFieldLabel">시작 시간</span>
+                                    <input
+                                        type="time"
+                                        className="calInput"
+                                        value={studyForm.startTime}
+                                        onChange={(e) => onChangeStudyForm("startTime", e.target.value)}
+                                    />
+                                </label>
+
+                                <label className="calField">
+                                    <span className="calFieldLabel">종료 시간</span>
+                                    <input
+                                        type="time"
+                                        className="calInput"
+                                        value={studyForm.endTime}
+                                        onChange={(e) => onChangeStudyForm("endTime", e.target.value)}
                                     />
                                 </label>
                             </div>
