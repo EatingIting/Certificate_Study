@@ -1,5 +1,3 @@
-// Attendance.js (완성본: 그대로 교체해서 사용)
-
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
