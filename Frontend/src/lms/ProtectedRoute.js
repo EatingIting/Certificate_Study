@@ -54,18 +54,9 @@ export default function ProtectedRoute({ children }) {
         }
     }, [user, loading, error, navigate]);
 
-    // 체크 중이거나 로딩 중이면 로딩 화면 표시
+    // 체크 중이거나 로딩 중이면 빈 화면 (새로고침 시 "로딩 중..." 문구 없음)
     if (isChecking || loading) {
-        return (
-            <div style={{ 
-                display: "flex", 
-                justifyContent: "center", 
-                alignItems: "center", 
-                height: "100vh" 
-            }}>
-                <p>로딩 중...</p>
-            </div>
-        );
+        return <div style={{ height: "100vh", minHeight: "100vh" }} />;
     }
 
     // 토큰이 없거나 사용자 정보가 없으면 아무것도 렌더링하지 않음

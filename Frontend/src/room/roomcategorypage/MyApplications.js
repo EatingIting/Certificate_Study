@@ -6,7 +6,6 @@ import "./MyApplications.css";
 const MyApplications = () => {
   const navigate = useNavigate();
 
-  // 로그인 체크
   useEffect(() => {
     const token = sessionStorage.getItem("accessToken");
     if (!token) {
@@ -15,19 +14,14 @@ const MyApplications = () => {
     }
   }, [navigate]);
 
-  // 상태값
-  const [tab, setTab] = useState("sent"); // sent | received
+  const [tab, setTab] = useState("sent");
   const [list, setList] = useState([]);
   const [openApplicationId, setOpenApplicationId] = useState(null);
-
-  // 로딩 상태
   const [loading, setLoading] = useState(false);
 
   const fetchApplications = async (signal) => {
     try {
       setLoading(true);
-
-      // 탭 변경 순간 기존 목록 제거
       setList([]);
       setOpenApplicationId(null);
 
@@ -37,14 +31,10 @@ const MyApplications = () => {
               : "/applications/received";
 
       const res = await api.get(url, { signal });
-
-      console.log("applications response:", res.data);
       setList(res.data);
-
     } catch (e) {
       if (e.code === "ERR_CANCELED") return;
       console.error("신청 목록 조회 실패", e);
-
     } finally {
       setLoading(false);
     }
@@ -52,26 +42,23 @@ const MyApplications = () => {
 
   useEffect(() => {
     const controller = new AbortController();
-
     fetchApplications(controller.signal);
 
     return () => controller.abort();
   }, [tab]);
 
-  const toggleDetail = (joinId) => {
+  const toggleDetail = (joinId, requestedAt) => {
     setOpenApplicationId((prev) => (prev === joinId ? null : joinId));
+
+    sessionStorage.setItem("lastCheckedAt", requestedAt);
   };
 
   const handleApprove = async (joinId) => {
     try {
       await api.post(`/applications/${joinId}/approve`);
-
       alert("승인 되었습니다.");
-
       fetchApplications();
-
       setOpenApplicationId(null);
-
     } catch (e) {
       alert(e.response?.data?.message || "승인 실패");
     }
@@ -80,22 +67,16 @@ const MyApplications = () => {
   const handleReject = async (joinId) => {
     try {
       await api.post(`/applications/${joinId}/reject`);
-
       alert("거절 되었습니다.");
-
       fetchApplications();
-
       setOpenApplicationId(null);
-
     } catch (e) {
       alert("거절 실패");
     }
   };
 
-  // 신청 받은 탭 여부
   const isReceived = tab === "received";
 
-  // 컬럼 폭 설정
   const columns = useMemo(() => {
     return isReceived
         ? ["1fr", "160px", "180px"]
@@ -104,11 +85,9 @@ const MyApplications = () => {
 
   return (
       <div className="apply-wrap">
-        {/* 헤더 */}
         <div className="apply-head">
           <h2 className="apply-title">스터디 신청 현황</h2>
 
-          {/* 탭 버튼 */}
           <div className="apply-tabs">
             <button
                 className={`tab-chip ${tab === "sent" ? "active" : ""}`}
@@ -128,9 +107,7 @@ const MyApplications = () => {
           </div>
         </div>
 
-        {/* 테이블 */}
         <div className="apply-table">
-          {/* 헤더 */}
           <div
               className="apply-thead"
               style={{ gridTemplateColumns: columns.join(" ") }}
@@ -140,7 +117,6 @@ const MyApplications = () => {
             <div>{isReceived ? "관리" : "상태"}</div>
           </div>
 
-          {/* 로딩 표시 */}
           {loading ? (
               <div className="apply-empty">불러오는 중...</div>
           ) : list.length === 0 ? (
@@ -152,31 +128,28 @@ const MyApplications = () => {
 
                 return (
                     <React.Fragment key={item.joinId}>
-                      {/* 신청 row */}
                       <div
                           className={`apply-row ${
                               isReceived ? "clickable" : ""
                           } ${opened ? "opened" : ""}`}
                           style={{ gridTemplateColumns: columns.join(" ") }}
                           onClick={() =>
-                              isReceived && toggleDetail(item.joinId)
+                              isReceived &&
+                              toggleDetail(item.joinId, item.requestedAt)
                           }
                       >
-                        {/* 스터디명 */}
                         <div className="cell title">
                           <strong className="study-title">
                             {item.studyTitle}
                           </strong>
                         </div>
 
-                        {/* 신청자/스터디장 */}
                         <div className="cell who">
                           {isReceived
                               ? item.applicantNickname
                               : item.ownerNickname}
                         </div>
 
-                        {/* 상태 or 관리 버튼 */}
                         {!isReceived ? (
                             <div className={`cell status-pill ${item.status}`}>
                               {item.status}
@@ -206,7 +179,6 @@ const MyApplications = () => {
                         )}
                       </div>
 
-                      {/* 상세 정보 */}
                       {isReceived && opened && (
                           <div className="apply-detail">
                             <div className="detail-card">
@@ -233,7 +205,6 @@ const MyApplications = () => {
                                 </div>
                               </div>
 
-                              {/* 신청 메시지 */}
                               <div className="msg">
                                 <div className="msg-title">신청 메시지</div>
                                 <textarea

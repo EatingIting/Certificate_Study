@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import org.apache.ibatis.type.Alias;
 
 import java.sql.Date;
-import java.sql.Time;
 import java.sql.Timestamp;
 
 @Data
@@ -16,18 +15,24 @@ import java.sql.Timestamp;
 @AllArgsConstructor
 @Alias("StudyScheduleVO")
 public class StudyScheduleVO {
+    /** schedule_id BIGINT - DB PK (AUTO_INCREMENT) */
     private Long studyScheduleId;
 
-    private String roomId;   // char(36)
+    private String roomId;   // legacy
+    /** LMS subject UUID → study_schedule.subject_id */
+    private String subjectId;
 
-    private Integer roundNum; // int
-    private Date studyDate;   // date
+    private Integer roundNum;
+    private Date studyDate;
 
-    private Time startTime;   // time
-    private Time endTime;     // time
+    /** 시작 시간 (HH:mm 또는 HH:mm:ss) */
+    private String startTime;
+    /** 종료 시간 (HH:mm 또는 HH:mm:ss) */
+    private String endTime;
 
-    private String description; // varchar(500) nullable
+    private String description;
 
-    private Timestamp createdAt; // datetime지만 Timestamp로 매핑해도 보통 문제 없음
+    /** DB에 없으면 제거 가능 */
+    private Timestamp createdAt;
     private Timestamp updatedAt;
 }

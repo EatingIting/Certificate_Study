@@ -437,3 +437,19 @@
     align-items: center !important;
     justify-content: flex-end !important;
 }
+
+
+/* 결석 표시용(없으면 추가) */
+.status.bad {
+  background: #ffe9e9;
+  color: #d60000;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 출석률 progress가 width로 먹게(없으면 추가) */
+.rate-progress {
+  height: 100%;
+}
