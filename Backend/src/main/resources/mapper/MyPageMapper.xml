@@ -3,10 +3,10 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.mypage.MyPageMapper">
+<mapper namespace="com.example.demo.마이페이지.mapper.MyPageMapper">
 
     <!-- 내 정보 조회 -->
-    <select id="findByUserId" resultType="com.example.demo.mypage.MyPageVO">
+    <select id="findByUserId" resultType="com.example.demo.마이페이지.vo.MyPageVO">
         SELECT *
         FROM users
         WHERE user_id = #{userId}
@@ -39,7 +39,7 @@
     </select>
 
     <!-- 진행중 스터디 -->
-    <select id="getJoinedStudies" resultType="com.example.demo.mypage.MyStudyVO">
+    <select id="getJoinedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
         <!-- 방장이 만든 진행중 -->
         SELECT r.room_id AS roomId,
@@ -70,7 +70,7 @@
     </select>
 
     <!-- 완료된 스터디 -->
-    <select id="getCompletedStudies" resultType="com.example.demo.mypage.MyStudyVO">
+    <select id="getCompletedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
         <!-- 방장이 만든 종료 -->
         SELECT r.room_id AS roomId,

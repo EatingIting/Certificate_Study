@@ -3,9 +3,9 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.category.CategoryMapper">
+<mapper namespace="com.example.demo.모집.mapper.CategoryMapper">
 
-    <resultMap id="CategoryMap" type="com.example.demo.category.CategoryVO">
+    <resultMap id="CategoryMap" type="com.example.demo.모집.vo.CategoryVO">
         <id property="id" column="id"/>
         <result property="name" column="name"/>
         <result property="parentId" column="parent_id"/>

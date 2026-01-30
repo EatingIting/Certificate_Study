@@ -9,6 +9,10 @@
         <id     property="commentId" column="comment_id"/>
         <result property="postId"    column="post_id"/>
         <result property="userId"    column="user_id"/>
+
+        <!-- ✅ 추가 -->
+        <result property="nickname"  column="nickname"/>
+
         <result property="content"   column="content"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -17,12 +21,14 @@
 
     <select id="selectByPostId" resultMap="CommentMap">
         SELECT
-            comment_id, post_id, user_id, content,
-            created_at, updated_at, deleted_at
-        FROM board_comments
-        WHERE post_id = #{postId}
-          AND deleted_at IS NULL
-        ORDER BY comment_id ASC
+            c.comment_id, c.post_id, c.user_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            c.content, c.created_at, c.updated_at, c.deleted_at
+        FROM board_comments c
+                 LEFT JOIN users u ON u.user_id = c.user_id
+        WHERE c.post_id = #{postId}
+          AND c.deleted_at IS NULL
+        ORDER BY c.comment_id ASC
     </select>
 
     <insert id="insert" parameterType="com.example.demo.board.vo.BoardCommentVO"

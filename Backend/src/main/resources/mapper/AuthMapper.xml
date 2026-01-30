@@ -3,7 +3,7 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.auth.AuthMapper">
+<mapper namespace="com.example.demo.로그인.mapper.AuthMapper">
 
     <select id="countByEmail" resultType="int">
         SELECT COUNT(*)
@@ -34,7 +34,7 @@
     </insert>
 
     <select id="findByEmail"
-            resultType="com.example.demo.auth.AuthVO">
+            resultType="com.example.demo.로그인.vo.AuthVO">
         SELECT
             user_id     AS userId,
             email,

@@ -20,4 +20,6 @@ public class BoardPostUpdateRequest {
 
     @NotBlank
     private String content;
+
+    private Boolean isPinned;
 }

@@ -546,7 +546,7 @@ body {
     background: rgba(0, 0, 0, 0.65);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    overflow-x: auto;
+    overflow: hidden; /* 스크롤 없이 타일 그대로 표시 */
     justify-content: center;
 }
 
@@ -937,46 +937,10 @@ body {
   display: flex;
   gap: 1rem;
 
-  overflow-x: auto;
-  overflow-y: visible; /* 아이콘이 잘리지 않도록 visible로 변경 */
-  scroll-behavior: smooth;
-  cursor: grab;
-
+  overflow: hidden; /* 스크롤 완전 비활성화 */
   padding: 16px 2px 1rem 2px; /* 상단 패딩을 늘려서 테두리가 잘리지 않도록 */
   margin-top: 1rem;
   position: relative; /* 위치 고정을 위해 */
-
-  /* 스크롤바 숨기기 (필요할 때만 표시) */
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.bottom-strip::-webkit-scrollbar {
-  height: 6px;
-}
-
-.bottom-strip::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.bottom-strip::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 3px;
-  transition: background 0.2s;
-}
-
-/* 스크롤 가능할 때만 스크롤바 표시 (호버 시) */
-.bottom-strip:hover::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-}
-
-.bottom-strip:hover::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-/* 드래그 중일 때 커서 변경 */
-.bottom-strip:active {
-  cursor: grabbing;
 }
 
 /* LMS 내부에서 bottom-strip */
@@ -1215,7 +1179,7 @@ body {
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  overflow-x: auto;
+  overflow: hidden; /* 스크롤 없이 타일 그대로 표시 */
   justify-content: center;
 }
 
@@ -2020,6 +1984,12 @@ body {
     left: 0;
 }
 
+/* 하단 타일 재접속 중 스피너도 타일과 동일한 radius */
+.bottom-strip .video-tile .reconnecting-overlay,
+.strip-item .video-tile .reconnecting-overlay {
+    border-radius: 0.75rem;
+}
+
 .reconnecting-overlay p {
     margin-top: 10px;
     font-size: 0.9rem;
@@ -2240,6 +2210,12 @@ body.fullscreen-active .meet-sidebar {
   scrollbar-color: #d1d5db transparent;
 }
 
+/* 방장이 아닐 때: 초대하기 영역 없음 → 참여자 영역 축소, 채팅창 위로 */
+.sidebar-inner--guest .participants-area {
+  max-height: 300px;
+  min-height: 300px;
+}
+
 .participants-area::-webkit-scrollbar {
   width: 6px;
 }
@@ -2391,9 +2367,57 @@ body.fullscreen-active .meet-sidebar {
 .icon-red { color: var(--danger-color); }
 
 .more-btn {
-  background: none; border: none; cursor: pointer; color: #9ca3af; opacity: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  opacity: 0;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease, opacity 0.15s ease, color 0.15s ease;
 }
+.more-btn:hover { background: #e5e7eb; color: #6b7280; }
+.more-btn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; opacity: 1; }
+.more-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .participant-card:hover .more-btn { opacity: 1; }
+
+/* 👑 방장 권한 드롭다운 메뉴 */
+.host-menu-container { position: relative; }
+
+.host-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  padding: 6px;
+  margin-top: 6px;
+}
+
+.host-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.host-menu-dropdown button:hover { background: #f3f4f6; }
+.host-menu-dropdown button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+
+.host-menu-dropdown button.kick-btn { color: #dc2626; }
+.host-menu-dropdown button.kick-btn:hover { background: #fef2f2; }
 
 .invite-section {
   margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);
@@ -2412,3 +2436,61 @@ body.fullscreen-active .meet-sidebar {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* 방장 카메라 켜기 요청 확인 모달 */
+.force-camera-on-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.force-camera-on-modal {
+  background: var(--panel-bg);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+}
+.force-camera-on-modal-title {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+.force-camera-on-modal-desc {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 1.25rem 0;
+  line-height: 1.45;
+}
+.force-camera-on-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+.force-camera-on-modal-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  font-size: 0.9rem;
+}
+.force-camera-on-modal-btn.allow {
+  background: var(--brand-color);
+  color: #fff;
+}
+.force-camera-on-modal-btn.allow:hover {
+  background: var(--brand-dark);
+}
+.force-camera-on-modal-btn.reject {
+  background: #f3f4f6;
+  color: var(--text-primary);
+}
+.force-camera-on-modal-btn.reject:hover {
+  background: #e5e7eb;
+}

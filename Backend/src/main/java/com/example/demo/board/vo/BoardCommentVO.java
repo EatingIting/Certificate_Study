@@ -19,6 +19,8 @@ public class BoardCommentVO {
     private Long postId;
     private String userId;
 
+    private String nickname;
+
     private String content;
 
     private Timestamp createdAt;
