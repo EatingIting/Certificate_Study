@@ -1,4 +1,4 @@
-package com.example.demo.service;
+package com.example.demo.화상채팅.SFU;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
