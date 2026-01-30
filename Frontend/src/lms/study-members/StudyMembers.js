@@ -74,7 +74,7 @@ function StudyMembers() {
             if (status === 403) {
                 setMyRole("MEMBER");
                 setMembers([]);
-                setGuardMsg("방장만 접근할 수 있는 페이지입니다.");
+                setGuardMsg("스터디장만 접근할 수 있는 페이지입니다.");
             } else if (status === 401) {
                 setGuardMsg("로그인이 필요합니다. 다시 로그인해주세요.");
             } else if (status === 404) {
@@ -99,7 +99,7 @@ function StudyMembers() {
         if (target.role === "OWNER") return;
 
         let ok = confirmText(
-            `정말 "${target.name}"님에게 방장 권한을 위임할까요?\n(현재 방장은 스터디원이 됩니다.)`
+            `정말 "${target.name}"님에게 스터디장 권한을 위임할까요?\n(현재 스터디장은 스터디원이 됩니다.)`
         );
         if (!ok) return;
 
@@ -108,11 +108,11 @@ function StudyMembers() {
                 targetUserId: memberId,
             });
 
-            showToast("방장 권한을 위임했어요.");
+            showToast("스터디장 권한을 위임했어요.");
             await fetchMembers();
         } catch (err) {
             let msg = err?.response?.data?.message;
-            showToast(msg || "방장 위임에 실패했어요.");
+            showToast(msg || "스터디장 위임에 실패했어요.");
         }
     };
 
@@ -124,7 +124,7 @@ function StudyMembers() {
         if (!target) return;
 
         if (target.role === "OWNER") {
-            showToast("방장은 내보낼 수 없어요.");
+            showToast("스터디장은 내보낼 수 없어요.");
             return;
         }
 
@@ -177,7 +177,7 @@ function StudyMembers() {
                 </div>
 
                 <p className="pageSub">
-                    방장은 스터디룸 멤버를 관리할 수 있습니다. (방장 위임 / 내보내기)
+                    스터디장은 스터디룸 멤버를 관리할 수 있습니다. (스터디장 위임 / 내보내기)
                 </p>
             </div>
 
@@ -222,16 +222,15 @@ function StudyMembers() {
                                 <div key={m.id} className="smRow smRowCols3">
                                     <div className="smName">
                                         {m.name}
-                                        {isOwnerRow && <span className="smBadgeOwner">방장</span>}
+                                        {isOwnerRow && <span className="smBadgeOwner">스터디장</span>}
                                     </div>
 
                                     <div className="smEmail">{m.email}</div>
 
                                     <div>
                                         <span
-                                            className={`smRoleBadge ${
-                                                isOwnerRow ? "owner" : "member"
-                                            }`}
+                                            className={`smRoleBadge ${isOwnerRow ? "owner" : "member"
+                                                }`}
                                         >
                                             {isOwnerRow ? "OWNER" : "MEMBER"}
                                         </span>
@@ -243,9 +242,9 @@ function StudyMembers() {
                                             className="smGhostBtn"
                                             disabled={isOwnerRow}
                                             onClick={() => promoteToOwner(m.id)}
-                                            title={isOwnerRow ? "이미 방장입니다" : "방장 위임"}
+                                            title={isOwnerRow ? "이미 스터디장입니다" : "스터디장 위임"}
                                         >
-                                            방장 위임
+                                            스터디장 위임
                                         </button>
 
                                         <button
@@ -253,7 +252,7 @@ function StudyMembers() {
                                             className="smDangerBtn"
                                             disabled={isOwnerRow}
                                             onClick={() => kickMember(m.id)}
-                                            title={isOwnerRow ? "방장은 내보낼 수 없습니다" : "내보내기"}
+                                            title={isOwnerRow ? "스터디장은 내보낼 수 없습니다" : "내보내기"}
                                         >
                                             내보내기
                                         </button>

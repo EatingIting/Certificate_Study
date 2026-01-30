@@ -56,16 +56,14 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
                 // joinedAt 최신순(없으면 뒤로)
                 .sorted(Comparator.comparing(
                         RoomParticipantItemResponse::getJoinedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())
-                ))
+                        Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
 
         return new RoomParticipantListResponse(
                 roomId,
                 "OWNER",
                 items.size(),
-                items
-        );
+                items);
     }
 
     @Override

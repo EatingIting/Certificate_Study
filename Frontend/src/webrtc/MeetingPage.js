@@ -479,7 +479,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         if (!shouldRenderVideo) {
             // 렌더링하지 않을 때도 스트림이 live면 유지 (PIP 등)
             if (hasLiveStream && v.srcObject && v.paused) {
-                v.play().catch(() => {});
+                v.play().catch(() => { });
             }
             return;
         }
@@ -510,7 +510,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             } catch (err) {
                 setTimeout(() => {
                     if (v && v.srcObject && (shouldRenderVideo || hasLiveStream)) {
-                        v.play().catch(() => {});
+                        v.play().catch(() => { });
                     }
                 }, 50);
             }
@@ -523,7 +523,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             if (!v || !v.srcObject) {
                 if (hasLiveStream && v && displayStream) {
                     v.srcObject = displayStream;
-                    v.play().catch(() => {});
+                    v.play().catch(() => { });
                 } else {
                     clearInterval(playRetryInterval);
                     return;
@@ -537,7 +537,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
             const hasLiveTrack = displayStream && displayStream.getVideoTracks().some(t => t.readyState === "live");
             if (hasLiveTrack && (v.paused || v.readyState < 2)) {
-                v.play().catch(() => {});
+                v.play().catch(() => { });
             } else if (hasLiveTrack && !v.paused) {
                 clearInterval(playRetryInterval);
             }
@@ -579,7 +579,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                         setTimeout(() => retryPlay(attempt + 1), 100);
                         return;
                     }
-                    
+
                     try {
                         if (v.paused || v.readyState < 2) {
                             await v.play();
@@ -687,8 +687,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
                 {/* 카메라 꺼짐 또는 스트림 없음 - canvas 위에 겹쳐서 표시 */}
                 {!shouldRenderVideo && (
-                    <div 
-                        className="camera-off-placeholder" 
+                    <div
+                        className="camera-off-placeholder"
                         style={isMain ? { position: "absolute", zIndex: 1, top: "50%", left: "50%", transform: "translate(-50%, -50%)" } : { position: "relative", zIndex: 1 }}
                     >
                         <UserAvatar name={safeUser.name} size={isMain ? "lg" : "md"} />
@@ -776,9 +776,9 @@ function MeetingPage({ portalRoomId }) {
 
     // DB 입장 로그용: subjectId·scheduleId를 sessionStorage에 유지 (WebSocket URL에 항상 포함되도록)
     useEffect(() => {
-        if (subjectId) try { sessionStorage.setItem("pip.subjectId", subjectId); } catch (e) {}
-        if (scheduleId != null && scheduleId !== "") try { sessionStorage.setItem("pip.scheduleId", String(scheduleId)); } catch (e) {}
-        if (roomId) try { sessionStorage.setItem("pip.roomId", roomId); } catch (e) {}
+        if (subjectId) try { sessionStorage.setItem("pip.subjectId", subjectId); } catch (e) { }
+        if (scheduleId != null && scheduleId !== "") try { sessionStorage.setItem("pip.scheduleId", String(scheduleId)); } catch (e) { }
+        if (roomId) try { sessionStorage.setItem("pip.roomId", roomId); } catch (e) { }
     }, [subjectId, scheduleId, roomId]);
 
     // 🔥 브라우저 PIP용 숨겨진 video element 생성 및 초기화
@@ -1298,7 +1298,7 @@ function MeetingPage({ portalRoomId }) {
                 userId: uid,
                 changes: { muted, cameraOff },
             }));
-        } catch (_) {}
+        } catch (_) { }
     }, [micPermission, camPermission]);
 
     // 🔥 컴포넌트 마운트 시 저장된 필터 설정이 있으면 모델을 미리 로딩 (즉시 적용을 위해)
@@ -1354,14 +1354,14 @@ function MeetingPage({ portalRoomId }) {
 
     // 사용자 정보 가져오기 (nickname 사용)
     const [userNickname, setUserNickname] = useState(null);
-    
+
     useEffect(() => {
         // API에서 사용자 정보 가져오기
         api.get("/users/me")
             .then((res) => {
                 const nickname = res.data.nickname?.trim() || "";
                 const name = res.data.name?.trim() || "";
-                
+
                 // nickname을 우선적으로 사용하고, 없으면 name 사용
                 const displayName = nickname || name || null;
                 if (displayName) {
@@ -1659,10 +1659,10 @@ function MeetingPage({ portalRoomId }) {
         if (canvasPipelineVideoKickTimerRef.current) {
             try {
                 document.removeEventListener("visibilitychange", canvasPipelineVideoKickTimerRef.current.kickVideo);
-            } catch {}
+            } catch { }
             try {
                 clearInterval(canvasPipelineVideoKickTimerRef.current.kickTimer);
-            } catch {}
+            } catch { }
             canvasPipelineVideoKickTimerRef.current = null;
         }
         try { canvasPipelineOutTrackRef.current?.stop?.(); } catch { }
@@ -1756,7 +1756,7 @@ function MeetingPage({ portalRoomId }) {
         const needAudio = !localStreamRef.current?.getAudioTracks().some(t => t.readyState === "live");
         try {
             stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
                 audio: needAudio
             });
         } catch (err) {
@@ -1798,17 +1798,17 @@ function MeetingPage({ portalRoomId }) {
         const kickVideo = () => {
             try {
                 if (v && v.srcObject && v.paused) {
-                    v.play().catch(() => {});
+                    v.play().catch(() => { });
                 }
-            } catch {}
+            } catch { }
         };
         document.addEventListener("visibilitychange", kickVideo);
         const kickTimer = setInterval(kickVideo, 500);
         canvasPipelineVideoKickTimerRef.current = { kickVideo, kickTimer };
 
         // 🔥 메타데이터 로드 대기 완전 제거 - drawLoop에서 처리하므로 즉시 시작
-        const videoW = 640; // 기본값으로 시작, drawLoop에서 실제 크기로 업데이트
-        const videoH = 480;
+        const videoW = 1280;
+        const videoH = 720;
 
         // 4) Canvas 생성 (항상 사용)
         const canvas = document.createElement("canvas");
@@ -1823,8 +1823,8 @@ function MeetingPage({ portalRoomId }) {
         lastCanvas.height = canvas.height;
         lastGoodFrameCanvasRef.current = lastCanvas;
 
-        // 5) Canvas에서 track 캡처 (부드러운 화면을 위해 30fps 시도)
-        const outStream = canvas.captureStream(30);
+        // 5) Canvas에서 track 캡처 (부드러운 화면을 위해 60fps)
+        const outStream = canvas.captureStream(60);
         const outTrack = outStream.getVideoTracks()[0];
         canvasPipelineOutTrackRef.current = outTrack;
 
@@ -1932,7 +1932,7 @@ function MeetingPage({ portalRoomId }) {
         // 🔥 핵심: setTimeout 사용 (requestAnimationFrame은 탭이 백그라운드로 가면 멈춤)
         // 탭이 백그라운드여도 canvas에 계속 프레임을 그려야 PiP가 검은화면이 안됨
         // ✅ 필터가 켜져있을 때는 15fps로 낮춰서 렉/멈춤 방지
-        const BASE_INTERVAL = 33;  // ~30fps
+        const BASE_INTERVAL = 16;  // ~60fps
         const FILTER_INTERVAL = 66; // ~15fps
 
         const drawLoop = async () => {
@@ -1954,34 +1954,34 @@ function MeetingPage({ portalRoomId }) {
 
                         const nowMs = Date.now();
                         if (faceDetectorRef.current && nowMs - lastDetectAtRef.current > 80) {
-                        lastDetectAtRef.current = nowMs;
-                        if (!faceDetectInFlightRef.current) {
-                            faceDetectInFlightRef.current = true;
-                            faceDetectSeqRef.current++;
-                            const currentSeq = faceDetectSeqRef.current;
-                            const vw = v.videoWidth || canvas.width;
-                            const vh = v.videoHeight || canvas.height;
+                            lastDetectAtRef.current = nowMs;
+                            if (!faceDetectInFlightRef.current) {
+                                faceDetectInFlightRef.current = true;
+                                faceDetectSeqRef.current++;
+                                const currentSeq = faceDetectSeqRef.current;
+                                const vw = v.videoWidth || canvas.width;
+                                const vh = v.videoHeight || canvas.height;
 
-                            runFaceDetectOnce(v, vw, vh)
-                                .then(normalized => {
-                                    if (currentSeq !== faceDetectSeqRef.current) return;
-                                    if (normalized) {
-                                        lastFaceBoxRef.current = normalized;
-                                        lastFaceBoxAtRef.current = Date.now();
-                                    } else {
-                                        // 얼굴 잃어버림: 1초 정도는 기존 위치 유지 (깜빡임 방지)
-                                        if (Date.now() - (lastFaceBoxAtRef.current || 0) > 1000) {
-                                            lastFaceBoxRef.current = null;
+                                runFaceDetectOnce(v, vw, vh)
+                                    .then(normalized => {
+                                        if (currentSeq !== faceDetectSeqRef.current) return;
+                                        if (normalized) {
+                                            lastFaceBoxRef.current = normalized;
+                                            lastFaceBoxAtRef.current = Date.now();
+                                        } else {
+                                            // 얼굴 잃어버림: 1초 정도는 기존 위치 유지 (깜빡임 방지)
+                                            if (Date.now() - (lastFaceBoxAtRef.current || 0) > 1000) {
+                                                lastFaceBoxRef.current = null;
+                                            }
                                         }
-                                    }
-                                })
-                                .finally(() => {
-                                    if (currentSeq === faceDetectSeqRef.current) faceDetectInFlightRef.current = false;
-                                });
+                                    })
+                                    .finally(() => {
+                                        if (currentSeq === faceDetectSeqRef.current) faceDetectInFlightRef.current = false;
+                                    });
+                            }
                         }
                     }
-                }
-            } catch { }
+                } catch { }
 
                 // ==========================================================
                 // 2. 배경 제거 추론 (비동기) - 백그라운드에서는 스킵
@@ -2152,6 +2152,7 @@ function MeetingPage({ portalRoomId }) {
                     if (transport && !transport.closed) {
                         const newProducer = await transport.produce({
                             track: outTrack,
+                            encodings: [{ maxBitrate: 2500000, scaleResolutionDownBy: 1.0 }], // 2.5Mbps 제한 (60fps 대응)
                             appData: { type: "camera" },
                         });
                         producersRef.current.set("camera", newProducer);
@@ -2177,7 +2178,7 @@ function MeetingPage({ portalRoomId }) {
                         lastGoodFrameAtRef.current = Date.now();
                     }
                 }
-            } catch {}
+            } catch { }
 
             // 다음 프레임: 백그라운드 200ms(CPU 절약), 포그라운드 필터 66ms(~15fps), 무필터 33ms
             const nextInterval = isHidden ? 200 : (isEmojiOn || isBgRemoveOn) ? 66 : 33;
@@ -2440,7 +2441,7 @@ function MeetingPage({ portalRoomId }) {
         // 저장된 마이크/카메라 상태 확인
         const savedMicOn = micOnRef.current;
         const savedCamOn = camOnRef.current;
-        
+
         // 저장된 이모지 또는 배경제거 상태가 있으면 자동 적용
         const savedEmoji = faceEmojiRef.current;
         const savedBgRemove = bgRemoveRef.current;
@@ -2458,14 +2459,14 @@ function MeetingPage({ portalRoomId }) {
 
                 // sendTransport가 준비되면 상태 복원
                 if (sendTransportRef.current && !sendTransportRef.current.closed) {
-                    console.log("[Auto-restore] sendTransport ready, restoring saved state:", { 
-                        savedMicOn, 
-                        savedCamOn, 
-                        savedEmoji, 
-                        savedBgRemove, 
-                        waited 
+                    console.log("[Auto-restore] sendTransport ready, restoring saved state:", {
+                        savedMicOn,
+                        savedCamOn,
+                        savedEmoji,
+                        savedBgRemove,
+                        waited
                     });
-                    
+
                     try {
                         // 카메라가 켜져있었을 때만 카메라 켜기 (이모지/배경제거가 있어도 카메라가 꺼져있었으면 켜지 않음)
                         if (savedCamOn) {
@@ -2482,7 +2483,7 @@ function MeetingPage({ portalRoomId }) {
                                 await startFaceEmojiFilter(savedEmoji);
                             }
                         }
-                        
+
                         // 마이크가 켜져있었으면 마이크 켜기 (ensureLocalProducers에서 처리되지만 명시적으로 확인)
                         if (savedMicOn) {
                             // ensureLocalProducers가 이미 호출되었을 수 있으므로, 트랙 enabled 상태만 확인
@@ -3107,7 +3108,7 @@ function MeetingPage({ portalRoomId }) {
         }
 
         faceDetectorRef.current = detectorState;
-        
+
         // 🔥 이모지 모드일 때는 얼굴 감지기를 즉시 초기화하여 입장/새로고침 시 빠른 감지
         if (faceEmojiRef.current && faceModeRef.current === "emoji" && detectorState) {
             console.log("[startFaceEmojiFilter] 얼굴 감지기 즉시 초기화 완료, 감지 시작");
@@ -3262,7 +3263,7 @@ function MeetingPage({ portalRoomId }) {
                 if (isFilterPreparingRef.current && (wantBgRemove || wantEmoji)) {
                     // 필터 준비 중에는 검은 화면만 유지 (위에서 이미 그려짐)
                     // 얼굴 감지는 계속 진행 (아래에서 처리)
-                    } else if (!wantBgRemove || !frameCtx) {
+                } else if (!wantBgRemove || !frameCtx) {
                     // 🔥 이모지 모드 여부와 관계없이 원본 비디오 그리기
                     // (얼굴 감지 실패 시에도 검은 화면 대신 카메라 스트림 표시)
                     ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
@@ -3564,7 +3565,7 @@ function MeetingPage({ portalRoomId }) {
                         faceFilterLastGoodFrameAtRef.current = Date.now();
                     }
                 }
-            } catch {}
+            } catch { }
 
             // 이모지/배경제거 시 20fps로 스로틀(렉 방지), 아니면 rAF
             if (wantBgRemove || wantEmoji) {
@@ -3624,7 +3625,7 @@ function MeetingPage({ portalRoomId }) {
             .join("")
             .substring(0, 2)
             .toUpperCase();
-        
+
         ctx.fillStyle = "#97c793";
         ctx.font = `bold ${radius * 0.8}px Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
         ctx.textAlign = "center";
@@ -3813,7 +3814,7 @@ function MeetingPage({ portalRoomId }) {
                         userId,
                         changes: { muted: true, cameraOff: true },
                     }));
-                } catch (_) {}
+                } catch (_) { }
             }
 
             return null;
@@ -3999,6 +4000,18 @@ function MeetingPage({ portalRoomId }) {
                     try { t.stop(); } catch { }
                 });
 
+                // 🔥 [Fix] 화면 공유 시작 시 Canvas Pipeline도 확실히 정리
+                // 정리하지 않으면 drawLoop가 계속 돌거나, 상태가 꼬여서 화면공유 종료 후 필터 적용 안됨
+                canvasPipelineActiveRef.current = false;
+                if (canvasPipelineRafRef.current) {
+                    clearTimeout(canvasPipelineRafRef.current);
+                    canvasPipelineRafRef.current = null;
+                }
+                // video element도 일시 정지 (CPU 절약)
+                if (canvasPipelineVideoElRef.current) {
+                    try { canvasPipelineVideoElRef.current.pause(); } catch { }
+                }
+
                 const audios = localStreamRef.current
                     .getAudioTracks()
                     .filter((t) => t.readyState === "live");
@@ -4129,29 +4142,36 @@ function MeetingPage({ portalRoomId }) {
                 return;
             }
 
-            // 화면공유 시작 전 이모지 필터 상태 확인
+            // 화면공유 시작 전 이모지 필터 상태 확인 (백업)
             const savedEmoji = faceEmojiWasOnBeforeScreenShareRef.current;
             const savedMode = faceModeWasOnBeforeScreenShareRef.current;
             const savedBgRemove = bgRemoveWasOnBeforeScreenShareRef.current;
-            const hadEmojiFilter = savedEmoji || savedMode === "emoji" || savedBgRemove;
+
+            // 🔥 [Fix] 화면 공유 중에 변경한 설정(해제 포함)을 정확히 반영하기 위해
+            // saved...(백업)값은 무시하고, 현재 UI 상태(ref)를 유일한 진실로 사용한다.
+            const targetEmoji = faceEmojiRef.current;
+            const targetMode = faceModeRef.current;
+            const targetBgRemove = bgRemoveRef.current;
+
+            const hasFilterConfig = targetEmoji || targetMode === "emoji" || targetBgRemove;
 
             // 이모지 필터가 활성화되어 있었으면 turnOnCamera를 사용 (canvas pipeline)
             // 이렇게 하면 아바타가 잠깐 뜨는 문제를 방지하고 이모지 필터가 바로 적용됨
-            if (hadEmojiFilter) {
-                console.log(`[stopScreenShare] Restoring camera with emoji filter: emoji=${savedEmoji}, mode=${savedMode}, bgRemove=${savedBgRemove}`);
-                
-                // 상태 먼저 복원 (turnOnCamera가 이 상태를 확인함)
-                if (savedEmoji) {
-                    faceEmojiRef.current = savedEmoji;
-                    setFaceEmoji(savedEmoji);
+            if (hasFilterConfig) {
+                console.log(`[stopScreenShare] Restoring camera with filter: emoji=${targetEmoji}, mode=${targetMode}, bgRemove=${targetBgRemove}`);
+
+                // 상태 먼저 업데이트 (turnOnCamera가 이 상태를 확인함)
+                if (targetEmoji) {
+                    faceEmojiRef.current = targetEmoji;
+                    setFaceEmoji(targetEmoji);
                 }
-                if (savedMode) {
-                    faceModeRef.current = savedMode;
-                    setFaceMode(savedMode);
+                if (targetMode) {
+                    faceModeRef.current = targetMode;
+                    setFaceMode(targetMode);
                 }
-                if (savedBgRemove !== undefined) {
-                    bgRemoveRef.current = savedBgRemove;
-                    setBgRemove(savedBgRemove);
+                if (targetBgRemove !== undefined) {
+                    bgRemoveRef.current = targetBgRemove;
+                    setBgRemove(targetBgRemove);
                 }
 
                 // turnOnCamera 호출 (canvas pipeline 사용, 이모지 필터 자동 적용)
@@ -5004,7 +5024,7 @@ function MeetingPage({ portalRoomId }) {
             e.stopPropagation();
             return;
         }
-        
+
         manuallySelectedRef.current = true;
         setActiveSpeakerId(participantId);
     }, []);
@@ -5565,16 +5585,16 @@ function MeetingPage({ portalRoomId }) {
                             // 🔥 스트림이 live 상태면 무조건 유지 (PIP 모드 전환 시 깜빡임 방지)
                             // hasLiveStream은 위에서 이미 선언됨
                             const shouldKeepStream = keepMediaWhileOffline || hasLiveStream || (old?.stream && old.stream.getVideoTracks().some(t => t.readyState === "live"));
-                            
+
                             // 🔥 핵심: live stream이 있으면 절대 null로 설정하지 않음 (검은 화면 방지)
                             // 🔥 동일 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면/깜빡임 방지
                             const rawFinal = hasLiveStream ? (currentStream || old?.stream || null) :
-                                               ((shouldShowReconnecting && !shouldKeepStream) ? null : (currentStream || old?.stream || null));
+                                ((shouldShowReconnecting && !shouldKeepStream) ? null : (currentStream || old?.stream || null));
                             const finalStream = rawFinal && old?.stream ? getStableStreamRef(old.stream, rawFinal) : rawFinal;
                             const finalScreenStream = hasLiveStream ? (old?.screenStream ?? null) :
-                                                      ((shouldShowReconnecting && !shouldKeepStream) ? null : (old?.screenStream ?? null));
+                                ((shouldShowReconnecting && !shouldKeepStream) ? null : (old?.screenStream ?? null));
                             const finalIsScreenSharing = hasLiveStream ? (old?.isScreenSharing ?? false) :
-                                                         ((shouldShowReconnecting && !shouldKeepStream) ? false : (old?.isScreenSharing ?? false));
+                                ((shouldShowReconnecting && !shouldKeepStream) ? false : (old?.isScreenSharing ?? false));
 
                             const baseUser = {
                                 id: peerId,
@@ -5972,7 +5992,7 @@ function MeetingPage({ portalRoomId }) {
                                 if (wsRef.current?.readyState === WebSocket.OPEN) {
                                     wsRef.current.send(JSON.stringify({ type: "LEAVE" }));
                                 }
-                            } catch {}
+                            } catch { }
                             navigate(`/lms/${subjectId}`);
                         }, 1500);
                         return;
@@ -6042,7 +6062,7 @@ function MeetingPage({ portalRoomId }) {
 
         hasFinishedInitialSyncRef.current = false;
         setRoomReconnecting(true);
-        
+
         // ✅ 재접속 시작: 다른 참가자들에게 알림 (로컬 타일에는 스피너 표시 안 함)
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({
@@ -7167,11 +7187,11 @@ function MeetingPage({ portalRoomId }) {
                                                     />
                                                 )}
                                                 <ButtonControl label="얼굴" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
-                                                <ButtonControl 
-                                                    label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"} 
-                                                    icon={sidebarOpen ? PanelRightClose : PanelRightOpen} 
-                                                    active={sidebarOpen} 
-                                                    onClick={toggleSidebarOpen} 
+                                                <ButtonControl
+                                                    label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"}
+                                                    icon={sidebarOpen ? PanelRightClose : PanelRightOpen}
+                                                    active={sidebarOpen}
+                                                    onClick={toggleSidebarOpen}
                                                 />
                                                 <div className="divider" />
                                                 <ButtonControl label="통화 종료" danger icon={Phone} onClick={() => setLeaveConfirmModal(true)} />
@@ -7351,11 +7371,11 @@ function MeetingPage({ portalRoomId }) {
                                     }} />
                             )}
                             <ButtonControl label="얼굴" icon={Smile} active={showReactions} onClick={() => setShowReactions(!showReactions)} />
-                            <ButtonControl 
-                                label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"} 
-                                icon={sidebarOpen ? PanelRightClose : PanelRightOpen} 
-                                active={sidebarOpen} 
-                                onClick={toggleSidebarOpen} 
+                            <ButtonControl
+                                label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"}
+                                icon={sidebarOpen ? PanelRightClose : PanelRightOpen}
+                                active={sidebarOpen}
+                                onClick={toggleSidebarOpen}
                             />
                             <div className="divider"></div>
                             <ButtonControl label="통화 종료" danger icon={Phone} onClick={() => setLeaveConfirmModal(true)} />
@@ -7417,7 +7437,7 @@ function MeetingPage({ portalRoomId }) {
                                                 )}
                                             </div>
                                         )}
-                                                        {/* 방장이 아닌 사람에게는 ... 메뉴 미표시 */}
+                                        {/* 방장이 아닌 사람에게는 ... 메뉴 미표시 */}
                                     </div>
                                 </div>
                             ))}

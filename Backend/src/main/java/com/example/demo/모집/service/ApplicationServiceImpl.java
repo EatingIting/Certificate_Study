@@ -57,8 +57,6 @@ public class ApplicationServiceImpl implements ApplicationService {
         }
     }
 
-
-
     @Override
     public void rejectApplication(String joinId, String hostUserEmail) {
         applicationMapper.rejectApplication(joinId, hostUserEmail);
@@ -69,23 +67,19 @@ public class ApplicationServiceImpl implements ApplicationService {
             String requestUserEmail,
             String requestUserNickname,
             String roomId,
-            String applyMessage
-    ) {
+            String applyMessage) {
 
         // 성별 제한 검사
-        String userGender =
-                applicationMapper.getUserGender(requestUserEmail);
+        String userGender = applicationMapper.getUserGender(requestUserEmail);
 
-        String roomGender =
-                applicationMapper.getRoomGender(roomId);
+        String roomGender = applicationMapper.getRoomGender(roomId);
 
         if (!roomGender.equals("ALL") && !roomGender.equals(userGender)) {
             throw new IllegalStateException("성별 제한으로 신청할 수 없습니다.");
         }
 
         // 현재 신청 상태 조회
-        String status =
-                applicationMapper.findStatus(roomId, requestUserEmail);
+        String status = applicationMapper.findStatus(roomId, requestUserEmail);
 
         // 신청한 적 없음 → insert
         if (status == null) {
@@ -95,8 +89,7 @@ public class ApplicationServiceImpl implements ApplicationService {
                     requestUserEmail,
                     requestUserNickname,
                     roomId,
-                    applyMessage
-            );
+                    applyMessage);
 
             if (result == 0) {
                 throw new IllegalStateException("본인이 작성한 스터디에는 신청할 수 없습니다.");
@@ -111,8 +104,7 @@ public class ApplicationServiceImpl implements ApplicationService {
             applicationMapper.reapply(
                     roomId,
                     requestUserEmail,
-                    applyMessage
-            );
+                    applyMessage);
 
             return;
         }
@@ -120,6 +112,5 @@ public class ApplicationServiceImpl implements ApplicationService {
         // 신청중 또는 승인 상태면 재신청 불가
         throw new IllegalStateException("이미 신청 중이거나 승인된 스터디입니다.");
     }
-
 
 }
