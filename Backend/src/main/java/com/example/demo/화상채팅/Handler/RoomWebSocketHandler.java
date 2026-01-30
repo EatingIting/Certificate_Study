@@ -74,8 +74,24 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             title = "제목 없음";
         }
 
-        // 방장이면 meeting_room에 저장, 모든 유저는 participant에 저장 (userEmail 사용)
-        meetingRoomService.handleJoin(roomId, userEmail, title, isHost);
+        String subjectId = params.get("subjectId");
+        Long scheduleId = null;
+        String scheduleIdParam = params.get("scheduleId");
+        if (scheduleIdParam != null && !scheduleIdParam.isBlank()) {
+            try {
+                scheduleId = Long.parseLong(scheduleIdParam);
+            } catch (NumberFormatException ignored) {}
+        }
+
+        System.out.println("📥 [WS] 수신 파라미터 → roomId=" + roomId + ", subjectId=" + subjectId + ", userEmail=" + userEmail + ", scheduleId=" + scheduleId + ", isHost=" + isHost);
+
+        // 방장 → meeting_room 저장, 참여자 → meetingroom_participant 저장 (입장 로그 필수)
+        try {
+            meetingRoomService.handleJoin(roomId, userEmail, title, isHost, subjectId, scheduleId);
+        } catch (Exception e) {
+            System.err.println("⚠️ [RoomWebSocketHandler] handleJoin(DB) 실패 - 입장 로그 미저장 가능: " + e.getMessage());
+            e.printStackTrace();
+        }
 
     /* =========================================================
        2. LEAVE 타이머 취소 (재접속 대응)

@@ -5,6 +5,8 @@ import com.example.demo.dto.schedule.StudyScheduleUpdateRequest;
 import com.example.demo.schedule.service.StudyScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,13 +16,16 @@ public class StudyScheduleController {
 
     private final StudyScheduleService studyScheduleService;
 
-    // POST /api/study-schedules
     @PostMapping
-    public Long create(@Valid @RequestBody StudyScheduleCreateRequest req) {
-        return studyScheduleService.insert(req);
+    public ResponseEntity<?> create(@Valid @RequestBody StudyScheduleCreateRequest req) {
+        try {
+            Long id = studyScheduleService.insert(req);
+            return ResponseEntity.ok(id);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
     }
 
-    // PUT /api/study-schedules/{studyScheduleId}
     @PutMapping("/{studyScheduleId}")
     public void update(
             @PathVariable Long studyScheduleId,
@@ -30,12 +35,17 @@ public class StudyScheduleController {
         studyScheduleService.update(studyScheduleId, roomId, req);
     }
 
-    // DELETE /api/study-schedules/{studyScheduleId}?roomId=...
     @DeleteMapping("/{studyScheduleId}")
     public void delete(
             @PathVariable Long studyScheduleId,
             @RequestParam String roomId
     ) {
         studyScheduleService.delete(studyScheduleId, roomId);
+    }
+
+    /** 스터디 일정 추가 시 제안할 다음 회차 번호 (중복 방지용) */
+    @GetMapping("/next-round")
+    public int getNextRound(@RequestParam String roomId) {
+        return studyScheduleService.getNextRoundNum(roomId);
     }
 }

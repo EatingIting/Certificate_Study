@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import "pretendard/dist/web/static/pretendard.css";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import * as mediasoupClient from "mediasoup-client";
 import "./MeetingPage.css";
 import { useMeeting } from "./MeetingContext";
@@ -726,12 +726,17 @@ function safeUUID() {
 
 function MeetingPage({ portalRoomId }) {
     const params = useParams();
+    const [searchParams] = useSearchParams();
+    const location = useLocation();
     const navigate = useNavigate();
     const loggedRef = useRef(false);
 
-    // URL params 또는 portal prop에서 roomId/subjectId 가져오기
-    const roomId = params.roomId || portalRoomId || sessionStorage.getItem("pip.roomId");
-    const subjectId = params.subjectId || sessionStorage.getItem("pip.subjectId");
+    // /lms/{subjectId}/MeetingRoom/{roomId} → subjectId는 subject_id, roomId는 서버 난수(room_id)로 DB 저장
+    const pathMatch = useMemo(() => location.pathname.match(/\/lms\/([^/]+)\/MeetingRoom\/([^/]+)/), [location.pathname]);
+    const subjectIdFromPath = pathMatch ? pathMatch[1] : null;
+    const roomIdFromPath = pathMatch ? pathMatch[2] : null;
+    const roomId = roomIdFromPath || params.roomId || portalRoomId || sessionStorage.getItem("pip.roomId");
+    const subjectId = subjectIdFromPath || params.subjectId || sessionStorage.getItem("pip.subjectId");
 
     useEffect(() => {
         if (!roomId) return;
@@ -754,6 +759,8 @@ function MeetingPage({ portalRoomId }) {
     // roomTitle, email, room 정보 (LMSContext에서)
     const { roomTitle, email, user, room } = useLMS();
     const hostUserEmail = room?.hostUserEmail || "";
+    /** 회차 ID - 있으면 meetingroom_participant/meeting_room DB 저장, 없으면 입장만 허용 */
+    const scheduleId = params.scheduleId ?? searchParams.get("scheduleId") ?? room?.scheduleId ?? (() => { try { const s = sessionStorage.getItem("pip.scheduleId"); return s != null && s !== "" ? Number(s) : null; } catch { return null; } })();
     const userEmail = (email || user?.email || sessionStorage.getItem("userEmail") || "").trim();
     const isHostLocal =
         !!userEmail &&
@@ -766,6 +773,13 @@ function MeetingPage({ portalRoomId }) {
         console.log("[MeetingPage] startMeeting", { roomId, subjectId });
         startMeeting(roomId, subjectId);
     }, [roomId, subjectId, startMeeting]);
+
+    // DB 입장 로그용: subjectId·scheduleId를 sessionStorage에 유지 (WebSocket URL에 항상 포함되도록)
+    useEffect(() => {
+        if (subjectId) try { sessionStorage.setItem("pip.subjectId", subjectId); } catch (e) {}
+        if (scheduleId != null && scheduleId !== "") try { sessionStorage.setItem("pip.scheduleId", String(scheduleId)); } catch (e) {}
+        if (roomId) try { sessionStorage.setItem("pip.roomId", roomId); } catch (e) {}
+    }, [subjectId, scheduleId, roomId]);
 
     // 🔥 브라우저 PIP용 숨겨진 video element 생성 및 초기화
     useEffect(() => {
@@ -5313,10 +5327,9 @@ function MeetingPage({ portalRoomId }) {
 
     // 1️⃣ Signaling WebSocket (8080)
     useEffect(() => {
-        // userEmail/hostUserEmail이 준비될 때까지 대기
-        // (방장 판정(isHostLocal)을 정확히 하기 위해 room.hostUserEmail 로딩을 기다림)
-        if (!roomId || !userEmail || !hostUserEmail) {
-            console.log("[WS] 대기 중 - roomId:", roomId, "userEmail:", userEmail, "hostUserEmail:", hostUserEmail);
+        // roomId·userEmail만 있으면 연결 (hostUserEmail 없어도 입장·타일 표시 가능, 방장 여부는 로딩 후 반영)
+        if (!roomId || !userEmail) {
+            console.log("[WS] 대기 중 - roomId:", roomId, "userEmail:", userEmail);
             return;
         }
 
@@ -5348,9 +5361,14 @@ function MeetingPage({ portalRoomId }) {
                 `&cameraOff=${!camOnRef.current}` +
                 `&isHost=${isHostLocal}` +
                 `&title=${encodeURIComponent(roomTitle || "")}` +
+                (subjectId ? `&subjectId=${encodeURIComponent(subjectId)}` : "") +
+                (scheduleId != null && scheduleId !== "" ? `&scheduleId=${encodeURIComponent(String(scheduleId))}` : "") +
                 (initialFaceEmoji ? `&faceEmoji=${encodeURIComponent(initialFaceEmoji)}` : "") +
                 `&bgRemove=${!!initialBgRemove}`;
 
+            if (!subjectId && roomId) {
+                console.warn("[MeetingPage] WebSocket 연결 시 subjectId 없음 → DB 저장 시 subject_id 비어갈 수 있음. roomId=", roomId);
+            }
             ws = new WebSocket(wsUrl);
             wsRef.current = ws;
 
@@ -5990,7 +6008,7 @@ function MeetingPage({ portalRoomId }) {
 
             wsRef.current = null;
         };
-    }, [roomId, userId, userName, userEmail, isHostLocal, roomTitle]); // userEmail/isHostLocal 반영
+    }, [roomId, subjectId, userId, userName, userEmail, isHostLocal, roomTitle]); // subjectId 포함 시 DB 저장용
 
     useEffect(() => {
         setParticipants((prev) =>
