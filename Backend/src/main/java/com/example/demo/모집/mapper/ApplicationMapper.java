@@ -39,18 +39,20 @@ public interface ApplicationMapper {
             @Param("applyMessage") String applyMessage
     );
 
-    // ✅ 신청 상태 조회
+    // 신청 상태 조회
     String findStatus(
             @Param("roomId") String roomId,
             @Param("requestUserEmail") String requestUserEmail
     );
 
-    // ✅ 거절된 신청 재신청 처리
+    // 거절된 신청 재신청 처리
     int reapply(
             @Param("roomId") String roomId,
             @Param("requestUserEmail") String requestUserEmail,
+            @Param("requestUserNickname") String requestUserNickname,
             @Param("applyMessage") String applyMessage
     );
+
 
     // 중복 체크 (신청중/승인)
     int existsActiveApplication(
@@ -78,5 +80,8 @@ public interface ApplicationMapper {
 
     // 방 성별 제한 조회
     String getRoomGender(@Param("roomId") String roomId);
+
+    //방장 이메일 조회
+    String getHostEmailByRoomId(@Param("roomId") String roomId);
 
 }

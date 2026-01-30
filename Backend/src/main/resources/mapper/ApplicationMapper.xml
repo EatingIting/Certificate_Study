@@ -171,6 +171,7 @@
     <update id="reapply">
         UPDATE room_join_request
         SET status = '신청중',
+            request_user_nickname = #{requestUserNickname},
             apply_message = #{applyMessage},
             requested_at = NOW()
         WHERE room_id = #{roomId}
@@ -178,6 +179,12 @@
           AND status = '거절'
     </update>
 
+    <!-- roomId로 방장 이메일 조회 -->
+    <select id="getHostEmailByRoomId" resultType="String">
+        SELECT host_user_email
+        FROM room
+        WHERE room_id = #{roomId}
+    </select>
 
 
 </mapper>

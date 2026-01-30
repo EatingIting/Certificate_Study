@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.모집.mapper.UserMapper">
+
+    <!-- email로 userId 조회 -->
+    <select id="findUserIdByEmail" resultType="string">
+        SELECT user_id
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+    <!-- email로 nickname 조회 -->
+    <select id="findNicknameByEmail" resultType="string">
+        SELECT nickname
+        FROM users
+        WHERE email = #{email}
+    </select>
+
+</mapper>

@@ -1,5 +1,6 @@
 package com.example.demo.모집.controller;
 
+import com.example.demo.모집.mapper.UserMapper;
 import com.example.demo.모집.service.RoomJoinRequestService;
 import com.example.demo.모집.vo.RoomJoinRequestVO;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import java.util.List;
 public class RoomJoinRequestController {
 
     private final RoomJoinRequestService service;
+    private final UserMapper userMapper;
 
     @PostMapping
     public void apply(
@@ -21,9 +23,15 @@ public class RoomJoinRequestController {
             Authentication authentication
     ) {
         String userEmail = authentication.getName();
+
         vo.setRequestUserEmail(userEmail);
+
+        String nickname = userMapper.findNicknameByEmail(userEmail);
+        vo.setNickname(nickname);
+
         service.apply(vo);
     }
+
 
     @GetMapping("/sent")
     public List<RoomJoinRequestVO> sent(Authentication authentication) {
