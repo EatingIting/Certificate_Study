@@ -130,8 +130,12 @@ function Calendar() {
 
     /* 달력 그리드·+N개 팝업에는 일반 일정만 (스터디는 날짜칸 회차로만 표시) */
     let calendarEvents = useMemo(() => {
-        return allEvents.filter((ev) => ev.extendedProps?.type !== "STUDY");
-    }, [allEvents]);
+        return events.filter((ev) => {
+            if (ev.extendedProps?.type === "STUDY") return false;
+            if (typeof ev.id === "string" && ev.id.startsWith("S")) return false;
+            return true;
+        });
+    }, [events]);
 
     /* =========================
        날짜 상단 "회차 + 시간대" 맵 (회차별 startTime, endTime 포함)
@@ -365,6 +369,7 @@ function Calendar() {
             for (let i = 0; i < items.length; i++) {
                 let it = items[i];
                 let t = it?.extendedProps?.type;
+                let idStr = typeof it?.id === "string" ? it.id : String(it?.id ?? "");
 
                 // end는 exclusive로 온다 :contentReference[oaicite:5]{index=5}
                 let ev = {
@@ -378,7 +383,9 @@ function Calendar() {
                     ...(it.textColor ? { textColor: it.textColor } : {}),
                 };
 
-                if (t === "STUDY") study.push(ev);
+                // type이 STUDY이거나 id가 S로 시작하면 스터디 일정
+                let isStudy = t === "STUDY" || idStr.startsWith("S");
+                if (isStudy) study.push(ev);
                 else normal.push(ev);
             }
 
@@ -403,6 +410,7 @@ function Calendar() {
             }
         })();
     }, [visibleRange, roomId, fetchRangeEvents]);
+
 
     /* =========================
        서버 호출(일반 일정 저장/수정/삭제)
@@ -796,6 +804,10 @@ function Calendar() {
                             return selectedDate === ymd ? ["calDaySelected"] : [];
                         }}
                         eventClassNames={eventClassNames}
+                        eventDidMount={(info) => {
+                            let id = info.event.id;
+                            if (id != null) info.el.setAttribute("data-event-id", String(id));
+                        }}
                         eventContent={(arg) => {
                             if (arg.event.extendedProps?.type === "STUDY") {
                                 let r = arg.event.extendedProps?.round;
