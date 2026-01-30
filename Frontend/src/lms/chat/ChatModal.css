@@ -1,9 +1,9 @@
 /* =================================================================
-   1. 플로팅 버튼 (위치는 JS에서 제어)
+   1. 플로팅 버튼 (우측 하단 아이콘)
    ================================================================= */
-   .chat-floating-btn {
+.chat-floating-btn {
     position: fixed;
-    /* top, left는 JS에서 제어하므로 CSS에서는 제거 */
+    /* top, left는 JS에서 드래그로 제어하므로 CSS에서는 제거 */
     width: 70px;
     height: 70px;
     background-color: #97c793; /* 기본 테마: 초록 */
@@ -27,12 +27,12 @@
     transform: scale(1.1);
 }
 
-/* AI 모드일 때 그림자만 보라색 틴트 (배경은 초록 유지) */
+/* AI 모드일 때 그림자 포인트 (보라색) */
 .chat-floating-btn.ai-mode {
     box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
 }
 
-/* 안 읽은 메시지 배지 */
+/* 안 읽은 메시지 숫자 배지 */
 .chat-badge {
     position: absolute;
     top: 0;
@@ -62,9 +62,8 @@
    ================================================================= */
 .tc-wrapper {
     position: fixed;
-    /* 위치는 JS 제어 */
-    width: 360px;
-    height: 550px;
+    /* top, left는 JS에서 드래그로 제어 */
+    
     background-color: #f5f7fb;
     border-radius: 20px;
     box-shadow: 0 5px 25px rgba(0,0,0,0.15);
@@ -73,29 +72,47 @@
     z-index: 9990;
     animation: slideUp 0.3s ease;
     border: 1px solid rgba(0,0,0,0.05);
+    overflow: hidden; /* 내부 컨텐츠가 둥근 모서리를 넘지 않게 */
 
-    overflow: hidden;
-
-    /* 1. 기본 크기 (처음 켰을 때 크기) */
+    /* [수정] 8방향 리사이즈를 위해 resize: both 제거됨 */
+    /* JS에서 스타일을 제어하지만, 초기 로딩 시 깜빡임 방지를 위해 기본값 유지 */
     width: 360px;
     height: 600px;
-
-    /* 2. 크기 조절 활성화 (핵심 ⭐) */
-    resize: both;        /* 가로, 세로 모두 조절 가능 */
     
-    /* 3. 최소 크기 제한 (지금 크기보다 작아지지 않게) */
+    /* 최소/최대 크기 안전장치 */
     min-width: 360px;
     min-height: 600px;
-
-    /* 4. 최대 크기 제한 (화면 밖으로 나가지 않게 안전장치) */
-    max-width: 90vw;     /* 화면 너비의 90%까지만 */
-    max-height: 90vh;    /* 화면 높이의 90%까지만 */
+    max-width: 90vw;
+    max-height: 90vh;
 }
 
 @keyframes slideUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+
+/* =================================================================
+   [NEW] 8방향 리사이즈 핸들 (투명 영역)
+   - 마우스를 가장자리에 대면 커서가 바뀝니다.
+   ================================================================= */
+.resizer {
+    position: absolute;
+    user-select: none;
+    z-index: 100; /* 내용물보다 위에 있어야 잡힘 */
+}
+
+/* 상하좌우 (약 6px 두께) */
+.resizer-n { top: 0; left: 0; right: 0; height: 6px; cursor: n-resize; }
+.resizer-s { bottom: 0; left: 0; right: 0; height: 6px; cursor: s-resize; }
+.resizer-e { right: 0; top: 0; bottom: 0; width: 6px; cursor: e-resize; }
+.resizer-w { left: 0; top: 0; bottom: 0; width: 6px; cursor: w-resize; }
+
+/* 대각선 모서리 (조금 더 넓게 12px) */
+.resizer-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; z-index: 101; }
+.resizer-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; z-index: 101; }
+.resizer-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; z-index: 101; }
+.resizer-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; z-index: 101; }
 
 
 /* =================================================================
@@ -109,12 +126,8 @@
     align-items: center;
     color: white;
     transition: background-color 0.3s ease;
-}
-
-.tc-title-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    /* 드래그 핸들러가 여기 붙으므로 커서 설정 */
+    cursor: move; 
 }
 
 .tc-title {
@@ -171,7 +184,7 @@
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(5px);
     border-left: 1px solid #eee;
-    z-index: 100;
+    z-index: 90; /* 리사이저(100)보다는 아래, 내용물보다는 위 */
     padding: 15px;
     overflow-y: auto;
     animation: slideInRight 0.3s ease;
@@ -203,12 +216,6 @@
     font-size: 10px;
 }
 
-.edit-hint {
-    margin-left: auto;
-    color: #ccc;
-    font-size: 12px;
-}
-
 
 /* =================================================================
    5. 채팅 메시지 영역 (Body)
@@ -224,6 +231,7 @@
     transition: background-color 0.3s;
 }
 
+/* AI 모드일 때 배경색 (연한 푸른빛) */
 .tc-body.ai-mode {
     background-color: #fcfcff;
 }
@@ -231,13 +239,13 @@
 .tc-body::-webkit-scrollbar { width: 6px; }
 .tc-body::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 3px; }
 
-/* 🟢 메시지 행 (말풍선 너비 조절 핵심) */
+/* 메시지 한 줄 (프로필 + 말풍선) */
 .tc-msg-row {
     display: flex;
     align-items: flex-end;
     gap: 10px;
     
-    /* 👇 여기를 85% -> 90%로 늘리면 더 시원해집니다 */
+    /* [수정] 말풍선이 화면의 90%까지 찰 수 있게 확장 */
     max-width: 90%; 
 }
 
@@ -274,19 +282,21 @@
 }
 .me .tc-name { margin-right: 5px; }
 
-/* 🟢 말풍선 공통 (텍스트 가독성 핵심) */
+/* 말풍선 공통 스타일 */
 .tc-bubble {
     padding: 12px 16px;
     border-radius: 18px;
     font-size: 14px;
-    line-height: 1.6;  /* 1.5 -> 1.6으로 살짝 늘리면 읽기 더 편함 */
+    
+    /* [수정] 가독성을 위해 줄 간격 1.6으로 설정 */
+    line-height: 1.6;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     position: relative;
 
-    /* 👇 긴 단어 줄바꿈 (사용자님이 추가하신 것, 잘하셨습니다!) */
+    /* [필수] 긴 단어 줄바꿈 */
     word-break: break-word; 
     
-    /* 👇 [필수 추가] AI 줄바꿈/띄어쓰기 인식하게 해줌 */
+    /* [필수] AI 줄바꿈 및 공백 인식 */
     white-space: pre-wrap; 
 }
 
@@ -302,7 +312,7 @@
     border-bottom-right-radius: 4px;
 }
 
-/* AI 답변 말풍선 */
+/* AI 답변 말풍선 스타일 */
 .tc-bubble.ai-bubble {
     background-color: white;
     color: #333;
@@ -329,7 +339,7 @@
 
 
 /* =================================================================
-   7. 입력창 & 스티커 메뉴
+   7. 입력창 & 전송 영역
    ================================================================= */
 .tc-input-area {
     padding: 15px;
@@ -338,7 +348,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    position: relative;
 }
 
 .tc-sticker-toggle-btn {
@@ -351,13 +360,12 @@
     transition: transform 0.2s, color 0.2s;
 }
 
-.tc-sticker-toggle-btn:hover,
-.tc-sticker-toggle-btn.active {
+.tc-sticker-toggle-btn:hover {
     transform: scale(1.1);
     color: #f39c12;
 }
 
-/* 입력창 */
+/* 입력 Input */
 .tc-input {
     flex: 1;
     border: 1px solid #ddd;
@@ -385,7 +393,7 @@
     font-weight: bold;
     transition: background 0.3s;
     
-    /* 버튼 모양 유지 핵심 */
+    /* 버튼 찌그러짐 방지 */
     white-space: nowrap; 
 }
 
@@ -395,7 +403,7 @@
 
 
 /* =================================================================
-   8. 스티커 메뉴판
+   8. 스티커 선택 메뉴판
    ================================================================= */
 .sticker-menu-container {
     position: absolute;
@@ -430,4 +438,33 @@
     background-color: #fff9e6;
     transform: scale(1.1);
     border-color: #f39c12;
+}
+
+/* AI 오답노트 저장 버튼 */
+.ai-save-btn {
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border: 1px solid #e1e1e1;
+    border-radius: 15px;
+    background-color: #fff;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.ai-save-btn:hover {
+    background-color: #f1f8ff; /* 마우스 올리면 연한 파란색 */
+    border-color: #add8e6;
+    color: #007bff;
+    transform: scale(1.02);
+}
+
+.ai-save-btn:active {
+    transform: scale(0.98);
 }
