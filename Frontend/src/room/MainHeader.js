@@ -32,37 +32,31 @@ const MainHeader = () => {
     }, []);
 
     useEffect(() => {
-        const fetchNotification = async () => {
-            if (!nickname) return;
+        const userId = sessionStorage.getItem("userId");
+        if (!userId) return;
 
-            try {
-                const res = await api.get("/applications/received");
+        const socket = new WebSocket(
+            `ws://localhost:8080/ws/notification/${userId}`
+        );
 
-                if (!Array.isArray(res.data) || res.data.length === 0) {
-                    setHasNotification(false);
-                    setLatestJoinId(null);
-                    return;
-                }
+        socket.onopen = () => {
+            console.log("✅ 방장 알림 WebSocket 연결됨");
+        };
 
-                const newestJoinId = res.data[0].joinId;
-                setLatestJoinId(newestJoinId);
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
 
-                const lastCheckedJoinId =
-                    localStorage.getItem("lastCheckedJoinId");
-
-                if (!lastCheckedJoinId) {
-                    setHasNotification(true);
-                    return;
-                }
-
-                setHasNotification(newestJoinId !== lastCheckedJoinId);
-            } catch (e) {
-                console.error("알림 조회 실패", e);
+            if (data.type === "NOTIFICATION") {
+                console.log("🔔 신청 알림 도착:", data.content);
+                setHasNotification(true);
             }
         };
 
-        fetchNotification();
-    }, [nickname]);
+        return () => socket.close();
+    }, []);
+
+
+
 
     const handleLogout = () => {
         sessionStorage.clear();
