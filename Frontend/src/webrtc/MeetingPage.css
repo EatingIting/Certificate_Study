@@ -24,7 +24,9 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -35,7 +37,7 @@ body {
 
 /* --- Layout --- */
 /* Portal로 렌더링될 때만 fixed 오버레이 */
-#meeting-root > .meeting-page {
+#meeting-root>.meeting-page {
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -150,7 +152,7 @@ body {
 .glass-panel {
   pointer-events: auto;
   background: rgba(255, 255, 255, 0.9);
-/*   backdrop-filter: blur(12px);
+  /*   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px); */
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: var(--shadow-sm);
@@ -162,9 +164,10 @@ body {
   box-shadow: none;
   backdrop-filter: none;
   padding: 0;
-  
+
   display: flex;
-  flex-direction: row; /* 아이콘과 텍스트를 가로로 배치 */
+  flex-direction: row;
+  /* 아이콘과 텍스트를 가로로 배치 */
   align-items: center;
   gap: 0.75rem;
 }
@@ -175,16 +178,18 @@ body {
   height: 42px;
   background: var(--brand-light);
   color: var(--brand-color);
-  border-radius: 12px; /* 둥근 사각형 */
+  border-radius: 12px;
+  /* 둥근 사각형 */
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
 }
 
-.header-info > div:last-child {
+.header-info>div:last-child {
   display: flex;
-  flex-direction: column; /* 제목과 메타정보를 세로로 쌓음 */
+  flex-direction: column;
+  /* 제목과 메타정보를 세로로 쌓음 */
   justify-content: center;
   gap: 2px;
 }
@@ -235,14 +240,21 @@ body {
   transition: all 0.2s;
 }
 
-.view-btn:hover { background: #f3f4f6; }
-.view-btn.active { background: var(--brand-light); color: var(--brand-color); }
+.view-btn:hover {
+  background: #f3f4f6;
+}
+
+.view-btn.active {
+  background: var(--brand-light);
+  color: var(--brand-color);
+}
 
 /* --- Video Stage --- */
 .meet-stage {
   flex: 1;
   padding: 1rem;
-  padding-top: 4.5rem; /* 플로팅 배지 공간 확보 */
+  padding-top: 4.5rem;
+  /* 플로팅 배지 공간 확보 */
   padding-bottom: 6rem;
 
   display: flex;
@@ -257,7 +269,8 @@ body {
 /* 하단 스트립이 테두리가 잘리지 않도록 meet-stage의 하단 패딩 조정 */
 .layout-speaker .meet-stage,
 .subject-content .meet-stage {
-  padding-bottom: calc(6rem + 16px); /* 하단 스트립의 상단 패딩만큼 추가하여 테두리가 잘리지 않도록 */
+  padding-bottom: calc(6rem + 16px);
+  /* 하단 스트립의 상단 패딩만큼 추가하여 테두리가 잘리지 않도록 */
 }
 
 /* LMS 내부에서 meet-stage */
@@ -272,8 +285,8 @@ body {
 }
 
 .video-element.screen {
-    object-fit: contain;
-    background-color: black;
+  object-fit: contain;
+  background-color: black;
 }
 
 /* Speaker Mode */
@@ -326,7 +339,7 @@ body {
   width: 100%;
   height: 100%;
   min-height: 400px;
-  
+
   background: #000;
   border-radius: 16px;
 }
@@ -486,7 +499,8 @@ body {
 
 .main-stage:fullscreen .fullscreen-strip .video-tile {
   width: 180px;
-  height: 101px; /* 16:9 비율 */
+  height: 101px;
+  /* 16:9 비율 */
   border-radius: 10px;
   border: 2px solid rgba(255, 255, 255, 0.2);
   transition: all 0.2s ease;
@@ -540,14 +554,15 @@ body {
 
 /* 참가자 스트립 */
 .fullscreen-strip {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    overflow: hidden; /* 스크롤 없이 타일 그대로 표시 */
-    justify-content: center;
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow: hidden;
+  /* 스크롤 없이 타일 그대로 표시 */
+  justify-content: center;
 }
 
 /* 토글 버튼 */
@@ -608,19 +623,23 @@ body {
 .main-stage:fullscreen,
 .main-stage:fullscreen * {
   user-select: none;
-  -webkit-user-select: none; /* Safari */
-  -ms-user-select: none;     /* 구형 Edge */
+  -webkit-user-select: none;
+  /* Safari */
+  -ms-user-select: none;
+  /* 구형 Edge */
 }
 
 /* 모바일에서 길게 눌러 선택 메뉴 뜨는거 삭제 */
 .main-stage:fullscreen {
-  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-touch-callout: none;
+  /* iOS Safari */
 }
 
 /* 전체화면에서의 미디어 컨트롤 버튼 */
 .fullscreen-media-controls {
   position: absolute;
-  bottom: 156px; /* 참가자 스트립(~140px) 위에 충분한 여백 */
+  bottom: 156px;
+  /* 참가자 스트립(~140px) 위에 충분한 여백 */
   left: 50%;
   transform: translateX(-50%);
 
@@ -722,6 +741,7 @@ body {
     opacity: 0;
     transform: translateX(-50%) translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
@@ -837,7 +857,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 0; /* flex 컨테이너 내에서 스크롤 가능하도록 */
+  min-height: 0;
+  /* flex 컨테이너 내에서 스크롤 가능하도록 */
 }
 
 .fullscreen-chat-input-area {
@@ -907,20 +928,15 @@ body {
 }
 
 .main-stage.screen-share {
-    aspect-ratio: auto;
+  aspect-ratio: auto;
 }
 
-.main-stage.screen-share-active .video-tile,
-.main-stage.screen-share-active .video-tile.screen-share {
-    border: 3px solid #ff4d4d;
-    box-shadow: 0 0 15px rgba(255, 77, 77, 0.3);
-    overflow: visible;
-}
+
 
 .main-stage.screen-share-active .video-content,
 .main-stage.screen-share-active .video-content.screen-share {
-    overflow: visible;
-    background: #000;
+  overflow: visible;
+  background: #000;
 }
 
 .main-stage .video-tile {
@@ -931,16 +947,20 @@ body {
 }
 
 .bottom-strip {
-  height: 190px; /* 높이를 늘려서 아이콘이 보이도록 */
+  height: 190px;
+  /* 높이를 늘려서 아이콘이 보이도록 */
   min-height: 190px;
   flex-shrink: 0;
   display: flex;
   gap: 1rem;
 
-  overflow: hidden; /* 스크롤 완전 비활성화 */
-  padding: 16px 2px 1rem 2px; /* 상단 패딩을 늘려서 테두리가 잘리지 않도록 */
+  overflow: hidden;
+  /* 스크롤 완전 비활성화 */
+  padding: 16px 2px 1rem 2px;
+  /* 상단 패딩을 늘려서 테두리가 잘리지 않도록 */
   margin-top: 1rem;
-  position: relative; /* 위치 고정을 위해 */
+  position: relative;
+  /* 위치 고정을 위해 */
 }
 
 /* LMS 내부에서 bottom-strip */
@@ -950,19 +970,25 @@ body {
 }
 
 .bottom-strip .strip-item {
-  height: 160px; /* 높이를 늘려서 아이콘이 보이도록 */
+  height: 160px;
+  /* 높이를 늘려서 아이콘이 보이도록 */
   min-height: 160px;
   max-height: 160px;
-  overflow: visible; /* 아이콘이 잘리지 않도록 */
-  padding-bottom: 20px; /* 하단 패딩 추가하여 아이콘이 보이도록 */
-  position: relative; /* 위치 고정을 위해 */
-  margin-top: 0; /* 상단 마진 제거하여 위치 고정 */
+  overflow: visible;
+  /* 아이콘이 잘리지 않도록 */
+  padding-bottom: 20px;
+  /* 하단 패딩 추가하여 아이콘이 보이도록 */
+  position: relative;
+  /* 위치 고정을 위해 */
+  margin-top: 0;
+  /* 상단 마진 제거하여 위치 고정 */
 }
 
 .bottom-strip .video-tile {
   height: 100%;
   background: transparent;
-  overflow: visible; /* 아이콘이 잘리지 않도록 */
+  overflow: visible;
+  /* 아이콘이 잘리지 않도록 */
 }
 
 /* main 효과는 그림자만 남기고 레이아웃 영향 제거 */
@@ -972,7 +998,8 @@ body {
 
 .bottom-strip .video-content {
   padding: 0;
-  overflow: visible; /* 아이콘이 잘리지 않도록 */
+  overflow: visible;
+  /* 아이콘이 잘리지 않도록 */
 }
 
 .strip-item {
@@ -982,11 +1009,12 @@ body {
   flex-shrink: 0;
   cursor: grab;
   transition: transform 0.2s;
-  
+
   /* 세로 정렬 (비디오 위, 이름 아래) */
   display: flex;
-  flex-direction: column; 
-  gap: 4px; /* 비디오와 이름 사이 간격 */
+  flex-direction: column;
+  gap: 4px;
+  /* 비디오와 이름 사이 간격 */
 }
 
 .strip-item:active {
@@ -994,12 +1022,14 @@ body {
 }
 
 .strip-item:hover {
-  transform: translateY(-5px); /* 마우스 호버시 살짝 위로 */
+  transform: translateY(-5px);
+  /* 마우스 호버시 살짝 위로 */
 }
 
 /* 하단 스트립의 strip-item은 호버 시에도 테두리가 잘리지 않도록 */
 .bottom-strip .strip-item:hover {
-  transform: translateY(-3px); /* 호버 시 이동 거리를 줄여서 테두리가 잘리지 않도록 */
+  transform: translateY(-3px);
+  /* 호버 시 이동 거리를 줄여서 테두리가 잘리지 않도록 */
 }
 
 .strip-item .video-content {
@@ -1013,20 +1043,24 @@ body {
 }
 
 .strip-item .video-tile {
-  width: 200px;  /* 너비 고정 (비율 유지 위해) */
-  height: 112px; /* 16:9 비율에 맞춰 높이 설정 */
+  width: 200px;
+  /* 너비 고정 (비율 유지 위해) */
+  height: 112px;
+  /* 16:9 비율에 맞춰 높이 설정 */
   border-radius: 0.75rem;
   border: none;
   box-shadow: none;
 }
 
 .strip-item .video-tile .video-element {
-  border-radius: 0.75rem; /* 타일 테두리와 동일하게 */
+  border-radius: 0.75rem;
+  /* 타일 테두리와 동일하게 */
 }
 
 .strip-name {
   font-size: 0.8rem;
-  color: #374151; /* 진한 회색 */
+  color: #374151;
+  /* 진한 회색 */
   text-align: center;
   font-weight: 600;
 
@@ -1079,7 +1113,8 @@ body {
 }
 
 .grid-video-area {
-  position: relative; /* 기준 */
+  position: relative;
+  /* 기준 */
 }
 
 .grid-fullscreen-btn {
@@ -1179,7 +1214,8 @@ body {
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  overflow: hidden; /* 스크롤 없이 타일 그대로 표시 */
+  overflow: hidden;
+  /* 스크롤 없이 타일 그대로 표시 */
   justify-content: center;
 }
 
@@ -1206,16 +1242,19 @@ body {
 }
 
 .grid-fullscreen-strip .strip-item .video-tile .video-content {
-  border-radius: 10px; /* 타일 테두리와 동일하게 */
+  border-radius: 10px;
+  /* 타일 테두리와 동일하게 */
 }
 
 .grid-fullscreen-strip .strip-item .video-tile .video-element {
-  border-radius: 10px; /* 비디오 요소도 타일 테두리와 동일하게 */
+  border-radius: 10px;
+  /* 비디오 요소도 타일 테두리와 동일하게 */
 }
 
 .grid-fullscreen-strip .strip-item .video-tile .camera-off-placeholder {
   gap: 0.25rem;
-  border-radius: 10px; /* 그리드 전체화면 스트립 타일 테두리와 동일하게 */
+  border-radius: 10px;
+  /* 그리드 전체화면 스트립 타일 테두리와 동일하게 */
 }
 
 .grid-fullscreen-strip .strip-item .video-tile .user-avatar {
@@ -1447,13 +1486,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 0; /* flex 컨테이너 내에서 스크롤 가능하도록 */
+  min-height: 0;
+  /* flex 컨테이너 내에서 스크롤 가능하도록 */
 }
 
 .grid-fullscreen-chat-input-area {
   flex-shrink: 0;
   padding: 12px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* 그리드 전체화면 참여자 영역 */
@@ -1640,10 +1680,7 @@ body {
   width: 360px;
 }
 
-.video-tile-wrapper:has(.video-element.screen) {
-     border: 3px solid #ff4d4d;
-     border-radius: 8px;
-}
+
 
 /* --- Video Tile Component --- */
 .video-tile {
@@ -1748,16 +1785,26 @@ body {
 }
 
 @keyframes speakingBlueBlink {
-  0%, 100% { opacity: 0.15; }
-  50% { opacity: 0.75; }
+
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+
+  50% {
+    opacity: 0.75;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .video-tile.speaking::after { animation: none; }
+  .video-tile.speaking::after {
+    animation: none;
+  }
 }
 
 .video-stream-mock {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
   display: flex;
   flex-direction: column;
@@ -1767,18 +1814,20 @@ body {
 }
 
 .video-element {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 1rem; /* 비디오 타일 테두리와 동일하게 둥글게 */
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 1rem;
+  /* 비디오 타일 테두리와 동일하게 둥글게 */
 }
 
 .video-element.screen {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    background-color: black;
-    border-radius: 1rem; /* 화면공유 비디오도 둥글게 */
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: black;
+  border-radius: 1rem;
+  /* 화면공유 비디오도 둥글게 */
 }
 
 .video-element.hidden {
@@ -1793,7 +1842,8 @@ body {
 }
 
 .stream-label {
-  margin-top: 0; /* 기본값 제거 */
+  margin-top: 0;
+  /* 기본값 제거 */
   font-size: 1.125rem;
   font-weight: 600;
   z-index: 1;
@@ -1812,8 +1862,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem; /* 아바타와 이름 사이 간격 */
-  border-radius: 1rem; /* 비디오 타일 테두리와 동일하게 둥글게 */
+  gap: 0.5rem;
+  /* 아바타와 이름 사이 간격 */
+  border-radius: 1rem;
+  /* 비디오 타일 테두리와 동일하게 둥글게 */
 }
 
 /* 메인 타일의 아바타는 정중앙에 배치 - 인라인 스타일도 덮어쓰기 */
@@ -1823,23 +1875,32 @@ body {
 .main-video-area .video-tile.main .camera-off-placeholder {
   justify-content: center !important;
   align-items: center !important;
-  gap: 0.75rem !important; /* 메인 타일은 조금 더 넓은 간격 */
-  padding: 0 !important; /* 패딩 제거하여 정중앙 배치 */
-  padding-top: 0 !important; /* padding-top 강제 제거 */
-  margin: 0 !important; /* 마진 제거 */
-  position: absolute !important; /* 인라인 스타일의 relative를 덮어쓰기 */
+  gap: 0.75rem !important;
+  /* 메인 타일은 조금 더 넓은 간격 */
+  padding: 0 !important;
+  /* 패딩 제거하여 정중앙 배치 */
+  padding-top: 0 !important;
+  /* padding-top 강제 제거 */
+  margin: 0 !important;
+  /* 마진 제거 */
+  position: absolute !important;
+  /* 인라인 스타일의 relative를 덮어쓰기 */
   top: 50% !important;
   left: 50% !important;
-  transform: translate(-50%, -50%) !important; /* 정확한 중앙 배치 */
+  transform: translate(-50%, -50%) !important;
+  /* 정확한 중앙 배치 */
   width: auto !important;
   height: auto !important;
-  z-index: 1 !important; /* 인라인 스타일의 zIndex 유지 */
-  border-radius: 1rem !important; /* 메인 타일 테두리와 동일하게 둥글게 */
+  z-index: 1 !important;
+  /* 인라인 스타일의 zIndex 유지 */
+  border-radius: 1rem !important;
+  /* 메인 타일 테두리와 동일하게 둥글게 */
 }
 
 .video-tile.main .camera-off-placeholder .stream-label,
 .main-stage .video-tile.main .camera-off-placeholder .stream-label {
-  margin-top: 0 !important; /* margin-top 강제 제거하여 정중앙 배치 */
+  margin-top: 0 !important;
+  /* margin-top 강제 제거하여 정중앙 배치 */
   margin-bottom: 0 !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
@@ -1847,13 +1908,15 @@ body {
 
 .video-tile.main .camera-off-placeholder .user-avatar,
 .main-stage .video-tile.main .camera-off-placeholder .user-avatar {
-  margin: 0 !important; /* 아바타 마진 제거 */
+  margin: 0 !important;
+  /* 아바타 마진 제거 */
 }
 
 .bottom-strip .camera-off-placeholder {
   justify-content: center;
   padding-top: 1.5rem;
-  border-radius: 0.75rem; /* 하단 스트립 타일 테두리와 동일하게 */
+  border-radius: 0.75rem;
+  /* 하단 스트립 타일 테두리와 동일하게 */
 }
 
 .bottom-strip .stream-label {
@@ -1861,7 +1924,11 @@ body {
   font-size: 0.75rem;
 }
 
-.off-label { color: #9ca3af; font-size: 1.125rem; font-weight: 500; }
+.off-label {
+  color: #9ca3af;
+  font-size: 1.125rem;
+  font-weight: 500;
+}
 
 .video-overlay {
   position: absolute;
@@ -1877,9 +1944,11 @@ body {
 
 /* 하단 스트립의 비디오 타일에서 아이콘이 잘리지 않도록 조정 */
 .bottom-strip .video-overlay {
-  bottom: 0px; /* 비디오 타일 하단에 정확히 위치 */
+  bottom: 0px;
+  /* 비디오 타일 하단에 정확히 위치 */
   left: 4px;
-  z-index: 10; /* 다른 요소 위에 표시되도록 */
+  z-index: 10;
+  /* 다른 요소 위에 표시되도록 */
 }
 
 .media-status {
@@ -1909,7 +1978,8 @@ body {
 
 .hand-raised-badge {
   position: absolute;
-  top: 1rem; left: 1rem;
+  top: 1rem;
+  left: 1rem;
   background: #fef9c3;
   color: #854d0e;
   border: 1px solid #fde047;
@@ -1918,31 +1988,54 @@ body {
   font-size: 0.75rem;
   font-weight: 700;
   animation: bounce 1s infinite;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
 }
 
 /* Reaction Animation */
 @keyframes floatUp {
-  0% { transform: translateY(0) scale(0.5); opacity: 0; }
-  20% { transform: translateY(-20px) scale(1.2); opacity: 1; }
-  80% { transform: translateY(-80px) scale(1); opacity: 1; }
-  100% { transform: translateY(-100px) scale(0.8); opacity: 0; }
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+
+  20% {
+    transform: translateY(-20px) scale(1.2);
+    opacity: 1;
+  }
+
+  80% {
+    transform: translateY(-80px) scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(-100px) scale(0.8);
+    opacity: 0;
+  }
 }
 
 .reaction-overlay {
   position: absolute;
-  top: 50%; left: 50%;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
   font-size: 5rem;
   animation: floatUp 2s ease-out forwards;
   pointer-events: none;
   z-index: 50;
-  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
 
 /* --- Avatar --- */
@@ -1951,7 +2044,7 @@ body {
   object-fit: cover;
   border: 2px solid #fff;
   box-shadow: var(--shadow-sm);
- 
+
   /* [핵심 수정] 공간이 부족해도 절대 찌그러지지 않게 설정 */
   flex-shrink: 0;
 }
@@ -1965,52 +2058,81 @@ body {
   font-weight: 700;
 }
 
-.user-avatar.md { width: 40px; height: 40px; font-size: 0.875rem; }
-.user-avatar.sm { width: 32px; height: 32px; font-size: 0.75rem; }
-.user-avatar.lg { width: 80px; height: 80px; font-size: 1.5rem; }
+.user-avatar.md {
+  width: 40px;
+  height: 40px;
+  font-size: 0.875rem;
+}
+
+.user-avatar.sm {
+  width: 32px;
+  height: 32px;
+  font-size: 0.75rem;
+}
+
+.user-avatar.lg {
+  width: 80px;
+  height: 80px;
+  font-size: 1.5rem;
+}
 
 .reconnecting-overlay {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background-color: #1a1a1a; /* 살짝 어두운 배경 */
-    color: #e5e5e5;
-    z-index: 5; /* 🔥 필터 준비중 스피너(canvas)가 보이도록 z-index 낮춤 */
-    position: absolute;
-    top: 0;
-    left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #1a1a1a;
+  /* 살짝 어두운 배경 */
+  color: #e5e5e5;
+  z-index: 5;
+  /* 🔥 필터 준비중 스피너(canvas)가 보이도록 z-index 낮춤 */
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 /* 하단 타일 재접속 중 스피너도 타일과 동일한 radius */
 .bottom-strip .video-tile .reconnecting-overlay,
 .strip-item .video-tile .reconnecting-overlay {
-    border-radius: 0.75rem;
+  border-radius: 0.75rem;
 }
 
 .reconnecting-overlay p {
-    margin-top: 10px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    animation: pulse 1.5s infinite;
+  margin-top: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: pulse 1.5s infinite;
 }
 
 .spinner {
-    animation: spin 1s linear infinite;
-    color: var(--brand-color);
+  animation: spin 1s linear infinite;
+  color: var(--brand-color);
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
+  0% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.6;
+  }
 }
 
 /* --- Bottom Controls & Reactions --- */
@@ -2033,15 +2155,22 @@ body {
   background: #ffffff;
   padding: 1rem;
   border-radius: 1rem;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   margin-bottom: 0.5rem;
   animation: fadeIn 0.2s ease-out;
   border: 1px solid var(--border-color);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .reaction-btn {
@@ -2081,7 +2210,8 @@ body {
 
 .btn-control {
   position: relative;
-  width: 3rem; height: 3rem;
+  width: 3rem;
+  height: 3rem;
   border-radius: 50%;
   border: none;
   display: flex;
@@ -2094,13 +2224,19 @@ body {
   box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
 }
 
-.btn-control:hover { background: var(--brand-dark); transform: translateY(-1px); }
-.btn-control:active { transform: translateY(0); }
+.btn-control:hover {
+  background: var(--brand-dark);
+  transform: translateY(-1px);
+}
+
+.btn-control:active {
+  transform: translateY(0);
+}
 
 .btn-control.active {
   background: #f3f4f6;
   color: #4b5563;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .btn-control.danger {
@@ -2121,11 +2257,6 @@ body {
   transform: none;
 }
 
-.strip-item.screen-sharing {
-    border: 3px solid #ff4d4d; /* 빨간색 테두리 */
-    box-shadow: 0 0 10px rgba(255, 77, 77, 0.5); /* 붉은 광선 효과 */
-}
-
 .tooltip {
   position: absolute;
   top: -2.5rem;
@@ -2142,7 +2273,10 @@ body {
   opacity: 0;
 }
 
-.btn-control:hover .tooltip { transform: translateX(-50%) scale(1); opacity: 1; }
+.btn-control:hover .tooltip {
+  transform: translateX(-50%) scale(1);
+  opacity: 1;
+}
 
 /* --- Sidebar (Layout Fixed) --- */
 .meet-sidebar {
@@ -2151,7 +2285,7 @@ body {
   position: relative;
   z-index: 30;
   transition: width 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
-  box-shadow: -4px 0 25px rgba(0,0,0,0.05);
+  box-shadow: -4px 0 25px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   border-left: none;
   min-height: 0;
@@ -2187,9 +2321,22 @@ body.fullscreen-active .meet-sidebar {
   flex-shrink: 0;
 }
 
-.sidebar-title { font-size: 1.125rem; font-weight: 700; margin: 0; }
-.close-btn { background: none; border: none; cursor: pointer; color: #9ca3af; }
-.close-btn:hover { color: #4b5563; }
+.sidebar-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+}
+
+.close-btn:hover {
+  color: #4b5563;
+}
 
 /* Chat & Participants Area */
 .participants-area {
@@ -2263,9 +2410,18 @@ body.fullscreen-active .meet-sidebar {
   letter-spacing: 0.05em;
 }
 
-.chat-msg { display: flex; flex-direction: column; }
-.chat-msg.me { align-items: flex-end; }
-.chat-msg.others { align-items: flex-start; }
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-msg.me {
+  align-items: flex-end;
+}
+
+.chat-msg.others {
+  align-items: flex-start;
+}
 
 .msg-content-wrapper {
   display: flex;
@@ -2309,7 +2465,11 @@ body.fullscreen-active .meet-sidebar {
   flex-shrink: 0;
 }
 
-.chat-form { position: relative; display: flex; align-items: center; }
+.chat-form {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 
 .chat-input {
   width: 100%;
@@ -2328,24 +2488,39 @@ body.fullscreen-active .meet-sidebar {
 }
 
 .send-btn {
-  position: absolute; right: 0.5rem;
-  background: var(--brand-color); color: #fff;
-  border: none; width: 2rem; height: 2rem;
+  position: absolute;
+  right: 0.5rem;
+  background: var(--brand-color);
+  color: #fff;
+  border: none;
+  width: 2rem;
+  height: 2rem;
   border-radius: 0.5rem;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
-.send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* Participants List */
 .section-label {
-  font-size: 0.75rem; font-weight: 700; color: #9ca3af;
-  text-transform: uppercase; margin-bottom: 0.75rem; padding-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  padding-left: 0.5rem;
 }
 
 .participant-card {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0.75rem;
   border-radius: 0.75rem;
   background: #fff;
@@ -2355,16 +2530,46 @@ body.fullscreen-active .meet-sidebar {
   transition: background 0.2s;
 }
 
-.participant-card:hover { background: #f3f4f6; }
-.participant-card.me { background: var(--brand-light); border-color: #c7d2fe; }
+.participant-card:hover {
+  background: #f3f4f6;
+}
 
-.p-info { display: flex; align-items: center; gap: 0.75rem; }
-.p-name { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
-.p-name.me { color: var(--brand-dark); }
-.p-role { font-size: 0.75rem; color: #9ca3af; }
+.participant-card.me {
+  background: var(--brand-light);
+  border-color: #c7d2fe;
+}
 
-.p-status { display: flex; align-items: center; gap: 0.5rem; color: #9ca3af; }
-.icon-red { color: var(--danger-color); }
+.p-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.p-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.p-name.me {
+  color: var(--brand-dark);
+}
+
+.p-role {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.p-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #9ca3af;
+}
+
+.icon-red {
+  color: var(--danger-color);
+}
 
 .more-btn {
   background: none;
@@ -2376,13 +2581,31 @@ body.fullscreen-active .meet-sidebar {
   border-radius: 6px;
   transition: background 0.15s ease, opacity 0.15s ease, color 0.15s ease;
 }
-.more-btn:hover { background: #e5e7eb; color: #6b7280; }
-.more-btn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; opacity: 1; }
-.more-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.participant-card:hover .more-btn { opacity: 1; }
+
+.more-btn:hover {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.more-btn:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.more-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.participant-card:hover .more-btn {
+  opacity: 1;
+}
 
 /* 👑 방장 권한 드롭다운 메뉴 */
-.host-menu-container { position: relative; }
+.host-menu-container {
+  position: relative;
+}
 
 .host-menu-dropdown {
   position: absolute;
@@ -2413,29 +2636,66 @@ body.fullscreen-active .meet-sidebar {
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.host-menu-dropdown button:hover { background: #f3f4f6; }
-.host-menu-dropdown button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+.host-menu-dropdown button:hover {
+  background: #f3f4f6;
+}
 
-.host-menu-dropdown button.kick-btn { color: #dc2626; }
-.host-menu-dropdown button.kick-btn:hover { background: #fef2f2; }
+.host-menu-dropdown button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.host-menu-dropdown button.kick-btn {
+  color: #dc2626;
+}
+
+.host-menu-dropdown button.kick-btn:hover {
+  background: #fef2f2;
+}
 
 .invite-section {
-  margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
 }
+
 .invite-btn {
-  width: 100%; padding: 0.625rem;
-  border-radius: 0.75rem; border: 1px solid #d1d5db;
-  background: #fff; color: var(--text-secondary);
-  font-weight: 500; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem;
+  border-radius: 0.75rem;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
-.invite-btn:hover { background: #f9fafb; }
+
+.invite-btn:hover {
+  background: #f9fafb;
+}
 
 /* Scrollbar */
-.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
 
 /* 방장 카메라 켜기 요청 확인 모달 */
 .force-camera-on-modal-overlay {
@@ -2447,6 +2707,7 @@ body.fullscreen-active .meet-sidebar {
   justify-content: center;
   z-index: 10000;
 }
+
 .force-camera-on-modal {
   background: var(--panel-bg);
   border-radius: 12px;
@@ -2455,23 +2716,27 @@ body.fullscreen-active .meet-sidebar {
   width: 90%;
   box-shadow: var(--shadow-lg);
 }
+
 .force-camera-on-modal-title {
   font-weight: 600;
   font-size: 1.1rem;
   color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
+
 .force-camera-on-modal-desc {
   font-size: 0.9rem;
   color: var(--text-secondary);
   margin: 0 0 1.25rem 0;
   line-height: 1.45;
 }
+
 .force-camera-on-modal-actions {
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
 }
+
 .force-camera-on-modal-btn {
   padding: 0.5rem 1rem;
   border-radius: 8px;
@@ -2480,17 +2745,57 @@ body.fullscreen-active .meet-sidebar {
   border: none;
   font-size: 0.9rem;
 }
+
 .force-camera-on-modal-btn.allow {
   background: var(--brand-color);
   color: #fff;
 }
+
 .force-camera-on-modal-btn.allow:hover {
   background: var(--brand-dark);
 }
+
 .force-camera-on-modal-btn.reject {
   background: #f3f4f6;
   color: var(--text-primary);
 }
+
 .force-camera-on-modal-btn.reject:hover {
   background: #e5e7eb;
+}
+
+/* =========================================================================
+   🔥 화면 공유 시 테두리 수정 (이모지/필터 작업 관련)
+   ========================================================================= */
+
+/* 1. 화면 공유 중일 때 초록색/파란색(Active/Speaking) 테두리 제거 */
+.strip-item.screen-sharing .video-tile,
+.strip-item.screen-sharing.active-strip .video-tile,
+.video-tile.screen-share {
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* 2. 화면 공유 중일 때 speaking 링(내부 파란 링) 숨김 */
+.strip-item.screen-sharing .video-tile::after,
+.video-tile.screen-share::after,
+.strip-item.screen-sharing.active-strip .video-tile::after {
+  display: none !important;
+  animation: none !important;
+}
+
+/* 3. 화면 공유 시 빨간색 테두리 강제 적용 (Active처럼 outset box-shadow 사용) */
+/* .video-tile-wrapper가 없는 구조일 수 있으므로 .video-tile에 직접 적용 */
+.strip-item.screen-sharing .video-tile,
+.strip-item.screen-sharing.active-strip .video-tile,
+.video-tile.screen-share {
+  border-radius: 0.75rem !important;
+  box-shadow: 0 0 0 3px #ff4d4d !important;
+  border: none !important;
+}
+
+/* 만약 video-tile-wrapper가 사용된다면 중복 테두리 방지 */
+.strip-item.screen-sharing .video-tile-wrapper {
+  border: none !important;
+  padding: 0 !important;
 }
