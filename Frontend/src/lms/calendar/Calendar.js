@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useParams } from "react-router-dom";
+import { useLMS } from "../LMSContext";
 
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -8,6 +9,7 @@ import koLocale from "@fullcalendar/core/locales/ko";
 import "./Calendar.css";
 
 function Calendar() {
+    const { isHost } = useLMS();
     let calendarRef = useRef(null);
 
     let { subjectId } = useParams();
@@ -662,17 +664,17 @@ function Calendar() {
         try {
             if (!editingStudyId) {
                 let res = await authFetch(`/api/study-schedules`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            roomId,
-                            round: roundNum,
-                            date: studyForm.date,
-                            startTime: studyForm.startTime?.trim() || "09:00",
-                            endTime: studyForm.endTime?.trim() || "11:00",
-                            description: studyForm.description.trim(),
-                        }),
-                    });
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        roomId,
+                        round: roundNum,
+                        date: studyForm.date,
+                        startTime: studyForm.startTime?.trim() || "09:00",
+                        endTime: studyForm.endTime?.trim() || "11:00",
+                        description: studyForm.description.trim(),
+                    }),
+                });
 
                 if (!res.ok) {
                     let msg = await res.text().catch(() => "");
@@ -874,35 +876,39 @@ function Calendar() {
                             <div className="cardTitle calListTitle">
                                 {selectedDate
                                     ? (() => {
-                                            let [y, m, d] = selectedDate.split("-").map(Number);
-                                            return `${y}년 ${m}월 ${d}일 일정`;
-                                        })()
+                                        let [y, m, d] = selectedDate.split("-").map(Number);
+                                        return `${y}년 ${m}월 ${d}일 일정`;
+                                    })()
                                     : visibleTitle
-                                    ? `${visibleTitle} 일정`
-                                    : "이번 달 일정"}
+                                        ? `${visibleTitle} 일정`
+                                        : "이번 달 일정"}
                             </div>
                             <div className="calListActions">
-                            <button
-                                type="button"
-                                className="calStudyBtn"
-                                onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    openStudyAddModal();
-                                }}
-                            >
-                                스터디 일정 추가
-                            </button>
+                                {isHost && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="calStudyBtn"
+                                            onMouseDown={(e) => {
+                                                e.stopPropagation();
+                                                openStudyAddModal();
+                                            }}
+                                        >
+                                            스터디 일정 추가
+                                        </button>
 
-                            <button
-                                    type="button"
-                                    className="calAddBtn"
-                                    onMouseDown={(e) => {
-                                        e.stopPropagation();
-                                        openAddModal();
-                                    }}
-                                >
-                                    일정 추가
-                                </button>
+                                        <button
+                                            type="button"
+                                            className="calAddBtn"
+                                            onMouseDown={(e) => {
+                                                e.stopPropagation();
+                                                openAddModal();
+                                            }}
+                                        >
+                                            일정 추가
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                         {selectedDate && (

@@ -22,14 +22,14 @@ export default function Header() {
 
 
             <div className="lms-header-right">
-                <MessageCircle size={18} />
-                <Bell size={18} />
                 {isHost && (
-                    <div className="host-badge" title="방장">
+                    <div className="host-badge" title="스터디장">
                         <Star size={18} fill="#fbbf24" color="#fbbf24" />
-                        <span className="host-text">(방장)</span>
+                        <span className="host-text">(스터디장)</span>
                     </div>
                 )}
+                <MessageCircle size={18} />
+                <Bell size={18} />
                 <div className="profile">
                     <User size={18} />
                 </div>
