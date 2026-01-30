@@ -2,7 +2,7 @@ import "./MainHeader.css";
 import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import MainSideBar from "./MainSideBar";
 import { useEffect, useRef, useState } from "react";
-import { FaBell } from "react-icons/fa";
+import { Bell } from "lucide-react";
 import api from "../api/api";
 
 const MainHeader = () => {
@@ -117,7 +117,7 @@ const MainHeader = () => {
                                     navigate("/room/my-applications");
                                 }}
                             >
-                                <FaBell size={18} />
+                                <Bell size={18} />
                                 {hasNotification && <span className="notif-dot"></span>}
                             </div>
 
