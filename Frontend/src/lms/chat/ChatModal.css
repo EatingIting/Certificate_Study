@@ -439,3 +439,32 @@
     transform: scale(1.1);
     border-color: #f39c12;
 }
+
+/* AI 오답노트 저장 버튼 */
+.ai-save-btn {
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border: 1px solid #e1e1e1;
+    border-radius: 15px;
+    background-color: #fff;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.ai-save-btn:hover {
+    background-color: #f1f8ff; /* 마우스 올리면 연한 파란색 */
+    border-color: #add8e6;
+    color: #007bff;
+    transform: scale(1.02);
+}
+
+.ai-save-btn:active {
+    transform: scale(0.98);
+}
