@@ -33,6 +33,8 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Long> roomStartedAtMap = new ConcurrentHashMap<>();
     /** 방별 경과 시간 브로드캐스트 타이머. 1초마다 서버 기준 elapsed 전송 → 모든 클라이언트 동일 표시 */
     private final Map<String, Timer> roomElapsedTimers = new ConcurrentHashMap<>();
+    /** 세션별 전송 락. Tomcat WebSocket은 같은 세션에 동시 전송 시 TEXT_PARTIAL_WRITING 예외 발생 → 전송 직렬화 */
+    private final Map<String, Object> sessionSendLocks = new ConcurrentHashMap<>();
 
     private final ObjectMapper objectMapper;
     private final MeetingRoomService meetingRoomService;
@@ -187,11 +189,15 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
        6. 세션 등록 + 브로드캐스트
        ========================================================= */
         // 가장 처음 입장한 사람 기준으로 방 시작 시각 설정 (온라인+재접속 중 모두 비었을 때만)
+        // 재접속(restoredUser != null)일 때는 기존 roomStartedAt 유지 → 새로고침해도 시간이 0으로 리셋되지 않음
         if (users.isEmpty()) {
             Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.get(roomId);
             if (disconnectedMap == null || disconnectedMap.isEmpty()) {
-                roomStartedAtMap.put(roomId, System.currentTimeMillis());
-                startRoomElapsedBroadcast(roomId);
+                if (restoredUser == null) {
+                    roomStartedAtMap.put(roomId, System.currentTimeMillis());
+                    startRoomElapsedBroadcast(roomId);
+                }
+                // 재접속 시 이미 roomStartedAt/타이머가 있으면 그대로 사용
             }
         }
         sessions.put(session.getId(), session);
@@ -221,8 +227,10 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         RoomUser leavingUser = users.get(session.getId());
 
-        // 세션은 항상 제거
-        sessions.remove(session.getId());
+        // 세션은 항상 제거 (전송 락도 제거하여 메모리 누수 방지)
+        String sessionId = session.getId();
+        sessions.remove(sessionId);
+        sessionSendLocks.remove(sessionId);
 
         if (leavingUser == null) {
             broadcast(roomId);
@@ -303,9 +311,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
             TextMessage message = new TextMessage(payload);
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(message);
-                }
+                sendMessageSafe(s, message);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -324,6 +330,19 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         merged.addAll(disconnectedUsers);
         merged.sort(Comparator.comparingLong(RoomUser::getJoinAt));
         return merged;
+    }
+
+    /** 같은 세션에 동시 전송 시 Tomcat이 TEXT_PARTIAL_WRITING 예외를 던지므로, 세션별 락으로 직렬화 */
+    private void sendMessageSafe(WebSocketSession session, TextMessage message) {
+        if (session == null || !session.isOpen()) return;
+        Object lock = sessionSendLocks.computeIfAbsent(session.getId(), k -> new Object());
+        synchronized (lock) {
+            try {
+                if (session.isOpen()) session.sendMessage(message);
+            } catch (Exception e) {
+                // 연결 끊김 등은 로그만 (예: IllegalStateException TEXT_PARTIAL_WRITING 방지됨)
+            }
+        }
     }
 
     private void broadcast(String roomId) {
@@ -352,9 +371,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             TextMessage message = new TextMessage(payload);
 
             for (WebSocketSession session : sessions.values()) {
-                if (session.isOpen()) {
-                    session.sendMessage(message);
-                }
+                sendMessageSafe(session, message);
             }
 
         } catch (Exception e) {
@@ -381,7 +398,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                     );
                     TextMessage message = new TextMessage(payload);
                     for (WebSocketSession s : sessions.values()) {
-                        if (s.isOpen()) s.sendMessage(message);
+                        sendMessageSafe(s, message);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -462,9 +479,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
             // 같은 방 전체 브로드캐스트
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(outboundMessage);
-                }
+                sendMessageSafe(s, outboundMessage);
             }
 
             return;
@@ -492,9 +507,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             TextMessage updateMessage = new TextMessage(payload);
 
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(updateMessage);
-                }
+                sendMessageSafe(s, updateMessage);
             }
             return;
         }
@@ -551,14 +564,12 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             TextMessage broadcastMessage = new TextMessage(payload);
 
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(broadcastMessage);
-                }
+                sendMessageSafe(s, broadcastMessage);
             }
             return;
         }
         if ("PING".equalsIgnoreCase(type)) {
-            session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+            sendMessageSafe(session, new TextMessage("{\"type\":\"PONG\"}"));
             return;
         }
 
@@ -623,9 +634,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             TextMessage broadcastMessage = new TextMessage(payload);
 
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(broadcastMessage);
-                }
+                sendMessageSafe(s, broadcastMessage);
             }
             return;
         }
@@ -671,9 +680,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
             TextMessage broadcastMessage = new TextMessage(payload);
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(broadcastMessage);
-                }
+                sendMessageSafe(s, broadcastMessage);
             }
 
             // USERS_UPDATE도 브로드캐스트
@@ -705,9 +712,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
             TextMessage broadcastMessage = new TextMessage(payload);
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(broadcastMessage);
-                }
+                sendMessageSafe(s, broadcastMessage);
             }
 
             // USERS_UPDATE도 브로드캐스트
@@ -735,9 +740,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             );
             TextMessage broadcastMessage = new TextMessage(payload);
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(broadcastMessage);
-                }
+                sendMessageSafe(s, broadcastMessage);
             }
             broadcast(roomId);
             return;
@@ -763,9 +766,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             );
             TextMessage broadcastMessage = new TextMessage(payload);
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(broadcastMessage);
-                }
+                sendMessageSafe(s, broadcastMessage);
             }
             broadcast(roomId);
             return;
@@ -795,15 +796,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
             TextMessage broadcastMessage = new TextMessage(payload);
             for (WebSocketSession s : sessions.values()) {
-                if (s.isOpen()) {
-                    s.sendMessage(broadcastMessage);
-                }
+                sendMessageSafe(s, broadcastMessage);
             }
 
             // 유저 제거
             if (targetSessionId != null) {
                 users.remove(targetSessionId);
                 WebSocketSession targetSession = sessions.remove(targetSessionId);
+                sessionSendLocks.remove(targetSessionId);
                 if (targetSession != null && targetSession.isOpen()) {
                     try {
                         targetSession.close();
