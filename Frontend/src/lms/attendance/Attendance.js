@@ -1,31 +1,25 @@
-import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import api from "../../api/api";
 
 import "./Attendance.css";
 
 /**
- * ✅ 나중에 백엔드에서 이런 형태로 내려주면 제일 편함(추천)
+ * ✅ 백엔드에서 이런 형태로 내려주면 제일 편함(추천)
  *
- * studySchedule: {
- *   dayOfWeek: 1, // Monday
- *   start: "13:00",
- *   end: "15:00",
- *   requiredRatio: 0.9
+ * {
+ *   studySchedule: { start, end, requiredRatio, totalSessions },
+ *   attendanceLogs: [
+ *     {
+ *       memberId: "user@email.com",
+ *       name: "닉네임(김***)",
+ *       sessions: [
+ *         { sessionNo: 1, studyDate: "2026-01-19", joinAt: "...", leaveAt: "..." },
+ *         ...
+ *       ]
+ *     }
+ *   ]
  * }
- *
- * attendanceLogs: [
- *  {
- *    memberId: "m1",
- *    name: "김00",
- *    sessions: [
- *      { sessionNo: 1, joinAt: "2026-01-19T13:02:00", leaveAt: "2026-01-19T15:00:00" },
- *      { sessionNo: 2, joinAt: "2026-01-26T13:10:00", leaveAt: "2026-01-26T14:10:00" },
- *      ...
- *    ]
- *  },
- * ]
- *
- * 프론트는 session별로 "참여시간" 계산 -> 출석/결석 판정만 하면 됨.
  */
 
 // ------- utils -------
@@ -43,6 +37,7 @@ const minutesBetween = (startIso, endIso) => {
 };
 
 const calcTotalMinutes = (startHHMM, endHHMM) => {
+  if (!startHHMM || !endHHMM) return 0;
   const [sh, sm] = startHHMM.split(":").map(Number);
   const [eh, em] = endHHMM.split(":").map(Number);
   const start = sh * 60 + sm;
@@ -58,46 +53,68 @@ const judgeAttendance = ({ joinAt, leaveAt }, totalMin, requiredRatio) => {
 };
 
 const Attendance = () => {
-  // ✅ 스터디 시간/기준(백엔드에서 내려줄 값)
-  const studySchedule = useMemo(
-    () => ({
-      start: "13:00",
-      end: "15:00",
-      requiredRatio: 0.9, // 90%
-      totalSessions: 6,
-    }),
-    []
-  );
+  const { subjectId } = useParams();
+  const [sp] = useSearchParams();
+  const scope = sp.get("scope") || "my"; // my | all
+
+  // ✅ 백엔드에서 내려줄 값(기본값)
+  const [studySchedule, setStudySchedule] = useState({
+    start: "00:00",
+    end: "00:00",
+    requiredRatio: 0.9,
+    totalSessions: 0,
+  });
+
+  // ✅ 백엔드 attendanceLogs
+  const [members, setMembers] = useState([]);
+
+  useEffect(() => {
+    if (!subjectId) return;
+
+    const fetchAttendance = async () => {
+      try {
+        const res = await api.get(`/subjects/${subjectId}/attendance`, {
+          params: { scope },
+        });
+
+        setStudySchedule(res.data?.studySchedule || studySchedule);
+        setMembers(res.data?.attendanceLogs || []);
+      } catch (e) {
+        console.error("ATTENDANCE FETCH ERROR:", {
+          message: e.message,
+          status: e.response?.status,
+          data: e.response?.data,
+          url: e.config?.baseURL + e.config?.url,
+        });
+        alert("출석 데이터 불러오기 실패");
+      }
+    };
+
+    fetchAttendance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjectId, scope]);
 
   const totalMin = useMemo(
     () => calcTotalMinutes(studySchedule.start, studySchedule.end),
     [studySchedule.start, studySchedule.end]
   );
 
-  // ✅ 데모용 로그(백엔드 붙이면 이 구조로 그대로 갈아끼우면 됨)
-  const members = useMemo(
-    () => [
-      {
-        memberId: "m2",
-        name: "손00",
-        sessions: [
-          { sessionNo: 1, joinAt: "2026-01-19T13:10:00", leaveAt: "2026-01-19T15:00:00" }, // 출석
-          { sessionNo: 2, joinAt: "2026-01-26T13:30:00", leaveAt: "2026-01-26T14:30:00" }, // 결석
-          { sessionNo: 3, joinAt: "2026-02-02T13:00:00", leaveAt: "2026-02-02T15:00:00" }, // 출석
-          { sessionNo: 4, joinAt: "2026-02-09T13:05:00", leaveAt: "2026-02-09T14:59:00" }, // 출석
-          { sessionNo: 5, joinAt: "2026-02-16T13:00:00", leaveAt: "2026-02-16T14:20:00" }, // 결석
-          { sessionNo: 6, joinAt: "2026-02-23T13:00:00", leaveAt: "2026-02-23T15:00:00" }, // 출석
-        ],
-      },
-    ],
-    []
-  );
-
-  // ✅ 회차(세로형) rows 만들기 (현재는 members[0] = 내 데이터라고 가정)
+  // ✅ 회차(세로형) rows 만들기
+  // - scope=my : members[0]이 내 데이터라고 가정
+  // - scope=all: members에서 내 이메일 찾아서 우선 사용 (없으면 0번)
   const sessionRows = useMemo(() => {
-    const totalSessions = studySchedule.totalSessions;
+    const totalSessions = studySchedule.totalSessions || 0;
 
-    const my = members[0];
+    const myEmail =
+      sessionStorage.getItem("userEmail") ||
+      sessionStorage.getItem("userId") ||
+      "";
+
+    const my =
+      scope === "all"
+        ? members.find((m) => m.memberId === myEmail) || members[0]
+        : members[0];
+
     const byNo = new Map((my?.sessions || []).map((s) => [s.sessionNo, s]));
 
     return Array.from({ length: totalSessions }).map((_, idx) => {
@@ -108,7 +125,12 @@ const Attendance = () => {
         ? judgeAttendance(log, totalMin, studySchedule.requiredRatio)
         : { attendedMin: 0, ratio: 0, isPresent: false };
 
-      const studyDate = log?.joinAt ? log.joinAt.slice(0, 10) : "-";
+      // ✅ 백엔드에서 studyDate 내려주면 그걸 우선 사용
+      const studyDate = log?.studyDate
+        ? log.studyDate
+        : log?.joinAt
+        ? log.joinAt.slice(0, 10)
+        : "-";
 
       return {
         sessionNo,
@@ -116,7 +138,13 @@ const Attendance = () => {
         ...judged,
       };
     });
-  }, [members, studySchedule.totalSessions, studySchedule.requiredRatio, totalMin]);
+  }, [
+    members,
+    scope,
+    studySchedule.totalSessions,
+    studySchedule.requiredRatio,
+    totalMin,
+  ]);
 
   // ✅ 요약(출석률/출석/결석/전체)
   const summary = useMemo(() => {
@@ -126,9 +154,6 @@ const Attendance = () => {
     const ratio = total === 0 ? 0 : Math.round((present / total) * 100);
     return { total, present, absent, ratio };
   }, [sessionRows]);
-
-  const [sp] = useSearchParams();
-  const scope = sp.get("scope") || "all"; // my | all (나중 확장용)
 
   return (
     <div className="at-page">
@@ -142,7 +167,9 @@ const Attendance = () => {
             <div>
               <h2 className="at-title">출석</h2>
               <p className="at-subtitle">
-                기준: 스터디 시간 중 {(studySchedule.requiredRatio * 100).toFixed(0)}% 이상 참여 시 출석 인정
+                기준: 스터디 시간 중{" "}
+                {(studySchedule.requiredRatio * 100).toFixed(0)}% 이상 참여 시
+                출석 인정
               </p>
             </div>
           </div>
@@ -153,7 +180,8 @@ const Attendance = () => {
         <div className="at-card-body">
           <div className="at-hint">
             <span className="at-chip at-chip--rule">
-              기준: 참여시간/전체시간 ≥ {(studySchedule.requiredRatio * 100).toFixed(0)}%
+              기준: 참여시간/전체시간 ≥{" "}
+              {(studySchedule.requiredRatio * 100).toFixed(0)}%
             </span>
           </div>
 
@@ -174,7 +202,10 @@ const Attendance = () => {
                 aria-valuemin={0}
                 aria-valuemax={100}
               >
-                <div className="at-progressbar-fill" style={{ width: `${summary.ratio}%` }} />
+                <div
+                  className="at-progressbar-fill"
+                  style={{ width: `${summary.ratio}%` }}
+                />
               </div>
 
               <div className="at-progressbar-sub">
@@ -183,22 +214,25 @@ const Attendance = () => {
             </div>
 
             <div className="at-summary-item at-summary-item--triple">
-            <div className="at-summary-grid">
+              <div className="at-summary-grid">
                 <div>
-                <span className="at-summary-label">전체</span>
-                <span className="at-summary-big">{summary.total}회</span>
+                  <span className="at-summary-label">전체</span>
+                  <span className="at-summary-big">{summary.total}회</span>
                 </div>
                 <div>
-                <span className="at-summary-label">출석</span>
-                <span className="at-summary-big is-ok">{summary.present}회</span>
+                  <span className="at-summary-label">출석</span>
+                  <span className="at-summary-big is-ok">
+                    {summary.present}회
+                  </span>
                 </div>
                 <div>
-                <span className="at-summary-label">결석</span>
-                <span className="at-summary-big is-absent">{summary.absent}회</span>
+                  <span className="at-summary-label">결석</span>
+                  <span className="at-summary-big is-absent">
+                    {summary.absent}회
+                  </span>
                 </div>
+              </div>
             </div>
-            </div>
-
           </div>
 
           <div className="at-table-wrap">
@@ -217,7 +251,11 @@ const Attendance = () => {
                     <td className="at-td-sessionno">{s.sessionNo}회차</td>
                     <td className="at-td-date">{s.studyDate}</td>
                     <td className="at-td-status">
-                      <span className={`at-badge ${s.isPresent ? "is-ok" : "is-absent"}`}>
+                      <span
+                        className={`at-badge ${
+                          s.isPresent ? "is-ok" : "is-absent"
+                        }`}
+                      >
                         {s.isPresent ? "출석" : "결석"}
                       </span>
                       <span className="at-td-muted">
