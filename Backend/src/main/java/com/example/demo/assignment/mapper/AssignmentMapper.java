@@ -1,6 +1,7 @@
 package com.example.demo.assignment.mapper;
 
 import com.example.demo.assignment.dto.AssignmentListResponse;
+import com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse;
 import com.example.demo.assignment.vo.AssignmentSubmissionVO;
 import com.example.demo.assignment.vo.AssignmentVO;
 import org.apache.ibatis.annotations.Mapper;
@@ -15,6 +16,11 @@ public interface AssignmentMapper {
             @Param("roomId") String roomId,
             @Param("userId") String userId
     );
+
+    List<AssignmentSubmissionDetailResponse> selectSubmissionDetails(
+            @Param("assignmentId") Long assignmentId
+    );
+
 
     int insertAssignment(AssignmentVO vo);
 

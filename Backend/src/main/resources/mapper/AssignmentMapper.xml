@@ -50,4 +50,58 @@
                                  submitted_at = CURRENT_TIMESTAMP
     </insert>
 
+    <select id="selectSubmissionDetails"
+            resultType="com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse">
+        SELECT
+            u.user_id AS userId,
+
+            /* 닉네임(이름마스킹) -> 예: 가나디(홍*동) */
+            CONCAT(
+                    rjr.request_user_nickname,
+                    '(',
+                    CASE
+                        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
+                        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
+                        ELSE CONCAT(
+                                SUBSTRING(u.name, 1, 1),
+                                REPEAT('*', CHAR_LENGTH(u.name) - 2),
+                                SUBSTRING(u.name, -1)
+                             )
+                        END,
+                    ')'
+            ) AS memberName,
+
+            s.submitted_at AS submittedAt,
+
+            CASE
+                WHEN s.submission_id IS NULL THEN '미제출'
+                ELSE '제출됨'
+                END AS status,
+
+            s.file_url AS fileUrl,
+            s.file_name AS fileName
+
+        FROM assignments a
+                 /* 이 과제가 속한 room_id로 승인된 스터디원 목록 가져오기 */
+                 JOIN room_join_request rjr
+                      ON rjr.room_id = a.room_id
+                          AND rjr.status = '승인'
+
+                 JOIN users u
+                      ON u.email = rjr.request_user_email
+
+                 LEFT JOIN assignment_submissions s
+                           ON s.assignment_id = a.assignment_id
+                               AND s.user_id = u.user_id
+
+        WHERE a.assignment_id = #{assignmentId}
+
+        /* 제출됨 먼저, 제출시간 최신 순 */
+        ORDER BY
+            (s.submission_id IS NULL) ASC,
+            s.submitted_at DESC,
+            rjr.request_user_nickname ASC;
+    </select>
+
+
 </mapper>
