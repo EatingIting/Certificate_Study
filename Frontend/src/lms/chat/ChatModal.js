@@ -89,7 +89,38 @@ const ChatModal = ({ roomId, roomName }) => {
     hours = hours % 12;
     hours = hours ? hours : 12; 
     return `${ampm} ${hours}:${minutes < 10 ? '0' + minutes : minutes}`;
+
+// 🟢 [추가] 오답노트 저장 함수
+  const handleSaveNote = async (question, answer) => {
+    if (!window.confirm("이 내용을 오답노트에 저장하시겠습니까?")) return;
+
+    try {
+        const token = sessionStorage.getItem("accessToken");
+        const res = await fetch(`${apiBaseUrl}/api/answernote`, { // 백엔드 엔드포인트 (가정)
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                subjectId: roomId, // 현재 방 ID (과목 ID)
+                question: question, // 사용자의 질문
+                answer: answer,     // AI의 답변
+                memo: "AI 채팅에서 저장됨" // 기본 메모
+            })
+        });
+
+        if (res.ok) {
+            alert("✅ 오답노트에 저장되었습니다!");
+        } else {
+            alert("저장에 실패했습니다.");
+        }
+    } catch (err) {
+        console.error("오답노트 저장 오류:", err);
+    }
   };
+
+};
 
   // =================================================================
   // 3. 지난 대화 내용 불러오기 (API)
@@ -351,6 +382,36 @@ const ChatModal = ({ roomId, roomName }) => {
     }
   };
 
+  // 🟢 [추가] 오답노트 저장 API 호출 함수
+  const handleSaveNote = async (question, answer) => {
+    if (!window.confirm("이 내용을 오답노트에 저장하시겠습니까?")) return;
+
+    try {
+        const token = sessionStorage.getItem("accessToken");
+        const res = await fetch(`${apiBaseUrl}/api/answernote`, { 
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                subjectId: roomId, 
+                question: question, 
+                answer: answer,     
+                memo: "AI 채팅에서 저장됨" 
+            })
+        });
+
+        if (res.ok) {
+            alert("✅ 오답노트에 저장되었습니다!");
+        } else {
+            alert("저장에 실패했습니다.");
+        }
+    } catch (err) {
+        console.error("오답노트 저장 오류:", err);
+    }
+  };
+
   if (!myInfo) return null;
 
   return (
@@ -397,6 +458,13 @@ const ChatModal = ({ roomId, roomName }) => {
         <div className={`tc-body ${isAiMode ? 'ai-mode' : ''}`} ref={scrollRef} onClick={() => { setIsMenuOpen(false); setShowStickerMenu(false); }}>
           {currentMessages.map((msg, idx) => {
             const isMe = isAiMode ? !msg.isAiResponse : msg.userId === myInfo.userId;
+            let relatedQuestion = "질문 내용을 찾을 수 없습니다.";
+            if (msg.isAiResponse && idx > 0) {
+                const prevMsg = currentMessages[idx - 1];
+                if (!prevMsg.isAiResponse) {
+                    relatedQuestion = prevMsg.message;
+                }
+            }
             return (
               <div key={idx} className={`tc-msg-row ${isMe ? 'me' : 'other'}`}>
                 {!isMe && <div className="tc-profile">{isAiMode && msg.isAiResponse ? "🤖" : "👤"}</div>}
@@ -406,6 +474,15 @@ const ChatModal = ({ roomId, roomName }) => {
                       <div className={`tc-bubble ${isMe ? 'me' : 'other'} ${msg.isSticker ? 'sticker-bubble' : ''}`}>{msg.isSticker ? <div className="sticker-text">{msg.message}</div> : msg.message}</div>
                       <span style={{ fontSize: '10px', color: '#888', minWidth: '50px', textAlign: isMe ? 'right' : 'left', marginBottom: '5px' }}>{formatTime(msg.createdAt)}</span>
                   </div>
+                  {/* 🟢 [핵심] AI 답변 밑에 '오답노트 저장' 버튼 노출 */}
+                  {isAiMode && msg.isAiResponse && (
+                      <button 
+                          className="ai-save-btn" 
+                          onClick={() => handleSaveNote(relatedQuestion, msg.message)}
+                      >
+                          📝 오답노트 저장
+                      </button>
+                  )}
                 </div>
               </div>
             );

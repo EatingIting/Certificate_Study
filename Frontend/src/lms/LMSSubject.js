@@ -11,6 +11,8 @@ import Attendance from "./attendance/Attendance";
 import Assignment from "./assignment/Assignment";
 import AssignmentDetail from "./assignment/AssignmentDetail";
 
+import AnswerNote from "./answernote/AnswerNote";
+
 import Board from "./board/Board";
 import BoardWrite from "./board/BoardWrite";
 import BoardDetail from "./board/BoardDetail";
@@ -116,6 +118,7 @@ function LMSSubjectInner() {
         if (p.includes("/assignment")) setActiveMenu("assignment");
         else if (p.includes("/attendance")) setActiveMenu("attendance");
         else if (p.includes("/board")) setActiveMenu("board");
+        else if (p.includes("/answernote")) setActiveMenu("answernote/list");
         else if (p.includes("/calendar")) setActiveMenu("calendar");
         else setActiveMenu("dashboard");
     }, [location.pathname]);
@@ -228,8 +231,9 @@ function LMSSubjectInner() {
 
                         {/* 게시판: 목록 / 글쓰기 / 상세 */}
                         <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
-                        <Route path="board/write" element={<BoardWrite setActiveMenu={setActiveMenu} />} />
+                        <Route path="answernote" element={<AnswerNote setActiveMenu={setActiveMenu} />} />
                         <Route path="board/:postId" element={<BoardDetail setActiveMenu={setActiveMenu} />} />
+                        <Route path="answernote" element={<Board setActiveMenu={setActiveMenu} />} />
                         {/* <Route path="board/:postId/edit" element={<BoardEdit setActiveMenu={setActiveMenu} />} /> */}
 
                         <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
