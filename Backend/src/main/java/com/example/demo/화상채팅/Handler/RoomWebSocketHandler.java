@@ -1,10 +1,10 @@
-package com.example.demo.service;
+package com.example.demo.화상채팅.Handler;
 
-import com.example.demo.dto.ChatInboundMessage;
-import com.example.demo.dto.ChatOutboundMessage;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.example.demo.화상채팅.DTO.ChatInboundMessage;
+import com.example.demo.화상채팅.DTO.ChatOutboundMessage;
+import com.example.demo.화상채팅.DTO.RoomUser;
+import com.example.demo.화상채팅.Service.MeetingRoomService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.catalina.User;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -16,7 +16,6 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import com.example.demo.dto.RoomUser;
 
 @Component
 public class RoomWebSocketHandler extends TextWebSocketHandler {

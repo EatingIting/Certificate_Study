@@ -1,4 +1,4 @@
-package com.example.demo.dto;
+package com.example.demo.화상채팅.DTO;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

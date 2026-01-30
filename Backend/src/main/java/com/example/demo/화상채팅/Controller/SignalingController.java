@@ -1,10 +1,10 @@
-package com.example.demo.controller;
+package com.example.demo.화상채팅.Controller;
 
 import com.example.demo.dto.ConsumeRequest;
 import com.example.demo.dto.ProduceRequest;
 import com.example.demo.dto.RoomRequest;
 import com.example.demo.dto.TransportRequest;
-import com.example.demo.service.SfuClient;
+import com.example.demo.화상채팅.SFU.SfuClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 

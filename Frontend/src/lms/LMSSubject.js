@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { Routes, Route, Navigate, useLocation, useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 
 import LMSHeader from "./LMSHeader";
 import LMSSidebar from "./LMSSidebar";
@@ -63,6 +63,12 @@ function LMSSubjectInner() {
     let location = useLocation();
     let navigate = useNavigate();
     let { subjectId } = useParams();
+
+    // 🔥 URL pathname에서 MeetingRoom roomId 추출 (createPortal로 렌더링된 MeetingPage에 전달용)
+    const meetingRoomIdFromPath = useMemo(() => {
+        const match = location.pathname.match(/\/MeetingRoom\/([^/]+)/);
+        return match ? match[1] : null;
+    }, [location.pathname]);
 
     useEffect(() => {
         let p = location.pathname;
@@ -233,7 +239,7 @@ function LMSSubjectInner() {
                         />
                     )}
                     {showMeeting && meetingContainerReady && meetingContainerRef.current &&
-                        createPortal(<MeetingPage />, meetingContainerRef.current)}
+                        createPortal(<MeetingPage portalRoomId={meetingRoomIdFromPath} />, meetingContainerRef.current)}
 
                     {/* MeetingRoom 경로가 아닐 때만 Routes 표시 (회의 중이면 위 컨테이너에 MeetingPage 표시) */}
                     <div style={{ display: isOnMeetingRoom ? "none" : "block", width: "100%" }}>

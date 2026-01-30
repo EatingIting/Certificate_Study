@@ -1,6 +1,6 @@
-package com.example.demo.config;
+package com.example.demo.화상채팅.Config;
 
-import com.example.demo.service.RoomWebSocketHandler;
+import com.example.demo.화상채팅.Handler.RoomWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
