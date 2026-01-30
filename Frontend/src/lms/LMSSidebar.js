@@ -49,10 +49,13 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             else nextActive = "assignment/list";
         }
 
-        if (last === "attendance") {
-            if (sp.get("scope") === "all") nextActive = "attendance/all";
-            else nextActive = "attendance/my";
+        // 출석 라우트 동기화
+        if (path.includes("/attendance/all")) {
+        nextActive = "attendance/all";
+        } else if (path.includes("/attendance")) {
+        nextActive = "attendance/my";
         }
+
 
         if (last === "board") {
             let category = sp.get("category");
@@ -272,7 +275,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                     goChild(
                                         "attendance",
                                         "attendance/my",
-                                        "attendance?scope=my"
+                                        "attendance"
                                     )
                                 }
                             >
@@ -286,7 +289,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                     goChild(
                                         "attendance",
                                         "attendance/all",
-                                        "attendance?scope=all"
+                                        "attendance/all"
                                     )
                                 }
                             >
@@ -585,20 +588,29 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                     if (!subjectId) return;
 
                     try {
-                        // 서버에서 roomId 가져오기 (8자리)
+                        // 서버에서 roomId + 오늘 회차 scheduleId 가져오기 (scheduleId 없어도 roomId만 있으면 입장 가능)
                         const response = await api.get(`/meeting-rooms/room-id/${subjectId}`);
-                        const roomId = response.data.roomId;
+                        const roomId = response.data?.roomId;
+                        const scheduleId = response.data?.scheduleId ?? null;
 
-                        if (roomId) {
-                            sessionStorage.setItem("lms.activeRoomId", roomId);
+                        if (!roomId) {
+                            console.error("[LMSSidebar] roomId 없음:", response.data);
+                            alert("화상 채팅방 입장에 실패했습니다. 다시 시도해주세요.");
+                            return;
+                        }
+
+                        sessionStorage.setItem("lms.activeRoomId", roomId);
+                        if (scheduleId != null) {
+                            sessionStorage.setItem("pip.scheduleId", String(scheduleId));
                         }
 
                         window.dispatchEvent(new Event("meeting:request-pip"));
 
-                        navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
+                        navigate(scheduleId != null
+                            ? `/lms/${subjectId}/MeetingRoom/${roomId}?scheduleId=${scheduleId}`
+                            : `/lms/${subjectId}/MeetingRoom/${roomId}`);
                     } catch (error) {
                         console.error("[LMSSidebar] roomId 가져오기 실패:", error);
-                        // 에러 발생 시 기존 방식으로 fallback (하지만 이 경우는 없어야 함)
                         alert("화상 채팅방 입장에 실패했습니다. 다시 시도해주세요.");
                     }
                 }}

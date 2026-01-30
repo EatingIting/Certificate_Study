@@ -25,12 +25,12 @@ public class StudyScheduleCreateRequest {
     @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$")
     private String date;
 
-    @NotNull
-    @Pattern(regexp = "^\\d{2}:\\d{2}$")
+    /** 시작 시간 (HH:mm 또는 HH:mm:ss), 선택 */
+    @Pattern(regexp = "^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$")
     private String startTime;
 
-    @NotNull
-    @Pattern(regexp = "^\\d{2}:\\d{2}$")
+    /** 종료 시간 (HH:mm 또는 HH:mm:ss), 선택 */
+    @Pattern(regexp = "^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$")
     private String endTime;
 
     @Size(max = 500)

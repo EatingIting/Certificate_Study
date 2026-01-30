@@ -7,7 +7,8 @@ import java.time.LocalDateTime;
 public class AssignmentSubmissionVO {
     private Long submissionId;
     private Long assignmentId;
-    private String userId;
+    private String userEmail; // userId 제거/대체
+
 
     private String submitTitle;
     private String memo;

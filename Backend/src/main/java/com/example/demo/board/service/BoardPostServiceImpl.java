@@ -1,10 +1,10 @@
 package com.example.demo.board.service;
 
-import com.example.demo.auth.AuthService;
-import com.example.demo.auth.AuthVO;
 import com.example.demo.board.mapper.BoardPostMapper;
 import com.example.demo.board.vo.BoardPostVO;
 import com.example.demo.roomparticipant.RoomParticipantMapper;
+import com.example.demo.로그인.service.AuthService;
+import com.example.demo.로그인.vo.AuthVO;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
