@@ -7,22 +7,22 @@ import heroImg from "./메인메인.png";
 function Main() {
     const navigate = useNavigate();
 
-    // 최신 모집 스터디
     const [rooms, setRooms] = useState([]);
-
-    // 관심 자격증 기반 추천 스터디
     const [interestRooms, setInterestRooms] = useState([]);
-
-    // 메인 카테고리 목록
     const [categories, setCategories] = useState([]);
+    const [isLogin, setIsLogin] = useState(false);
 
     useEffect(() => {
         fetchRooms();
         fetchCategories();
-        fetchInterestRooms();
+
+        const token = sessionStorage.getItem("accessToken");
+        if (token) {
+            setIsLogin(true);
+            fetchInterestRooms();
+        }
     }, []);
 
-    // 최신 모집 스터디 조회
     const fetchRooms = async () => {
         const res = await api.get("/rooms");
 
@@ -33,14 +33,12 @@ function Main() {
         );
     };
 
-    // 메인 카테고리 조회
     const fetchCategories = async () => {
         const res = await api.get("/category");
 
         setCategories(res.data.filter((c) => c.level === 1));
     };
 
-    // 관심 자격증 기반 스터디 조회
     const fetchInterestRooms = async () => {
         try {
             const token = sessionStorage.getItem("accessToken");
@@ -58,13 +56,11 @@ function Main() {
             data = data.slice(0, 4);
 
             setInterestRooms(data);
-
         } catch (err) {
             console.error("관심 스터디 조회 실패", err);
         }
     };
 
-    // 날짜 출력 포맷
     const formatStartDate = (dateStr) => {
         if (!dateStr) return "";
 
@@ -72,13 +68,11 @@ function Main() {
         return `${y}년 ${m}월 ${d}일 시작`;
     };
 
-    // 카테고리 이름 축약
     const categoryNameMap = {
         "공무원·공공시험": "공공시험",
         "민간자격·실무능력": "민간자격",
     };
 
-    // 이미지 URL 처리
     const getImageUrl = (img) => {
         if (!img) return "/sample.jpg";
 
@@ -89,7 +83,6 @@ function Main() {
 
     return (
         <div className="page">
-            {/* HERO */}
             <section
                 className="hero sample-container"
                 style={{ "--hero-img": `url(${heroImg})` }}
@@ -101,7 +94,6 @@ function Main() {
                 <p>자격증 · 취업 · 개발 스터디를 실시간 화상으로</p>
             </section>
 
-            {/* 메인 카테고리 */}
             <section className="main-category sample-container">
                 <h2>스터디 카테고리</h2>
 
@@ -123,51 +115,55 @@ function Main() {
                 </div>
             </section>
 
-            {/* 관심 자격증 화상 스터디 */}
-            <section className="study-sample-container">
-                <h2>관심 자격증 화상 스터디</h2>
+            {isLogin && (
+                <section className="study-sample-container">
+                    <h2>관심 자격증 화상 스터디</h2>
 
-                <div className="study-list">
-                    {interestRooms.length === 0 ? (
-                        <div className="empty">
-                            관심 자격증 기반 스터디가 없습니다.
-                        </div>
-                    ) : (
-                        interestRooms.map((room, idx) => (
-                            <div key={idx} className="cardbox">
-                                <div className="thumbnail">
-                                    <img
-                                        src={getImageUrl(room.roomImg)}
-                                        alt="스터디 썸네일"
-                                        className="thumb-img"
-                                        onError={(e) => {
-                                            e.currentTarget.src = "/sample.jpg";
-                                        }}
-                                    />
-                                </div>
-
-                                <span className="main-tag">
-                                    {room.subCategoryName ?? room.midCategoryName}
-                                </span>
-
-                                <h5>{room.title}</h5>
-
-                                <p>{formatStartDate(room.startDate)}</p>
-
-                                <button
-                                    onClick={() =>
-                                        navigate(`/room?open=${room.roomId}`)
-                                    }
-                                >
-                                    자세히 보기
-                                </button>
+                    <div className="study-list">
+                        {interestRooms.length === 0 ? (
+                            <div className="empty">
+                                관심 자격증 기반 스터디가 없습니다.
                             </div>
-                        ))
-                    )}
-                </div>
-            </section>
+                        ) : (
+                            interestRooms.map((room, idx) => (
+                                <div key={idx} className="cardbox">
+                                    <div className="thumbnail">
+                                        <img
+                                            src={getImageUrl(room.roomImg)}
+                                            alt="스터디 썸네일"
+                                            className="thumb-img"
+                                            onError={(e) => {
+                                                e.currentTarget.src =
+                                                    "/sample.jpg";
+                                            }}
+                                        />
+                                    </div>
 
-            {/* 최신 모집 중인 스터디 */}
+                                    <span className="main-tag">
+                                        {room.subCategoryName ??
+                                            room.midCategoryName}
+                                    </span>
+
+                                    <h5>{room.title}</h5>
+
+                                    <p>{formatStartDate(room.startDate)}</p>
+
+                                    <button
+                                        onClick={() =>
+                                            navigate(
+                                                `/room?open=${room.roomId}`
+                                            )
+                                        }
+                                    >
+                                        자세히 보기
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </section>
+            )}
+
             <section className="study-sample-container">
                 <h2>지금 모집 중인 화상 스터디</h2>
 

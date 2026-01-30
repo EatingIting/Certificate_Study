@@ -23,8 +23,11 @@ const MainSideBar = () => {
     const go = (path) => navigate(path);
 
     const handleLogout = () => {
-        localStorage.clear(); //
+        sessionStorage.clear();
+        localStorage.clear();
+
         alert("로그아웃 되었습니다.");
+
         navigate("/auth");
     };
 
