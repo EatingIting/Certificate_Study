@@ -11,17 +11,16 @@
             a.assignment_id AS assignmentId,
             a.title AS title,
             a.due_at AS dueAt,
-            u.email AS authorEmail,
+            a.created_by_email AS authorEmail,
             CASE WHEN s.submission_id IS NULL THEN '제출 하기' ELSE '제출 완료' END AS status
         FROM assignments a
-                 JOIN users u ON u.user_id = a.created_by_user_id
                  LEFT JOIN assignment_submissions s
                            ON s.assignment_id = a.assignment_id
-                               AND s.user_id = #{userId}
+                               AND s.user_email = #{userEmail}
         WHERE a.room_id = #{roomId}
-        ORDER BY a.due_at ASC, a.assignment_id DESC;
-
+        ORDER BY a.due_at ASC, a.assignment_id DESC
     </select>
+
 
 
     <!-- 2) 과제 생성 -->
@@ -30,17 +29,18 @@
             useGeneratedKeys="true"
             keyProperty="assignmentId">
 
-        INSERT INTO assignments (room_id, title, description, due_at, created_by_user_id)
-        VALUES (#{roomId}, #{title}, #{description}, #{dueAt}, #{createdByUserId})
+        INSERT INTO assignments (room_id, title, description, due_at, created_by_email)
+        VALUES (#{roomId}, #{title}, #{description}, #{dueAt}, #{createdByEmail})
 
     </insert>
+
 
     <!-- 3) 제출: (assignment_id, user_email) UNIQUE라서 중복제출이면 UPDATE -->
     <insert id="upsertSubmission" parameterType="com.example.demo.assignment.vo.AssignmentSubmissionVO">
         INSERT INTO assignment_submissions
-        (assignment_id, user_id, submit_title, memo, file_name, file_url, file_size)
+        (assignment_id, user_email, submit_title, memo, file_name, file_url, file_size, submitted_at)
         VALUES
-            (#{assignmentId}, #{userId}, #{submitTitle}, #{memo}, #{fileName}, #{fileUrl}, #{fileSize})
+            (#{assignmentId}, #{userEmail}, #{submitTitle}, #{memo}, #{fileName}, #{fileUrl}, #{fileSize}, CURRENT_TIMESTAMP)
             ON DUPLICATE KEY UPDATE
                                  submit_title = VALUES(submit_title),
                                  memo        = VALUES(memo),
@@ -50,58 +50,77 @@
                                  submitted_at = CURRENT_TIMESTAMP
     </insert>
 
+
     <select id="selectSubmissionDetails"
             resultType="com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse">
+
         SELECT
-            u.user_id AS userId,
+        u.email AS userId,  <!-- DTO 필드명이 userId라 일단 유지(원하면 userEmail로 rename 추천) -->
 
-            /* 닉네임(이름마스킹) -> 예: 가나디(홍*동) */
-            CONCAT(
-                    rjr.request_user_nickname,
-                    '(',
-                    CASE
-                        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
-                        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
-                        ELSE CONCAT(
-                                SUBSTRING(u.name, 1, 1),
-                                REPEAT('*', CHAR_LENGTH(u.name) - 2),
-                                SUBSTRING(u.name, -1)
-                             )
-                        END,
-                    ')'
-            ) AS memberName,
+        CONCAT(
+        COALESCE(m.request_user_nickname, u.nickname, '방장'),
+        '(',
+        CASE
+        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
+        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
+        ELSE CONCAT(
+        SUBSTRING(u.name, 1, 1),
+        REPEAT('*', CHAR_LENGTH(u.name) - 2),
+        SUBSTRING(u.name, -1)
+        )
+        END,
+        ')'
+        ) AS memberName,
 
-            s.submitted_at AS submittedAt,
+        s.submitted_at AS submittedAt,
 
-            CASE
-                WHEN s.submission_id IS NULL THEN '미제출'
-                ELSE '제출됨'
-                END AS status,
+        CASE
+        WHEN s.submission_id IS NULL THEN '미제출'
+        ELSE '제출됨'
+        END AS status,
 
-            s.file_url AS fileUrl,
-            s.file_name AS fileName
+        s.file_url AS fileUrl,
+        s.file_name AS fileName
 
         FROM assignments a
-                 /* 이 과제가 속한 room_id로 승인된 스터디원 목록 가져오기 */
-                 JOIN room_join_request rjr
-                      ON rjr.room_id = a.room_id
-                          AND rjr.status = '승인'
 
-                 JOIN users u
-                      ON u.email = rjr.request_user_email
+        JOIN (
+        /* 1) 승인된 멤버 */
+        SELECT
+        rjr.room_id,
+        rjr.request_user_email AS user_email,
+        rjr.request_user_nickname
+        FROM room_join_request rjr
+        WHERE rjr.status = '승인'
 
-                 LEFT JOIN assignment_submissions s
-                           ON s.assignment_id = a.assignment_id
-                               AND s.user_id = u.user_id
+        UNION
+
+        /* 2) 방장(= 과제 작성자 email) */
+        SELECT
+        a2.room_id,
+        a2.created_by_email AS user_email,
+        NULL AS request_user_nickname
+        FROM assignments a2
+        ) m
+        ON m.room_id = a.room_id
+
+        JOIN users u
+        ON u.email = m.user_email
+
+        LEFT JOIN assignment_submissions s
+        ON s.assignment_id = a.assignment_id
+        AND s.user_email = u.email
 
         WHERE a.assignment_id = #{assignmentId}
 
-        /* 제출됨 먼저, 제출시간 최신 순 */
         ORDER BY
-            (s.submission_id IS NULL) ASC,
-            s.submitted_at DESC,
-            rjr.request_user_nickname ASC;
+        (s.submission_id IS NULL) ASC,
+        s.submitted_at DESC,
+        COALESCE(m.request_user_nickname, u.nickname) ASC;
+
     </select>
+
+
 
 
 </mapper>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.attendance.mapper.AttendanceMapper">
+
+    <select id="countTotalSessions" resultType="int">
+        SELECT COUNT(*)
+        FROM study_schedule
+        WHERE subject_id = #{studyRoomId}
+    </select>
+
+    <select id="selectMySessions" resultType="com.example.demo.attendance.vo.AttendanceSessionVO">
+        SELECT
+            ss.round_num AS sessionNo,
+            DATE_FORMAT(MIN(p.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
+            DATE_FORMAT(MAX(p.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
+        FROM study_schedule ss
+                 JOIN meeting_room mr
+                      ON mr.subject_id = ss.subject_id
+                          AND mr.schedule_id = ss.schedule_id
+                 LEFT JOIN meetingroom_participant p
+                           ON p.room_id = mr.room_id
+                               AND p.user_email = #{userEmail}
+        WHERE ss.subject_id = #{studyRoomId}
+        GROUP BY ss.round_num
+        ORDER BY ss.round_num
+    </select>
+
+    <select id="selectAllSessionsRaw" resultType="com.example.demo.attendance.mapper.AttendanceAllRow">
+        SELECT
+            p.user_email AS memberId,
+            p.user_email AS name,
+            ss.round_num AS sessionNo,
+            DATE_FORMAT(MIN(p.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
+            DATE_FORMAT(MAX(p.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
+        FROM study_schedule ss
+                 JOIN meeting_room mr
+                      ON mr.subject_id = ss.subject_id
+                          AND mr.schedule_id = ss.schedule_id
+                 JOIN meetingroom_participant p
+                      ON p.room_id = mr.room_id
+        WHERE ss.subject_id = #{studyRoomId}
+        GROUP BY p.user_email, ss.round_num
+        ORDER BY p.user_email, ss.round_num
+    </select>
+
+    <select id="selectScheduleTime"
+            resultType="com.example.demo.attendance.vo.AttendanceScheduleTimeRow">
+        SELECT
+            DATE_FORMAT(start_time, '%H:%i') AS start,
+            DATE_FORMAT(end_time, '%H:%i')   AS end
+        FROM study_schedule
+        WHERE subject_id = #{studyRoomId}
+        ORDER BY round_num ASC
+            LIMIT 1
+    </select>
+
+
+</mapper>

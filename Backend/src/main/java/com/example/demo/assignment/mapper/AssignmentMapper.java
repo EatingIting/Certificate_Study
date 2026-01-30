@@ -14,7 +14,7 @@ public interface AssignmentMapper {
 
     List<AssignmentListResponse> selectAssignmentsByRoom(
             @Param("roomId") String roomId,
-            @Param("userId") String userId
+            @Param("userEmail") String userEmail
     );
 
     List<AssignmentSubmissionDetailResponse> selectSubmissionDetails(

@@ -190,8 +190,6 @@ const AttendanceAll = () => {
                             <tr>
                                 <th className="at-th-name">이름</th>
                                 <th className="at-th-att">출석률</th>
-                                <th className="at-th-num">결석</th>
-                                <th className="at-th-num">출석</th>
                                 {Array.from({ length: studySchedule.totalSessions }).map((_, i) => (
                                     <th key={i} className="at-th-session">
                                         {i + 1}
@@ -220,8 +218,6 @@ const AttendanceAll = () => {
                                         </div>
                                     </td>
 
-                                    <td className="at-td-num">{r.absentCount}</td>
-                                    <td className="at-td-num">{r.score}</td>
 
                                     {r.sessionsView.map((s) => (
                                         <td key={s.sessionNo} className="at-td-session">
@@ -238,7 +234,7 @@ const AttendanceAll = () => {
 
                             {viewRows.length === 0 && (
                                 <tr>
-                                    <td className="at-empty" colSpan={4 + studySchedule.totalSessions}>
+                                    <td className="at-empty" colSpan={2 + studySchedule.totalSessions}>
                                         출석 데이터가 없습니다.
                                     </td>
                                 </tr>

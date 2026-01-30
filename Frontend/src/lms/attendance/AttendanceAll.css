@@ -262,3 +262,25 @@
     padding: 26px 16px;
     color: #667085;
 }
+
+
+.at-table-wrap { overflow: auto; }
+
+.at-th-name, .at-td-name,
+.at-th-att,  .at-td-att {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+.at-th-att, .at-td-att {
+  left: 220px; /* 이름 컬럼 폭만큼(너가 쓰는 폭에 맞춰 조절) */
+  z-index: 2;
+}
+
+.at-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}

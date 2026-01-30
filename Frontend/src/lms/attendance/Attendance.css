@@ -458,3 +458,22 @@
 .at-summary-big.is-absent {
   color: #111827;
 }
+
+.at-td-status {
+  text-align: center;
+}
+
+.at-td-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 회차 / 날짜 / 상태 전부 가운데 정렬 */
+.at-td-sessionno,
+.at-td-date,
+.at-td-status {
+  text-align: center;
+}
+
