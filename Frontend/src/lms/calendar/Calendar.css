@@ -386,6 +386,20 @@
     display: none;
 }
 
+/* +N more 팝업에서 스터디 일정 숨김 (id가 S로 시작 = 스터디) */
+.calPage .fc-popover-body [data-event-id^="S"],
+.calPage .fc .fc-popover-body [data-event-id^="S"],
+.calPage .fc-popover-body .fc-daygrid-event.study,
+.calPage .fc .fc-popover-body .fc-daygrid-event.study {
+    display: none !important;
+}
+
+/* FullCalendar 팝오버가 body 포탈로 렌더될 경우 대비 전역 규칙 */
+.fc-popover-body [data-event-id^="S"],
+.fc-popover-body .fc-daygrid-event.study {
+    display: none !important;
+}
+
 /* 팝오버 안 일정 글씨 확실히 보이게 (스터디·일반 일정 모두) */
 .calPage .fc-popover-body .fc-daygrid-event,
 .calPage .fc .fc-popover-body .fc-daygrid-event,
@@ -409,6 +423,12 @@
 .calPage .fc-popover-body .fc-daygrid-event:last-child,
 .calPage .fc .fc-popover-body .fc-daygrid-event:last-child {
     margin-bottom: 0;
+}
+
+/* +N more 팝업에서 fc-more-popover-misc(dayCellContent 스터디 회차) 숨김 */
+.fc-popover .fc-more-popover-misc,
+.fc-more-popover .fc-more-popover-misc {
+    display: none !important;
 }
 
 /* +N more 링크 자체 스타일 */
