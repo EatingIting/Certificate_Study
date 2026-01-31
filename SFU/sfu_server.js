@@ -354,6 +354,13 @@ wss.on("connection", (ws) => {
         const consumer = await t.transport.consume({ producerId, rtpCapabilities, paused: true });
         peer.consumers.set(consumer.id, consumer);
 
+        // 비디오 consumer 생성 직후 키프레임 요청 → 상대방 화면 초반 화질 개선 (mediasoup Consumer API)
+        if (consumer.kind === "video") {
+          try {
+            consumer.requestKeyFrame();
+          } catch (_) {}
+        }
+
         consumer.on("transportclose", () => peer.consumers.delete(consumer.id));
         consumer.on("producerclose", () => {
           peer.consumers.delete(consumer.id);

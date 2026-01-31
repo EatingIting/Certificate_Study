@@ -2002,12 +2002,28 @@ function MeetingPage({ portalRoomId }) {
                 return;
             }
 
-            // 🔥 필터 준비 중에도 원본 비디오를 canvas에 그려서 다른 참가자에게 전송
-            // WebSocket으로 filterPreparing 상태를 동기화하므로 VideoTile 오버레이로 스피너 표시
+            // 🔥 배경제거만 켜져 있을 때 세그멘터 미준비 시 검은 화면. 이모지는 얼굴 미인식 시에도 카메라 표시.
             {
-                // 필터 준비 상태 확인 (렌더링용)
-                const isEmojiReady = !isEmojiOn || (isEmojiOn && !!lastFaceBoxRef.current);
                 const isBgReady = !isBgRemoveOn || (isBgRemoveOn && !!faceBgSegmenterRef.current?.segmenter);
+
+                if (isBgRemoveOn && !isBgReady) {
+                    ctx.fillStyle = "#000000";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    frameCount++;
+                    try {
+                        const last = lastGoodFrameCanvasRef.current;
+                        if (last && canvas) {
+                            const lctx = last.getContext("2d");
+                            if (lctx) {
+                                lctx.drawImage(canvas, 0, 0, last.width, last.height);
+                                lastGoodFrameAtRef.current = Date.now();
+                            }
+                        }
+                    } catch { }
+                    const nextInterval = isHidden ? 200 : (isEmojiOn || isBgRemoveOn) ? 66 : 33;
+                    canvasPipelineRafRef.current = setTimeout(drawLoop, nextInterval);
+                    return;
+                }
 
                 // 🖌️ 렌더링 시작 - 필터가 준비되면 정상 렌더링
                 // A. 배경 제거 (준비되었을 때만, 백그라운드에서는 스킵해 CPU 절약)
@@ -2068,13 +2084,12 @@ function MeetingPage({ portalRoomId }) {
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(bgFrameCanvas, 0, 0, canvas.width, canvas.height);
                     } else {
-                        // 배경제거가 켜져있지만 세그멘터가 아직 준비 안됨 -> 원본 비디오
-                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        // 배경제거 켜져있는데 마스크 미생성(첫 프레임 등) -> 검은 화면
+                        ctx.fillStyle = "#000000";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
                     }
                 } else {
-                    // B. 일반 비디오 (배경제거 X)
-                    // 🔥 이모지 모드가 켜져있지만 얼굴이 아직 감지되지 않았으면 원본 카메라 스트림 표시
-                    // (검은 화면 대신 카메라 스트림을 보여줌)
+                    // B. 일반 비디오 (배경제거 X) - 이모지만 켜져있을 때 얼굴 미인식 시에도 카메라 표시
                     ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
                 }
 
@@ -2091,14 +2106,18 @@ function MeetingPage({ portalRoomId }) {
                         const x = (box.x + box.width / 2) * scaleX;
                         const y = (box.y + box.height / 2) * scaleY - (size * 0.1);
 
-                        // 부드러운 이동 (Smoothing) - 🔥 새로고침 시 바로 따라오도록 개선
+                        // 부드러운 이동 (Smoothing) - 빠른 따라오기 + 큰 움직임 시 즉시 반영
                         const prev = smoothedFaceBoxRef.current;
                         const curr = { x, y, size };
-                        // 🔥 새로고침 직후(처음 몇 프레임) 또는 얼굴이 새로 감지된 경우 즉시 따라오게 함
                         const isNewDetection = !prev ||
                             frameCount <= 10 ||
                             (lastFaceBoxAtRef.current && Date.now() - lastFaceBoxAtRef.current < 300);
-                        const factor = isNewDetection ? 1.0 : 0.9; // 새 감지 시 즉시 이동, 이후 부드럽게
+                        let factor = isNewDetection ? 1.0 : 0.92; // 기본 더 빠른 반응 (0.9→0.92)
+                        if (prev && !isNewDetection) {
+                            const dx = curr.x - prev.x, dy = curr.y - prev.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist > 45) factor = 0.98; // 얼굴이 크게 움직이면 빠르게 따라감
+                        }
                         const smoothed = prev && !isNewDetection ? {
                             x: prev.x + (curr.x - prev.x) * factor,
                             y: prev.y + (curr.y - prev.y) * factor,
@@ -2125,6 +2144,7 @@ function MeetingPage({ portalRoomId }) {
                         const newProducer = await transport.produce({
                             track: outTrack,
                             encodings: [{ maxBitrate: 2500000, scaleResolutionDownBy: 1.0 }], // 2.5Mbps 제한 (60fps 대응)
+                            codecOptions: { videoGoogleStartBitrate: 2500, videoGoogleMaxBitrate: 2500 }, // 초반부터 고화질 (상대방 화질 개선)
                             appData: { type: "camera" },
                         });
                         producersRef.current.set("camera", newProducer);
@@ -3414,8 +3434,13 @@ function MeetingPage({ portalRoomId }) {
                 if (!Number.isFinite(targetBox.x) || !Number.isFinite(targetBox.y) || !Number.isFinite(targetBox.size)) {
                     smoothedFaceBoxRef.current = null;
                 } else {
-                    const smoothFactor = 0.75;
                     const prev = smoothedFaceBoxRef.current;
+                    let smoothFactor = 0.92; // 더 빠르게 따라오기 (0.75→0.92)
+                    if (prev) {
+                        const dx = targetBox.x - prev.x, dy = targetBox.y - prev.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 45) smoothFactor = 0.98; // 큰 움직임 시 빠르게 따라감
+                    }
                     smoothedFaceBoxRef.current = prev
                         ? {
                             x: prev.x + (targetBox.x - prev.x) * smoothFactor,
@@ -3469,6 +3494,8 @@ function MeetingPage({ portalRoomId }) {
                         if (transport && !transport.closed) {
                             const newProducer = await transport.produce({
                                 track: outTrack,
+                                encodings: [{ maxBitrate: 2500000, scaleResolutionDownBy: 1.0 }],
+                                codecOptions: { videoGoogleStartBitrate: 2500, videoGoogleMaxBitrate: 2500 },
                                 appData: { type: "camera" },
                             });
                             producersRef.current.set("camera", newProducer);
@@ -3790,6 +3817,8 @@ function MeetingPage({ portalRoomId }) {
             try {
                 const p = await t.produce({
                     track: videoTrack,
+                    encodings: [{ maxBitrate: 2500000, scaleResolutionDownBy: 1.0 }],
+                    codecOptions: { videoGoogleStartBitrate: 2500, videoGoogleMaxBitrate: 2500 },
                     appData: { type: "camera" },
                 });
                 producersRef.current.set("camera", p);
@@ -4173,6 +4202,8 @@ function MeetingPage({ portalRoomId }) {
 
         const producer = await t.produce({
             track,
+            encodings: [{ maxBitrate: 2500000, scaleResolutionDownBy: 1.0 }],
+            codecOptions: { videoGoogleStartBitrate: 2500, videoGoogleMaxBitrate: 2500 },
             appData: { type: "camera" },
         });
 
