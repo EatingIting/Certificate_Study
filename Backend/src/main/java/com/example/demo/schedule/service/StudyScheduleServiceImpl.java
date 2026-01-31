@@ -5,6 +5,9 @@ import com.example.demo.dto.schedule.StudyScheduleCreateRequest;
 import com.example.demo.dto.schedule.StudyScheduleUpdateRequest;
 import com.example.demo.schedule.mapper.StudyScheduleMapper;
 import com.example.demo.schedule.vo.StudyScheduleVO;
+import com.example.demo.화상채팅.Repository.MeetingRoomParticipantRepository;
+import com.example.demo.화상채팅.Repository.MeetingRoomRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,9 @@ import java.util.List;
 public class StudyScheduleServiceImpl implements StudyScheduleService {
 
     private final StudyScheduleMapper studyScheduleMapper;
+    private final MeetingRoomParticipantRepository meetingRoomParticipantRepository;
+    private final MeetingRoomRepository meetingRoomRepository;
+    private final EntityManager entityManager;
 
     @Override
     public List<StudyScheduleVO> selectByRange(String roomId, Date start, Date endExclusive) {
@@ -95,6 +101,10 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
     @Override
     @Transactional
     public void delete(Long studyScheduleId, String roomId) {
+        // FK 제약: meetingroom_participant, meeting_room이 study_schedule 참조 → 일정 삭제 전 둘 다 삭제
+        meetingRoomParticipantRepository.deleteBySubjectIdAndScheduleId(roomId, studyScheduleId);
+        meetingRoomRepository.deleteBySubjectIdAndScheduleId(roomId, studyScheduleId);
+        entityManager.flush(); // JPA DELETE를 DB에 즉시 반영 후 MyBatis DELETE 실행
         int deleted = studyScheduleMapper.delete(studyScheduleId, roomId);
         if (deleted == 0) {
             throw new IllegalArgumentException("해당 스터디 일정이 없거나 삭제할 수 없습니다. id=" + studyScheduleId);
@@ -157,6 +167,46 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
         if (subjectId == null || subjectId.isBlank()) return null;
         try {
             return studyScheduleMapper.selectScheduleIdBySubjectIdAndCurrentTime(subjectId.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public Long findUpcomingTodayScheduleId(String subjectId) {
+        if (subjectId == null || subjectId.isBlank()) return null;
+        try {
+            return studyScheduleMapper.selectUpcomingTodayScheduleId(subjectId.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public StudyScheduleVO getBySubjectIdAndScheduleId(String subjectId, Long scheduleId) {
+        if (subjectId == null || subjectId.isBlank() || scheduleId == null) return null;
+        try {
+            return studyScheduleMapper.selectBySubjectIdAndScheduleId(subjectId.trim(), scheduleId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public StudyScheduleVO getNextSessionTodayAfter(String subjectId, Long afterScheduleId) {
+        if (subjectId == null || subjectId.isBlank() || afterScheduleId == null) return null;
+        try {
+            return studyScheduleMapper.selectNextSessionToday(subjectId.trim(), afterScheduleId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public StudyScheduleVO getNextSessionOnDateAfter(String subjectId, java.sql.Date studyDate, Long afterScheduleId) {
+        if (subjectId == null || subjectId.isBlank() || studyDate == null || afterScheduleId == null) return null;
+        try {
+            return studyScheduleMapper.selectNextSessionOnDate(subjectId.trim(), studyDate, afterScheduleId);
         } catch (Exception e) {
             return null;
         }

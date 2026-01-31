@@ -63,6 +63,44 @@
         LIMIT 1
     </select>
 
+    <!-- 오늘 일정 중 시작 시각이 현재 시각 이후인 "다음 회차" schedule_id (2시 전 입장 → 2시 회차 배정용) -->
+    <select id="selectUpcomingTodayScheduleId" resultType="java.lang.Long">
+        SELECT schedule_id
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+          AND study_date = CURDATE()
+          AND start_time <![CDATA[>=]]> CURTIME()
+        ORDER BY start_time ASC
+        LIMIT 1
+    </select>
+
+    <select id="selectBySubjectIdAndScheduleId" resultMap="StudyScheduleMap">
+        SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
+        FROM study_schedule
+        WHERE subject_id = #{subjectId} AND schedule_id = #{scheduleId}
+    </select>
+
+    <select id="selectNextSessionToday" resultMap="StudyScheduleMap">
+        SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+          AND study_date = CURDATE()
+          AND schedule_id <![CDATA[>]]> #{afterScheduleId}
+        ORDER BY schedule_id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 캐치업: 열린 참가자의 study_date 기준 다음 회차 (서버 CURDATE/타임존 무관) -->
+    <select id="selectNextSessionOnDate" resultMap="StudyScheduleMap">
+        SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+          AND study_date = #{studyDate}
+          AND schedule_id <![CDATA[>]]> #{afterScheduleId}
+        ORDER BY schedule_id ASC
+        LIMIT 1
+    </select>
+
     <!-- schedule_id = round_num (동일 값), 복합 PK (subject_id, schedule_id), AUTO_INCREMENT 없음 -->
     <insert id="insert" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
         INSERT INTO study_schedule (subject_id, schedule_id, round_num, study_date, description, start_time, end_time)

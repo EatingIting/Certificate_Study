@@ -586,6 +586,19 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         }
         if ("PING".equalsIgnoreCase(type)) {
             sendMessageSafe(session, new TextMessage("{\"type\":\"PONG\"}"));
+            // 같은 날 다음 회차로 넘어갔을 때, 방에 그대로 있으면 새 회차 출석 배정 (2→3→4회차 모두 적용)
+            // PING 보낸 사람만이 아니라 방에 있는 모든 참가자에 대해 회차 전환 적용 → 4회차 행 생성 보장
+            if (users != null) {
+                for (RoomUser u : users.values()) {
+                    if (u != null && u.getUserEmail() != null && !u.getUserEmail().isBlank()) {
+                        try {
+                            meetingRoomService.checkAndAssignNewSessionIfNeeded(roomId, u.getUserEmail());
+                        } catch (Exception e) {
+                            // 한 명 실패해도 나머지 계속 처리
+                        }
+                    }
+                }
+            }
             return;
         }
 

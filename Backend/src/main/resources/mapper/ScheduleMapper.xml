@@ -15,6 +15,7 @@
         <result property="endAt"             column="end_at"/>
         <result property="type"              column="type"/>
         <result property="colorHex"          column="color_hex"/>
+        <result property="textColor"         column="text_color"/>
         <result property="customTypeLabel"   column="custom_type_label"/>
         <result property="createdAt"         column="created_at"/>
         <result property="updatedAt"         column="updated_at"/>
@@ -29,7 +30,7 @@
     <select id="selectByRange" resultMap="ScheduleMap">
         SELECT
         schedule_id, room_id, user_id, title, description,
-        start_at, end_at, type, color_hex, custom_type_label,
+        start_at, end_at, type, color_hex, text_color, custom_type_label,
         created_at, updated_at, deleted_at
         FROM schedules
         WHERE room_id = #{roomId}
@@ -43,13 +44,14 @@
             useGeneratedKeys="true" keyProperty="scheduleId">
         INSERT INTO schedules (
         room_id, user_id, title, description,
-        start_at, end_at, type, color_hex, custom_type_label
+        start_at, end_at, type, color_hex, text_color, custom_type_label
         ) VALUES (
         #{roomId}, #{userId}, #{title}, #{description},
-        #{startAt}, #{endAt}, #{type}, #{colorHex}, #{customTypeLabel}
+        #{startAt}, #{endAt}, #{type}, #{colorHex}, #{textColor}, #{customTypeLabel}
         )
     </insert>
 
+    <!-- room_id 일치 시 수정 (user_id 불일치 시에도 색상 등 수정 가능) -->
     <update id="update" parameterType="com.example.demo.schedule.vo.ScheduleVO">
         UPDATE schedules
         SET
@@ -58,20 +60,20 @@
         start_at = #{startAt},
         end_at = #{endAt},
         type = #{type},
-        color_hex = #{colorHex},
+        <if test="colorHex != null">color_hex = #{colorHex},</if>
+        <if test="textColor != null">text_color = #{textColor},</if>
         custom_type_label = #{customTypeLabel}
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
-        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
 
+    <!-- room_id만 일치하면 삭제 (user_id 불일치 시 0건 방지: 세션/저장 방식 차이 대응) -->
     <update id="softDelete">
         UPDATE schedules
         SET deleted_at = CURRENT_TIMESTAMP
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
-        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
 

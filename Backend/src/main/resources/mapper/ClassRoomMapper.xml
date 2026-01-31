@@ -30,7 +30,7 @@
 
         UNION ALL
 
-        <!-- 내가 참가 신청했고 승인된 방 -->
+        <!-- 내가 참가 신청했고 승인된 방 (방장인 방은 위에서 이미 포함 → 스터디장 위임 시 중복 방지) -->
         SELECT
         r.room_id AS roomId,
         r.title   AS title,
@@ -53,6 +53,7 @@
 
         WHERE j.request_user_email = #{email}
         AND j.status = '승인'
+        AND r.host_user_email != #{email}
 
         ORDER BY date DESC
 

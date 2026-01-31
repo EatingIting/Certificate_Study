@@ -2,6 +2,9 @@ package com.example.demo.화상채팅.Repository;
 
 import com.example.demo.화상채팅.Domain.MeetingRoomParticipant;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -16,4 +19,9 @@ public interface MeetingRoomParticipantRepository extends JpaRepository<MeetingR
     /** 퇴장 시 roomId + userEmail로 접속 중인 참가자 레코드 찾기 (scheduleId 없이) */
     Optional<MeetingRoomParticipant> findFirstByRoomIdAndUserEmailAndLeftAtIsNull(
             String roomId, String userEmail);
+
+    /** 스터디 일정 삭제 전 해당 일정의 출석 참가자 레코드 삭제 (FK 제약 해소) */
+    @Modifying(flushAutomatically = true)
+    @Query("DELETE FROM MeetingRoomParticipant p WHERE p.subjectId = :subjectId AND p.scheduleId = :scheduleId")
+    int deleteBySubjectIdAndScheduleId(@Param("subjectId") String subjectId, @Param("scheduleId") Long scheduleId);
 }

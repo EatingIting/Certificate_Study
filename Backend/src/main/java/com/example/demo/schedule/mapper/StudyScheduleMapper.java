@@ -35,6 +35,25 @@ public interface StudyScheduleMapper {
     /** 현재 시각이 스터디 일정 시간대 안에 있는 회차의 schedule_id. 없으면 null */
     Long selectScheduleIdBySubjectIdAndCurrentTime(@Param("subjectId") String subjectId);
 
+    /** 오늘 일정 중 start_time >= 현재 시각인 가장 가까운 회차의 schedule_id. 없으면 null */
+    Long selectUpcomingTodayScheduleId(@Param("subjectId") String subjectId);
+
+    /** subject_id + schedule_id로 회차 1건 조회 (오늘 여부 무관) */
+    StudyScheduleVO selectBySubjectIdAndScheduleId(
+            @Param("subjectId") String subjectId,
+            @Param("scheduleId") Long scheduleId);
+
+    /** 오늘 일정 중 schedule_id가 afterScheduleId 보다 큰 가장 가까운 회차 (다음 회차) */
+    StudyScheduleVO selectNextSessionToday(
+            @Param("subjectId") String subjectId,
+            @Param("afterScheduleId") Long afterScheduleId);
+
+    /** 해당 study_date 일정 중 schedule_id가 afterScheduleId 보다 큰 가장 가까운 회차 (캐치업 시 CURDATE 대신 사용) */
+    StudyScheduleVO selectNextSessionOnDate(
+            @Param("subjectId") String subjectId,
+            @Param("studyDate") java.sql.Date studyDate,
+            @Param("afterScheduleId") Long afterScheduleId);
+
     /** subject_id 컬럼으로 삽입 */
     int insertWithSubjectId(StudyScheduleVO vo);
 

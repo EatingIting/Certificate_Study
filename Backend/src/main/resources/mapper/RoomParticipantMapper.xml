@@ -12,7 +12,7 @@
         WHERE room_id = #{roomId}
     </select>
 
-    <!-- 승인 멤버 목록 -->
+    <!-- 같은 room_id에서 status='승인'인 request_user_email 목록 (users 조인) -->
     <select id="selectApprovedParticipants" resultType="com.example.demo.roomparticipant.RoomParticipantVO">
         SELECT
             u.user_id      AS userId,
@@ -72,5 +72,29 @@
         SET host_user_email = #{newHostEmail}
         WHERE room_id = #{roomId}
     </update>
+
+    <!-- 스터디장 위임 후 이전 방장을 스터디원(승인)으로 유지 -->
+    <insert id="insertApprovedMember">
+        INSERT INTO room_join_request (
+            join_id,
+            room_id,
+            request_user_email,
+            host_user_email,
+            request_user_nickname,
+            status,
+            apply_message,
+            requested_at
+        )
+        VALUES (
+            UUID(),
+            #{roomId},
+            #{requestUserEmail},
+            #{hostUserEmail},
+            #{requestUserNickname},
+            '승인',
+            '',
+            NOW()
+        )
+    </insert>
 
 </mapper>

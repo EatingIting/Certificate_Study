@@ -27,4 +27,12 @@ public interface RoomParticipantMapper {
 
     // 방장 위임: room.host_user_email 변경
     int updateHostEmail(@Param("roomId") String roomId, @Param("newHostEmail") String newHostEmail);
+
+    // 스터디장 위임 후 이전 방장을 스터디원으로 유지: room_join_request에 승인 행 추가
+    int insertApprovedMember(
+            @Param("roomId") String roomId,
+            @Param("requestUserEmail") String requestUserEmail,
+            @Param("hostUserEmail") String hostUserEmail,
+            @Param("requestUserNickname") String requestUserNickname
+    );
 }

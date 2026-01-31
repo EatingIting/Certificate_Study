@@ -103,18 +103,32 @@ function Calendar() {
     let toExclusiveEnd = (endInclusiveYmd) => addDays(endInclusiveYmd, 1);
 
     let fmtDate = (yyyyMmDd) => {
-        let [, m, d] = yyyyMmDd.split("-");
+        if (!yyyyMmDd || typeof yyyyMmDd !== "string") return "";
+        let ymd = yyyyMmDd.slice(0, 10);
+        if (ymd.length !== 10) return "";
+        let [, m, d] = ymd.split("-");
         return `${m}.${d}`;
+    };
+
+    /** ISO 또는 YYYY-MM-DD에서 날짜만 추출 (toDate/fmtDate/toInclusiveEnd 등에 전달용) */
+    let ymdOnly = (str) => {
+        if (str == null) return "";
+        let s = typeof str === "string" ? str : String(str);
+        return s.length >= 10 ? s.slice(0, 10) : "";
     };
 
     let overlaps = (event, range) => {
         if (!range) return true;
 
-        let s = event.start instanceof Date ? event.start : toDate(event.start);
+        let startStr = event.start instanceof Date ? toYmd(event.start) : (event.startStr?.slice(0, 10) || ymdOnly(event.start) || "");
+        let s = startStr ? toDate(startStr) : null;
+        if (!s) return false;
 
         let e;
         if (event.end) {
-            e = event.end instanceof Date ? event.end : toDate(event.end);
+            let endStr = event.end instanceof Date ? toYmd(event.end) : (event.endStr?.slice(0, 10) || ymdOnly(event.end) || "");
+            e = endStr ? toDate(endStr) : null;
+            if (!e) e = new Date(s.getTime());
         } else {
             e = new Date(s);
             e.setDate(e.getDate() + 1);
@@ -189,27 +203,29 @@ function Calendar() {
         }
         if (selectedDate) {
             list = allEvents.filter((ev) => {
-                let startStr = typeof ev.start === "string" ? ev.start : ev.startStr?.slice(0, 10);
-                if (!startStr) return false;
-                let startYmd = startStr.slice(0, 10);
+                let rawStart = typeof ev.start === "string" ? ev.start : (ev.startStr ?? "");
+                let startYmd = ymdOnly(rawStart);
+                if (!startYmd) return false;
                 if (startYmd === selectedDate) return true;
                 if (ev.end) {
-                    let endStr = typeof ev.end === "string" ? ev.end : ev.endStr?.slice(0, 10);
-                    let endInclusive = endStr ? toInclusiveEnd(endStr) : null;
-                    if (endInclusive && selectedDate >= startYmd && selectedDate <= endInclusive)
-                        return true;
+                    let rawEnd = typeof ev.end === "string" ? ev.end : (ev.endStr ?? "");
+                    let endPart = ymdOnly(rawEnd);
+                    if (!endPart) return false;
+                    let endInclusive = rawEnd.indexOf("T") !== -1 ? endPart : toInclusiveEnd(endPart);
+                    if (selectedDate >= startYmd && selectedDate <= endInclusive) return true;
                 }
                 return false;
             });
         }
 
         list.sort((a, b) => {
-            let aS = a.start instanceof Date ? a.start : toDate(a.start);
-            let bS = b.start instanceof Date ? b.start : toDate(b.start);
+            let aYmd = a.start instanceof Date ? toYmd(a.start) : (a.startStr?.slice(0, 10) || ymdOnly(a.start));
+            let bYmd = b.start instanceof Date ? toYmd(b.start) : (b.startStr?.slice(0, 10) || ymdOnly(b.start));
+            let aS = aYmd ? toDate(aYmd) : new Date(0);
+            let bS = bYmd ? toDate(bYmd) : new Date(0);
             return aS - bS;
         });
-        // 오른쪽 일정 목록에서는 스터디 일정 제외
-        return list.filter((ev) => ev.extendedProps?.type !== "STUDY");
+        return list;
     }, [allEvents, visibleRange, selectedDate]);
 
     /* =========================
@@ -225,13 +241,11 @@ function Calendar() {
         return "일정";
     };
 
+    /* STUDY만 타입 클래스 적용(고정 스타일). 일반 일정은 calEvent만 → FullCalendar가 event.backgroundColor 사용 */
     let eventClassNames = (arg) => {
         let t = arg.event.extendedProps?.type;
         if (t === "STUDY") return ["calEvent", "study"];
-        if (t === "REGISTRATION") return ["calEvent", "reg"];
-        if (t === "EXAM") return ["calEvent", "exam"];
-        if (t === "RESULT") return ["calEvent", "result"];
-        return ["calEvent", "other"];
+        return ["calEvent"];
     };
 
     /* =========================
@@ -943,18 +957,37 @@ function Calendar() {
                         )}
 
                         {monthlyEvents.map((ev) => {
-                            let startStr = typeof ev.start === "string" ? ev.start : ev.startStr?.slice(0, 10);
+                            let rawStart = typeof ev.start === "string" ? ev.start : (ev.startStr ?? "");
+                            let startYmd = ymdOnly(rawStart);
 
-                            let endStr = null;
+                            let endYmd = null;
                             if (ev.end) {
-                                let rawEnd = typeof ev.end === "string" ? ev.end : ev.endStr?.slice(0, 10);
-                                endStr = rawEnd ? toInclusiveEnd(rawEnd) : null;
+                                let rawEnd = typeof ev.end === "string" ? ev.end : (ev.endStr ?? "");
+                                let endPart = ymdOnly(rawEnd);
+                                if (endPart) {
+                                    endYmd = rawEnd.indexOf("T") !== -1 ? endPart : toInclusiveEnd(endPart);
+                                }
                             }
 
                             let isStudy = ev.extendedProps?.type === "STUDY";
+                            let timePart = "";
+                            if (isStudy) {
+                                let st = ev.extendedProps?.startTime;
+                                let et = ev.extendedProps?.endTime;
+                                if (st && et && /^\d{2}:\d{2}$/.test(st) && /^\d{2}:\d{2}$/.test(et)) {
+                                    timePart = ` ${st}~${et}`;
+                                }
+                            }
 
                             return (
-                                <div key={ev.id} className="calItem">
+                                <div
+                                    key={ev.id}
+                                    className="calItem"
+                                    style={{
+                                        backgroundColor: ev.backgroundColor || "#f6faf3",
+                                        color: "#1f2937",
+                                    }}
+                                >
                                     <div className="calItemTop">
                                         <span className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}>
                                             {typeLabel(ev)}
@@ -962,8 +995,9 @@ function Calendar() {
 
                                         <div className="calItemRight">
                                             <span className="calDate">
-                                                {startStr ? fmtDate(startStr) : ""}
-                                                {endStr ? ` ~ ${fmtDate(endStr)}` : ""}
+                                                {startYmd ? fmtDate(startYmd) : ""}
+                                                {endYmd && endYmd !== startYmd ? ` ~ ${fmtDate(endYmd)}` : ""}
+                                                {timePart}
                                             </span>
 
                                             <button
