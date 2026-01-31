@@ -94,16 +94,11 @@ const Attendance = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjectId, scope]);
 
-  const totalMin = useMemo(
-    () => calcTotalMinutes(studySchedule.start, studySchedule.end),
-    [studySchedule.start, studySchedule.end]
-  );
-
-  // ✅ 회차(세로형) rows 만들기
-  // - scope=my : members[0]이 내 데이터라고 가정
-  // - scope=all: members에서 내 이메일 찾아서 우선 사용 (없으면 0번)
+  // ✅ 회차(세로형) rows 만들기 (백엔드가 회차를 시간 순으로 내려줌 → 1회차=첫 시간, 2회차=두번째 시간)
+  // ✅ 비율은 회차별 수업 시간(startTime~endTime) 기준으로 계산 (2시~2시5분 = 5분 기준)
   const sessionRows = useMemo(() => {
     const totalSessions = studySchedule.totalSessions || 0;
+    const fallbackTotalMin = calcTotalMinutes(studySchedule.start, studySchedule.end);
 
     const myEmail =
       sessionStorage.getItem("userEmail") ||
@@ -115,14 +110,18 @@ const Attendance = () => {
         ? members.find((m) => m.memberId === myEmail) || members[0]
         : members[0];
 
-    const byNo = new Map((my?.sessions || []).map((s) => [s.sessionNo, s]));
+    const sessionsOrdered = my?.sessions || [];
 
     return Array.from({ length: totalSessions }).map((_, idx) => {
       const sessionNo = idx + 1;
-      const log = byNo.get(sessionNo);
+      const log = sessionsOrdered[idx];
+
+      const totalMinForSession = log?.startTime && log?.endTime
+        ? calcTotalMinutes(log.startTime, log.endTime)
+        : fallbackTotalMin;
 
       const judged = log
-        ? judgeAttendance(log, totalMin, studySchedule.requiredRatio)
+        ? judgeAttendance(log, totalMinForSession, studySchedule.requiredRatio)
         : { attendedMin: 0, ratio: 0, isPresent: false };
 
       // ✅ 백엔드에서 studyDate 내려주면 그걸 우선 사용
@@ -143,7 +142,8 @@ const Attendance = () => {
     scope,
     studySchedule.totalSessions,
     studySchedule.requiredRatio,
-    totalMin,
+    studySchedule.start,
+    studySchedule.end,
   ]);
 
   // ✅ 요약(출석률/출석/결석/전체)

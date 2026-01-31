@@ -28,8 +28,9 @@ function StudyMembers() {
 
         return members.filter((m) => {
             let name = (m.name || "").toLowerCase();
+            let nick = (m.nickname || "").toLowerCase();
             let email = (m.email || "").toLowerCase();
-            return name.includes(q) || email.includes(q);
+            return name.includes(q) || nick.includes(q) || email.includes(q);
         });
     }, [members, query]);
 
@@ -46,6 +47,24 @@ function StudyMembers() {
     };
 
     let confirmText = (msg) => window.confirm(msg);
+
+    // 실명 마스킹: "김철재" → "김*재" (첫 글자 + * + 마지막 글자)
+    let maskName = (str) => {
+        if (!str || typeof str !== "string") return "";
+        let s = str.trim();
+        if (s.length <= 1) return "*";
+        if (s.length === 2) return s[0] + "*";
+        return s[0] + "*" + s[s.length - 1];
+    };
+
+    // 표시용: "닉네임(김*재)" 형식 (닉네임 없으면 마스킹된 이름만)
+    let displayMemberName = (m) => {
+        let nick = (m.nickname || "").trim();
+        let real = (m.name || "").trim();
+        let masked = maskName(real || nick);
+        if (real) return nick ? `${nick}(${masked})` : masked;
+        return nick || masked || "-";
+    };
 
     // ✅ 목록 조회
     let fetchMembers = async () => {
@@ -64,7 +83,9 @@ function StudyMembers() {
 
             let data = res.data || {};
             setMyRole(data.myRole || "");
-            setMembers(Array.isArray(data.members) ? data.members : []);
+            // 같은 room_id의 스터디장(host_user_email) + status='승인' 멤버 목록 (백엔드 participants)
+            let list = Array.isArray(data.participants) ? data.participants : (Array.isArray(data.members) ? data.members : []);
+            setMembers(list);
         } catch (err) {
             if (!isMountedRef.current) return;
             if (seq !== requestSeqRef.current) return;
@@ -99,7 +120,7 @@ function StudyMembers() {
         if (target.role === "OWNER") return;
 
         let ok = confirmText(
-            `정말 "${target.name}"님에게 스터디장 권한을 위임할까요?\n(현재 스터디장은 스터디원이 됩니다.)`
+            `정말 "${displayMemberName(target)}"님에게 스터디장 권한을 위임할까요?\n(현재 스터디장은 스터디원이 됩니다.)`
         );
         if (!ok) return;
 
@@ -128,7 +149,7 @@ function StudyMembers() {
             return;
         }
 
-        let ok = confirmText(`정말 "${target.name}"님을 스터디룸에서 내보낼까요?`);
+        let ok = confirmText(`정말 "${displayMemberName(target)}"님을 스터디룸에서 내보낼까요?`);
         if (!ok) return;
 
         try {
@@ -177,7 +198,7 @@ function StudyMembers() {
                 </div>
 
                 <p className="pageSub">
-                    스터디장은 스터디룸 멤버를 관리할 수 있습니다. (스터디장 위임 / 내보내기)
+                    참여 중인 스터디원 목록을 확인하고, 스터디장 위임이나 내보내기로 관리할 수 있습니다.
                 </p>
             </div>
 
@@ -198,7 +219,7 @@ function StudyMembers() {
                         <div className="smTools">
                             <input
                                 className="smSearch"
-                                placeholder="이름/이메일 검색"
+                                placeholder="닉네임/이메일 검색"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                             />
@@ -221,7 +242,7 @@ function StudyMembers() {
                             return (
                                 <div key={m.id} className="smRow smRowCols3">
                                     <div className="smName">
-                                        {m.name}
+                                        {displayMemberName(m)}
                                         {isOwnerRow && <span className="smBadgeOwner">스터디장</span>}
                                     </div>
 

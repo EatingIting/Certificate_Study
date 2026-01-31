@@ -157,6 +157,7 @@
 .smBadgeOwner {
     display: inline-flex;
     align-items: center;
+    flex-shrink: 0;
     padding: 3px 8px;
     border-radius: 999px;
     font-size: 12px;
@@ -290,5 +291,6 @@
 }
 
 .smRowCols3 {
-    grid-template-columns: 1.2fr 1.7fr 0.9fr 1.3fr;
+    /* 이름 열을 넓혀서 닉네임 + 스터디장 뱃지가 여유 있게 보이도록 */
+    grid-template-columns: 1.55fr 1.4fr 0.9fr 1.3fr;
 }

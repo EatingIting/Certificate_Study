@@ -29,34 +29,37 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "방장만 접근할 수 있습니다.");
         }
 
+        // 같은 room_id: (1) host_user_email(스터디장) + (2) status='승인'인 request_user_email 전원
         List<RoomParticipantVO> approved = mapper.selectApprovedParticipants(roomId);
 
-        // host가 승인 목록에 없을 수도 있으니, 보장용으로 host 정보도 가져와서 합침
+        // 스터디장(host_user_email): room에는 있으나 room_join_request 승인 행에 없을 수 있으므로 별도 조회 후 맨 앞에 추가
         RoomParticipantVO hostVo = mapper.selectUserByEmail(hostEmail);
+        List<RoomParticipantVO> allParticipants = new ArrayList<>();
         if (hostVo != null) {
-            boolean alreadyIncluded = approved.stream()
-                    .anyMatch(v -> hostEmail.equals(v.getEmail()));
-            if (!alreadyIncluded) {
-                approved = new ArrayList<>(approved);
-                approved.add(hostVo);
+            allParticipants.add(hostVo);
+        }
+        for (RoomParticipantVO v : approved) {
+            if (v.getEmail() == null || !v.getEmail().equals(hostEmail)) {
+                allParticipants.add(v);
             }
         }
 
-        List<RoomParticipantItemResponse> items = approved.stream()
+        // 스터디장(OWNER) 먼저, 그 다음 승인 멤버를 joinedAt 최신순으로
+        List<RoomParticipantItemResponse> items = allParticipants.stream()
                 .map(v -> {
                     RoomParticipantItemResponse r = new RoomParticipantItemResponse();
                     r.setId(v.getUserId());
                     r.setEmail(v.getEmail());
-                    r.setName((v.getName() != null && !v.getName().isBlank()) ? v.getName() : v.getNickname());
+                    r.setName(v.getName());
+                    r.setNickname(v.getNickname());
                     r.setProfileImg(v.getProfileImg());
                     r.setJoinedAt(v.getJoinedAt());
                     r.setRole(hostEmail.equals(v.getEmail()) ? "OWNER" : "MEMBER");
                     return r;
                 })
-                // joinedAt 최신순(없으면 뒤로)
-                .sorted(Comparator.comparing(
-                        RoomParticipantItemResponse::getJoinedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .sorted(Comparator
+                        .comparing(RoomParticipantItemResponse::getRole, (a, b) -> "OWNER".equals(a) ? -1 : ("OWNER".equals(b) ? 1 : 0))
+                        .thenComparing(RoomParticipantItemResponse::getJoinedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
 
         return new RoomParticipantListResponse(
@@ -136,6 +139,13 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
         int updated = mapper.updateHostEmail(roomId, targetEmail);
         if (updated == 0) {
             return new ActionResultResponse(false, "방장 위임에 실패했습니다.");
+        }
+
+        // 이전 방장(나)을 스터디원으로 유지: room_join_request에 승인 행이 없으면 추가 → 스터디원 관리·입장 권한 유지
+        if (mapper.countApprovedByEmail(roomId, myEmail) == 0) {
+            RoomParticipantVO oldHostVo = mapper.selectUserByEmail(myEmail);
+            String nickname = oldHostVo != null ? oldHostVo.getNickname() : null;
+            mapper.insertApprovedMember(roomId, myEmail, targetEmail, nickname);
         }
 
         return new ActionResultResponse(true, "방장 권한을 위임했어요.");

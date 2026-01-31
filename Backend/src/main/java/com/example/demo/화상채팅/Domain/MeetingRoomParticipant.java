@@ -62,4 +62,14 @@ public class MeetingRoomParticipant {
     public void rejoin() {
         this.leftAt = null;
     }
+
+    /** 회차 전환 시 이전 회차 종료 시각으로 left_at 설정용 */
+    public void setLeftAt(java.time.LocalDateTime leftAt) {
+        this.leftAt = leftAt;
+    }
+
+    /** 캐치업 시 다음 회차 시작 시각으로 joined_at 설정용 */
+    public void setJoinedAt(java.time.LocalDateTime joinedAt) {
+        this.joinedAt = joinedAt;
+    }
 }

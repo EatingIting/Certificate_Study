@@ -88,16 +88,20 @@ function Dashboard({ setActiveMenu }) {
         };
 
         const requiredRatio = schedule?.requiredRatio ?? 0.9;
-        const totalMin = calcTotalMinutes(schedule?.start, schedule?.end);
+        const fallbackTotalMin = calcTotalMinutes(schedule?.start, schedule?.end);
 
-        // ✅ 회차별 판정 결과 만들기 (빈 회차는 결석 처리)
-        const byNo = new Map(sessions.map((s) => [s.sessionNo, s]));
+        // ✅ 회차별 판정 결과 만들기 (비율은 회차별 수업 시간 startTime~endTime 기준)
+        const sessionsOrdered = sessions || [];
         const judgedRows = Array.from({ length: totalSessions }).map((_, idx) => {
           const sessionNo = idx + 1;
-          const log = byNo.get(sessionNo);
+          const log = sessionsOrdered[idx];
+
+          const totalMinForSession = log?.startTime && log?.endTime
+            ? calcTotalMinutes(log.startTime, log.endTime)
+            : fallbackTotalMin;
 
           const judged = log
-            ? judgeAttendance(log, totalMin, requiredRatio)
+            ? judgeAttendance(log, totalMinForSession, requiredRatio)
             : { isPresent: false };
 
           return {

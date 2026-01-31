@@ -24,8 +24,8 @@ public class ScheduleEventConverter {
         extendedProps.put("description", vo.getDescription());
         extendedProps.put("customLabel", vo.getCustomTypeLabel());
 
-        // DB에 textColor가 없으니 일단 기본값(프론트/디자인에서 나중에 통일 가능)
-        String textColor = "#ffffff";
+        String textColor = (vo.getTextColor() != null && !vo.getTextColor().isBlank())
+                ? vo.getTextColor() : "#ffffff";
 
         return ScheduleEventResponse.builder()
                 .id(String.valueOf(vo.getScheduleId()))

@@ -15,13 +15,15 @@
         WHERE subject_id = #{subjectId}
     </select>
 
-    <!-- ✅ nested collection 매핑 -->
+    <!-- ✅ nested collection 매핑 (startTime/endTime = 해당 회차 수업 시간, 비율은 회차별로 계산) -->
     <resultMap id="memberLogMap" type="com.example.demo.attendance.dto.AttendanceMemberLogResponse">
         <id property="memberId" column="userEmail"/>
         <result property="name" column="memberName"/>
         <collection property="sessions" ofType="com.example.demo.attendance.dto.AttendanceSessionLogResponse">
             <result property="sessionNo" column="sessionNo"/>
             <result property="studyDate" column="studyDate"/>
+            <result property="startTime" column="sessionStart"/>
+            <result property="endTime" column="sessionEnd"/>
             <result property="joinAt" column="joinAt"/>
             <result property="leaveAt" column="leaveAt"/>
         </collection>
@@ -49,7 +51,7 @@
         ) m
     </sql>
 
-    <!-- ✅ 2) 전체 출석 로그 -->
+    <!-- ✅ 2) 전체 출석 로그 (joinAt/leaveAt은 수업 시간대 안으로 클리핑: 2시 전 입장 → 2시부터 인정) -->
     <select id="selectAttendanceLogsAll" resultMap="memberLogMap">
         SELECT
         u.email AS userEmail,
@@ -71,9 +73,20 @@
 
         ss.round_num AS sessionNo,
         DATE_FORMAT(ss.study_date, '%Y-%m-%d') AS studyDate,
+        DATE_FORMAT(ss.start_time, '%H:%i') AS sessionStart,
+        DATE_FORMAT(ss.end_time, '%H:%i')   AS sessionEnd,
 
-        DATE_FORMAT(MIN(mp.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
-        DATE_FORMAT(MAX(mp.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
+        DATE_FORMAT(
+            GREATEST(MIN(mp.joined_at), CONCAT(ss.study_date, ' ', ss.start_time)),
+            '%Y-%m-%dT%H:%i:%s'
+        ) AS joinAt,
+        DATE_FORMAT(
+            GREATEST(
+                LEAST(COALESCE(MAX(mp.left_at), CONCAT(ss.study_date, ' ', ss.end_time)), CONCAT(ss.study_date, ' ', ss.end_time)),
+                GREATEST(MIN(mp.joined_at), CONCAT(ss.study_date, ' ', ss.start_time))
+            ),
+            '%Y-%m-%dT%H:%i:%s'
+        ) AS leaveAt
 
         FROM <include refid="membersSql"/>
 
@@ -83,15 +96,10 @@
         JOIN study_schedule ss
         ON ss.subject_id = #{subjectId}
 
-        LEFT JOIN meeting_room mr
-        ON mr.subject_id = ss.subject_id
-        AND mr.schedule_id = ss.schedule_id
-
         LEFT JOIN meetingroom_participant mp
-        ON mp.room_id = mr.room_id
-        AND mp.user_email = u.email
-        AND mp.subject_id = ss.subject_id
+        ON mp.subject_id = ss.subject_id
         AND mp.schedule_id = ss.schedule_id
+        AND mp.user_email = u.email
 
         GROUP BY
         u.email,
@@ -101,10 +109,11 @@
 
         ORDER BY
         COALESCE(m.request_user_nickname, u.nickname) ASC,
-        ss.round_num ASC
+        ss.study_date ASC,
+        ss.start_time ASC
     </select>
 
-    <!-- ✅ 3) 내 출석 로그 -->
+    <!-- ✅ 3) 내 출석 로그 (joinAt/leaveAt은 수업 시간대 안으로 클리핑) -->
     <select id="selectAttendanceLogsMy" resultMap="memberLogMap">
         SELECT
         u.email AS userEmail,
@@ -126,9 +135,20 @@
 
         ss.round_num AS sessionNo,
         DATE_FORMAT(ss.study_date, '%Y-%m-%d') AS studyDate,
+        DATE_FORMAT(ss.start_time, '%H:%i') AS sessionStart,
+        DATE_FORMAT(ss.end_time, '%H:%i')   AS sessionEnd,
 
-        DATE_FORMAT(MIN(mp.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
-        DATE_FORMAT(MAX(mp.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
+        DATE_FORMAT(
+            GREATEST(MIN(mp.joined_at), CONCAT(ss.study_date, ' ', ss.start_time)),
+            '%Y-%m-%dT%H:%i:%s'
+        ) AS joinAt,
+        DATE_FORMAT(
+            GREATEST(
+                LEAST(COALESCE(MAX(mp.left_at), CONCAT(ss.study_date, ' ', ss.end_time)), CONCAT(ss.study_date, ' ', ss.end_time)),
+                GREATEST(MIN(mp.joined_at), CONCAT(ss.study_date, ' ', ss.start_time))
+            ),
+            '%Y-%m-%dT%H:%i:%s'
+        ) AS leaveAt
 
         FROM <include refid="membersSql"/>
 
@@ -138,15 +158,10 @@
         JOIN study_schedule ss
         ON ss.subject_id = #{subjectId}
 
-        LEFT JOIN meeting_room mr
-        ON mr.subject_id = ss.subject_id
-        AND mr.schedule_id = ss.schedule_id
-
         LEFT JOIN meetingroom_participant mp
-        ON mp.room_id = mr.room_id
-        AND mp.user_email = u.email
-        AND mp.subject_id = ss.subject_id
+        ON mp.subject_id = ss.subject_id
         AND mp.schedule_id = ss.schedule_id
+        AND mp.user_email = u.email
 
         WHERE u.email = #{userEmail}
 
@@ -156,7 +171,7 @@
         ss.round_num,
         ss.study_date
 
-        ORDER BY ss.round_num ASC
+        ORDER BY ss.study_date ASC, ss.start_time ASC
     </select>
 
 </mapper>

@@ -97,26 +97,26 @@ const AttendanceAll = () => {
     fetchAll();
   }, [subjectId, scope]);
 
-  const totalMin = useMemo(
-    () => calcTotalMinutes(studySchedule.start, studySchedule.end),
-    [studySchedule.start, studySchedule.end]
-  );
-
-  // ✅ 화면용으로 가공
+  // ✅ 화면용으로 가공 (백엔드가 회차를 시간 순 study_date+start_time 으로 정렬해서 내려줌 → 1회차=첫 시간, 2회차=두번째 시간)
+  // ✅ 비율은 회차별 수업 시간(startTime~endTime) 기준으로 계산
   const viewRows = useMemo(() => {
     const totalSessions = studySchedule.totalSessions || 0;
+    const fallbackTotalMin = calcTotalMinutes(studySchedule.start, studySchedule.end);
 
     return (members || []).map((m) => {
-      // sessionNo 기반으로 빈칸 없이 배열로 정렬(백엔드에서 누락 와도 안전)
-      const byNo = new Map((m.sessions || []).map((s) => [s.sessionNo, s]));
+      const sessionsOrdered = m.sessions || [];
 
       const sessionsView = Array.from({ length: totalSessions }).map((_, idx) => {
         const sessionNo = idx + 1;
-        const log = byNo.get(sessionNo);
+        const log = sessionsOrdered[idx];
+
+        const totalMinForSession = log?.startTime && log?.endTime
+          ? calcTotalMinutes(log.startTime, log.endTime)
+          : fallbackTotalMin;
 
         // 로그 없으면 결석 처리(정책)
         const judged = log
-          ? judgeAttendance(log, totalMin, studySchedule.requiredRatio)
+          ? judgeAttendance(log, totalMinForSession, studySchedule.requiredRatio)
           : { attendedMin: 0, ratio: 0, isPresent: false };
 
         return { sessionNo, ...judged };
@@ -136,7 +136,7 @@ const AttendanceAll = () => {
         ratioOverall,
       };
     });
-  }, [members, studySchedule.totalSessions, studySchedule.requiredRatio, totalMin]);
+  }, [members, studySchedule.totalSessions, studySchedule.requiredRatio, studySchedule.start, studySchedule.end]);
 
   return (
     <div className="at-page">
