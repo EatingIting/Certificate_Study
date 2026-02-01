@@ -15,19 +15,85 @@ function fakeFetchMyRooms() {
     ]);
 }
 
-function fakeFetchRoomProfile(roomId) {
-    // room별로 다른 프로필처럼 보이게 더미 분기
-    let map = {
-        "room-001": { nickname: "홍길동", profileImageUrl: "" },
-        "room-002": { nickname: "홍길동(SQL)", profileImageUrl: "" },
-        "room-003": { nickname: "홍길동(스프링)", profileImageUrl: "" },
-    };
-    return Promise.resolve(map[roomId] || { nickname: "홍길동", profileImageUrl: "" });
+/**
+ * 아래 2개만 백엔드 연동:
+ * - fakeFetchRoomProfile(roomId): GET /api/rooms/{roomId}/me/nickname
+ * - fakeUpdateNickname(roomId, nickname): PATCH /api/rooms/{roomId}/me/nickname
+ *
+ * UI 유지 목적상 profileImageUrl은 기존대로 유지(이번 범위는 닉네임만 연동).
+ */
+
+function getAuthToken() {
+    // 프로젝트마다 키가 달라서 흔한 케이스들만 커버
+    let token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("jwt") ||
+        "";
+
+    // "Bearer xxx" 형태로 저장되지 않았다면 붙여줌
+    if (token && !token.toLowerCase().startsWith("bearer ")) {
+        token = "Bearer " + token;
+    }
+    return token;
 }
 
-function fakeUpdateNickname(roomId, nickname) {
-    // 실제로는 PATCH /api/rooms/{roomId}/mypage/nickname
-    return Promise.resolve({ ok: true, roomId, nickname });
+async function requestJson(url, options) {
+    let token = getAuthToken();
+
+    let headers = {
+        "Content-Type": "application/json",
+        ...(options && options.headers ? options.headers : {}),
+    };
+
+    if (token) {
+        headers.Authorization = token;
+    }
+
+    let res = await fetch(url, {
+        credentials: "include",
+        ...options,
+        headers,
+    });
+
+    let text = await res.text();
+    let data = text ? JSON.parse(text) : null;
+
+    if (!res.ok) {
+        let msg = (data && (data.message || data.error)) || "요청에 실패했습니다.";
+        let err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+    }
+
+    return data;
+}
+
+async function fakeFetchRoomProfile(roomId) {
+    // ✅ 백엔드 연동: 방 안 내 닉네임 조회
+    // GET /api/rooms/{roomId}/me/nickname  -> { nickname: "..." }
+    let data = await requestJson(`/api/rooms/${roomId}/me/nickname`, {
+        method: "GET",
+    });
+
+    // UI 유지: profileImageUrl은 이번 범위 밖이라 빈 값 유지(원하면 나중에 연동)
+    return {
+        nickname: data && data.nickname ? data.nickname : "",
+        profileImageUrl: "",
+    };
+}
+
+async function fakeUpdateNickname(roomId, nickname) {
+    // ✅ 백엔드 연동: 방 안 내 닉네임 변경
+    // PATCH /api/rooms/{roomId}/me/nickname  body: { nickname }
+    // -> { nickname: "..." }
+    let data = await requestJson(`/api/rooms/${roomId}/me/nickname`, {
+        method: "PATCH",
+        body: JSON.stringify({ nickname }),
+    });
+
+    return { ok: true, roomId, nickname: (data && data.nickname) || nickname };
 }
 
 function fakeUpdateProfileImageUrl(roomId, profileImageUrl) {

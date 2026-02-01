@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.roomprofile.mapper.RoomNicknameMapper">
+
+    <select id="selectMyNickname" resultType="string">
+        SELECT request_user_nickname
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{userEmail}
+          AND status = '승인'
+            LIMIT 1
+    </select>
+
+    <select id="countNicknameDup" resultType="int">
+        SELECT COUNT(*)
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND status = '승인'
+          AND request_user_nickname = #{nickname}
+          AND request_user_email != #{userEmail}
+    </select>
+
+    <update id="updateMyNickname">
+        UPDATE room_join_request
+        SET request_user_nickname = #{nickname}
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{userEmail}
+          AND status = '승인'
+    </update>
+
+</mapper>
