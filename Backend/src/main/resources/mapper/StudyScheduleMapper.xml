@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.example.demo.schedule.mapper.StudyScheduleMapper">
 
@@ -21,19 +21,7 @@
 
     <!-- roomId 파라미터는 LMS subject_id -->
     <select id="selectByRange" resultMap="StudyScheduleMap">
-<<<<<<< HEAD
-        SELECT study_schedule_id,
-               round_num,
-               study_date,
-               start_time,
-               end_time,
-               description,
-               created_at,
-               updated_at,
-               room_id
-=======
         SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
->>>>>>> 20443d38d1bc3f9956f405d424daf11eea4c08d9
         FROM study_schedule
         WHERE subject_id = #{roomId}
         AND study_date <![CDATA[>=]]> #{start}
@@ -41,24 +29,6 @@
         ORDER BY study_date ASC, round_num ASC
     </select>
 
-<<<<<<< HEAD
-    <insert id="insert" parameterType="com.example.demo.schedule.vo.StudyScheduleVO"
-            useGeneratedKeys="true" keyProperty="studyScheduleId">
-        INSERT INTO
-            study_schedule (room_id,
-                            round_num,
-                            study_date,
-                            start_time,
-                            end_time,
-                            description
-        ) VALUES (#{roomId},
-                  #{roundNum},
-                  #{studyDate},
-                  #{startTime},
-                  #{endTime},
-                  #{description}
-        )
-=======
     <select id="selectBySubjectIdAndRange" resultMap="StudyScheduleMap">
         SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
         FROM study_schedule
@@ -86,9 +56,9 @@
         SELECT schedule_id
         FROM study_schedule
         WHERE subject_id = #{subjectId}
-          AND study_date = CURDATE()
-          AND CURTIME() <![CDATA[>=]]> start_time
-          AND CURTIME() <![CDATA[<]]> end_time
+        AND study_date = CURDATE()
+        AND CURTIME() <![CDATA[>=]]> start_time
+        AND CURTIME() <![CDATA[<]]> end_time
         ORDER BY round_num ASC
         LIMIT 1
     </select>
@@ -97,7 +67,6 @@
     <insert id="insert" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
         INSERT INTO study_schedule (subject_id, schedule_id, round_num, study_date, description, start_time, end_time)
         VALUES (#{subjectId}, #{roundNum}, #{roundNum}, #{studyDate}, #{description}, #{startTime}, #{endTime})
->>>>>>> 20443d38d1bc3f9956f405d424daf11eea4c08d9
     </insert>
 
     <insert id="insertWithSubjectId" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
@@ -108,20 +77,10 @@
     <!-- schedule_id = round_num 이므로 PK 컬럼(round_num) 변경 없이 날짜·설명만 수정 -->
     <update id="update" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
         UPDATE study_schedule
-<<<<<<< HEAD
-        SET round_num = #{roundNum},
-            study_date = #{studyDate},
-            start_time = #{startTime},
-            end_time = #{endTime},
-            description = #{description}
-        WHERE study_schedule_id = #{studyScheduleId}
-        AND room_id = #{roomId}
-=======
         SET study_date = #{studyDate}, description = #{description}
         <if test="startTime != null">, start_time = #{startTime}</if>
         <if test="endTime != null">, end_time = #{endTime}</if>
         WHERE schedule_id = #{studyScheduleId} AND subject_id = #{subjectId}
->>>>>>> 20443d38d1bc3f9956f405d424daf11eea4c08d9
     </update>
 
     <delete id="delete">

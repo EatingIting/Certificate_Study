@@ -6,7 +6,6 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import koLocale from "@fullcalendar/core/locales/ko";
-import { useLMS } from "../LMSContext";
 import "./Calendar.css";
 
 function Calendar() {
@@ -23,17 +22,6 @@ function Calendar() {
     let [selectedDate, setSelectedDate] = useState(null);
 
     let [openMenuId, setOpenMenuId] = useState(null);
-
-    const { user, room } = useLMS();
-
-    let isHost = !!(
-        user &&
-        room &&
-        user.email &&
-        room.hostUserEmail &&
-        String(user.email).trim().toLowerCase() ===
-            String(room.hostUserEmail).trim().toLowerCase()
-    );
 
     // ✅ roomId 전달 방식은 프로젝트마다 달라서 흔한 키들을 순서대로 본다.
     let roomId =
@@ -385,17 +373,36 @@ function Calendar() {
                 let t = it?.extendedProps?.type;
                 let idStr = typeof it?.id === "string" ? it.id : String(it?.id ?? "");
 
-                // end는 exclusive로 온다 :contentReference[oaicite:5]{index=5}
+                // 색상: 백엔드가 backgroundColor로 주든, colorHex로 주든 다 커버
+                let bg =
+                    it?.backgroundColor ||
+                    it?.borderColor ||
+                    it?.colorHex ||
+                    it?.extendedProps?.backgroundColor ||
+                    it?.extendedProps?.colorHex ||
+                    "";
+
+                let tc =
+                    it?.textColor ||
+                    it?.extendedProps?.textColor ||
+                    "";
+
                 let ev = {
-                    id: it.id,
-                    title: it.title,
-                    start: it.start,
-                    ...(it.end ? { end: it.end } : {}),
-                    extendedProps: it.extendedProps || {},
-                    ...(it.backgroundColor ? { backgroundColor: it.backgroundColor } : {}),
-                    ...(it.borderColor ? { borderColor: it.borderColor } : {}),
-                    ...(it.textColor ? { textColor: it.textColor } : {}),
+                    id: idStr,
+                    title: it?.title || "",
+                    start: it?.start,
+                    ...(it?.end ? { end: it.end } : {}),
+                    extendedProps: it?.extendedProps || {},
                 };
+                
+                // 조건부 spread 대신 if로 넣어서 “조용히 빠지는” 문제 방지
+                if (bg) {
+                    ev.backgroundColor = bg;
+                    ev.borderColor = bg;
+                }
+                if (tc) {
+                    ev.textColor = tc;
+                }
 
                 // type이 STUDY이거나 id가 S로 시작하면 스터디 일정
                 let isStudy = t === "STUDY" || idStr.startsWith("S");
@@ -965,21 +972,6 @@ function Calendar() {
 
                             let isStudy = ev.extendedProps?.type === "STUDY";
 
-                            let startTime = ev.extendedProps?.startTime || "";
-                            let endTime = ev.extendedProps?.endTime || "";
-
-                            let timeText = "";
-
-                            if (isStudy) {
-                                let startTime = ev.extendedProps?.startTime || "";
-                                let endTime = ev.extendedProps?.endTime || "";
-                                if (startTime && endTime) timeText = `${startTime} ~ ${endTime}`;
-                                else if (startTime) timeText = startTime;
-                            }
-
-                            if (startTime && endTime) timeText = `${startTime} ~ ${endTime}`;
-                            else if (startTime) timeText = startTime;
-
                             return (
                                 <div key={ev.id} className="calItem">
                                     <div className="calItemTop">
@@ -991,7 +983,6 @@ function Calendar() {
                                             <span className="calDate">
                                                 {startStr ? fmtDate(startStr) : ""}
                                                 {endStr ? ` ~ ${fmtDate(endStr)}` : ""}
-                                                {timeText ? ` · ${timeText}` : ""}
                                             </span>
 
                                             <button
