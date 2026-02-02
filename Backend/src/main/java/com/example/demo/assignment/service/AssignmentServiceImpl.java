@@ -68,7 +68,7 @@ public class AssignmentServiceImpl implements AssignmentService {
                 vo.setFileSize(file.getSize());
 
                 // 브라우저에서 접근할 URL (아래 8단계에서 /files/** 매핑해줄거임)
-                vo.setFileUrl("/files/" + safeName);
+                vo.setFileUrl("http://localhost:8080/files/" + safeName);
 
             } catch (Exception e) {
                 throw new RuntimeException("파일 저장 실패", e);

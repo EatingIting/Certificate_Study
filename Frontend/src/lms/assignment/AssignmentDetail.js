@@ -14,6 +14,8 @@ const AssignmentDetail = () => {
             try {
                 console.log("accessToken:", sessionStorage.getItem("accessToken"));
                 const res = await api.get(`/assignments/${id}/submissions`);
+                console.log("submissions raw res.data:", res.data);
+                console.log("first fileUrl:", res.data?.[0]?.fileUrl);
 
                 const mapped = (res.data || []).map((x) => ({
                     name: x.memberName,
@@ -42,10 +44,23 @@ const AssignmentDetail = () => {
 
     // 파일 타입 판단
     const openPreview = (url) => {
-        const ext = url.split(".").pop().toLowerCase();
-        const type = ext === "pdf" ? "pdf" : "image";
-        setPreview({ url, type });
+    const base = api.defaults.baseURL || "";
+    const origin = base.replace(/\/api\/?$/, "");
+    const fullUrl = url.startsWith("http") ? url : origin + url;
+
+    const ext = fullUrl.split(".").pop().toLowerCase();
+
+    // ✅ PDF는 새 탭으로 열기 (iframe 차단 회피)
+    if (ext === "pdf") {
+        window.open(fullUrl, "_blank", "noopener,noreferrer");
+        return;
+    }
+
+    // 이미지는 기존 모달 img로
+    setPreview({ url: fullUrl, type: "image" });
     };
+
+
 
     const closePreview = () => setPreview(null);
 
