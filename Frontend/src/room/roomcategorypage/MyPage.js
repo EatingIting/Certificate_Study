@@ -176,6 +176,23 @@ const MyPage = () => {
 
             setInterestCategories(tempInterestCategories);
 
+            // ✅ 닉네임 수정 즉시 전역 반영 (MainHeader / LMSContext / 화상채팅 fallback)
+            try {
+                const nextNick = (draft?.nickname || "").trim();
+                if (nextNick) {
+                    sessionStorage.setItem("nickname", nextNick);
+                    localStorage.setItem("nickname", nextNick); // 자동로그인 복원용
+                    localStorage.setItem("userName", nextNick); // MeetingPage fallback용
+                    window.dispatchEvent(
+                        new CustomEvent("user:nickname-updated", {
+                            detail: { nickname: nextNick },
+                        })
+                    );
+                }
+            } catch (e) {
+                // noop
+            }
+
             await fetchProfile();
             setEditOpen(false);
         } catch (err) {

@@ -295,6 +295,17 @@ export default function RoomMyPage() {
 
             setIsNicknameEditing(false);
             setSuccessMsg("닉네임이 수정되었습니다.");
+
+            // ✅ LMS 헤더/화상채팅 쪽에 즉시 반영 (roomNickname 우선 사용)
+            try {
+                window.dispatchEvent(
+                    new CustomEvent("lms:room-nickname-updated", {
+                        detail: { roomId: selectedRoomId, roomNickname: updated.nickname || next },
+                    })
+                );
+            } catch (e) {
+                // noop
+            }
         } catch (e) {
             setErrorMsg(e && e.message ? e.message : "닉네임 수정에 실패하였습니다.");
         } finally {
