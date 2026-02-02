@@ -882,6 +882,8 @@ function MeetingPage({ portalRoomId }) {
 
     const userIdRef = useRef(null);
     const userNameRef = useRef(null);
+    /** SFU consumer에서 참가자 생성 시 peerId → 표시 이름 조회용 (USERS_UPDATE에서 갱신) */
+    const peerIdToNameRef = useRef(new Map());
 
     const effectAliveRef = useRef(true);
     const chatEndRef = useRef(null);
@@ -5405,6 +5407,11 @@ function MeetingPage({ portalRoomId }) {
                 }
 
                 if (data.type === "USERS_UPDATE" && Array.isArray(data.users)) {
+                    data.users.forEach((u) => {
+                        const name = u.userName || "";
+                        peerIdToNameRef.current.set(String(u.userId), name);
+                        if (u.connectionId != null) peerIdToNameRef.current.set(String(u.connectionId), name);
+                    });
                     if (data.roomStartedAt != null) setRoomStartedAt(Number(data.roomStartedAt));
                     if (data.roomElapsedMs != null) {
                         const totalSec = Math.max(0, Math.floor(Number(data.roomElapsedMs) / 1000));
