@@ -1,6 +1,6 @@
 package com.example.demo.oauth;
 
-import com.example.demo.auth.AuthMapper;
+import com.example.demo.로그인.mapper.AuthMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;

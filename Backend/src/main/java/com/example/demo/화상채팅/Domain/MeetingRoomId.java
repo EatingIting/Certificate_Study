@@ -15,10 +15,10 @@ import java.io.Serializable;
 @EqualsAndHashCode
 public class MeetingRoomId implements Serializable {
 
-    @Column(name = "room_id", length = 36)
+    @Column(name = "room_id", nullable = false, length = 16)
     private String roomId;
 
-    @Column(name = "host_user_email")
+    @Column(name = "host_user_email", nullable = false, length = 255)
     private String hostUserEmail;
 
     public MeetingRoomId(String roomId, String hostUserEmail) {

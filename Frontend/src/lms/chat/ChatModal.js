@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './ChatModal.css';
-// ✅ 팀장님이 만드신 유틸리티 함수 임포트
 import { getHostnameWithPort, getWsProtocol } from "../../utils/backendUrl";
 
-// 🔹 상수 및 환경 설정
+// 상수 및 환경 설정
 const STICKER_LIST = ["👌", "👍", "🎉", "😭", "🔥", "🤔"];
 const MODAL_WIDTH = 360; 
 const MODAL_HEIGHT = 600;

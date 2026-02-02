@@ -3,11 +3,11 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.application.ApplicationMapper">
+<mapper namespace="com.example.demo.모집.mapper.ApplicationMapper">
 
     <!-- 신청 받은 스터디 -->
     <select id="selectReceivedApplications"
-            resultType="com.example.demo.application.ApplicationVO">
+            resultType="com.example.demo.모집.vo.ApplicationVO">
         SELECT
             rjr.join_id                  AS joinId,
             rjr.room_id                  AS roomId,
@@ -28,20 +28,24 @@
 
     <!-- 내가 신청한 스터디 -->
     <select id="selectSentApplications"
-            resultType="com.example.demo.application.ApplicationVO">
+            resultType="com.example.demo.모집.vo.ApplicationVO">
         SELECT
             rjr.join_id            AS joinId,
             rjr.room_id            AS roomId,
             r.title                AS studyTitle,
-            u.nickname             AS ownerNickname,
+
+            r.hostUserNickname     AS ownerNickname,
+
             rjr.status             AS status,
             rjr.requested_at       AS requestedAt
+
         FROM room_join_request rjr
                  JOIN room r ON rjr.room_id = r.room_id
-                 JOIN users u ON rjr.host_user_email = u.email
+
         WHERE rjr.request_user_email = #{requestUserEmail}
         ORDER BY rjr.requested_at DESC
     </select>
+
 
 
     <!-- 승인 -->
@@ -167,6 +171,7 @@
     <update id="reapply">
         UPDATE room_join_request
         SET status = '신청중',
+            request_user_nickname = #{requestUserNickname},
             apply_message = #{applyMessage},
             requested_at = NOW()
         WHERE room_id = #{roomId}
@@ -174,6 +179,12 @@
           AND status = '거절'
     </update>
 
+    <!-- roomId로 방장 이메일 조회 -->
+    <select id="getHostEmailByRoomId" resultType="String">
+        SELECT host_user_email
+        FROM room
+        WHERE room_id = #{roomId}
+    </select>
 
 
 </mapper>

@@ -45,7 +45,7 @@ public class OpenAiService {
             // 대화 메시지 구성 (System 역할 + User 역할)
             List<Map<String, String>> messages = new ArrayList<>();
 
-            // (선택) AI에게 페르소나 부여
+            // AI에게 페르소나 부여
             Map<String, String> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
             systemMessage.put("content", "너는 친절하고 명확하게 설명해주는 자격증 관련 학습 튜터야. 한국어로 답변해줘.");

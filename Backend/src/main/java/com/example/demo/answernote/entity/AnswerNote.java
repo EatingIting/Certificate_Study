@@ -1,7 +1,7 @@
-package com.example.demo.answernote.entity; // 👈 패키지 경로 수정됨
+package com.example.demo.answernote.entity;
 
-import com.example.demo.entity.Room; // 👈 기존 Room 엔티티 임포트
-import com.example.demo.entity.User; // 👈 기존 User 엔티티 임포트
+import com.example.demo.entity.Room;
+import com.example.demo.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

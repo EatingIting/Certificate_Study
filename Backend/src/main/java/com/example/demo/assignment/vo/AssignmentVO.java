@@ -11,7 +11,8 @@ public class AssignmentVO {
     private String description;
     private LocalDateTime dueAt;
 
-    private String createdByUserId;
+    private String createdByEmail; // createdByUserId 제거/대체
+
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

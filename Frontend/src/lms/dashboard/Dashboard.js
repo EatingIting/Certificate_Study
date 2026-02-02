@@ -1,462 +1,537 @@
 // Dashboard.js
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { navigate } from "react";
 import "./Dashboard.css";
 
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 
+import api from "../../api/api"; // ✅ 추가 (경로는 너 프로젝트 구조에 맞춰 조정)
+
 function Dashboard({ setActiveMenu }) {
-    let navigate = useNavigate();
-    let params = useParams();
+  const navigate = useNavigate();
+  const params = useParams();
 
-    let subjectId =
-        params.roomId ||
-        params.subjectId ||
-        params.id ||
-        window.location.pathname.split("/")[2];
+  const subjectId =
+    params.roomId ||
+    params.subjectId ||
+    params.id ||
+    window.location.pathname.split("/")[2];
 
-    let go = (menu) => {
-        if (typeof setActiveMenu === "function") {
-            setActiveMenu(menu);
-        }
-        navigate(`/lms/${subjectId}/${menu}`);
-    };
-
-    // ✅ 일정 더미
-    let upcomingSchedules = [
-        { date: "01.20", title: "정보처리기사 접수 시작", dday: "D-1" },
-        { date: "01.21", title: "스터디 1회차", dday: "D-2" },
-        { date: "01.22", title: "서류 준비", dday: "D-3" },
-        { date: "01.28", title: "스터디 2회차", dday: "D-9" },
-        { date: "02.02", title: "SQLD 시험", dday: "D-14" },
-        { date: "02.04", title: "스터디 3회차", dday: "D-16" },
-        { date: "02.10", title: "면접 준비", dday: "D-22" },
-        { date: "02.15", title: "프로젝트 발표", dday: "D-27" },
-        { date: "02.18", title: "서류 제출 마감", dday: "D-30" },
-        { date: "02.25", title: "스터디 회의", dday: "D-37" },
-    ];
-
-    let parseMD = (md) => {
-        let parts = String(md || "").split(".");
-        let m = parseInt(parts[0], 10);
-        let d = parseInt(parts[1], 10);
-        if (Number.isNaN(m) || Number.isNaN(d)) return { month: 0, day: 0 };
-        return { month: m, day: d };
-    };
-
-    // ✅ 달력이 보고 있는 달(아래 목록 필터용)
-    let [activeYear, setActiveYear] = useState(new Date().getFullYear());
-    let [activeMonth, setActiveMonth] = useState(new Date().getMonth() + 1);
-
-    // ✅ 달력 월 이동 시 업데이트
-    let onDatesSet = (arg) => {
-        let d = arg.view.currentStart; // 해당 월 그리드 시작점(보통 전월 말 포함)
-        setActiveYear(d.getFullYear());
-        setActiveMonth(d.getMonth() + 1);
-    };
-
-    // ✅ "YYYY-MM-DD" 키
-    let toKey = (y, m, d) => {
-        let mm = String(m).padStart(2, "0");
-        let dd = String(d).padStart(2, "0");
-        return `${y}-${mm}-${dd}`;
-    };
-
-    // ✅ 날짜키 -> 일정 배열
-    let itemsByKey = useMemo(() => {
-        let map = {};
-        for (let it of upcomingSchedules) {
-            let md = parseMD(it.date);
-            if (!md.month || !md.day) continue;
-
-            // 여기서는 “보고 있는 연도” 기준으로 맵 생성
-            let key = toKey(activeYear, md.month, md.day);
-            if (!map[key]) map[key] = [];
-            map[key].push(it);
-        }
-        return map;
-    }, [upcomingSchedules, activeYear]);
-
-    // ✅ 해당 달 일정만 아래 목록으로
-    let monthItems = useMemo(() => {
-        let filtered = upcomingSchedules.filter((it) => parseMD(it.date).month === activeMonth);
-        filtered.sort((a, b) => parseMD(a.date).day - parseMD(b.date).day);
-        return filtered;
-    }, [upcomingSchedules, activeMonth]);
-
-    // =========================
-    // ✅ "전역(body)" 툴팁: overflow/레이어 문제로 잘리는 것 방지
-    // =========================
-    function getGlobalTipEl() {
-        let el = document.getElementById("dashGlobalTip");
-        if (el) return el;
-
-        el = document.createElement("div");
-        el.id = "dashGlobalTip";
-        el.className = "dashGlobalTip";
-        document.body.appendChild(el);
-        return el;
+  const go = (menu) => {
+    if (typeof setActiveMenu === "function") {
+      setActiveMenu(menu);
     }
+    navigate(`/lms/${subjectId}/${menu}`);
+  };
 
-    function closeGlobalTip() {
-        let el = document.getElementById("dashGlobalTip");
-        if (!el) return;
-        el.classList.remove("isOpen");
-    }
+  // =========================
+  // ✅ 0) 대시보드용 상태 (출석/과제)
+  // =========================
+  const [dashAttendance, setDashAttendance] = useState({
+    items: [], // 최근 4개 [{ roundNum, studyDate, isPresent }]
+    ratio: 0,  // 0~100
+  });
 
-    function placeGlobalTip(el, anchorRect) {
-        let pad = 10;
+  const [dashAssignments, setDashAssignments] = useState({
+    items: [], // 최근 4개 [{ id, title, dueAt, status }]
+  });
 
-        // display가 none이면 offset 계산이 0 나올 수 있어서, 먼저 열고 계산하는 흐름을 가정
-        let w = el.offsetWidth || 220;
-        let h = el.offsetHeight || 120;
+  // =========================
+  // ✅ 1) 출석 대시보드 데이터 불러오기 (내 출석)
+  // - 백엔드: GET /subjects/{subjectId}/attendance?scope=my
+  // =========================
+  useEffect(() => {
+    if (!subjectId) return;
 
-        // 기본: 칸 오른쪽 아래
-        let left = anchorRect.left + 12;
-        let top = anchorRect.top + 28;
+    const fetchDashAttendance = async () => {
+      try {
+        const res = await api.get(`/subjects/${subjectId}/attendance`, {
+          params: { scope: "my" },
+        });
 
-        // 오른쪽 밖이면 왼쪽으로
-        if (left + w + pad > window.innerWidth) {
-            left = anchorRect.right - w - 12;
-        }
-        // 아래 밖이면 위로
-        if (top + h + pad > window.innerHeight) {
-            top = anchorRect.top - h - 12;
-        }
+        const schedule = res.data?.studySchedule;
+        const logs = res.data?.attendanceLogs || [];
+        const me = logs[0]; // scope=my면 보통 내 데이터 1개만 내려옴
 
-        // 너무 왼쪽/위로 가면 보정
-        if (left < pad) left = pad;
-        if (top < pad) top = pad;
+        const totalSessions = schedule?.totalSessions || 0;
 
-        el.style.left = `${Math.round(left)}px`;
-        el.style.top = `${Math.round(top)}px`;
-    }
+        // sessions: [{sessionNo, studyDate, joinAt, leaveAt}]
+        const sessions = me?.sessions || [];
 
-    useEffect(() => {
-        // 페이지 벗어나거나 리렌더 시 툴팁 남아있으면 닫기
-        return () => {
-            closeGlobalTip();
+        // ✅ 프론트에서 판정(Attendance 페이지 로직과 동일한 방식)
+        const toMs = (iso) => {
+          if (!iso) return 0;
+          const t = new Date(iso).getTime();
+          return Number.isNaN(t) ? 0 : t;
         };
-    }, []);
-
-    // ✅ 점 + 전역툴팁: 달력 셀에는 dot만 붙이고, 툴팁은 body에 띄움
-    let dayCellDidMount = (info) => {
-        // 1) 이전 렌더에서 남아있는 점 제거(중복 방지)
-        let old = info.el.querySelector(".dashDotWrap");
-        if (old) old.remove();
-
-        // 2) 해당 날짜 일정이 있으면 dot + hover
-        let y = info.date.getFullYear();
-        let m = String(info.date.getMonth() + 1).padStart(2, "0");
-        let d = String(info.date.getDate()).padStart(2, "0");
-        let key = `${y}-${m}-${d}`;
-
-        let items = itemsByKey[key];
-        if (!items || items.length === 0) return;
-
-        let top = info.el.querySelector(".fc-daygrid-day-top");
-        if (!top) return;
-
-        // dot만 표시
-        let wrap = document.createElement("div");
-        wrap.className = "dashDotWrap";
-
-        let dot = document.createElement("span");
-        dot.className = "dashDot";
-        wrap.appendChild(dot);
-
-        top.appendChild(wrap);
-
-        // ✅ hover 대상: "그 날짜 칸 전체"
-        let hoverTarget =
-            info.el.querySelector(".fc-daygrid-day-frame") ||
-            info.el;
-
-        // 기존 리스너 제거(중복 방지용)
-        if (hoverTarget._dashEnter) hoverTarget.removeEventListener("mouseenter", hoverTarget._dashEnter);
-        if (hoverTarget._dashLeave) hoverTarget.removeEventListener("mouseleave", hoverTarget._dashLeave);
-
-        let onEnter = () => {
-            let globalTip = getGlobalTipEl();
-
-            globalTip.innerHTML = `
-                <div class="dashTipTitle">${m}.${d} 일정</div>
-                ${items
-                .slice(0, 6)
-                .map((it) => `<div class="dashTipItem">• ${it.title}</div>`)
-                .join("")}
-                ${items.length > 6 ? `<div class="dashTipMore">+ ${items.length - 6}개 더 있음</div>` : ""}
-            `;
-
-            // 먼저 보여서 크기 계산 가능하게
-            globalTip.classList.add("isOpen");
-
-            let rect = hoverTarget.getBoundingClientRect();
-            placeGlobalTip(globalTip, rect);
+        const minutesBetween = (startIso, endIso) => {
+          const s = toMs(startIso);
+          const e = toMs(endIso);
+          if (!s || !e || e <= s) return 0;
+          return Math.floor((e - s) / 60000);
+        };
+        const calcTotalMinutes = (startHHMM, endHHMM) => {
+          if (!startHHMM || !endHHMM) return 0;
+          const [sh, sm] = startHHMM.split(":").map(Number);
+          const [eh, em] = endHHMM.split(":").map(Number);
+          const start = sh * 60 + sm;
+          const end = eh * 60 + em;
+          return Math.max(0, end - start);
+        };
+        const judgeAttendance = ({ joinAt, leaveAt }, totalMin, requiredRatio) => {
+          const attendedMin = minutesBetween(joinAt, leaveAt);
+          const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
+          const isPresent = ratio >= requiredRatio;
+          return { attendedMin, ratio, isPresent };
         };
 
-        let onLeave = () => {
-            closeGlobalTip();
-        };
+        const requiredRatio = schedule?.requiredRatio ?? 0.9;
+        const totalMin = calcTotalMinutes(schedule?.start, schedule?.end);
 
-        hoverTarget.addEventListener("mouseenter", onEnter);
-        hoverTarget.addEventListener("mouseleave", onLeave);
+        // ✅ 회차별 판정 결과 만들기 (빈 회차는 결석 처리)
+        const byNo = new Map(sessions.map((s) => [s.sessionNo, s]));
+        const judgedRows = Array.from({ length: totalSessions }).map((_, idx) => {
+          const sessionNo = idx + 1;
+          const log = byNo.get(sessionNo);
 
-        hoverTarget._dashEnter = onEnter;
-        hoverTarget._dashLeave = onLeave;
+          const judged = log
+            ? judgeAttendance(log, totalMin, requiredRatio)
+            : { isPresent: false };
+
+          return {
+            roundNum: sessionNo,
+            studyDate: log?.studyDate || (log?.joinAt ? log.joinAt.slice(0, 10) : "-"),
+            isPresent: judged.isPresent,
+          };
+        });
+
+        // ✅ 최근 4개: "가장 최근 회차" 기준 (회차 번호 큰 게 최신이라고 가정)
+        const recent4 = [...judgedRows]
+          .sort((a, b) => b.roundNum - a.roundNum)
+          .slice(0, 4)
+          .sort((a, b) => a.roundNum - b.roundNum); // 화면은 다시 오름차순
+
+        // ✅ 출석률
+        const presentCount = judgedRows.filter((x) => x.isPresent).length;
+        const ratio = totalSessions === 0 ? 0 : Math.round((presentCount / totalSessions) * 100);
+
+        setDashAttendance({ items: recent4, ratio });
+      } catch (e) {
+        console.error("DASH ATTENDANCE ERROR:", e);
+        setDashAttendance({ items: [], ratio: 0 });
+      }
     };
 
-    return (
-        <div className="dashboard-container">
-            <div className="dashboard-grid">
-                {/* 1) 시험 카드 */}
-                <div className="card study-card-back dashStudy">
-                    <div className="card study-card">
-                        <div className="study-info">
-                            <h3>정보처리기사</h3>
-                            <hr />
-                            <p>
-                                2026.04.27 <br />
-                                D-23
-                            </p>
+    fetchDashAttendance();
+  }, [subjectId]);
 
-                            <div className="progress-bar">
-                                <div className="progress" />
-                            </div>
-                        </div>
+  // =========================
+  // ✅ 2) 과제 대시보드 데이터 불러오기 (내 과제 목록)
+  // - 백엔드: GET /rooms/{roomId}/assignments (auth로 userEmail 판단)
+  // =========================
+  useEffect(() => {
+    if (!subjectId) return;
 
-                        <div className="study-icon">🔥</div>
-                    </div>
-                </div>
+    const fetchDashAssignments = async () => {
+      try {
+        const res = await api.get(`/rooms/${subjectId}/assignments`);
+        const list = res.data || [];
 
-                {/* 2) 출석 카드 */}
-                <div className="card attendance-card dashAttendance">
-                    <div className="card-header line">
-                        <span className="card-title">출석 현황</span>
-                        <button type="button" className="card-linkBtn" onClick={() => go("attendance")}>
-                            출석으로 이동 →
-                        </button>
-                    </div>
+        // list item: { assignmentId, title, dueAt, authorEmail, status }
+        // ✅ 최근 4개: dueAt이 가까운 순(또는 최신 생성순 원하면 바꿔도 됨)
+        const sorted = [...list].sort((a, b) => {
+          const da = a?.dueAt ? new Date(a.dueAt).getTime() : 0;
+          const db = b?.dueAt ? new Date(b.dueAt).getTime() : 0;
+          return da - db;
+        });
 
-                    <ul className="table-list">
-                        <li className="trow tinted">
-                            <span className="tleft">
-                                <span className="round">[1회차]</span>
-                                <span className="row-text">2026.01.01 (월)</span>
-                            </span>
-                            <span className="tright">
-                                <span className="status ok">출석</span>
-                            </span>
-                        </li>
+        const top4 = sorted.slice(0, 4).map((x) => ({
+          id: x.assignmentId,
+          title: x.title,
+          dueAt: x.dueAt,
+          status: x.status, // "제출 완료" / "제출 하기"
+        }));
 
-                        <li className="trow tinted">
-                            <span className="tleft">
-                                <span className="round">[2회차]</span>
-                                <span className="row-text">2026.01.03 (수)</span>
-                            </span>
-                            <span className="tright">
-                                <span className="status ok">출석</span>
-                            </span>
-                        </li>
+        setDashAssignments({ items: top4 });
+      } catch (e) {
+        console.error("DASH ASSIGNMENTS ERROR:", e);
+        setDashAssignments({ items: [] });
+      }
+    };
 
-                        <li className="trow tinted">
-                            <span className="tleft">
-                                <span className="round">[3회차]</span>
-                                <span className="row-text">2026.01.05 (금)</span>
-                            </span>
-                            <span className="tright">
-                                <span className="status ok">출석</span>
-                            </span>
-                        </li>
-                    </ul>
+    fetchDashAssignments();
+  }, [subjectId]);
 
-                    <div className="card-footer">
-                        <button type="button" className="more-btn" onClick={() => go("attendance")}>
-                            더보기 &gt;
-                        </button>
-                    </div>
+  // ✅ 일정 더미
+  const upcomingSchedules = [
+    { date: "01.20", title: "정보처리기사 접수 시작", dday: "D-1" },
+    { date: "01.21", title: "스터디 1회차", dday: "D-2" },
+    { date: "01.22", title: "서류 준비", dday: "D-3" },
+    { date: "01.28", title: "스터디 2회차", dday: "D-9" },
+    { date: "02.02", title: "SQLD 시험", dday: "D-14" },
+    { date: "02.04", title: "스터디 3회차", dday: "D-16" },
+    { date: "02.10", title: "면접 준비", dday: "D-22" },
+    { date: "02.15", title: "프로젝트 발표", dday: "D-27" },
+    { date: "02.18", title: "서류 제출 마감", dday: "D-30" },
+    { date: "02.25", title: "스터디 회의", dday: "D-37" },
+  ];
 
-                    <div className="attendance-rate-box">
-                        <div className="rate-top">
-                            <div className="rate-left">
-                                <img src="/calendar.png" alt="출석률" className="rate-badge" />
-                                <span className="rate-label">출석률</span>
-                            </div>
-                            <span className="rate-value">83.3%</span>
-                        </div>
+  const parseMD = (md) => {
+    const parts = String(md || "").split(".");
+    const m = parseInt(parts[0], 10);
+    const d = parseInt(parts[1], 10);
+    if (Number.isNaN(m) || Number.isNaN(d)) return { month: 0, day: 0 };
+    return { month: m, day: d };
+  };
 
-                        <div className="rate-bar">
-                            <div className="rate-progress" />
-                        </div>
-                    </div>
-                </div>
+  // ✅ 달력이 보고 있는 달(아래 목록 필터용)
+  const [activeYear, setActiveYear] = useState(new Date().getFullYear());
+  const [activeMonth, setActiveMonth] = useState(new Date().getMonth() + 1);
 
-                {/* ✅ 3) 달력(그리드 상단 오른쪽) */}
-                <div className="card dashCalendarTop">
-                    <div className="card-header line">
-                        <span className="card-title">달력</span>
-                        <button
-                            type="button"
-                            className="card-linkBtn"
-                            onClick={() => go("calendar")}
-                        >
-                            일정으로 이동 →
-                        </button>
-                    </div>
+  // ✅ 달력 월 이동 시 업데이트
+  const onDatesSet = (arg) => {
+    const d = arg.view.currentStart;
+    setActiveYear(d.getFullYear());
+    setActiveMonth(d.getMonth() + 1);
+  };
 
-                    <div className="dashMiniCal">
-                        <FullCalendar
-                            plugins={[dayGridPlugin, interactionPlugin]}
-                            initialView="dayGridMonth"
-                            locale="ko"
-                            height="auto"
-                            expandRows={false}
-                            fixedWeekCount={true}
-                            showNonCurrentDates={true}
-                            events={[]} // 막대 이벤트는 안 그림
-                            headerToolbar={{
-                                left: "prev",
-                                center: "title",
-                                right: "next",
-                            }}
-                            datesSet={onDatesSet}
-                            dayCellContent={(arg) => {
-                                return (
-                                    <span className="dashDayNum">
-                                        {arg.date.getDate()}
-                                    </span>
-                                );
-                            }}
-                            dayCellDidMount={dayCellDidMount}
-                        />
-                    </div>
-                </div>
+  const toKey = (y, m, d) => {
+    const mm = String(m).padStart(2, "0");
+    const dd = String(d).padStart(2, "0");
+    return `${y}-${mm}-${dd}`;
+  };
 
-                {/* 4) 게시판 카드 */}
-                <div className="card dashBoard">
-                    <div className="card-header line">
-                        <span className="card-title">게시판</span>
-                        <button type="button" className="card-linkBtn" onClick={() => go("board")}>
-                            게시판으로 이동 →
-                        </button>
-                    </div>
+  const itemsByKey = useMemo(() => {
+    const map = {};
+    for (const it of upcomingSchedules) {
+      const md = parseMD(it.date);
+      if (!md.month || !md.day) continue;
 
-                    <ul className="table-list">
-                        <li className="trow plain">
-                            <span className="row-text">[자료] 2024 기출 자료 공유합니다!</span>
-                        </li>
-                        <li className="trow plain">
-                            <span className="row-text">[자료] 필기 요약본입니다</span>
-                        </li>
-                        <li className="trow plain">
-                            <span className="row-text">[공지] 오늘 저녁 스터디 예정입니다</span>
-                        </li>
-                    </ul>
+      const key = toKey(activeYear, md.month, md.day);
+      if (!map[key]) map[key] = [];
+      map[key].push(it);
+    }
+    return map;
+  }, [upcomingSchedules, activeYear]);
 
-                    <div className="card-footer">
-                        <button type="button" className="more-btn" onClick={() => go("board")}>
-                            더보기 &gt;
-                        </button>
-                    </div>
-                </div>
+  const monthItems = useMemo(() => {
+    const filtered = upcomingSchedules.filter((it) => parseMD(it.date).month === activeMonth);
+    filtered.sort((a, b) => parseMD(a.date).day - parseMD(b.date).day);
+    return filtered;
+  }, [upcomingSchedules, activeMonth]);
 
-                {/* 5) 과제 카드 */}
-                <div className="card dashAssignment">
-                    <div className="card-header line">
-                        <span className="card-title">과제</span>
-                        <button type="button" className="card-linkBtn" onClick={() => go("assignment")}>
-                            과제로 이동 →
-                        </button>
-                    </div>
+  // =========================
+  // ✅ 전역 툴팁
+  // =========================
+  function getGlobalTipEl() {
+    let el = document.getElementById("dashGlobalTip");
+    if (el) return el;
 
-                    <ul className="table-list">
-                        <li className="trow tinted">
-                            <span className="tleft">
-                                <span className="round">[1회차]</span>
-                                <span className="row-text">2024 기출 풀기</span>
-                            </span>
-                            <span className="tright">
-                                <span className="pill done">제출</span>
-                            </span>
-                        </li>
+    el = document.createElement("div");
+    el.id = "dashGlobalTip";
+    el.className = "dashGlobalTip";
+    document.body.appendChild(el);
+    return el;
+  }
 
-                        <li className="trow tinted">
-                            <span className="tleft">
-                                <span className="round">[2회차]</span>
-                                <span className="row-text">2023 기출 풀기</span>
-                            </span>
-                            <span className="tright">
-                                <span className="pill done">제출</span>
-                            </span>
-                        </li>
+  function closeGlobalTip() {
+    const el = document.getElementById("dashGlobalTip");
+    if (!el) return;
+    el.classList.remove("isOpen");
+  }
 
-                        <li className="trow tinted">
-                            <span className="tleft">
-                                <span className="round">[3회차]</span>
-                                <span className="row-text">2022 기출 풀기</span>
-                            </span>
-                            <span className="tright">
-                                <span className="pill done">제출</span>
-                            </span>
-                        </li>
+  function placeGlobalTip(el, anchorRect) {
+    const pad = 10;
+    const w = el.offsetWidth || 220;
+    const h = el.offsetHeight || 120;
 
-                        <li className="trow tinted">
-                            <span className="tleft">
-                                <span className="round">[4회차]</span>
-                                <span className="row-text">2021 기출 풀기</span>
-                            </span>
-                            <span className="tright">
-                                <span className="pill pending">제출하기</span>
-                            </span>
-                        </li>
-                    </ul>
+    let left = anchorRect.left + 12;
+    let top = anchorRect.top + 28;
 
-                    <div className="card-footer">
-                        <button type="button" className="more-btn" onClick={() => go("assignment")}>
-                            더보기 &gt;
-                        </button>
-                    </div>
-                </div>
+    if (left + w + pad > window.innerWidth) left = anchorRect.right - w - 12;
+    if (top + h + pad > window.innerHeight) top = anchorRect.top - h - 12;
 
-                {/* ✅ 6) 월별 일정 목록(그리드 하단 오른쪽) */}
-                <div className="card dashCalendarBottom">
-                    <div className="card-header line">
-                        <span className="card-title">월별 일정</span>
-                        <span className="dashMonthBadge">{activeMonth}월</span>
-                    </div>
+    if (left < pad) left = pad;
+    if (top < pad) top = pad;
 
-                    <div className="dashListBody">
-                        {monthItems.length === 0 ? (
-                            <div className="dashEmpty">이번 달 일정이 없습니다.</div>
-                        ) : (
-                            <ul className="table-list dashCalListTight">
-                                {monthItems.map((it, idx) => (
-                                    <li key={`m-${activeMonth}-${idx}`} className="trow tinted">
-                                        <span className="tleft">
-                                            <span className="round">[{it.date}]</span>
-                                            <span className="row-text">{it.title}</span>
-                                        </span>
-                                        <span className="tright">
-                                            <span className="status ok">{it.dday}</span>
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
 
-                    <div className="card-footer">
-                        <button type="button" className="more-btn" onClick={() => go("calendar")}>
-                            더보기 &gt;
-                        </button>
-                    </div>
-                </div>
+  useEffect(() => {
+    return () => closeGlobalTip();
+  }, []);
+
+  const dayCellDidMount = (info) => {
+    const old = info.el.querySelector(".dashDotWrap");
+    if (old) old.remove();
+
+    const y = info.date.getFullYear();
+    const m = String(info.date.getMonth() + 1).padStart(2, "0");
+    const d = String(info.date.getDate()).padStart(2, "0");
+    const key = `${y}-${m}-${d}`;
+
+    const items = itemsByKey[key];
+    if (!items || items.length === 0) return;
+
+    const top = info.el.querySelector(".fc-daygrid-day-top");
+    if (!top) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "dashDotWrap";
+    const dot = document.createElement("span");
+    dot.className = "dashDot";
+    wrap.appendChild(dot);
+    top.appendChild(wrap);
+
+    const hoverTarget = info.el.querySelector(".fc-daygrid-day-frame") || info.el;
+
+    if (hoverTarget._dashEnter) hoverTarget.removeEventListener("mouseenter", hoverTarget._dashEnter);
+    if (hoverTarget._dashLeave) hoverTarget.removeEventListener("mouseleave", hoverTarget._dashLeave);
+
+    const onEnter = () => {
+      const globalTip = getGlobalTipEl();
+
+      globalTip.innerHTML = `
+        <div class="dashTipTitle">${m}.${d} 일정</div>
+        ${items
+          .slice(0, 6)
+          .map((it) => `<div class="dashTipItem">• ${it.title}</div>`)
+          .join("")}
+        ${items.length > 6 ? `<div class="dashTipMore">+ ${items.length - 6}개 더 있음</div>` : ""}
+      `;
+
+      globalTip.classList.add("isOpen");
+      const rect = hoverTarget.getBoundingClientRect();
+      placeGlobalTip(globalTip, rect);
+    };
+
+    const onLeave = () => closeGlobalTip();
+
+    hoverTarget.addEventListener("mouseenter", onEnter);
+    hoverTarget.addEventListener("mouseleave", onLeave);
+
+    hoverTarget._dashEnter = onEnter;
+    hoverTarget._dashLeave = onLeave;
+  };
+
+  // ✅ 날짜 표시용 (출석 카드)
+  const fmtYMD = (ymd) => {
+    if (!ymd || ymd === "-") return "-";
+    // "2026-01-19" -> "2026.01.19"
+    return ymd.replaceAll("-", ".");
+  };
+
+  return (
+    <div className="dashboard-container">
+      <div className="dashboard-grid">
+        {/* 1) 시험 카드 */}
+        <div className="card study-card-back dashStudy">
+          <div className="card study-card">
+            <div className="study-info">
+              <h3>정보처리기사</h3>
+              <hr />
+              <p>
+                2026.04.27 <br />
+                D-23
+              </p>
+
+              <div className="progress-bar">
+                <div className="progress" />
+              </div>
             </div>
+
+            <div className="study-icon">🔥</div>
+          </div>
         </div>
-    );
+
+        {/* 2) 출석 카드 (✅ API 적용) */}
+        <div className="card attendance-card dashAttendance">
+          <div className="card-header line">
+            <span className="card-title">출석 현황</span>
+            <button type="button" className="card-linkBtn" onClick={() => go("attendance")}>
+              출석으로 이동 →
+            </button>
+          </div>
+
+          <ul className="table-list">
+            {(dashAttendance.items || []).map((it) => (
+              <li key={`att-${it.roundNum}`} className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[{it.roundNum}회차]</span>
+                  <span className="row-text">{fmtYMD(it.studyDate)}</span>
+                </span>
+                <span className="tright">
+                  <span className={`status ${it.isPresent ? "ok" : "bad"}`}>
+                    {it.isPresent ? "출석" : "결석"}
+                  </span>
+                </span>
+              </li>
+            ))}
+
+            {(dashAttendance.items || []).length === 0 && (
+              <li className="trow tinted">
+                <span className="row-text">출석 데이터가 없습니다.</span>
+              </li>
+            )}
+          </ul>
+
+          <div className="card-footer">
+            <button type="button" className="more-btn" onClick={() => go("attendance")}>
+              더보기 &gt;
+            </button>
+          </div>
+
+          <div className="attendance-rate-box">
+            <div className="rate-top">
+              <div className="rate-left">
+                <img src="/calendar.png" alt="출석률" className="rate-badge" />
+                <span className="rate-label">출석률</span>
+              </div>
+              <span className="rate-value">{dashAttendance.ratio}%</span>
+            </div>
+
+            <div className="rate-bar">
+              <div className="rate-progress" style={{ width: `${dashAttendance.ratio}%` }} />
+            </div>
+          </div>
+        </div>
+
+        {/* 3) 달력 */}
+        <div className="card dashCalendarTop">
+          <div className="card-header line">
+            <span className="card-title">달력</span>
+            <button type="button" className="card-linkBtn" onClick={() => go("calendar")}>
+              일정으로 이동 →
+            </button>
+          </div>
+
+          <div className="dashMiniCal">
+            <FullCalendar
+              plugins={[dayGridPlugin, interactionPlugin]}
+              initialView="dayGridMonth"
+              locale="ko"
+              height="auto"
+              expandRows={false}
+              fixedWeekCount={true}
+              showNonCurrentDates={true}
+              events={[]}
+              headerToolbar={{
+                left: "prev",
+                center: "title",
+                right: "next",
+              }}
+              datesSet={onDatesSet}
+              dayCellContent={(arg) => <span className="dashDayNum">{arg.date.getDate()}</span>}
+              dayCellDidMount={dayCellDidMount}
+            />
+          </div>
+        </div>
+
+        {/* 4) 게시판 카드 */}
+        <div className="card dashBoard">
+          <div className="card-header line">
+            <span className="card-title">게시판</span>
+            <button type="button" className="card-linkBtn" onClick={() => go("board")}>
+              게시판으로 이동 →
+            </button>
+          </div>
+
+          <ul className="table-list">
+            <li className="trow plain">
+              <span className="row-text">[자료] 2024 기출 자료 공유합니다!</span>
+            </li>
+            <li className="trow plain">
+              <span className="row-text">[자료] 필기 요약본입니다</span>
+            </li>
+            <li className="trow plain">
+              <span className="row-text">[공지] 오늘 저녁 스터디 예정입니다</span>
+            </li>
+          </ul>
+
+          <div className="card-footer">
+            <button type="button" className="more-btn" onClick={() => go("board")}>
+              더보기 &gt;
+            </button>
+          </div>
+        </div>
+
+        {/* 5) 과제 카드 (✅ API 적용) */}
+        <div className="card dashAssignment">
+          <div className="card-header line">
+            <span className="card-title">과제</span>
+            <button type="button" className="card-linkBtn" onClick={() => go("assignment")}>
+              과제로 이동 →
+            </button>
+          </div>
+
+          <ul className="table-list">
+            {(dashAssignments.items || []).map((a) => (
+              <li key={`as-${a.id}`} className="trow tinted">
+                <span className="tleft">
+                  <span className="round">[과제]</span>
+                  <span className="row-text">{a.title}</span>
+                </span>
+                <span className="tright">
+                  <span className={`pill ${a.status === "제출 완료" ? "done" : "pending"}`}>
+                    {a.status === "제출 완료" ? "제출" : "제출하기"}
+                  </span>
+                </span>
+              </li>
+            ))}
+
+            {(dashAssignments.items || []).length === 0 && (
+              <li className="trow tinted">
+                <span className="row-text">과제 데이터가 없습니다.</span>
+              </li>
+            )}
+          </ul>
+
+          <div className="card-footer">
+            <button type="button" className="more-btn" onClick={() => go("assignment")}>
+              더보기 &gt;
+            </button>
+          </div>
+        </div>
+
+        {/* 6) 월별 일정 목록 */}
+        <div className="card dashCalendarBottom">
+          <div className="card-header line">
+            <span className="card-title">월별 일정</span>
+            <span className="dashMonthBadge">{activeMonth}월</span>
+          </div>
+
+          <div className="dashListBody">
+            {monthItems.length === 0 ? (
+              <div className="dashEmpty">이번 달 일정이 없습니다.</div>
+            ) : (
+              <ul className="table-list dashCalListTight">
+                {monthItems.map((it, idx) => (
+                  <li key={`m-${activeMonth}-${idx}`} className="trow tinted">
+                    <span className="tleft">
+                      <span className="round">[{it.date}]</span>
+                      <span className="row-text">{it.title}</span>
+                    </span>
+                    <span className="tright">
+                      <span className="status ok">{it.dday}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card-footer">
+            <button type="button" className="more-btn" onClick={() => go("calendar")}>
+              더보기 &gt;
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default Dashboard;

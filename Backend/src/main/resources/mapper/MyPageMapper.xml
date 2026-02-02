@@ -3,10 +3,10 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.mypage.MyPageMapper">
+<mapper namespace="com.example.demo.마이페이지.mapper.MyPageMapper">
 
     <!-- 내 정보 조회 -->
-    <select id="findByUserId" resultType="com.example.demo.mypage.MyPageVO">
+    <select id="findByUserId" resultType="com.example.demo.마이페이지.vo.MyPageVO">
         SELECT *
         FROM users
         WHERE user_id = #{userId}
@@ -38,8 +38,8 @@
         WHERE email = #{email}
     </select>
 
-    <!-- 진행중 스터디 -->
-    <select id="getJoinedStudies" resultType="com.example.demo.mypage.MyStudyVO">
+    <!-- 진행중 스터디 (같은 방이 방장+가입 양쪽에 있어도 room_id 기준 1개만) -->
+    <select id="getJoinedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
         <!-- 방장이 만든 진행중 -->
         SELECT r.room_id AS roomId,
@@ -54,7 +54,7 @@
 
         UNION
 
-        <!-- 가입 승인된 진행중 -->
+        <!-- 가입 승인된 진행중 (같은 방에 대한 요청이 여러 건이어도 room_id 기준 1개) -->
         SELECT r.room_id AS roomId,
         r.title,
         '진행중' AS status,
@@ -66,11 +66,12 @@
         WHERE j.request_user_email = #{email}
         AND j.status = '승인'
         AND r.ended_at <![CDATA[ >= ]]> CURDATE()
+        GROUP BY r.room_id, r.title, r.start_date, r.ended_at, r.host_user_email
 
     </select>
 
-    <!-- 완료된 스터디 -->
-    <select id="getCompletedStudies" resultType="com.example.demo.mypage.MyStudyVO">
+    <!-- 완료된 스터디 (같은 방이 방장+가입 양쪽에 있어도 room_id 기준 1개만) -->
+    <select id="getCompletedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
         <!-- 방장이 만든 종료 -->
         SELECT r.room_id AS roomId,
@@ -85,7 +86,7 @@
 
         UNION
 
-        <!-- 가입 승인된 종료 -->
+        <!-- 가입 승인된 종료 (같은 방에 대한 요청이 여러 건이어도 room_id 기준 1개) -->
         SELECT r.room_id AS roomId,
         r.title,
         '종료' AS status,
@@ -97,6 +98,7 @@
         WHERE j.request_user_email = #{email}
         AND j.status = '승인'
         AND r.ended_at <![CDATA[ < ]]> CURDATE()
+        GROUP BY r.room_id, r.title, r.start_date, r.ended_at, r.host_user_email
 
     </select>
 

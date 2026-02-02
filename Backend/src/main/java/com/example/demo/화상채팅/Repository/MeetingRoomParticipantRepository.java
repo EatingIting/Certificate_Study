@@ -1,15 +1,23 @@
 package com.example.demo.화상채팅.Repository;
 
 import com.example.demo.화상채팅.Domain.MeetingRoomParticipant;
-import com.example.demo.화상채팅.Domain.MeetingRoomParticipantId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
-public interface MeetingRoomParticipantRepository extends JpaRepository<MeetingRoomParticipant, MeetingRoomParticipantId> {
+public interface MeetingRoomParticipantRepository extends JpaRepository<MeetingRoomParticipant, Long> {
 
-    boolean existsByIdRoomIdAndIdUserEmail(String roomId, String userEmail);
+    Optional<MeetingRoomParticipant> findByScheduleIdAndRoomIdAndUserEmail(
+            Long scheduleId, String roomId, String userEmail);
 
-    Optional<MeetingRoomParticipant>
-    findByIdRoomIdAndIdUserEmailAndLeftAtIsNull(String roomId, String userEmail);
+    Optional<MeetingRoomParticipant> findByScheduleIdAndRoomIdAndUserEmailAndLeftAtIsNull(
+            Long scheduleId, String roomId, String userEmail);
+
+    /** 퇴장 시 roomId + userEmail로 접속 중인 참가자 레코드 찾기 (scheduleId 없이) */
+    Optional<MeetingRoomParticipant> findFirstByRoomIdAndUserEmailAndLeftAtIsNull(
+            String roomId, String userEmail);
+
+    /** schedule_id가 null인 참가 중인 행만 찾기 (null 입장 시 다른 회차 행 재사용 방지) */
+    Optional<MeetingRoomParticipant> findFirstByRoomIdAndUserEmailAndScheduleIdIsNullAndLeftAtIsNull(
+            String roomId, String userEmail);
 }

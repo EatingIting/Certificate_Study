@@ -26,7 +26,7 @@
 /* ===== 공통 카드 ===== */
 .card {
     background: #ffffff;
-    border-radius: 5px;
+    border-radius: 5px; 
     padding: 16px 16px 14px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
     min-height: 0;
@@ -436,4 +436,20 @@
     min-width: 0 !important;
     align-items: center !important;
     justify-content: flex-end !important;
+}
+
+
+/* 결석 표시용(없으면 추가) */
+.status.bad {
+  background: #ffe9e9;
+  color: #d60000;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 출석률 progress가 width로 먹게(없으면 추가) */
+.rate-progress {
+  height: 100%;
 }

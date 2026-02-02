@@ -15,6 +15,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const { user, room } = useLMS();
     const isHost = !!(user && room && user.email && room.hostUserEmail &&
         String(user.email).trim().toLowerCase() === String(room.hostUserEmail).trim().toLowerCase());
+    const isNotHost = !isHost;
 
     // ✅ 초기값: 전부 열림
     let [openKeys, setOpenKeys] = useState([
@@ -26,11 +27,6 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         "study",
         "profile",
     ]);
-
-    let studyRole = "OWNER";
-
-    let isOwner = studyRole === "OWNER";
-    let isMember = studyRole === "MEMBER";
 
     useEffect(() => {
         if (typeof setActiveMenu !== "function") return;
@@ -54,10 +50,13 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             else nextActive = "assignment/list";
         }
 
-        if (last === "attendance") {
-            if (sp.get("scope") === "all") nextActive = "attendance/all";
-            else nextActive = "attendance/my";
+        // 출석 라우트 동기화
+        if (path.includes("/attendance/all")) {
+            nextActive = "attendance/all";
+        } else if (path.includes("/attendance")) {
+            nextActive = "attendance/my";
         }
+
 
         if (last === "board") {
             let category = sp.get("category");
@@ -101,9 +100,9 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const requestPipIfMeeting = useCallback(async () => {
         // roomId가 있으면 회의 중으로 간주 (isInMeeting이 false여도)
         const hasActiveMeeting = isInMeeting || isPipMode || roomId || sessionStorage.getItem("pip.roomId");
-        
+
         console.log("[LMSSidebar] requestPipIfMeeting 호출", { isInMeeting, isPipMode, roomId, hasActiveMeeting });
-        
+
         if (!hasActiveMeeting) {
             console.log("[LMSSidebar] 회의 중이 아니므로 PiP 요청 안 함");
             return;
@@ -168,11 +167,11 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         }
 
         const { video, stream, peerName, peerId } = mainPresenter;
-        
+
         // 🔥 video 요소가 없어도 메인 발표자 정보는 있으므로 PiP 실행 가능
         // requestBrowserPip에서 스트림이 없으면 아바타 스트림을 생성함
         console.log("[LMSSidebar] 브라우저 PiP 요청", { video, stream, peerName, peerId, hasStream: !!stream });
-        
+
         // video 요소가 없으면 임시 video 요소 생성
         let videoEl = video;
         if (!videoEl) {
@@ -180,7 +179,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             videoEl.style.cssText = "position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none;";
             document.body.appendChild(videoEl);
         }
-        
+
         await requestBrowserPip(videoEl, stream, peerName, peerId);
     }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
@@ -236,9 +235,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                 <ul className="menu-list">
                     {/* 대시보드 */}
                     <li
-                        className={`menu-item menu-single ${
-                            activeMenu === "dashboard" ? "active" : ""
-                        }`}
+                        className={`menu-item menu-single ${activeMenu === "dashboard" ? "active" : ""
+                            }`}
                         onClick={goDashboard}
                         role="button"
                         tabIndex={0}
@@ -249,14 +247,12 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                     {/* 출석 */}
                     <li
-                        className={`menu-group ${
-                            openKeys.includes("attendance") ? "open" : ""
-                        }`}
+                        className={`menu-group ${openKeys.includes("attendance") ? "open" : ""
+                            }`}
                     >
                         <div
-                            className={`menu-item menu-parent ${
-                                activeMenu.startsWith("attendance") ? "active" : ""
-                            }`}
+                            className={`menu-item menu-parent ${activeMenu.startsWith("attendance") ? "active" : ""
+                                }`}
                             onClick={() => toggleParent("attendance")}
                             role="button"
                             tabIndex={0}
@@ -272,28 +268,26 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                         <ul className="submenu">
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "attendance/my" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "attendance/my" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "attendance",
                                         "attendance/my",
-                                        "attendance?scope=my"
+                                        "attendance"
                                     )
                                 }
                             >
                                 내 출석 조회
                             </li>
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "attendance/all" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "attendance/all" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "attendance",
                                         "attendance/all",
-                                        "attendance?scope=all"
+                                        "attendance/all"
                                     )
                                 }
                             >
@@ -304,14 +298,12 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                     {/* 과제 */}
                     <li
-                        className={`menu-group ${
-                            openKeys.includes("assignment") ? "open" : ""
-                        }`}
+                        className={`menu-group ${openKeys.includes("assignment") ? "open" : ""
+                            }`}
                     >
                         <div
-                            className={`menu-item menu-parent ${
-                                activeMenu.startsWith("assignment") ? "active" : ""
-                            }`}
+                            className={`menu-item menu-parent ${activeMenu.startsWith("assignment") ? "active" : ""
+                                }`}
                             onClick={() => toggleParent("assignment")}
                             role="button"
                             tabIndex={0}
@@ -327,9 +319,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                         <ul className="submenu">
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "assignment/list" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "assignment/list" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "assignment",
@@ -341,9 +332,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 과제 목록
                             </li>
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "assignment/create" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "assignment/create" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "assignment",
@@ -359,14 +349,12 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                     {/* 게시판 */}
                     <li
-                        className={`menu-group ${
-                            openKeys.includes("board") ? "open" : ""
-                        }`}
+                        className={`menu-group ${openKeys.includes("board") ? "open" : ""
+                            }`}
                     >
                         <div
-                            className={`menu-item menu-parent ${
-                                activeMenu.startsWith("board") ? "active" : ""
-                            }`}
+                            className={`menu-item menu-parent ${activeMenu.startsWith("board") ? "active" : ""
+                                }`}
                             onClick={() => toggleParent("board")}
                             role="button"
                             tabIndex={0}
@@ -382,9 +370,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                         <ul className="submenu">
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "board/all" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "board/all" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild("board", "board/all", "board")
                                 }
@@ -392,9 +379,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 전체
                             </li>
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "board/notice" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "board/notice" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "board",
@@ -406,9 +392,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 공지
                             </li>
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "board/free" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "board/free" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "board",
@@ -420,9 +405,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 일반
                             </li>
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "board/qna" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "board/qna" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "board",
@@ -434,9 +418,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 질문
                             </li>
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "board/data" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "board/data" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "board",
@@ -493,14 +476,12 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                     {/* 일정 */}
                     <li
-                        className={`menu-group ${
-                            openKeys.includes("calendar") ? "open" : ""
-                        }`}
+                        className={`menu-group ${openKeys.includes("calendar") ? "open" : ""
+                            }`}
                     >
                         <div
-                            className={`menu-item menu-parent ${
-                                activeMenu.startsWith("calendar") ? "active" : ""
-                            }`}
+                            className={`menu-item menu-parent ${activeMenu.startsWith("calendar") ? "active" : ""
+                                }`}
                             onClick={() => toggleParent("calendar")}
                             role="button"
                             tabIndex={0}
@@ -516,9 +497,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
 
                         <ul className="submenu">
                             <li
-                                className={`submenu-item ${
-                                    activeMenu === "calendar/list" ? "active" : ""
-                                }`}
+                                className={`submenu-item ${activeMenu === "calendar/list" ? "active" : ""
+                                    }`}
                                 onClick={() =>
                                     goChild(
                                         "calendar",
@@ -531,9 +511,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                             </li>
                             {isHost === true && (
                                 <li
-                                    className={`submenu-item ${
-                                        activeMenu === "calendar/add" ? "active" : ""
-                                    }`}
+                                    className={`submenu-item ${activeMenu === "calendar/add" ? "active" : ""
+                                        }`}
                                     onClick={() =>
                                         goChild(
                                             "calendar",
@@ -548,22 +527,23 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                         </ul>
                     </li>
 
-                    {/* ✅ 스터디 관리 */}
-                    <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
-                        <div
-                            className={`menu-item menu-parent ${activeMenu.startsWith("study") ? "active" : ""}`}
-                            onClick={() => toggleParent("study")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => e.key === "Enter" && toggleParent("study")}
-                        >
-                            <span className="menu-label">스터디 관리</span>
-                            <span className="arrow">{openKeys.includes("study") ? "▾" : "▸"}</span>
-                        </div>
+                    {/* ✅ 스터디 관리 (스터디장만) */}
+                    {isHost && (
+                        <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
+                            <div
+                                className={`menu-item menu-parent ${activeMenu.startsWith("study") ? "active" : ""}`}
+                                onClick={() => toggleParent("study")}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => e.key === "Enter" && toggleParent("study")}
+                            >
+                                <span className="menu-label">스터디 관리</span>
+                                <span className="arrow">{openKeys.includes("study") ? "▾" : "▸"}</span>
+                            </div>
 
                         <ul className="submenu">
                             {/* 방장만 */}
-                            {isOwner && (
+                            {isHost && (
                                 <li
                                     className={`submenu-item ${activeMenu === "study/members" ? "active" : ""}`}
                                     onClick={() => goChild("study", "study/members", "study/members")}
@@ -573,7 +553,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                             )}
 
                             {/* 스터디원만 (맨 아래) */}
-                            {isMember && (
+                            {isNotHost && (
                                 <li
                                     className={`submenu-item submen-danger ${activeMenu === "study/leave" ? "active" : ""}`}
                                     onClick={() => goChild("study", "study/leave", "study/leave")}
@@ -583,17 +563,16 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                             )}
                         </ul>
                     </li>
+                    )}
 
                     {/* 프로필 관리 */}
                     <li
-                        className={`menu-group ${
-                            openKeys.includes("profile") ? "open" : ""
-                        }`}
+                        className={`menu-group ${openKeys.includes("profile") ? "open" : ""
+                            }`}
                     >
                         <div
-                            className={`menu-item menu-parent ${
-                                activeMenu.startsWith("profile") ? "active" : ""
-                            }`}
+                            className={`menu-item menu-parent ${activeMenu.startsWith("profile") ? "active" : ""
+                                }`}
                             onClick={() => toggleParent("profile")}
                             role="button"
                             tabIndex={0}
@@ -633,20 +612,29 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                     if (!subjectId) return;
 
                     try {
-                        // 서버에서 roomId 가져오기 (8자리)
+                        // 서버에서 roomId + 오늘 회차 scheduleId 가져오기 (scheduleId 없어도 roomId만 있으면 입장 가능)
                         const response = await api.get(`/meeting-rooms/room-id/${subjectId}`);
-                        const roomId = response.data.roomId;
+                        const roomId = response.data?.roomId;
+                        const scheduleId = response.data?.scheduleId ?? null;
 
-                        if (roomId) {
-                            sessionStorage.setItem("lms.activeRoomId", roomId);
+                        if (!roomId) {
+                            console.error("[LMSSidebar] roomId 없음:", response.data);
+                            alert("화상 채팅방 입장에 실패했습니다. 다시 시도해주세요.");
+                            return;
+                        }
+
+                        sessionStorage.setItem("lms.activeRoomId", roomId);
+                        if (scheduleId != null) {
+                            sessionStorage.setItem("pip.scheduleId", String(scheduleId));
                         }
 
                         window.dispatchEvent(new Event("meeting:request-pip"));
 
-                        navigate(`/lms/${subjectId}/MeetingRoom/${roomId}`);
+                        navigate(scheduleId != null
+                            ? `/lms/${subjectId}/MeetingRoom/${roomId}?scheduleId=${scheduleId}`
+                            : `/lms/${subjectId}/MeetingRoom/${roomId}`);
                     } catch (error) {
                         console.error("[LMSSidebar] roomId 가져오기 실패:", error);
-                        // 에러 발생 시 기존 방식으로 fallback (하지만 이 경우는 없어야 함)
                         alert("화상 채팅방 입장에 실패했습니다. 다시 시도해주세요.");
                     }
                 }}
