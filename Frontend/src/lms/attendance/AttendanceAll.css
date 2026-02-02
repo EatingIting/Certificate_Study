@@ -112,7 +112,7 @@
 }
 
 .at-table tbody td {
-    padding: 14px 14px;
+    padding: 14px 30px;
     border-top: 1px solid #eef1f5;
     font-size: 14px;
     color: #101828;
@@ -120,13 +120,6 @@
     white-space: nowrap;
 }
 
-/* column sizing */
-.at-th-name {
-    width: 160px;
-}
-.at-th-att {
-    width: 260px;
-}
 .at-th-num,
 .at-td-num {
     width: 70px;
@@ -155,7 +148,7 @@
 
 .at-name {
     font-weight: 700;
-    margin: 0 auto;
+    margin: 0;
 }
 
 /* progress */
@@ -275,7 +268,7 @@
 }
 
 .at-th-att, .at-td-att {
-  left: 220px; /* 이름 컬럼 폭만큼(너가 쓰는 폭에 맞춰 조절) */
+  left: 100px; /* 이름 컬럼 폭만큼(너가 쓰는 폭에 맞춰 조절) */
   z-index: 2;
 }
 
@@ -284,3 +277,23 @@
   top: 0;
   z-index: 3;
 }
+
+.at-th-name,
+.at-td-name {
+  width: 100px;
+  max-width: 100px;
+  overflow: hidden;
+  padding-left: 50px;
+}
+
+
+
+
+.at-th-att,
+.at-td-att {
+  width: 100px !important;
+  max-width: 110px;
+  min-width: 110px;
+  overflow: hidden;
+}
+
