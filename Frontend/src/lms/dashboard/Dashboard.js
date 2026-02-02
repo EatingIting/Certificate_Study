@@ -60,18 +60,21 @@ function Dashboard({ setActiveMenu }) {
         // sessions: [{sessionNo, studyDate, joinAt, leaveAt}]
         const sessions = me?.sessions || [];
 
-        // ✅ 프론트에서 판정(Attendance 페이지 로직과 동일한 방식)
-        const toMs = (iso) => {
+       const toMs = (iso) => {
           if (!iso) return 0;
-          const t = new Date(iso).getTime();
+          // 혹시 백엔드가 "2026-02-01 13:05:00" 같이 줄 때도 안전하게
+          const s = String(iso).trim().replace(" ", "T");
+          const t = Date.parse(s);
           return Number.isNaN(t) ? 0 : t;
         };
+
         const minutesBetween = (startIso, endIso) => {
           const s = toMs(startIso);
           const e = toMs(endIso);
           if (!s || !e || e <= s) return 0;
           return Math.floor((e - s) / 60000);
         };
+
         const calcTotalMinutes = (startHHMM, endHHMM) => {
           if (!startHHMM || !endHHMM) return 0;
           const [sh, sm] = startHHMM.split(":").map(Number);
@@ -80,10 +83,18 @@ function Dashboard({ setActiveMenu }) {
           const end = eh * 60 + em;
           return Math.max(0, end - start);
         };
-        const judgeAttendance = ({ joinAt, leaveAt }, totalMin, requiredRatio) => {
-          const attendedMin = minutesBetween(joinAt, leaveAt);
+
+        // ✅ Attendance 페이지 로직과 동일하게: 회차별 startTime/endTime 우선
+        const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
+          const totalMin =
+            log?.startTime && log?.endTime
+              ? calcTotalMinutes(log.startTime, log.endTime)
+              : fallbackTotalMin;
+
+          const attendedMin = minutesBetween(log?.joinAt, log?.leaveAt);
           const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
           const isPresent = ratio >= requiredRatio;
+
           return { attendedMin, ratio, isPresent };
         };
 
