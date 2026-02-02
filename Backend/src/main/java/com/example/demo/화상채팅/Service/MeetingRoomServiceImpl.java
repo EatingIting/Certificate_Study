@@ -2,7 +2,9 @@ package com.example.demo.화상채팅.Service;
 
 import com.example.demo.화상채팅.Domain.MeetingRoom;
 import com.example.demo.화상채팅.Domain.MeetingRoomId;
+import com.example.demo.화상채팅.Domain.MeetingRoomKickedUser;
 import com.example.demo.화상채팅.Domain.MeetingRoomParticipant;
+import com.example.demo.화상채팅.Repository.MeetingRoomKickedUserRepository;
 import com.example.demo.화상채팅.Repository.MeetingRoomParticipantRepository;
 import com.example.demo.화상채팅.Repository.MeetingRoomRepository;
 import com.example.demo.schedule.service.StudyScheduleService;
@@ -16,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Slf4j
@@ -28,6 +31,7 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
 
     private final MeetingRoomRepository meetingRoomRepository;
     private final MeetingRoomParticipantRepository participantRepository;
+    private final MeetingRoomKickedUserRepository kickedUserRepository;
     private final StudyScheduleService studyScheduleService;
 
     @Override
@@ -259,5 +263,22 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                             () -> System.out.println("⚠️ 해당 참여자를 찾을 수 없습니다.")
                     );
         }
+    }
+
+    @Override
+    public void recordKicked(String roomId, String userEmail) {
+        if (roomId == null || roomId.isBlank() || userEmail == null || userEmail.isBlank()) return;
+        kickedUserRepository.save(new MeetingRoomKickedUser(roomId.trim(), userEmail.trim()));
+        log.info("[MeetingRoomServiceImpl] 강퇴 기록: roomId={}, userEmail={}", roomId, userEmail);
+    }
+
+    @Override
+    public boolean isKickedToday(String roomId, String userEmail) {
+        if (roomId == null || roomId.isBlank() || userEmail == null || userEmail.isBlank()) return false;
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59, 999_999_999);
+        return kickedUserRepository.findFirstByRoomIdAndUserEmailAndKickedAtBetween(
+                roomId.trim(), userEmail.trim(), startOfDay, endOfDay
+        ).isPresent();
     }
 }
