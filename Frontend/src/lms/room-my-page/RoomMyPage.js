@@ -65,7 +65,6 @@ async function requestJson(url, options) {
     return data;
 }
 
-/** ✅ 더미 제거: 내 방 목록 API로 교체 */
 async function fetchMyRooms() {
     let data = await requestJson("/api/me/rooms", { method: "GET" });
 
@@ -77,7 +76,7 @@ async function fetchMyRooms() {
         .map((x) => ({
             roomId: x.roomId,
             roomName: x.title || "제목 없음",
-            isHost: !!x.isHost,
+            isHost: !!(x.isHost ?? x.host),
         }));
 
     return mapped;
@@ -97,6 +96,20 @@ async function fetchRoomMyPage(roomId) {
 
         recentPosts: Array.isArray(data?.recentPosts) ? data.recentPosts : [],
         recentComments: Array.isArray(data?.recentComments) ? data.recentComments : [],
+    };
+}
+
+async function fetchRoomInfo(roomId) {
+    let data = await requestJson(`/api/rooms/${roomId}`, { method: "GET" });
+
+    return {
+        midCategoryName: data?.midCategoryName || "",
+        // 혹시 다른 키로 올 수도 있으니 방어
+        categoryName:
+            data?.midCategoryName ||
+            data?.categoryName ||
+            data?.category ||
+            "",
     };
 }
 
@@ -149,10 +162,16 @@ export default function RoomMyPage() {
     let [recentPosts, setRecentPosts] = useState([]);
     let [recentComments, setRecentComments] = useState([]);
 
+    let [categoryName, setCategoryName] = useState("");
+
     let selectedRoom = useMemo(() => {
         let found = rooms.find((r) => r.roomId === selectedRoomId);
         return found || null;
     }, [rooms, selectedRoomId]);
+
+    let myRoleText = selectedRoom
+        ? (selectedRoom.isHost ? "방장" : "스터디원")
+        : "-";
 
     useEffect(() => {
         let mounted = true;
@@ -215,14 +234,15 @@ export default function RoomMyPage() {
 
                 setNickname(data.nickname || "");
                 setProfileImageUrl(data.profileImageUrl || "");
-
                 setPostCount(data.postCount || 0);
                 setCommentCount(data.commentCount || 0);
                 setRecentPosts(data.recentPosts || []);
                 setRecentComments(data.recentComments || []);
-
                 setIsNicknameEditing(false);
                 setNicknameDraft(data.nickname || "");
+                let info = await fetchRoomInfo(selectedRoomId);
+                if (!mounted) return;
+                setCategoryName(info.categoryName || "");
             } catch (e) {
                 if (!mounted) return;
                 setErrorMsg(e && e.message ? e.message : "프로필 정보를 불러오지 못했습니다.");
@@ -395,6 +415,19 @@ export default function RoomMyPage() {
                                         </button>
                                     </div>
                                 )}
+                            </div>
+                            <div className="rmp-row">
+                                <div className="rmp-rowLabel">내 역할</div>
+                                <div className="rmp-rowValue">
+                                    {myRoleText}
+                                </div>
+                            </div>
+
+                            <div className="rmp-row">
+                                <div className="rmp-rowLabel">카테고리</div>
+                                <div className="rmp-rowValue">
+                                    {categoryName || "-"}
+                                </div>
                             </div>
                         </div>
                     </div>
