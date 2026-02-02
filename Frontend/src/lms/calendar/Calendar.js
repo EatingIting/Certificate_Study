@@ -1064,23 +1064,25 @@ function Calendar() {
                                         <div className="calItemRight">
                                             <span className="calDate">
                                                 {startYmd ? fmtDate(startYmd) : ""}
-                                                {endStr ? ` ~ ${fmtDate(endStr)}` : ""}
+                                                {endStr && endStr !== startYmd ? ` ~ ${fmtDate(endStr)}` : ""}
                                                 {isStudy && timePart ? ` (${timePart})` : ""}
                                             </span>
 
-                                            <button
-                                                type="button"
-                                                className="calKebabBtn"
-                                                aria-label="일정 메뉴"
-                                                onMouseDown={(e) => {
-                                                    e.stopPropagation();
-                                                    setOpenMenuId((prev) => (prev === ev.id ? null : ev.id));
-                                                }}
-                                            >
-                                                ⋮
-                                            </button>
+                                            {isHost && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        className="calKebabBtn"
+                                                        aria-label="일정 메뉴"
+                                                        onMouseDown={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenMenuId((prev) => (prev === ev.id ? null : ev.id));
+                                                        }}
+                                                    >
+                                                        ⋮
+                                                    </button>
 
-                                            {openMenuId === ev.id && (
+                                                    {openMenuId === ev.id && (
                                                 <div className="calKebabMenu" onMouseDown={(e) => e.stopPropagation()}>
                                                     <button
                                                         type="button"
@@ -1106,6 +1108,8 @@ function Calendar() {
                                                         삭제하기
                                                     </button>
                                                 </div>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </div>

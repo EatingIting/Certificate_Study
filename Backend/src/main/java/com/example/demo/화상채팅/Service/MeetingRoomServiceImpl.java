@@ -178,32 +178,18 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         try {
             if (effectiveScheduleId != null) {
                 Optional<MeetingRoomParticipant> existing = participantRepository
-                        .findByScheduleIdAndRoomIdAndUserEmailAndLeftAtIsNull(effectiveScheduleId, roomId, userEmail);
-                if (existing.isPresent()) {
-                    MeetingRoomParticipant participant = existing.get();
-                    participant.rejoin();
-                    participantRepository.save(participant);
-                    log.info("[MeetingRoomServiceImpl] 재입장 - left_at 초기화 (schedule_id={})", effectiveScheduleId);
-                    return;
-                }
-                Optional<MeetingRoomParticipant> anyRecord = participantRepository
                         .findByScheduleIdAndRoomIdAndUserEmail(effectiveScheduleId, roomId, userEmail);
-                if (anyRecord.isPresent()) {
-                    MeetingRoomParticipant participant = anyRecord.get();
-                    participant.rejoin();
-                    participantRepository.save(participant);
-                    log.info("[MeetingRoomServiceImpl] 재입장 - left_at 초기화");
+                if (existing.isPresent()) {
+                    // 재입장 시 새 행 만들지 않고 left_at 그대로 둠. 퇴장할 때만 left_at 갱신
+                    log.info("[MeetingRoomServiceImpl] 재입장 - 기존 행 유지, left_at 갱신 안 함 (schedule_id={})", effectiveScheduleId);
                     return;
                 }
             } else {
-                // schedule_id=null인 행만 재사용 (다른 회차(schedule_id=1,2…) 행 재사용 방지 → 2회차 입장 시 새 행 생성)
+                // schedule_id=null인 행이 있으면 재사용 (새 행 생성 안 함, left_at 갱신 안 함)
                 Optional<MeetingRoomParticipant> existingNullSchedule = participantRepository
-                        .findFirstByRoomIdAndUserEmailAndScheduleIdIsNullAndLeftAtIsNull(roomId, userEmail);
+                        .findFirstByRoomIdAndUserEmailAndScheduleIdIsNull(roomId, userEmail);
                 if (existingNullSchedule.isPresent()) {
-                    MeetingRoomParticipant participant = existingNullSchedule.get();
-                    participant.rejoin();
-                    participantRepository.save(participant);
-                    log.info("[MeetingRoomServiceImpl] 재입장 (schedule_id=null) - left_at 초기화");
+                    log.info("[MeetingRoomServiceImpl] 재입장 (schedule_id=null) - 기존 행 유지, left_at 갱신 안 함");
                     return;
                 }
             }
@@ -242,8 +228,8 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                     },
                     () -> System.out.println("⚠️ 해당 방을 찾을 수 없습니다.")
             );
-            // 호스트도 meetingroom_participant에 left_at 기록
-            participantRepository.findFirstByRoomIdAndUserEmailAndLeftAtIsNull(roomId, userEmail)
+            // 호스트도 meetingroom_participant에 left_at 기록 (재입장 시 새 행 안 쓰므로 원래 행에서 left_at만 갱신)
+            participantRepository.findFirstByRoomIdAndUserEmailOrderByParticipantIdDesc(roomId, userEmail)
                     .ifPresentOrElse(
                             participant -> {
                                 participant.leave();
@@ -253,7 +239,7 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                             () -> log.debug("[MeetingRoomServiceImpl] 호스트 participant 기록 없음 (과거 버전 입장)")
                     );
         } else {
-            participantRepository.findFirstByRoomIdAndUserEmailAndLeftAtIsNull(roomId, userEmail)
+            participantRepository.findFirstByRoomIdAndUserEmailOrderByParticipantIdDesc(roomId, userEmail)
                     .ifPresentOrElse(
                             participant -> {
                                 participant.leave();

@@ -5,6 +5,11 @@ import com.example.demo.dto.schedule.StudyScheduleCreateRequest;
 import com.example.demo.dto.schedule.StudyScheduleUpdateRequest;
 import com.example.demo.schedule.mapper.StudyScheduleMapper;
 import com.example.demo.schedule.vo.StudyScheduleVO;
+import com.example.demo.화상채팅.Domain.MeetingRoom;
+import com.example.demo.화상채팅.Repository.MeetingRoomKickedUserRepository;
+import com.example.demo.화상채팅.Repository.MeetingRoomParticipantRepository;
+import com.example.demo.화상채팅.Repository.MeetingRoomRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -13,12 +18,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class StudyScheduleServiceImpl implements StudyScheduleService {
 
     private final StudyScheduleMapper studyScheduleMapper;
+    private final MeetingRoomRepository meetingRoomRepository;
+    private final MeetingRoomParticipantRepository participantRepository;
+    private final MeetingRoomKickedUserRepository kickedUserRepository;
+    private final EntityManager entityManager;
 
     @Override
     public List<StudyScheduleVO> selectByRange(String roomId, Date start, Date endExclusive) {
@@ -95,6 +105,16 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
     @Override
     @Transactional
     public void delete(Long studyScheduleId, String roomId) {
+        // roomId = subject_id. FK 제약(study_schedule <- meeting_room) 때문에 먼저 연관 데이터 삭제
+        List<MeetingRoom> rooms = meetingRoomRepository.findBySubjectIdAndScheduleId(roomId, studyScheduleId);
+        participantRepository.deleteBySubjectIdAndScheduleId(roomId, studyScheduleId);
+        if (!rooms.isEmpty()) {
+            List<String> roomIds = rooms.stream().map(MeetingRoom::getRoomId).collect(Collectors.toList());
+            kickedUserRepository.deleteByRoomIdIn(roomIds);
+        }
+        // meeting_room을 네이티브 DELETE로 삭제 후 flush (JPA/MyBatis 혼용 시 즉시 반영 필요)
+        meetingRoomRepository.deleteBySubjectIdAndScheduleId(roomId, studyScheduleId);
+        entityManager.flush();
         int deleted = studyScheduleMapper.delete(studyScheduleId, roomId);
         if (deleted == 0) {
             throw new IllegalArgumentException("해당 스터디 일정이 없거나 삭제할 수 없습니다. id=" + studyScheduleId);
