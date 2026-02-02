@@ -15,15 +15,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import com.example.demo.s3.S3Uploader;
+
 
 @Service
 @RequiredArgsConstructor
 public class AssignmentServiceImpl implements AssignmentService {
 
     private final AssignmentMapper assignmentMapper;
+    private final S3Uploader s3Uploader;
 
-    // 로컬 저장 폴더 (원하면 yml로 빼도 됨)
-    private final String uploadDir = "uploads";
+
 
     @Override
     public List<AssignmentListResponse> getAssignments(String roomId, String userEmail) {
@@ -54,28 +56,17 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         if (file != null && !file.isEmpty()) {
             try {
-                // uploads 폴더 없으면 생성
-                File dir = new File(uploadDir);
-                if (!dir.exists()) dir.mkdirs();
-
-                String originalName = file.getOriginalFilename();
-                String safeName = UUID.randomUUID() + "_" + (originalName == null ? "file" : originalName);
-
-                Path target = Path.of(uploadDir, safeName);
-                Files.write(target, file.getBytes());
-
-                vo.setFileName(originalName);
+                String s3Url = s3Uploader.upload(file);   // ✅ S3 업로드
+                vo.setFileName(file.getOriginalFilename());
                 vo.setFileSize(file.getSize());
-
-                // 브라우저에서 접근할 URL (아래 8단계에서 /files/** 매핑해줄거임)
-                vo.setFileUrl("/files/" + safeName);
-
+                vo.setFileUrl(s3Url);                    // ✅ DB에는 S3 URL 저장
             } catch (Exception e) {
-                throw new RuntimeException("파일 저장 실패", e);
+                throw new RuntimeException("S3 업로드 실패", e);
             }
         }
 
         assignmentMapper.upsertSubmission(vo);
+
     }
 
     @Override

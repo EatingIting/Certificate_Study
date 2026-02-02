@@ -2,7 +2,9 @@ package com.example.demo.화상채팅.Service;
 
 import com.example.demo.화상채팅.Domain.MeetingRoom;
 import com.example.demo.화상채팅.Domain.MeetingRoomId;
+import com.example.demo.화상채팅.Domain.MeetingRoomKickedUser;
 import com.example.demo.화상채팅.Domain.MeetingRoomParticipant;
+import com.example.demo.화상채팅.Repository.MeetingRoomKickedUserRepository;
 import com.example.demo.화상채팅.Repository.MeetingRoomParticipantRepository;
 import com.example.demo.화상채팅.Repository.MeetingRoomRepository;
 import com.example.demo.schedule.service.StudyScheduleService;
@@ -12,15 +14,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.demo.schedule.vo.StudyScheduleVO;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.Objects;
 import java.util.Optional;
 
 @Slf4j
@@ -33,6 +31,7 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
 
     private final MeetingRoomRepository meetingRoomRepository;
     private final MeetingRoomParticipantRepository participantRepository;
+    private final MeetingRoomKickedUserRepository kickedUserRepository;
     private final StudyScheduleService studyScheduleService;
 
     @Override
@@ -110,18 +109,18 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             }
         }
 
-        // schedule_id: 현재 시간대 회차 우선, 없으면 오늘의 "다음 회차" 배정 (2시 전 입장 → 2시 회차 자동 배정)
+        // schedule_id: 스터디 일정 시간대 안에 들어왔을 때 해당 회차, 그 외에는 오늘 회차 조회/생성 (meeting_room.schedule_id NOT NULL 대응)
         Long safeScheduleId = null;
         if (!safeSubjectId.isEmpty()) {
             safeScheduleId = studyScheduleService.findActiveScheduleIdByCurrentTime(safeSubjectId);
             if (safeScheduleId != null) {
                 log.info("[MeetingRoomServiceImpl] 현재 시간대 회차 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
             } else {
-                safeScheduleId = studyScheduleService.findUpcomingTodayScheduleId(safeSubjectId);
-                if (safeScheduleId != null) {
-                    log.info("[MeetingRoomServiceImpl] 다음 회차 배정(시작 전 입장): subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
-                } else {
-                    log.info("[MeetingRoomServiceImpl] 스터디 일정 시간대가 아님, 오늘 다음 회차도 없음 → schedule_id=null");
+                try {
+                    safeScheduleId = studyScheduleService.getOrCreateTodayScheduleId(safeSubjectId);
+                    log.info("[MeetingRoomServiceImpl] 일정 시간대 아님 → 오늘 회차 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
+                } catch (Exception e) {
+                    log.warn("[MeetingRoomServiceImpl] 오늘 회차 조회/생성 실패 → schedule_id=null: {}", e.getMessage());
                 }
             }
         }
@@ -135,9 +134,22 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             Optional<MeetingRoom> existingRoom = meetingRoomRepository.findById(id);
 
             if (existingRoom.isEmpty()) {
-                MeetingRoom room = new MeetingRoom(roomId, userEmail, safeSubjectId, safeScheduleId);
-                meetingRoomRepository.save(room);
-                log.info("[MeetingRoomServiceImpl] meeting_room 저장 완료 (schedule_id={})", safeScheduleId);
+                // DB의 meeting_room.schedule_id가 NOT NULL이면 null 불가 → 오늘 회차로 보정
+                Long scheduleIdForRoom = safeScheduleId;
+                if (scheduleIdForRoom == null) {
+                    try {
+                        scheduleIdForRoom = studyScheduleService.getOrCreateTodayScheduleId(safeSubjectId);
+                    } catch (Exception e) {
+                        log.warn("[MeetingRoomServiceImpl] meeting_room 저장 전 schedule_id 보정 실패: {}", e.getMessage());
+                    }
+                }
+                if (scheduleIdForRoom == null) {
+                    log.warn("[MeetingRoomServiceImpl] schedule_id를 확보할 수 없어 meeting_room 저장 건너뜀 (입장은 계속됨)");
+                } else {
+                    MeetingRoom room = new MeetingRoom(roomId, userEmail, safeSubjectId, scheduleIdForRoom);
+                    meetingRoomRepository.save(room);
+                    log.info("[MeetingRoomServiceImpl] meeting_room 저장 완료 (schedule_id={})", scheduleIdForRoom);
+                }
             } else {
                 MeetingRoom room = existingRoom.get();
                 room.rejoin();
@@ -166,31 +178,18 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         try {
             if (effectiveScheduleId != null) {
                 Optional<MeetingRoomParticipant> existing = participantRepository
-                        .findByScheduleIdAndRoomIdAndUserEmailAndLeftAtIsNull(effectiveScheduleId, roomId, userEmail);
-                if (existing.isPresent()) {
-                    MeetingRoomParticipant participant = existing.get();
-                    participant.rejoin();
-                    participantRepository.save(participant);
-                    log.info("[MeetingRoomServiceImpl] 재입장 - left_at 초기화 (schedule_id={})", effectiveScheduleId);
-                    return;
-                }
-                Optional<MeetingRoomParticipant> anyRecord = participantRepository
                         .findByScheduleIdAndRoomIdAndUserEmail(effectiveScheduleId, roomId, userEmail);
-                if (anyRecord.isPresent()) {
-                    MeetingRoomParticipant participant = anyRecord.get();
-                    participant.rejoin();
-                    participantRepository.save(participant);
-                    log.info("[MeetingRoomServiceImpl] 재입장 - left_at 초기화");
+                if (existing.isPresent()) {
+                    // 재입장 시 새 행 만들지 않고 left_at 그대로 둠. 퇴장할 때만 left_at 갱신
+                    log.info("[MeetingRoomServiceImpl] 재입장 - 기존 행 유지, left_at 갱신 안 함 (schedule_id={})", effectiveScheduleId);
                     return;
                 }
             } else {
+                // schedule_id=null인 행이 있으면 재사용 (새 행 생성 안 함, left_at 갱신 안 함)
                 Optional<MeetingRoomParticipant> existingNullSchedule = participantRepository
-                        .findFirstByRoomIdAndUserEmailAndLeftAtIsNull(roomId, userEmail);
+                        .findFirstByRoomIdAndUserEmailAndScheduleIdIsNull(roomId, userEmail);
                 if (existingNullSchedule.isPresent()) {
-                    MeetingRoomParticipant participant = existingNullSchedule.get();
-                    participant.rejoin();
-                    participantRepository.save(participant);
-                    log.info("[MeetingRoomServiceImpl] 재입장 (schedule_id=null) - left_at 초기화");
+                    log.info("[MeetingRoomServiceImpl] 재입장 (schedule_id=null) - 기존 행 유지, left_at 갱신 안 함");
                     return;
                 }
             }
@@ -204,79 +203,6 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             log.error("[MeetingRoomServiceImpl] meetingroom_participant 저장 실패 (입장 로그 누락 가능): roomId={}, userEmail={}, error={}",
                     roomId, userEmail, e.getMessage(), e);
             throw e;
-        }
-    }
-
-    /**
-     * 같은 날 다음 회차로 넘어갔을 때, 방에 그대로 있는 참가자를 새 회차 참가자로 배정.
-     * PING 등에서 주기적으로 호출.
-     */
-    @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public void checkAndAssignNewSessionIfNeeded(String roomId, String userEmail) {
-        if (roomId == null || roomId.isBlank() || userEmail == null || userEmail.isBlank()) return;
-
-        String subjectId = meetingRoomRepository.findByIdRoomId(roomId)
-                .map(MeetingRoom::getSubjectId)
-                .filter(s -> s != null && !s.isBlank())
-                .orElse(null);
-        if (subjectId == null) return;
-
-        Optional<MeetingRoomParticipant> openOpt = participantRepository
-                .findFirstByRoomIdAndUserEmailAndLeftAtIsNull(roomId, userEmail);
-        if (openOpt.isEmpty()) return;
-
-        Long currentScheduleId = studyScheduleService.findActiveScheduleIdByCurrentTime(subjectId);
-        MeetingRoomParticipant open = openOpt.get();
-
-        if (currentScheduleId != null && Objects.equals(open.getScheduleId(), currentScheduleId)) return;
-
-        try {
-            if (currentScheduleId != null) {
-                open.leave();
-                participantRepository.save(open);
-                MeetingRoomParticipant newParticipant = new MeetingRoomParticipant(
-                        subjectId, currentScheduleId, roomId, userEmail);
-                participantRepository.save(newParticipant);
-                log.info("[MeetingRoomServiceImpl] 회차 전환 배정: roomId={}, userEmail={}, 이전 schedule_id={} → 현재 {}",
-                        roomId, userEmail, open.getScheduleId(), currentScheduleId);
-                return;
-            }
-
-            // 캐치업: 현재 활성 회차 없음 → 이전 회차 종료 처리 후, 이미 시작된 다음 회차가 있으면 해당 회차 레코드 생성 (2→3→4 연속 시 4회차 놓치는 경우 방지)
-            StudyScheduleVO openSession = studyScheduleService.getBySubjectIdAndScheduleId(subjectId, open.getScheduleId());
-            if (openSession != null && openSession.getStudyDate() != null && openSession.getEndTime() != null) {
-                LocalDate ld = openSession.getStudyDate().toLocalDate();
-                String endStr = openSession.getEndTime().length() == 5 ? openSession.getEndTime() + ":00" : openSession.getEndTime();
-                LocalTime endTime = LocalTime.parse(endStr);
-                open.setLeftAt(LocalDateTime.of(ld, endTime));
-                participantRepository.save(open);
-            } else {
-                open.leave();
-                participantRepository.save(open);
-            }
-
-            // 열린 참가자의 study_date 기준 다음 회차 조회 (CURDATE/서버 타임존 무관 → 2·3·4회차 연속 시 4회차 누락 방지)
-            java.sql.Date openStudyDate = (openSession != null) ? openSession.getStudyDate() : null;
-            StudyScheduleVO nextSession = openStudyDate != null
-                    ? studyScheduleService.getNextSessionOnDateAfter(subjectId, openStudyDate, open.getScheduleId())
-                    : studyScheduleService.getNextSessionTodayAfter(subjectId, open.getScheduleId());
-            if (nextSession == null || nextSession.getStudyDate() == null || nextSession.getStartTime() == null) return;
-
-            LocalDate nextDate = nextSession.getStudyDate().toLocalDate();
-            String startStr = nextSession.getStartTime().length() == 5 ? nextSession.getStartTime() + ":00" : nextSession.getStartTime();
-            LocalDateTime nextStart = LocalDateTime.of(nextDate, LocalTime.parse(startStr));
-            if (LocalDateTime.now().isBefore(nextStart)) return;
-
-            MeetingRoomParticipant newParticipant = new MeetingRoomParticipant(
-                    subjectId, nextSession.getStudyScheduleId(), roomId, userEmail);
-            newParticipant.setJoinedAt(nextStart);
-            participantRepository.save(newParticipant);
-            log.info("[MeetingRoomServiceImpl] 회차 캐치업 배정: roomId={}, userEmail={}, 다음 schedule_id={} (joined_at={})",
-                    roomId, userEmail, nextSession.getStudyScheduleId(), nextStart);
-        } catch (Exception e) {
-            log.warn("[MeetingRoomServiceImpl] 회차 전환/캐치업 배정 실패: roomId={}, userEmail={}, error={}",
-                    roomId, userEmail, e.getMessage());
         }
     }
 
@@ -302,8 +228,8 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                     },
                     () -> System.out.println("⚠️ 해당 방을 찾을 수 없습니다.")
             );
-            // 호스트도 meetingroom_participant에 left_at 기록
-            participantRepository.findFirstByRoomIdAndUserEmailAndLeftAtIsNull(roomId, userEmail)
+            // 호스트도 meetingroom_participant에 left_at 기록 (재입장 시 새 행 안 쓰므로 원래 행에서 left_at만 갱신)
+            participantRepository.findFirstByRoomIdAndUserEmailOrderByParticipantIdDesc(roomId, userEmail)
                     .ifPresentOrElse(
                             participant -> {
                                 participant.leave();
@@ -313,7 +239,7 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                             () -> log.debug("[MeetingRoomServiceImpl] 호스트 participant 기록 없음 (과거 버전 입장)")
                     );
         } else {
-            participantRepository.findFirstByRoomIdAndUserEmailAndLeftAtIsNull(roomId, userEmail)
+            participantRepository.findFirstByRoomIdAndUserEmailOrderByParticipantIdDesc(roomId, userEmail)
                     .ifPresentOrElse(
                             participant -> {
                                 participant.leave();
@@ -323,5 +249,22 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                             () -> System.out.println("⚠️ 해당 참여자를 찾을 수 없습니다.")
                     );
         }
+    }
+
+    @Override
+    public void recordKicked(String roomId, String userEmail) {
+        if (roomId == null || roomId.isBlank() || userEmail == null || userEmail.isBlank()) return;
+        kickedUserRepository.save(new MeetingRoomKickedUser(roomId.trim(), userEmail.trim()));
+        log.info("[MeetingRoomServiceImpl] 강퇴 기록: roomId={}, userEmail={}", roomId, userEmail);
+    }
+
+    @Override
+    public boolean isKickedToday(String roomId, String userEmail) {
+        if (roomId == null || roomId.isBlank() || userEmail == null || userEmail.isBlank()) return false;
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59, 999_999_999);
+        return kickedUserRepository.findFirstByRoomIdAndUserEmailAndKickedAtBetween(
+                roomId.trim(), userEmail.trim(), startOfDay, endOfDay
+        ).isPresent();
     }
 }

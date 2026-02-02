@@ -15,6 +15,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const { user, room } = useLMS();
     const isHost = !!(user && room && user.email && room.hostUserEmail &&
         String(user.email).trim().toLowerCase() === String(room.hostUserEmail).trim().toLowerCase());
+    const isNotHost = !isHost;
 
     // ✅ 초기값: 전부 열림
     let [openKeys, setOpenKeys] = useState([
@@ -26,9 +27,6 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         "study",
         "profile",
     ]);
-
-    const isOwner = isHost;
-    const isMember = !isHost;
 
     useEffect(() => {
         if (typeof setActiveMenu !== "function") return;
@@ -530,7 +528,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                     </li>
 
                     {/* ✅ 스터디 관리 (스터디장만) */}
-                    {isOwner && (
+                    {isHost && (
                         <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
                             <div
                                 className={`menu-item menu-parent ${activeMenu.startsWith("study") ? "active" : ""}`}
@@ -543,15 +541,28 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 <span className="arrow">{openKeys.includes("study") ? "▾" : "▸"}</span>
                             </div>
 
-                            <ul className="submenu">
+                        <ul className="submenu">
+                            {/* 방장만 */}
+                            {isHost && (
                                 <li
                                     className={`submenu-item ${activeMenu === "study/members" ? "active" : ""}`}
                                     onClick={() => goChild("study", "study/members", "study/members")}
                                 >
                                     스터디원 관리
                                 </li>
-                            </ul>
-                        </li>
+                            )}
+
+                            {/* 스터디원만 (맨 아래) */}
+                            {isNotHost && (
+                                <li
+                                    className={`submenu-item submen-danger ${activeMenu === "study/leave" ? "active" : ""}`}
+                                    onClick={() => goChild("study", "study/leave", "study/leave")}
+                                >
+                                    스터디 탈퇴
+                                </li>
+                            )}
+                        </ul>
+                    </li>
                     )}
 
                     {/* 프로필 관리 */}

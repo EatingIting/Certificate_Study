@@ -5,10 +5,8 @@ import com.example.demo.dto.schedule.ScheduleUpdateRequest;
 import com.example.demo.schedule.mapper.ScheduleMapper;
 import com.example.demo.schedule.vo.ScheduleVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.Date;
 import java.time.LocalDate;
@@ -43,9 +41,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                 ? req.getCustomLabel().trim()
                 : null;
 
-        String textColor = (req.getTextColor() != null && !req.getTextColor().isBlank())
-                ? req.getTextColor() : "#ffffff";
-
         ScheduleVO vo = ScheduleVO.builder()
                 .roomId(req.getRoomId())
                 .userId(req.getUserId())
@@ -55,7 +50,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .endAt(Date.valueOf(endAt)) // DB는 inclusive
                 .type(type)
                 .colorHex(req.getColorHex())
-                .textColor(textColor)
+                .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 
@@ -81,9 +76,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                 ? req.getCustomLabel().trim()
                 : null;
 
-        String textColor = (req.getTextColor() != null && !req.getTextColor().isBlank())
-                ? req.getTextColor() : null; // null이면 DB 기존값 유지
-
         ScheduleVO vo = ScheduleVO.builder()
                 .scheduleId(scheduleId)
                 .roomId(roomId)
@@ -94,7 +86,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .endAt(Date.valueOf(endAt))
                 .type(type)
                 .colorHex(req.getColorHex())
-                .textColor(textColor)
+                .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 
@@ -107,10 +99,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     @Transactional
     public void softDelete(Long scheduleId, String roomId, String userId) {
-        int deleted = scheduleMapper.softDelete(scheduleId, roomId, userId);
+        int deleted = scheduleMapper.softDelete(scheduleId, roomId, userId); // mapper 그대로 :contentReference[oaicite:5]{index=5}
         if (deleted == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "해당 일정이 없거나 이미 삭제된 일정입니다. scheduleId=" + scheduleId);
+            throw new IllegalArgumentException("해당 일정이 없거나 삭제할 수 없습니다. scheduleId=" + scheduleId);
         }
     }
 }

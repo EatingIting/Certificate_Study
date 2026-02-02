@@ -51,7 +51,6 @@
         )
     </insert>
 
-    <!-- room_id 일치 시 수정 (user_id 불일치 시에도 색상 등 수정 가능) -->
     <update id="update" parameterType="com.example.demo.schedule.vo.ScheduleVO">
         UPDATE schedules
         SET
@@ -60,20 +59,21 @@
         start_at = #{startAt},
         end_at = #{endAt},
         type = #{type},
-        <if test="colorHex != null">color_hex = #{colorHex},</if>
-        <if test="textColor != null">text_color = #{textColor},</if>
+        color_hex = #{colorHex},
+        text_color = #{textColor},
         custom_type_label = #{customTypeLabel}
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
+        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
 
-    <!-- room_id만 일치하면 삭제 (user_id 불일치 시 0건 방지: 세션/저장 방식 차이 대응) -->
     <update id="softDelete">
         UPDATE schedules
         SET deleted_at = CURRENT_TIMESTAMP
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
+        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
 

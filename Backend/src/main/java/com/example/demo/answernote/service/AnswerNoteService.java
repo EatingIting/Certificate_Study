@@ -1,11 +1,10 @@
 package com.example.demo.answernote.service;
 
 import com.example.demo.answernote.dto.AnswerNoteRequestDTO;
-import com.example.demo.answernote.dto.AnswerNoteResponseDTO; // 👈 DTO 임포트 필수!
+import com.example.demo.answernote.dto.AnswerNoteResponseDTO;
 import com.example.demo.answernote.entity.AnswerNote;
 import com.example.demo.answernote.repository.AnswerNoteRepository;
 
-// 👇 사용자님 패키지 경로에 맞춘 레포지토리
 import com.example.demo.LMS회원.Repository.RoomRepository;
 import com.example.demo.LMS회원.Repository.UserRepository;
 
@@ -49,7 +48,7 @@ public class AnswerNoteService {
         answerNoteRepository.save(note);
     }
 
-    // 2. 조회 (🚨 여기가 핵심! DTO로 변환해서 반환)
+    // 2. 조회
     @Transactional(readOnly = true)
     public List<AnswerNoteResponseDTO> getNotesByRoom(String roomId) {
         List<AnswerNote> notes = answerNoteRepository.findByRoom_RoomIdOrderByCreatedAtDesc(roomId);

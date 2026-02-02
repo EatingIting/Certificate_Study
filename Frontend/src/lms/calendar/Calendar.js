@@ -79,7 +79,9 @@ function Calendar() {
        유틸
     ========================= */
     let toDate = (yyyyMmDd) => {
-        let [y, m, d] = yyyyMmDd.split("-").map(Number);
+        // "YYYY-MM-DD" 뿐 아니라 "YYYY-MM-DDTHH:mm:ss" 같은 ISO 문자열도 안전 처리
+        let ymd = String(yyyyMmDd || "").slice(0, 10);
+        let [y, m, d] = ymd.split("-").map(Number);
         return new Date(y, m - 1, d);
     };
 
@@ -110,11 +112,18 @@ function Calendar() {
         return `${m}.${d}`;
     };
 
-    /** ISO 또는 YYYY-MM-DD에서 날짜만 추출 (toDate/fmtDate/toInclusiveEnd 등에 전달용) */
-    let ymdOnly = (str) => {
-        if (str == null) return "";
-        let s = typeof str === "string" ? str : String(str);
-        return s.length >= 10 ? s.slice(0, 10) : "";
+    // "YYYY-MM-DD" / "YYYY-MM-DDTHH:mm:ss" 등에서 YYYY-MM-DD만 뽑기
+    let ymdOf = (v) => String(v || "").slice(0, 10);
+
+    // end 표기용(포함 end):
+    // - 날짜만 오는 경우(YYYY-MM-DD): FullCalendar 규칙(end exclusive)이라 하루 빼서 inclusive로 변환
+    // - 시간이 포함된 경우(YYYY-MM-DDTHH:mm:ss): 이미 같은 날의 시각이므로 그대로 그 날을 사용
+    let endInclusiveYmdOf = (rawEnd) => {
+        let s = String(rawEnd || "");
+        if (!s) return null;
+        let ymd = s.slice(0, 10);
+        if (s.length > 10) return ymd;
+        return toInclusiveEnd(ymd);
     };
 
     let overlaps = (event, range) => {
@@ -193,6 +202,34 @@ function Calendar() {
         return map;
     }, [studyEvents]);
 
+    // ✅ 스터디 회차가 있는 날이 포함된 "주(week) 줄"에 클래스를 부여해서,
+    //    기간(멀티데이) 이벤트 바도 끊김 없이 아래로 내릴 수 있게 한다.
+    let applyWeekHasStudyClass = useCallback(() => {
+        let api = calendarRef.current?.getApi?.();
+        let root = api?.el;
+        if (!root) return;
+
+        // 기존 클래스 제거
+        root
+            .querySelectorAll?.(".fc-daygrid-week.calWeekHasStudy")
+            ?.forEach((w) => w.classList.remove("calWeekHasStudy"));
+
+        // 스터디가 있는 날짜를 찾아 해당 week에 클래스 추가
+        root.querySelectorAll?.(".fc-daygrid-day")?.forEach((dayEl) => {
+            let ymd = dayEl.getAttribute?.("data-date");
+            if (!ymd) return;
+            let items = studyRoundsByDate[ymd];
+            if (!items || items.length === 0) return;
+            dayEl.closest?.(".fc-daygrid-week")?.classList.add("calWeekHasStudy");
+        });
+    }, [studyRoundsByDate]);
+
+    useEffect(() => {
+        // DOM 렌더 타이밍을 조금 기다렸다가 적용
+        let t = setTimeout(() => applyWeekHasStudyClass(), 0);
+        return () => clearTimeout(t);
+    }, [applyWeekHasStudyClass, visibleRange]);
+
     /* =========================
        오른쪽 리스트 (선택한 날짜가 있으면 해당 날짜만, 없으면 월간)
     ========================= */
@@ -203,16 +240,13 @@ function Calendar() {
         }
         if (selectedDate) {
             list = allEvents.filter((ev) => {
-                let rawStart = typeof ev.start === "string" ? ev.start : (ev.startStr ?? "");
-                let startYmd = ymdOnly(rawStart);
+                let startYmd = ymdOf(typeof ev.start === "string" ? ev.start : ev.startStr);
                 if (!startYmd) return false;
                 if (startYmd === selectedDate) return true;
                 if (ev.end) {
-                    let rawEnd = typeof ev.end === "string" ? ev.end : (ev.endStr ?? "");
-                    let endPart = ymdOnly(rawEnd);
-                    if (!endPart) return false;
-                    let endInclusive = rawEnd.indexOf("T") !== -1 ? endPart : toInclusiveEnd(endPart);
-                    if (selectedDate >= startYmd && selectedDate <= endInclusive) return true;
+                    let endInclusive = endInclusiveYmdOf(typeof ev.end === "string" ? ev.end : ev.endStr);
+                    if (endInclusive && selectedDate >= startYmd && selectedDate <= endInclusive)
+                        return true;
                 }
                 return false;
             });
@@ -225,6 +259,7 @@ function Calendar() {
             let bS = bYmd ? toDate(bYmd) : new Date(0);
             return aS - bS;
         });
+        // ✅ 오른쪽 일정 목록에는 스터디 일정도 포함
         return list;
     }, [allEvents, visibleRange, selectedDate]);
 
@@ -387,17 +422,36 @@ function Calendar() {
                 let t = it?.extendedProps?.type;
                 let idStr = typeof it?.id === "string" ? it.id : String(it?.id ?? "");
 
-                // end는 exclusive로 온다 :contentReference[oaicite:5]{index=5}
+                // 색상: 백엔드가 backgroundColor로 주든, colorHex로 주든 다 커버
+                let bg =
+                    it?.backgroundColor ||
+                    it?.borderColor ||
+                    it?.colorHex ||
+                    it?.extendedProps?.backgroundColor ||
+                    it?.extendedProps?.colorHex ||
+                    "";
+
+                let tc =
+                    it?.textColor ||
+                    it?.extendedProps?.textColor ||
+                    "";
+
                 let ev = {
-                    id: it.id,
-                    title: it.title,
-                    start: it.start,
-                    ...(it.end ? { end: it.end } : {}),
-                    extendedProps: it.extendedProps || {},
-                    ...(it.backgroundColor ? { backgroundColor: it.backgroundColor } : {}),
-                    ...(it.borderColor ? { borderColor: it.borderColor } : {}),
-                    ...(it.textColor ? { textColor: it.textColor } : {}),
+                    id: idStr,
+                    title: it?.title || "",
+                    start: it?.start,
+                    ...(it?.end ? { end: it.end } : {}),
+                    extendedProps: it?.extendedProps || {},
                 };
+                
+                // 조건부 spread 대신 if로 넣어서 “조용히 빠지는” 문제 방지
+                if (bg) {
+                    ev.backgroundColor = bg;
+                    ev.borderColor = bg;
+                }
+                if (tc) {
+                    ev.textColor = tc;
+                }
 
                 // type이 STUDY이거나 id가 S로 시작하면 스터디 일정
                 let isStudy = t === "STUDY" || idStr.startsWith("S");
@@ -817,7 +871,12 @@ function Calendar() {
                         }}
                         dayCellClassNames={(arg) => {
                             let ymd = toYmd(arg.date);
-                            return selectedDate === ymd ? ["calDaySelected"] : [];
+                            let classes = [];
+                            if (selectedDate === ymd) classes.push("calDaySelected");
+                            if (studyRoundsByDate[ymd] && studyRoundsByDate[ymd].length > 0) {
+                                classes.push("calDayHasStudy");
+                            }
+                            return classes;
                         }}
                         eventClassNames={eventClassNames}
                         eventDidMount={(info) => {
@@ -854,6 +913,8 @@ function Calendar() {
                                 end: info.view.currentEnd,
                             });
                             setVisibleTitle(info.view.title || "");
+                            // 달 이동/렌더 직후 week 클래스 재적용
+                            setTimeout(() => applyWeekHasStudyClass(), 0);
                         }}
                         /* 날짜칸 상단: 날짜 숫자 + 스터디 회차 + 시간대 */
                         dayCellContent={(arg) => {
@@ -957,27 +1018,44 @@ function Calendar() {
                         )}
 
                         {monthlyEvents.map((ev) => {
-                            let rawStart = typeof ev.start === "string" ? ev.start : (ev.startStr ?? "");
-                            let startYmd = ymdOnly(rawStart);
+                            let startYmd = ymdOf(typeof ev.start === "string" ? ev.start : ev.startStr);
 
-                            let endYmd = null;
+                            let endStr = null;
                             if (ev.end) {
-                                let rawEnd = typeof ev.end === "string" ? ev.end : (ev.endStr ?? "");
-                                let endPart = ymdOnly(rawEnd);
-                                if (endPart) {
-                                    endYmd = rawEnd.indexOf("T") !== -1 ? endPart : toInclusiveEnd(endPart);
-                                }
+                                let rawEnd = typeof ev.end === "string" ? ev.end : ev.endStr;
+                                endStr = endInclusiveYmdOf(rawEnd);
                             }
+
+                            // ✅ 배지 색상을 달력 이벤트 색상과 동일하게
+                            let badgeBg =
+                                ev.backgroundColor ||
+                                ev.borderColor ||
+                                ev.extendedProps?.backgroundColor ||
+                                ev.extendedProps?.colorHex ||
+                                "";
+
+                            let badgeText =
+                                ev.textColor ||
+                                ev.extendedProps?.textColor ||
+                                "";
+
+                            // 비어있으면(혹시 서버 누락) 기존 톤으로 안전 fallback
+                            if (!badgeBg) badgeBg = "#97c793";
+                            if (!badgeText) badgeText = "#ffffff";
+
+                            let badgeStyle = {
+                                backgroundColor: badgeBg,
+                                color: badgeText,
+                            };
 
                             let isStudy = ev.extendedProps?.type === "STUDY";
-                            let timePart = "";
-                            if (isStudy) {
-                                let st = ev.extendedProps?.startTime;
-                                let et = ev.extendedProps?.endTime;
-                                if (st && et && /^\d{2}:\d{2}$/.test(st) && /^\d{2}:\d{2}$/.test(et)) {
-                                    timePart = ` ${st}~${et}`;
-                                }
-                            }
+                            let round = ev.extendedProps?.round;
+                            let sTime = ev.extendedProps?.startTime;
+                            let eTime = ev.extendedProps?.endTime;
+                            let timePart = sTime && eTime ? `${sTime} ~ ${eTime}` : "";
+                            let displayTitle = isStudy
+                                ? `${round ? `${round}회차` : "스터디"}${timePart ? ` (${timePart})` : ""}`
+                                : ev.title;
 
                             return (
                                 <div
@@ -989,30 +1067,36 @@ function Calendar() {
                                     }}
                                 >
                                     <div className="calItemTop">
-                                        <span className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}>
+                                        {/* ✅ 여기 style 추가 */}
+                                        <span
+                                            className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}
+                                            style={badgeStyle}
+                                        >
                                             {typeLabel(ev)}
                                         </span>
 
                                         <div className="calItemRight">
                                             <span className="calDate">
                                                 {startYmd ? fmtDate(startYmd) : ""}
-                                                {endYmd && endYmd !== startYmd ? ` ~ ${fmtDate(endYmd)}` : ""}
-                                                {timePart}
+                                                {endStr && endStr !== startYmd ? ` ~ ${fmtDate(endStr)}` : ""}
+                                                {isStudy && timePart ? ` (${timePart})` : ""}
                                             </span>
 
-                                            <button
-                                                type="button"
-                                                className="calKebabBtn"
-                                                aria-label="일정 메뉴"
-                                                onMouseDown={(e) => {
-                                                    e.stopPropagation();
-                                                    setOpenMenuId((prev) => (prev === ev.id ? null : ev.id));
-                                                }}
-                                            >
-                                                ⋮
-                                            </button>
+                                            {isHost && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        className="calKebabBtn"
+                                                        aria-label="일정 메뉴"
+                                                        onMouseDown={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenMenuId((prev) => (prev === ev.id ? null : ev.id));
+                                                        }}
+                                                    >
+                                                        ⋮
+                                                    </button>
 
-                                            {openMenuId === ev.id && (
+                                                    {openMenuId === ev.id && (
                                                 <div className="calKebabMenu" onMouseDown={(e) => e.stopPropagation()}>
                                                     <button
                                                         type="button"
@@ -1038,12 +1122,14 @@ function Calendar() {
                                                         삭제하기
                                                     </button>
                                                 </div>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="calItemTitle" title={ev.title}>
-                                        {ev.title}
+                                    <div className="calItemTitle" title={displayTitle || ev.title}>
+                                        {displayTitle}
                                     </div>
 
                                     {ev.extendedProps?.description && (

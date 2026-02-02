@@ -56,9 +56,9 @@
         SELECT schedule_id
         FROM study_schedule
         WHERE subject_id = #{subjectId}
-          AND study_date = CURDATE()
-          AND CURTIME() <![CDATA[>=]]> start_time
-          AND CURTIME() <![CDATA[<]]> end_time
+        AND study_date = CURDATE()
+        AND CURTIME() <![CDATA[>=]]> start_time
+        AND CURTIME() <![CDATA[<]]> end_time
         ORDER BY round_num ASC
         LIMIT 1
     </select>

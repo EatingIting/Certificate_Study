@@ -83,9 +83,7 @@ function StudyMembers() {
 
             let data = res.data || {};
             setMyRole(data.myRole || "");
-            // 같은 room_id의 스터디장(host_user_email) + status='승인' 멤버 목록 (백엔드 participants)
-            let list = Array.isArray(data.participants) ? data.participants : (Array.isArray(data.members) ? data.members : []);
-            setMembers(list);
+            setMembers(Array.isArray(data.participants) ? data.participants : []);
         } catch (err) {
             if (!isMountedRef.current) return;
             if (seq !== requestSeqRef.current) return;
@@ -95,7 +93,7 @@ function StudyMembers() {
             if (status === 403) {
                 setMyRole("MEMBER");
                 setMembers([]);
-                setGuardMsg("스터디장만 접근할 수 있는 페이지입니다.");
+                setGuardMsg("스터디원만 접근할 수 있는 페이지입니다.");
             } else if (status === 401) {
                 setGuardMsg("로그인이 필요합니다. 다시 로그인해주세요.");
             } else if (status === 404) {
@@ -205,15 +203,15 @@ function StudyMembers() {
             {/* 로딩 */}
             {loading && <div className="smGuard">불러오는 중...</div>}
 
-            {/* 비방장/에러 가드 */}
+            {/* 에러 가드 */}
             {!loading && guardMsg && <div className="smGuard">{guardMsg}</div>}
 
-            {/* 방장만 */}
-            {!loading && !guardMsg && isOwner && (
+            {/* 스터디원 전체: 방장 포함 모든 멤버 목록 (스터디 소속이면 조회 가능) */}
+            {!loading && !guardMsg && (
                 <div className="card smCard">
                     <div className="smCardHead">
                         <div className="smCardTitle">
-                            멤버 목록 <span className="smCount">({members.length})</span>
+                            멤버 목록 <span className="smCount">(방장 포함 {members.length}명)</span>
                         </div>
 
                         <div className="smTools">
@@ -227,11 +225,11 @@ function StudyMembers() {
                     </div>
 
                     <div className="smTable">
-                        <div className="smRow smRowHead smRowCols3">
+                        <div className={`smRow smRowHead ${isOwner ? "smRowCols3" : "smRowCols3NoActions"}`}>
                             <div>이름</div>
                             <div>이메일</div>
                             <div>권한</div>
-                            <div className="smActionsCol">관리</div>
+                            {isOwner && <div className="smActionsCol">관리</div>}
                         </div>
 
                         {filtered.length === 0 && <div className="smEmpty">검색 결과가 없습니다.</div>}
@@ -240,7 +238,7 @@ function StudyMembers() {
                             let isOwnerRow = m.role === "OWNER";
 
                             return (
-                                <div key={m.id} className="smRow smRowCols3">
+                                <div key={m.id} className={`smRow ${isOwner ? "smRowCols3" : "smRowCols3NoActions"}`}>
                                     <div className="smName">
                                         {displayMemberName(m)}
                                         {isOwnerRow && <span className="smBadgeOwner">스터디장</span>}
@@ -257,27 +255,29 @@ function StudyMembers() {
                                         </span>
                                     </div>
 
-                                    <div className="smActionsCol">
-                                        <button
-                                            type="button"
-                                            className="smGhostBtn"
-                                            disabled={isOwnerRow}
-                                            onClick={() => promoteToOwner(m.id)}
-                                            title={isOwnerRow ? "이미 스터디장입니다" : "스터디장 위임"}
-                                        >
-                                            스터디장 위임
-                                        </button>
+                                    {isOwner && (
+                                        <div className="smActionsCol">
+                                            <button
+                                                type="button"
+                                                className="smGhostBtn"
+                                                disabled={isOwnerRow}
+                                                onClick={() => promoteToOwner(m.id)}
+                                                title={isOwnerRow ? "이미 스터디장입니다" : "방장 위임"}
+                                            >
+                                                방장 위임
+                                            </button>
 
-                                        <button
-                                            type="button"
-                                            className="smDangerBtn"
-                                            disabled={isOwnerRow}
-                                            onClick={() => kickMember(m.id)}
-                                            title={isOwnerRow ? "스터디장은 내보낼 수 없습니다" : "내보내기"}
-                                        >
-                                            내보내기
-                                        </button>
-                                    </div>
+                                            <button
+                                                type="button"
+                                                className="smDangerBtn"
+                                                disabled={isOwnerRow}
+                                                onClick={() => kickMember(m.id)}
+                                                title={isOwnerRow ? "스터디장은 내보낼 수 없습니다" : "내보내기"}
+                                            >
+                                                내보내기
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}

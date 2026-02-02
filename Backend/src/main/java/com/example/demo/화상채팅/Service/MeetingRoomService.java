@@ -20,10 +20,9 @@ public interface MeetingRoomService {
      */
     void handleLeave(String roomId, String userEmail, boolean isHost);
 
-    /**
-     * 같은 날 다음 회차로 넘어갔을 때, 방에 그대로 있는 참가자를 새 회차 참가자로 배정.
-     * (2회차→3회차 방 나가지 않고 있으면 입실시간 초기화 없이 3회차 출석이 안 잡히는 문제 해결)
-     * PING 등에서 주기적으로 호출 권장.
-     */
-    void checkAndAssignNewSessionIfNeeded(String roomId, String userEmail);
+    /** 강퇴 시 해당 방·오늘 기준으로 기록 (재입장 차단용) */
+    void recordKicked(String roomId, String userEmail);
+
+    /** 오늘 이 방에서 강퇴된 유저인지 여부 */
+    boolean isKickedToday(String roomId, String userEmail);
 }
