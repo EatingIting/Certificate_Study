@@ -660,10 +660,10 @@ function MeetingPage({ portalRoomId }) {
     } = useMeeting();
 
     // roomTitle, email, room 정보 (LMSContext에서)
-    const { roomTitle, email, user, room } = useLMS();
+    const { roomTitle, email, user, room, roomNickname } = useLMS();
     const hostUserEmail = room?.hostUserEmail || "";
     /** 회차 ID - 있으면 meetingroom_participant/meeting_room DB 저장, 없으면 입장만 허용 */
-    const scheduleId = params.scheduleId ?? searchParams.get("scheduleId") ?? room?.scheduleId ?? (() => { try { const s = sessionStorage.getItem("pip.scheduleId"); return s != null && s !== "" ? Number(s) : null; } catch { return null; } })();
+    const scheduleId = searchParams.get("scheduleId") ?? room?.scheduleId ?? (() => { try { const s = sessionStorage.getItem("pip.scheduleId"); return s != null && s !== "" ? Number(s) : null; } catch { return null; } })();
     const userEmail = (email || user?.email || sessionStorage.getItem("userEmail") || "").trim();
     const isHostLocal =
         !!userEmail &&
@@ -1257,7 +1257,7 @@ function MeetingPage({ portalRoomId }) {
         }
     }, []); // 마운트 시 한 번만 실행
 
-    // 사용자 정보 가져오기 (nickname 사용)
+    // 사용자 정보 가져오기 (전역 nickname 사용 - 방별 닉네임이 있으면 그게 우선)
     const [userNickname, setUserNickname] = useState(null);
 
     useEffect(() => {
@@ -1310,8 +1310,12 @@ function MeetingPage({ portalRoomId }) {
     const mainVideoRef = useRef(null);
 
     const userId = userIdRef.current;
-    // userNickname이 있으면 그것을 사용하고, 없으면 기존 userName 사용
-    const userName = userNickname || userNameRef.current;
+    // ✅ 방별 닉네임(roomNickname)을 최우선으로 사용
+    const preferredRoomNick = (roomNickname || "").trim();
+    const userName =
+        (preferredRoomNick ? preferredRoomNick : null) ||
+        userNickname ||
+        userNameRef.current;
 
     const hasAudioTrack = localStream?.getAudioTracks().length > 0;
     // const hasVideoTrack = localStream?.getVideoTracks().length > 0;

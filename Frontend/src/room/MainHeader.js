@@ -23,6 +23,16 @@ const MainHeader = () => {
         setNickname(sessionStorage.getItem("nickname"));
     }, [pathname]);
 
+    // ✅ 마이페이지에서 닉네임 저장 시 즉시 반영
+    useEffect(() => {
+        const onNickUpdated = (e) => {
+            const next = (e?.detail?.nickname || sessionStorage.getItem("nickname") || "").trim();
+            setNickname(next || null);
+        };
+        window.addEventListener("user:nickname-updated", onNickUpdated);
+        return () => window.removeEventListener("user:nickname-updated", onNickUpdated);
+    }, []);
+
 
     useEffect(() => {
         const handleClickOutside = (e) => {

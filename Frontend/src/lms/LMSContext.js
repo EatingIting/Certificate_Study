@@ -15,6 +15,8 @@ export const LMSProvider = ({ children, roomId }) => {
     const [loading, setLoading] = useState(true);
     const [roomLoading, setRoomLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [roomNickname, setRoomNickname] = useState("");
+    const [roomProfileImg, setRoomProfileImg] = useState("");
 
     // 사용자 정보 가져오기
     const fetchUserInfo = useCallback(async () => {
@@ -46,6 +48,39 @@ export const LMSProvider = ({ children, roomId }) => {
         }
     }, []);
 
+    // 방별 마이페이지(닉네임) 가져오기
+    const fetchRoomMyPage = useCallback(
+        async (id) => {
+            if (!id) {
+                setRoomNickname("");
+                setRoomProfileImg("");
+                return;
+            }
+
+            // 토큰 체크 (인증 없으면 호출하지 않음)
+            const token = sessionStorage.getItem("accessToken");
+            if (!token) {
+                setRoomNickname("");
+                setRoomProfileImg("");
+                return;
+            }
+
+            try {
+                const res = await api.get(`/rooms/${id}/me/mypage`);
+                const nextNick = (res?.data?.roomNickname || "").trim();
+                const nextImg = (res?.data?.profileImg || "").trim();
+                setRoomNickname(nextNick);
+                setRoomProfileImg(nextImg);
+            } catch (err) {
+                // 방별 닉네임은 옵션 값이므로 실패해도 전체 로딩을 막지 않음
+                console.warn("방별 마이페이지 가져오기 실패", err);
+                setRoomNickname("");
+                setRoomProfileImg("");
+            }
+        },
+        []
+    );
+
     // Room 정보 가져오기
     const fetchRoomInfo = useCallback(async (id) => {
         if (!id) {
@@ -71,21 +106,56 @@ export const LMSProvider = ({ children, roomId }) => {
     useEffect(() => {
         if (roomId) {
             fetchRoomInfo(roomId);
+            fetchRoomMyPage(roomId);
         }
-    }, [roomId, fetchRoomInfo]);
+    }, [roomId, fetchRoomInfo, fetchRoomMyPage]);
 
     // 사용자 정보 새로고침
     const refreshUser = useCallback(() => {
         fetchUserInfo();
     }, [fetchUserInfo]);
 
+    // 방별 마이페이지 새로고침
+    const refreshRoom = useCallback(() => {
+        fetchRoomMyPage(roomId);
+    }, [fetchRoomMyPage, roomId]);
+
+    // 닉네임 변경 이벤트 수신 (RoomMyPage / MyPage 저장 후 즉시 반영용)
+    useEffect(() => {
+        const onRoomNickUpdated = (e) => {
+            const detail = e?.detail || {};
+            const targetRoomId = detail.roomId;
+            const nextNick = (detail.roomNickname || "").trim();
+            if (!targetRoomId || String(targetRoomId) !== String(roomId)) return;
+            setRoomNickname(nextNick);
+        };
+
+        const onUserNickUpdated = () => {
+            // 전역 닉네임 변경 시 user 재조회 (fallback displayName 반영)
+            refreshUser();
+        };
+
+        window.addEventListener("lms:room-nickname-updated", onRoomNickUpdated);
+        window.addEventListener("user:nickname-updated", onUserNickUpdated);
+        return () => {
+            window.removeEventListener("lms:room-nickname-updated", onRoomNickUpdated);
+            window.removeEventListener("user:nickname-updated", onUserNickUpdated);
+        };
+    }, [roomId, refreshUser]);
+
     // 표시용 이름 (nickname(name) 형식)
     const displayName = user
         ? (() => {
+              const roomNick = (roomNickname && roomNickname.trim()) || "";
               const nickname = (user.nickname && user.nickname.trim()) || "";
               const name = (user.name && user.name.trim()) || "";
               
-              if (nickname.length > 0 && name.length > 0) {
+              // ✅ 방별 닉네임이 있으면 최우선
+              if (roomNick.length > 0 && name.length > 0) {
+                  return `${roomNick}(${name})`;
+              } else if (roomNick.length > 0) {
+                  return roomNick;
+              } else if (nickname.length > 0 && name.length > 0) {
                   return `${nickname}(${name})`;
               } else if (nickname.length > 0) {
                   return nickname;
@@ -114,6 +184,7 @@ export const LMSProvider = ({ children, roomId }) => {
         roomLoading,
         error,
         refreshUser,
+        refreshRoom,
         displayName,
         isHost,
         // 편의 메서드들
@@ -121,6 +192,8 @@ export const LMSProvider = ({ children, roomId }) => {
         email: user?.email || null,
         name: user?.name || null,
         nickname: user?.nickname || null,
+        roomNickname: roomNickname || null,
+        roomProfileImg: roomProfileImg || null,
         roomTitle: room?.title || null,
         roomId: room?.roomId || null,
         hostUserEmail: room?.hostUserEmail || null,
