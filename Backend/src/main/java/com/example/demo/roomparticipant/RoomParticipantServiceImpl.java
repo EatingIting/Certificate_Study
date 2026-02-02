@@ -1,8 +1,10 @@
 package com.example.demo.roomparticipant;
 
 import com.example.demo.dto.roomparticipant.*;
+import com.example.demo.로그인.mapper.AuthMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -15,6 +17,8 @@ import java.util.List;
 public class RoomParticipantServiceImpl implements RoomParticipantService {
 
     private final RoomParticipantMapper mapper;
+    private final AuthMapper authMapper;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public RoomParticipantListResponse getParticipants(String roomId, String myEmail) {
@@ -142,6 +146,44 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
         }
 
         return new ActionResultResponse(true, "방장 권한을 위임했어요.");
+    }
+
+    @Override
+    public ActionResultResponse verifyLeavePassword(String roomId, String myEmail, VerifyLeaveRoomPasswordRequest request) {
+
+        String hostEmail = mapper.selectHostEmail(roomId);
+        if (hostEmail == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 스터디룸입니다.");
+        }
+
+        // 방장은 탈퇴 불가 → 굳이 비번 검증할 필요도 없으니 여기서 차단
+        if (hostEmail.equals(myEmail)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "방장은 탈퇴할 수 없습니다. 방장 위임 후 탈퇴하세요.");
+        }
+
+        // 승인 멤버가 아니면 검증/탈퇴 둘 다 불가하게(지금 leaveRoom이랑 정책 통일)
+        int isApproved = mapper.countApprovedByEmail(roomId, myEmail);
+        if (isApproved == 0) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "승인된 멤버만 탈퇴할 수 있습니다.");
+        }
+
+        if (request == null || request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "비밀번호를 입력해 주세요.");
+        }
+
+        // users 조회(기존 로그인쪽 mapper 재사용)
+        com.example.demo.로그인.vo.AuthVO user = authMapper.findByEmail(myEmail);
+        if (user == null || user.getPassword() == null || user.getPassword().isBlank()) {
+            // 계정 존재 여부를 노출하지 않도록 메시지 단순화
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "비밀번호가 일치하지 않습니다.");
+        }
+
+        boolean ok = passwordEncoder.matches(request.getPassword(), user.getPassword());
+        if (!ok) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "비밀번호가 일치하지 않습니다.");
+        }
+
+        return new ActionResultResponse(true, "비밀번호 확인 완료");
     }
 
     @Override

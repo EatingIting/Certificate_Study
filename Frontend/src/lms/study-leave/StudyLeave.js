@@ -49,6 +49,7 @@ function StudyLeave() {
                 data.studyName ||
                 data.roomName ||
                 data.name ||
+                data.title ||
                 (data.room && (data.room.name || data.room.roomName)) ||
                 "";
 
@@ -97,12 +98,16 @@ function StudyLeave() {
         setError("");
 
         try {
-            // ✅ 백엔드: DELETE /rooms/{roomId}/participants/me
-            // (백엔드가 password 검증을 안 하므로 보내지 않음 — UX용 입력만 유지)
+            // ✅ 1) 비밀번호 검증 먼저
+            await api.post(`/rooms/${subjectId}/participants/me/verify-password`, {
+                password: password.trim(),
+            });
+
+            // ✅ 2) 검증 성공하면 탈퇴 실행
             await api.delete(`/rooms/${subjectId}/participants/me`);
 
             window.alert("탈퇴가 완료되었습니다.");
-            navigate("/lmsMain", { replace: true });
+            navigate("/room/mystudy", { replace: true });
         } catch (err) {
             let status = err?.response?.status;
 
@@ -111,6 +116,7 @@ function StudyLeave() {
             else if (status === 400) {
                 let msg = err?.response?.data?.message || "요청을 처리할 수 없습니다.";
                 setError(msg);
+                window.alert(msg);
             } else {
                 setError("탈퇴 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.");
             }
