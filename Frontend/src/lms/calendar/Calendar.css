@@ -196,10 +196,10 @@
 }
 
 .calDayStudyRoundWrap {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
+    display: inline-flex;     /* inline 요소처럼 동작 */
+    flex-direction: row;      /* 가로 배치 */
+    align-items: center;
+    gap: 4px;                 /* 회차 ↔ 시간 간격 */
 }
 
 .calDayStudyTime {
@@ -389,7 +389,7 @@
 .calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title-container,
 .calPage .fc-popover-body .fc-daygrid-event .fc-event-title,
 .calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title * {
-    color: #1f2937 !important;
+    color: var(--fc-event-text-color) !important;
     font-size: 13px !important;
     font-weight: 800;
 }
@@ -397,7 +397,8 @@
 /* HSK 시험 등 일반 일정도 팝업에서 글씨 보이게 (이벤트별 흰색 덮어씀) */
 .calPage .fc-popover-body .fc-daygrid-event *,
 .calPage .fc .fc-popover-body .fc-daygrid-event * {
-    color: #1f2937 !important;
+    background-color: var(--fc-event-bg-color) !important;
+    border-color: var(--fc-event-border-color) !important;
 }
 
 .calPage .fc-popover-body .fc-daygrid-event:last-child,
@@ -1040,4 +1041,10 @@
 .calCalendarCard .fc .fc-daygrid-event .fc-event-main {
     background-color: inherit;
     color: var(--fc-event-text-color);
+}
+
+/* ✅ 월뷰(dayGrid) 이벤트에서 내부 레이어가 배경을 덮는 문제만 차단 */
+.calCalendarCard .fc .fc-daygrid-event .fc-event-main,
+.calCalendarCard .fc .fc-daygrid-event .fc-event-main-frame {
+  background: transparent !important;
 }

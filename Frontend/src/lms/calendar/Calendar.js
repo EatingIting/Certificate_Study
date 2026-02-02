@@ -970,12 +970,38 @@ function Calendar() {
                                 endStr = rawEnd ? toInclusiveEnd(rawEnd) : null;
                             }
 
+                            // ✅ 배지 색상을 달력 이벤트 색상과 동일하게
+                            let badgeBg =
+                                ev.backgroundColor ||
+                                ev.borderColor ||
+                                ev.extendedProps?.backgroundColor ||
+                                ev.extendedProps?.colorHex ||
+                                "";
+
+                            let badgeText =
+                                ev.textColor ||
+                                ev.extendedProps?.textColor ||
+                                "";
+
+                            // 비어있으면(혹시 서버 누락) 기존 톤으로 안전 fallback
+                            if (!badgeBg) badgeBg = "#97c793";
+                            if (!badgeText) badgeText = "#ffffff";
+
+                            let badgeStyle = {
+                                backgroundColor: badgeBg,
+                                color: badgeText,
+                            };
+
                             let isStudy = ev.extendedProps?.type === "STUDY";
 
                             return (
                                 <div key={ev.id} className="calItem">
                                     <div className="calItemTop">
-                                        <span className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}>
+                                        {/* ✅ 여기 style 추가 */}
+                                        <span
+                                            className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}
+                                            style={badgeStyle}
+                                        >
                                             {typeLabel(ev)}
                                         </span>
 
