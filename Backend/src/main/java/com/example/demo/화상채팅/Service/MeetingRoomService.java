@@ -19,4 +19,10 @@ public interface MeetingRoomService {
      * - 참여자 → meetingroom_participant.left_at 업데이트
      */
     void handleLeave(String roomId, String userEmail, boolean isHost);
+
+    /** 강퇴 시 해당 방·오늘 기준으로 기록 (재입장 차단용) */
+    void recordKicked(String roomId, String userEmail);
+
+    /** 오늘 이 방에서 강퇴된 유저인지 여부 */
+    boolean isKickedToday(String roomId, String userEmail);
 }
