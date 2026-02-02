@@ -4304,19 +4304,20 @@ function MeetingPage({ portalRoomId }) {
                 const isVideoConsumer = kind === "video" && !isScreen;
 
                 setParticipants((prev) => {
-                    const idx = prev.findIndex((p) => String(p.id) === String(peerId));
+                    const idx = prev.findIndex((p) => String(p.id) === String(peerId) || String(p.userId) === String(peerId));
                     const isMe = String(peerId) === String(userIdRef.current);
 
                     // 🔥 본인 producer에 대한 consumer는 타일 추가하지 않음 (유령 유저 User-xxxx 방지)
                     if (idx === -1 && isMe) return prev;
 
-                    // 신규 참가자
+                    // 신규 참가자 (connectionId 사용 시 id가 peerId와 다를 수 있음)
                     if (idx === -1) {
+                        const displayName = peerIdToNameRef.current.get(String(peerId)) || `User-${String(peerId).slice(0, 4)}`;
                         return [
                             ...prev,
                             {
                                 id: peerId,
-                                name: `User-${String(peerId).slice(0, 4)}`,
+                                name: displayName,
                                 isMe: false,
 
                                 // 🔥 비디오 consumer가 들어왔으면 cameraOff: false
@@ -5414,15 +5415,16 @@ function MeetingPage({ portalRoomId }) {
                     }
                     setParticipants((prev) => {
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
-                        const newServerIds = new Set(data.users.map((u) => String(u.userId)));
+                        // connectionId 있으면 참가자 고유 id로 사용 (동일 userId가 둘 이상일 때 타일 구분)
+                        const newServerIds = new Set(data.users.map((u) => {
+                            const cid = u.connectionId != null ? String(u.connectionId) : null;
+                            return cid || String(u.userId);
+                        }));
                         const now = Date.now();
-
-                        // -------------------------------------------------------------
-                        // 1. 서버 목록에 있는 유저들 업데이트 (신규 + 기존)
-                        // -------------------------------------------------------------
                         const updatedUsers = data.users.map((u) => {
+                            const participantId = u.connectionId != null ? String(u.connectionId) : String(u.userId);
                             const peerId = String(u.userId);
-                            const old = prevMap.get(peerId);
+                            const old = prevMap.get(participantId) || prevMap.get(peerId);
 
                             // 🔥 서버에 다시 나타났으면 missing 기록 제거
                             missingSinceRef.current.delete(peerId);
@@ -5454,7 +5456,7 @@ function MeetingPage({ portalRoomId }) {
                                     // 오디오 트랙이 포함된 스트림이 반영되도록 함
                                     return {
                                         ...old,
-                                        id: peerId,
+                                        id: participantId,
                                         name: u.userName,
                                         joinAt: u.joinAt,
                                         isMe: false,
@@ -5520,7 +5522,8 @@ function MeetingPage({ portalRoomId }) {
                                 ((shouldShowReconnecting && !shouldKeepStream) ? false : (old?.isScreenSharing ?? false));
 
                             const baseUser = {
-                                id: peerId,
+                                id: participantId,
+                                userId: peerId,
                                 name: u.userName,
                                 joinAt: u.joinAt,
                                 isMe,
