@@ -39,12 +39,11 @@
     <update id="reapply">
         UPDATE room_join_request
         SET status = '신청중',
+            request_user_nickname = #{requestUserNickname},
             apply_message = #{applyMessage},
             requested_at = NOW()
-        WHERE request_user_email = #{requestUserEmail}
-          AND room_id = #{roomId}
-          AND status = '거절'
     </update>
+
 
     <!-- 내가 신청한 스터디 -->
     <select id="selectSent"
