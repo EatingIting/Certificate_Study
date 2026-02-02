@@ -79,7 +79,9 @@ function Calendar() {
        유틸
     ========================= */
     let toDate = (yyyyMmDd) => {
-        let [y, m, d] = yyyyMmDd.split("-").map(Number);
+        // "YYYY-MM-DD" 뿐 아니라 "YYYY-MM-DDTHH:mm:ss" 같은 ISO 문자열도 안전 처리
+        let ymd = String(yyyyMmDd || "").slice(0, 10);
+        let [y, m, d] = ymd.split("-").map(Number);
         return new Date(y, m - 1, d);
     };
 
@@ -105,6 +107,20 @@ function Calendar() {
     let fmtDate = (yyyyMmDd) => {
         let [, m, d] = yyyyMmDd.split("-");
         return `${m}.${d}`;
+    };
+
+    // "YYYY-MM-DD" / "YYYY-MM-DDTHH:mm:ss" 등에서 YYYY-MM-DD만 뽑기
+    let ymdOf = (v) => String(v || "").slice(0, 10);
+
+    // end 표기용(포함 end):
+    // - 날짜만 오는 경우(YYYY-MM-DD): FullCalendar 규칙(end exclusive)이라 하루 빼서 inclusive로 변환
+    // - 시간이 포함된 경우(YYYY-MM-DDTHH:mm:ss): 이미 같은 날의 시각이므로 그대로 그 날을 사용
+    let endInclusiveYmdOf = (rawEnd) => {
+        let s = String(rawEnd || "");
+        if (!s) return null;
+        let ymd = s.slice(0, 10);
+        if (s.length > 10) return ymd;
+        return toInclusiveEnd(ymd);
     };
 
     let overlaps = (event, range) => {
@@ -179,6 +195,34 @@ function Calendar() {
         return map;
     }, [studyEvents]);
 
+    // ✅ 스터디 회차가 있는 날이 포함된 "주(week) 줄"에 클래스를 부여해서,
+    //    기간(멀티데이) 이벤트 바도 끊김 없이 아래로 내릴 수 있게 한다.
+    let applyWeekHasStudyClass = useCallback(() => {
+        let api = calendarRef.current?.getApi?.();
+        let root = api?.el;
+        if (!root) return;
+
+        // 기존 클래스 제거
+        root
+            .querySelectorAll?.(".fc-daygrid-week.calWeekHasStudy")
+            ?.forEach((w) => w.classList.remove("calWeekHasStudy"));
+
+        // 스터디가 있는 날짜를 찾아 해당 week에 클래스 추가
+        root.querySelectorAll?.(".fc-daygrid-day")?.forEach((dayEl) => {
+            let ymd = dayEl.getAttribute?.("data-date");
+            if (!ymd) return;
+            let items = studyRoundsByDate[ymd];
+            if (!items || items.length === 0) return;
+            dayEl.closest?.(".fc-daygrid-week")?.classList.add("calWeekHasStudy");
+        });
+    }, [studyRoundsByDate]);
+
+    useEffect(() => {
+        // DOM 렌더 타이밍을 조금 기다렸다가 적용
+        let t = setTimeout(() => applyWeekHasStudyClass(), 0);
+        return () => clearTimeout(t);
+    }, [applyWeekHasStudyClass, visibleRange]);
+
     /* =========================
        오른쪽 리스트 (선택한 날짜가 있으면 해당 날짜만, 없으면 월간)
     ========================= */
@@ -189,13 +233,11 @@ function Calendar() {
         }
         if (selectedDate) {
             list = allEvents.filter((ev) => {
-                let startStr = typeof ev.start === "string" ? ev.start : ev.startStr?.slice(0, 10);
-                if (!startStr) return false;
-                let startYmd = startStr.slice(0, 10);
+                let startYmd = ymdOf(typeof ev.start === "string" ? ev.start : ev.startStr);
+                if (!startYmd) return false;
                 if (startYmd === selectedDate) return true;
                 if (ev.end) {
-                    let endStr = typeof ev.end === "string" ? ev.end : ev.endStr?.slice(0, 10);
-                    let endInclusive = endStr ? toInclusiveEnd(endStr) : null;
+                    let endInclusive = endInclusiveYmdOf(typeof ev.end === "string" ? ev.end : ev.endStr);
                     if (endInclusive && selectedDate >= startYmd && selectedDate <= endInclusive)
                         return true;
                 }
@@ -208,8 +250,8 @@ function Calendar() {
             let bS = b.start instanceof Date ? b.start : toDate(b.start);
             return aS - bS;
         });
-        // 오른쪽 일정 목록에서는 스터디 일정 제외
-        return list.filter((ev) => ev.extendedProps?.type !== "STUDY");
+        // ✅ 오른쪽 일정 목록에는 스터디 일정도 포함
+        return list;
     }, [allEvents, visibleRange, selectedDate]);
 
     /* =========================
@@ -803,7 +845,12 @@ function Calendar() {
                         }}
                         dayCellClassNames={(arg) => {
                             let ymd = toYmd(arg.date);
-                            return selectedDate === ymd ? ["calDaySelected"] : [];
+                            let classes = [];
+                            if (selectedDate === ymd) classes.push("calDaySelected");
+                            if (studyRoundsByDate[ymd] && studyRoundsByDate[ymd].length > 0) {
+                                classes.push("calDayHasStudy");
+                            }
+                            return classes;
                         }}
                         eventClassNames={eventClassNames}
                         eventDidMount={(info) => {
@@ -840,6 +887,8 @@ function Calendar() {
                                 end: info.view.currentEnd,
                             });
                             setVisibleTitle(info.view.title || "");
+                            // 달 이동/렌더 직후 week 클래스 재적용
+                            setTimeout(() => applyWeekHasStudyClass(), 0);
                         }}
                         /* 날짜칸 상단: 날짜 숫자 + 스터디 회차 + 시간대 */
                         dayCellContent={(arg) => {
@@ -943,15 +992,22 @@ function Calendar() {
                         )}
 
                         {monthlyEvents.map((ev) => {
-                            let startStr = typeof ev.start === "string" ? ev.start : ev.startStr?.slice(0, 10);
+                            let startYmd = ymdOf(typeof ev.start === "string" ? ev.start : ev.startStr);
 
                             let endStr = null;
                             if (ev.end) {
-                                let rawEnd = typeof ev.end === "string" ? ev.end : ev.endStr?.slice(0, 10);
-                                endStr = rawEnd ? toInclusiveEnd(rawEnd) : null;
+                                let rawEnd = typeof ev.end === "string" ? ev.end : ev.endStr;
+                                endStr = endInclusiveYmdOf(rawEnd);
                             }
 
                             let isStudy = ev.extendedProps?.type === "STUDY";
+                            let round = ev.extendedProps?.round;
+                            let sTime = ev.extendedProps?.startTime;
+                            let eTime = ev.extendedProps?.endTime;
+                            let timePart = sTime && eTime ? `${sTime} ~ ${eTime}` : "";
+                            let displayTitle = isStudy
+                                ? `${round ? `${round}회차` : "스터디"}${timePart ? ` (${timePart})` : ""}`
+                                : ev.title;
 
                             return (
                                 <div key={ev.id} className="calItem">
@@ -962,8 +1018,9 @@ function Calendar() {
 
                                         <div className="calItemRight">
                                             <span className="calDate">
-                                                {startStr ? fmtDate(startStr) : ""}
+                                                {startYmd ? fmtDate(startYmd) : ""}
                                                 {endStr ? ` ~ ${fmtDate(endStr)}` : ""}
+                                                {isStudy && timePart ? ` (${timePart})` : ""}
                                             </span>
 
                                             <button
@@ -1008,8 +1065,8 @@ function Calendar() {
                                         </div>
                                     </div>
 
-                                    <div className="calItemTitle" title={ev.title}>
-                                        {ev.title}
+                                    <div className="calItemTitle" title={displayTitle || ev.title}>
+                                        {displayTitle}
                                     </div>
 
                                     {ev.extendedProps?.description && (

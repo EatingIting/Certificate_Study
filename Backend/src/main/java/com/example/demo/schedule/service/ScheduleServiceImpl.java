@@ -50,6 +50,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .endAt(Date.valueOf(endAt)) // DB는 inclusive
                 .type(type)
                 .colorHex(req.getColorHex())
+                .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 
@@ -85,6 +86,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .endAt(Date.valueOf(endAt))
                 .type(type)
                 .colorHex(req.getColorHex())
+                .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 

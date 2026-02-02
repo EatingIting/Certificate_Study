@@ -22,6 +22,8 @@
         <collection property="sessions" ofType="com.example.demo.attendance.dto.AttendanceSessionLogResponse">
             <result property="sessionNo" column="sessionNo"/>
             <result property="studyDate" column="studyDate"/>
+            <result property="startTime" column="sessionStart"/>
+            <result property="endTime" column="sessionEnd"/>
             <result property="joinAt" column="joinAt"/>
             <result property="leaveAt" column="leaveAt"/>
         </collection>
@@ -71,6 +73,8 @@
 
         ss.round_num AS sessionNo,
         DATE_FORMAT(ss.study_date, '%Y-%m-%d') AS studyDate,
+        DATE_FORMAT(MAX(ss.start_time), '%H:%i') AS sessionStart,
+        DATE_FORMAT(MAX(ss.end_time),   '%H:%i') AS sessionEnd,
 
         DATE_FORMAT(MIN(mp.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
         DATE_FORMAT(MAX(mp.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
@@ -88,10 +92,16 @@
         AND mr.schedule_id = ss.schedule_id
 
         LEFT JOIN meetingroom_participant mp
-        ON mp.room_id = mr.room_id
-        AND mp.user_email = u.email
+        ON mp.user_email = u.email
         AND mp.subject_id = ss.subject_id
-        AND mp.schedule_id = ss.schedule_id
+        AND (
+            (mp.schedule_id = ss.schedule_id AND mp.room_id = mr.room_id)
+            OR
+            (mp.schedule_id IS NULL
+             AND DATE(mp.joined_at) = ss.study_date
+             AND mp.joined_at <![CDATA[<]]> CONCAT(ss.study_date, ' ', ss.end_time)
+             AND (mp.left_at IS NULL OR mp.left_at <![CDATA[>]]> CONCAT(ss.study_date, ' ', ss.start_time)))
+        )
 
         GROUP BY
         u.email,
@@ -126,6 +136,8 @@
 
         ss.round_num AS sessionNo,
         DATE_FORMAT(ss.study_date, '%Y-%m-%d') AS studyDate,
+        DATE_FORMAT(MAX(ss.start_time), '%H:%i') AS sessionStart,
+        DATE_FORMAT(MAX(ss.end_time),   '%H:%i') AS sessionEnd,
 
         DATE_FORMAT(MIN(mp.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
         DATE_FORMAT(MAX(mp.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
@@ -143,10 +155,16 @@
         AND mr.schedule_id = ss.schedule_id
 
         LEFT JOIN meetingroom_participant mp
-        ON mp.room_id = mr.room_id
-        AND mp.user_email = u.email
+        ON mp.user_email = u.email
         AND mp.subject_id = ss.subject_id
-        AND mp.schedule_id = ss.schedule_id
+        AND (
+            (mp.schedule_id = ss.schedule_id AND mp.room_id = mr.room_id)
+            OR
+            (mp.schedule_id IS NULL
+             AND DATE(mp.joined_at) = ss.study_date
+             AND mp.joined_at <![CDATA[<]]> CONCAT(ss.study_date, ' ', ss.end_time)
+             AND (mp.left_at IS NULL OR mp.left_at <![CDATA[>]]> CONCAT(ss.study_date, ' ', ss.start_time)))
+        )
 
         WHERE u.email = #{userEmail}
 

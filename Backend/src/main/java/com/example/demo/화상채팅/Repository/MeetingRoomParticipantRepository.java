@@ -16,4 +16,8 @@ public interface MeetingRoomParticipantRepository extends JpaRepository<MeetingR
     /** 퇴장 시 roomId + userEmail로 접속 중인 참가자 레코드 찾기 (scheduleId 없이) */
     Optional<MeetingRoomParticipant> findFirstByRoomIdAndUserEmailAndLeftAtIsNull(
             String roomId, String userEmail);
+
+    /** schedule_id가 null인 참가 중인 행만 찾기 (null 입장 시 다른 회차 행 재사용 방지) */
+    Optional<MeetingRoomParticipant> findFirstByRoomIdAndUserEmailAndScheduleIdIsNullAndLeftAtIsNull(
+            String roomId, String userEmail);
 }

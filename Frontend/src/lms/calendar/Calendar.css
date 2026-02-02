@@ -241,6 +241,20 @@
     margin-top: 6px;
 }
 
+/* ✅ FullCalendar 기본 margin-top 1px → 25px로 늘려 스터디 pill과 겹침 방지 */
+.calCalendarCard .fc .fc-daygrid-event {
+    margin-top: 25px;
+}
+
+/* ✅ 스터디 회차 pill이 있는 주(week) 줄은 "이벤트 바(harness)"만 아래로 내려 겹침 방지
+   - margin-top은 인라인 top/left를 건드리지 않아서
+     기간(멀티데이) 바가 끊기지 않고 그대로 내려감
+*/
+.calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness,
+.calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
+    margin-top: 22px;
+}
+
 /* =========================
    이벤트 스타일
 ========================= */
@@ -253,30 +267,11 @@
     font-weight: 900 !important;
 }
 
-.calEvent.reg {
-    background: #e9fadc !important;
-    color: #2f6a2f !important;
-}
-
-.calEvent.exam {
-    background: #97c793 !important;
-    color: #ffffff !important;
-}
-
-.calEvent.result {
-    background: #a5dea0 !important;
-    color: #1f2937 !important;
-}
-
-.calEvent.other {
-    background: #eef5ec !important;
-    color: #374151 !important;
-}
+/* ✅ 배경/글자색은 FullCalendar가 이벤트 데이터(backgroundColor/textColor)로 인라인 지정한 값을 사용 */
 
 /* 스터디 이벤트 클래스는 남아있지만, 달력에서는 숨김 처리 */
 .calEvent.study {
-    background: var(--primary) !important;
-    color: #ffffff !important;
+    /* 색상 오버라이드하지 않음 */
 }
 
 /* ✅ 달력에서 스터디 이벤트 바 숨김 */
@@ -466,7 +461,7 @@
     border: 1px solid var(--border);
 }
 
-.calItem + .calItem {
+.calItem+.calItem {
     margin-top: 10px;
 }
 

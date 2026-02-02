@@ -29,6 +29,7 @@ public class ScheduleVO {
 
     private String type;     // REGISTRATION/EXAM/RESULT/OTHER
     private String colorHex; // varchar(7) ex) #97c793
+    private String textColor; // varchar(7) ex) #ffffff (사용자 선택)
     private String customTypeLabel; // nullable
 
     private Timestamp createdAt;

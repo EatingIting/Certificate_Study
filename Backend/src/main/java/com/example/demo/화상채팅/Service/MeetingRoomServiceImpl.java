@@ -174,8 +174,9 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                     return;
                 }
             } else {
+                // schedule_id=null인 행만 재사용 (다른 회차(schedule_id=1,2…) 행 재사용 방지 → 2회차 입장 시 새 행 생성)
                 Optional<MeetingRoomParticipant> existingNullSchedule = participantRepository
-                        .findFirstByRoomIdAndUserEmailAndLeftAtIsNull(roomId, userEmail);
+                        .findFirstByRoomIdAndUserEmailAndScheduleIdIsNullAndLeftAtIsNull(roomId, userEmail);
                 if (existingNullSchedule.isPresent()) {
                     MeetingRoomParticipant participant = existingNullSchedule.get();
                     participant.rejoin();
