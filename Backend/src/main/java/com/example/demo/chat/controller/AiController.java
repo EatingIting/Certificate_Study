@@ -1,6 +1,6 @@
 package com.example.demo.chat.controller;
 
-import com.example.demo.chat.service.OpenAiService; // 👈 import 변경
+import com.example.demo.chat.service.OpenAiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,7 +12,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiController {
 
-    private final OpenAiService openAiService; // 👈 이름 변경
+    private final OpenAiService openAiService;
 
     @PostMapping("/chat")
     public ResponseEntity<String> chat(@RequestBody Map<String, String> request) {

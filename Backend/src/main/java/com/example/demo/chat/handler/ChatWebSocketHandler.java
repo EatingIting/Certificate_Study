@@ -50,8 +50,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         ChatMessageDTO chatMessageDTO = objectMapper.readValue(payload, ChatMessageDTO.class);
         String roomId = getRoomId(session);
 
-        // 🚨 [긴급 수정] 유저 ID가 너무 짧으면(UUID가 아니면) DB 저장을 건너뛰고 전송만 합니다.
-        // 이렇게 하면 채팅방 연결이 끊기지 않습니다!
+
         String userId = chatMessageDTO.getUserId();
         if (userId == null || userId.length() < 30) {
             log.warn("⚠️ 유효하지 않은 UserID({})로 인해 DB 저장을 건너뜁니다.", userId);
@@ -94,7 +93,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         broadcastUserList(roomId);
     }
 
-    // --- 👇 유틸리티 메서드 ---
+    // ---  유틸리티 메서드 ---
 
     // 방 전체 메시지 전송
     private void broadcastToRoom(String roomId, ChatMessageDTO messageDTO) {

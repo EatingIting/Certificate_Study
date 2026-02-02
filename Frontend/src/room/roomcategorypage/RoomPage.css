@@ -229,12 +229,17 @@
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.title-wrap {
+    display: flex;
     gap: 10px;
+    min-width: 260px;
+    justify-content: flex-start;
 }
 
 .row-title {
-    font-weight: 700;
-    cursor: pointer;
+    text-align: left;
 }
 
 .row-title:hover {

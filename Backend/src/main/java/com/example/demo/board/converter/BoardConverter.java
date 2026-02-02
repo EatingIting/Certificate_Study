@@ -49,6 +49,7 @@ public final class BoardConverter {
                 .category(dto.getCategory())
                 .title(dto.getTitle())
                 .content(dto.getContent())
+                .isPinned(dto.getIsPinned())
                 .build();
     }
 
@@ -75,6 +76,7 @@ public final class BoardConverter {
                 .category(dto.getCategory())
                 .title(dto.getTitle())
                 .content(dto.getContent())
+                .isPinned(dto.getIsPinned())
                 .build();
     }
 
@@ -89,6 +91,7 @@ public final class BoardConverter {
                 .postId(vo.getPostId())
                 .roomId(vo.getRoomId())
                 .userId(vo.getUserId())
+                .nickname(vo.getNickname())
                 .category(vo.getCategory())
                 .title(vo.getTitle())
                 .content(vo.getContent())
@@ -184,6 +187,7 @@ public final class BoardConverter {
                 .commentId(vo.getCommentId())
                 .postId(vo.getPostId())
                 .userId(vo.getUserId())
+                .nickname(vo.getNickname())
                 .content(vo.getContent())
                 .createdAt(vo.getCreatedAt())
                 .updatedAt(vo.getUpdatedAt())

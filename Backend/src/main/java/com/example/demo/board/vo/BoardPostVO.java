@@ -19,6 +19,8 @@ public class BoardPostVO {
     private String roomId;      // char(36)
     private String userId;      // char(36)
 
+    private String nickname;
+
     private String category;    // NOTICE, GENERAL, QNA, RESOURCE
 
     private String title;       // varchar(200)

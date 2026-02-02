@@ -1,0 +1,299 @@
+.at-page {
+    padding: 18px 18px 28px;
+}
+
+.at-card {
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(16, 24, 40, 0.08);
+    overflow: hidden;
+    border: 1px solid #eef1f5;
+
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.at-card-header {
+    background: #f7f9fc;
+    padding: 18px 22px;
+    border-bottom: 1px solid #eef1f5;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.at-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.at-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: #eaf7ee;
+    display: grid;
+    place-items: center;
+    color: #1f7a41;
+    border: 1px solid rgba(31, 122, 65, 0.15);
+}
+
+.at-icon img {
+    width: 24px;          /* 아이콘 크기 */
+    height: 24px;
+    object-fit: contain;  /* 비율 유지 */
+    display: block;
+    margin-left: 4px;
+}
+
+
+.at-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #101828;
+}
+
+.at-subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: #667085;
+}
+
+.at-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.at-action-btn {
+    border: 1px solid #e7ebf0;
+    background: #fff;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.at-action-btn:hover {
+    background: #f6f8fb;
+}
+
+.at-card-body {
+    padding: 18px 22px 22px;
+}
+
+.at-table-wrap {
+    border: 1px solid #eef1f5;
+    border-radius: 10px;
+    overflow: auto;
+    background: #fff;
+}
+
+.at-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 920px;
+}
+
+.at-table thead th {
+    text-align: center;
+    font-size: 13px;
+    color: #667085;
+    background: #f7f9fc;
+    padding: 14px 14px;
+    font-weight: 800;
+    border-bottom: 1px solid #eef1f5;
+    white-space: nowrap;
+}
+
+.at-table tbody td {
+    padding: 14px 30px;
+    border-top: 1px solid #eef1f5;
+    font-size: 14px;
+    color: #101828;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.at-th-num,
+.at-td-num {
+    width: 70px;
+    text-align: center;
+}
+.at-th-session,
+.at-td-session {
+    width: 58px;
+    text-align: center;
+}
+
+/* name cell */
+.at-person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.at-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #caa87a, #9a6b3f);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.at-name {
+    font-weight: 700;
+    margin: 0;
+}
+
+/* progress */
+
+.at-td-att{
+    text-align: center;
+}
+
+.at-progress {
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.at-bar {
+    width: 160px;
+    height: 12px;
+    border-radius: 999px;
+    background: #e7ebf0;
+    overflow: hidden;
+}
+
+.at-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: #8ccf9a;
+}
+
+.at-progress-text {
+    font-size: 13px;
+    color: #667085;
+    font-weight: 800;
+}
+
+/* marks (출석/결석 only) */
+.at-mark {
+    display: inline-flex;
+    width: 34px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    font-weight: 900;
+    border: 1px solid #eef1f5;
+    background: #fff;
+    color: #667085;
+}
+
+.at-mark.is-ok {
+    background: #eaf7ee;
+    border-color: rgba(31, 122, 65, 0.2);
+    color: #1f7a41;
+}
+
+.at-mark.is-absent {
+    background: #fff1f3;
+    border-color: rgba(233, 68, 75, 0.18);
+    color: #c01048;
+}
+
+/* legend */
+.at-hint {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom:10px
+}
+
+.at-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #eef1f5;
+    background: #fff;
+    color: #667085;
+    margin-bottom: 20px;
+}
+
+.at-chip--ok {
+    background: #eaf7ee;
+    color: #1f7a41;
+    border-color: rgba(31, 122, 65, 0.2);
+}
+
+.at-chip--absent {
+    background: #fff1f3;
+    color: #c01048;
+    border-color: rgba(233, 68, 75, 0.18);
+}
+
+.at-chip--rule {
+    background: #f6f8fb;
+    color: #475467;
+}
+
+.at-empty {
+    text-align: center;
+    padding: 26px 16px;
+    color: #667085;
+}
+
+
+.at-table-wrap { overflow: auto; }
+
+.at-th-name, .at-td-name,
+.at-th-att,  .at-td-att {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+.at-th-att, .at-td-att {
+  left: 100px; /* 이름 컬럼 폭만큼(너가 쓰는 폭에 맞춰 조절) */
+  z-index: 2;
+}
+
+.at-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.at-th-name,
+.at-td-name {
+  width: 100px;
+  max-width: 100px;
+  overflow: hidden;
+  padding-left: 50px;
+}
+
+
+
+
+.at-th-att,
+.at-td-att {
+  width: 100px !important;
+  max-width: 110px;
+  min-width: 110px;
+  overflow: hidden;
+}
+

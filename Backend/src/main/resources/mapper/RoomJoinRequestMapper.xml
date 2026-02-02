@@ -3,7 +3,7 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.roomjoinrequest.RoomJoinRequestMapper">
+<mapper namespace="com.example.demo.모집.mapper.RoomJoinRequestMapper">
 
     <!-- 신청 -->
     <insert id="insert">
@@ -39,16 +39,15 @@
     <update id="reapply">
         UPDATE room_join_request
         SET status = '신청중',
+            request_user_nickname = #{requestUserNickname},
             apply_message = #{applyMessage},
             requested_at = NOW()
-        WHERE request_user_email = #{requestUserEmail}
-          AND room_id = #{roomId}
-          AND status = '거절'
     </update>
+
 
     <!-- 내가 신청한 스터디 -->
     <select id="selectSent"
-            resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
+            resultType="com.example.demo.모집.vo.RoomJoinRequestVO">
         SELECT
             rjr.join_id   AS joinId,
             r.title       AS studyTitle,
@@ -65,7 +64,7 @@
 
     <!-- 내가 받은 신청 -->
     <select id="selectReceived"
-            resultType="com.example.demo.roomjoinrequest.RoomJoinRequestVO">
+            resultType="com.example.demo.모집.vo.RoomJoinRequestVO">
         SELECT
             rjr.join_id   AS joinId,
             r.title       AS studyTitle,

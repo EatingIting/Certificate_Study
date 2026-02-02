@@ -13,6 +13,8 @@ public class BoardPostResponse {
     private Long postId;
     private String roomId;
     private String userId;
+    private String nickname;
+
     private String category;
     private String title;
     private String content;

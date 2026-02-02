@@ -8,6 +8,7 @@ import com.example.demo.assignment.vo.AssignmentVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -25,28 +26,29 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final String uploadDir = "uploads";
 
     @Override
-    public List<AssignmentListResponse> getAssignments(String roomId, String userId) {
-        return assignmentMapper.selectAssignmentsByRoom(roomId, userId);
+    public List<AssignmentListResponse> getAssignments(String roomId, String userEmail) {
+        return assignmentMapper.selectAssignmentsByRoom(roomId, userEmail);
     }
     @Override
-    public Long createAssignment(String roomId, AssignmentCreateRequest req) {
+    public Long createAssignment(String roomId, AssignmentCreateRequest req, String createdByEmail) {
         AssignmentVO vo = new AssignmentVO();
         vo.setRoomId(roomId);
         vo.setTitle(req.getTitle());
         vo.setDescription(req.getDescription());
         vo.setDueAt(req.getDueAt());
-        vo.setCreatedByUserId(req.getCreatedByUserId());
+        vo.setCreatedByEmail(createdByEmail);
 
-        assignmentMapper.insertAssignment(vo); // 여기서 DB INSERT 실행 + PK가 vo.assignmentId에 채워짐
+        assignmentMapper.insertAssignment(vo);
         return vo.getAssignmentId();
     }
 
 
+
     @Override
-    public void submitAssignment(Long assignmentId, String userId, String submitTitle, String memo, MultipartFile file) {
+    public void submitAssignment(Long assignmentId, String userEmail, String submitTitle, String memo, MultipartFile file) {
         AssignmentSubmissionVO vo = new AssignmentSubmissionVO();
         vo.setAssignmentId(assignmentId);
-        vo.setUserId(userId);
+        vo.setUserEmail(userEmail);
         vo.setSubmitTitle(submitTitle);
         vo.setMemo(memo);
 
@@ -74,5 +76,10 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
 
         assignmentMapper.upsertSubmission(vo);
+    }
+
+    @Override
+    public List<AssignmentSubmissionDetailResponse> getSubmissionDetails(Long assignmentId) {
+        return assignmentMapper.selectSubmissionDetails(assignmentId);
     }
 }

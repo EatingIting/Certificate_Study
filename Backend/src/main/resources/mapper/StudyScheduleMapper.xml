@@ -5,50 +5,87 @@
 
 <mapper namespace="com.example.demo.schedule.mapper.StudyScheduleMapper">
 
+    <!-- study_schedule: 복합 PK (subject_id, schedule_id), schedule_id = round_num (동일) -->
     <resultMap id="StudyScheduleMap" type="com.example.demo.schedule.vo.StudyScheduleVO">
-        <id     property="studyScheduleId" column="study_schedule_id"/>
+        <id     property="studyScheduleId" column="schedule_id"/>
         <result property="roundNum"        column="round_num"/>
         <result property="studyDate"       column="study_date"/>
+        <result property="startTime"       column="start_time"/>
+        <result property="endTime"         column="end_time"/>
         <result property="description"     column="description"/>
         <result property="createdAt"       column="created_at"/>
         <result property="updatedAt"       column="updated_at"/>
         <result property="roomId"          column="room_id"/>
+        <result property="subjectId"       column="subject_id"/>
     </resultMap>
 
+    <!-- roomId 파라미터는 LMS subject_id -->
     <select id="selectByRange" resultMap="StudyScheduleMap">
-        SELECT
-        study_schedule_id, round_num, study_date, description,
-        created_at, updated_at, room_id
+        SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
         FROM study_schedule
-        WHERE room_id = #{roomId}
+        WHERE subject_id = #{roomId}
         AND study_date <![CDATA[>=]]> #{start}
         AND study_date <![CDATA[<=]]> DATE_SUB(#{endExclusive}, INTERVAL 1 DAY)
         ORDER BY study_date ASC, round_num ASC
     </select>
 
-    <insert id="insert" parameterType="com.example.demo.schedule.vo.StudyScheduleVO"
-            useGeneratedKeys="true" keyProperty="studyScheduleId">
-        INSERT INTO study_schedule (
-        round_num, study_date, description, room_id
-        ) VALUES (
-        #{roundNum}, #{studyDate}, #{description}, #{roomId}
-        )
+    <select id="selectBySubjectIdAndRange" resultMap="StudyScheduleMap">
+        SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+        AND study_date <![CDATA[>=]]> #{start}
+        AND study_date <![CDATA[<=]]> DATE_SUB(#{endExclusive}, INTERVAL 1 DAY)
+        ORDER BY round_num ASC
+        LIMIT 1
+    </select>
+
+    <select id="selectAnyBySubjectId" resultMap="StudyScheduleMap">
+        SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+        ORDER BY round_num ASC
+        LIMIT 1
+    </select>
+
+    <select id="selectMaxRoundNumBySubjectId" resultType="java.lang.Integer">
+        SELECT COALESCE(MAX(round_num), 0) FROM study_schedule WHERE subject_id = #{subjectId}
+    </select>
+
+    <!-- 현재 시각이 스터디 일정 시간(start_time ~ end_time) 안에 있는 회차의 schedule_id 반환. 없으면 null -->
+    <select id="selectScheduleIdBySubjectIdAndCurrentTime" resultType="java.lang.Long">
+        SELECT schedule_id
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+        AND study_date = CURDATE()
+        AND CURTIME() <![CDATA[>=]]> start_time
+        AND CURTIME() <![CDATA[<]]> end_time
+        ORDER BY round_num ASC
+        LIMIT 1
+    </select>
+
+    <!-- schedule_id = round_num (동일 값), 복합 PK (subject_id, schedule_id), AUTO_INCREMENT 없음 -->
+    <insert id="insert" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
+        INSERT INTO study_schedule (subject_id, schedule_id, round_num, study_date, description, start_time, end_time)
+        VALUES (#{subjectId}, #{roundNum}, #{roundNum}, #{studyDate}, #{description}, #{startTime}, #{endTime})
     </insert>
 
+    <insert id="insertWithSubjectId" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
+        INSERT INTO study_schedule (subject_id, schedule_id, round_num, study_date, description, start_time, end_time)
+        VALUES (#{subjectId}, #{roundNum}, #{roundNum}, #{studyDate}, #{description}, #{startTime}, #{endTime})
+    </insert>
+
+    <!-- schedule_id = round_num 이므로 PK 컬럼(round_num) 변경 없이 날짜·설명만 수정 -->
     <update id="update" parameterType="com.example.demo.schedule.vo.StudyScheduleVO">
         UPDATE study_schedule
-        SET
-        round_num = #{roundNum},
-        study_date = #{studyDate},
-        description = #{description}
-        WHERE study_schedule_id = #{studyScheduleId}
-        AND room_id = #{roomId}
+        SET study_date = #{studyDate}, description = #{description}
+        <if test="startTime != null">, start_time = #{startTime}</if>
+        <if test="endTime != null">, end_time = #{endTime}</if>
+        WHERE schedule_id = #{studyScheduleId} AND subject_id = #{subjectId}
     </update>
 
     <delete id="delete">
         DELETE FROM study_schedule
-        WHERE study_schedule_id = #{studyScheduleId}
-        AND room_id = #{roomId}
+        WHERE schedule_id = #{studyScheduleId} AND subject_id = #{roomId}
     </delete>
 
 </mapper>

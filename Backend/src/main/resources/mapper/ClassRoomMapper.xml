@@ -3,58 +3,36 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
-<mapper namespace="com.example.demo.classroom.ClassRoomMapper">
+<mapper namespace="com.example.demo.모집.mapper.ClassRoomMapper">
 
+    <!-- 내 클래스룸: room_id 기준 1개만 (스터디장 양도 후 중복 방지) -->
     <select id="selectMyClassRooms"
-            resultType="com.example.demo.classroom.ClassRoomVO">
+            resultType="com.example.demo.모집.vo.ClassRoomVO">
 
-        <!-- 내가 방장인 방 -->
         SELECT
         r.room_id AS roomId,
         r.title   AS title,
-
         r.host_user_email AS hostUserEmail,
-
-        1 AS isHost,
-
+        CASE WHEN r.host_user_email = #{email} THEN 1 ELSE 0 END AS isHost,
         CONCAT(
-        DATE_FORMAT(r.start_date, '%Y년 %m월 %d일'),
-        ' ~ ',
-        DATE_FORMAT(r.ended_at, '%Y년 %m월 %d일')
+            DATE_FORMAT(r.start_date, '%Y년 %m월 %d일'),
+            ' ~ ',
+            DATE_FORMAT(r.ended_at, '%Y년 %m월 %d일')
         ) AS date,
-
         r.room_img AS roomImg
-
         FROM room r
-        WHERE r.host_user_email = #{email}
-
-        UNION ALL
-
-        <!-- 내가 참가 신청했고 승인된 방 -->
-        SELECT
-        r.room_id AS roomId,
-        r.title   AS title,
-
-        r.host_user_email AS hostUserEmail,
-
-        0 AS isHost,
-
-        CONCAT(
-        DATE_FORMAT(r.start_date, '%Y년 %m월 %d일'),
-        ' ~ ',
-        DATE_FORMAT(r.ended_at, '%Y년 %m월 %d일')
-        ) AS date,
-
-        r.room_img AS roomImg
-
-        FROM room_join_request j
-        JOIN room r
-        ON j.room_id = r.room_id
-
-        WHERE j.request_user_email = #{email}
-        AND j.status = '승인'
-
-        ORDER BY date DESC
+        WHERE r.room_id IN (
+            <!-- 내가 방장인 방 -->
+            SELECT r2.room_id FROM room r2 WHERE r2.host_user_email = #{email}
+            UNION
+            <!-- 내가 참가 승인된 방 (같은 방 여러 건이어도 1개) -->
+            SELECT j.room_id
+            FROM room_join_request j
+            INNER JOIN room r3 ON j.room_id = r3.room_id
+            WHERE j.request_user_email = #{email} AND j.status = '승인'
+            GROUP BY j.room_id
+        )
+        ORDER BY r.ended_at DESC, r.room_id
 
     </select>
 

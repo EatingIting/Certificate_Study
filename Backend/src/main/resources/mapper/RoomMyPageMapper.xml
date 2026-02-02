@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.roommypage.RoomMyPageMapper">
+
+    <!-- 1) principal(auth.getName()) -> email 해석
+         - principal이 이미 email이면 그대로 반환
+         - principal이 user_id(UUID)면 users에서 email 찾아 반환
+    -->
+    <select id="resolveEmail" resultType="string">
+        SELECT u.email
+        FROM users u
+        WHERE u.email = #{principal}
+           OR u.user_id = #{principal}
+            LIMIT 1
+    </select>
+
+    <!-- 1-2) principal(auth.getName()) -> user_id 해석
+         - principal이 email이면 users에서 user_id 찾아 반환
+         - principal이 user_id(UUID)면 그대로 반환
+    -->
+    <select id="resolveUserId" resultType="string">
+        SELECT u.user_id
+        FROM users u
+        WHERE u.email = #{principal}
+           OR u.user_id = #{principal}
+            LIMIT 1
+    </select>
+
+    <!-- 2) 마이페이지 조회: 방장 or 승인 멤버만 -->
+    <select id="selectRoomMyPage" resultType="com.example.demo.roommypage.dto.RoomMyPageResponse">
+        SELECT
+            CASE
+                WHEN rm.host_user_email = #{email} THEN rm.hostUserNickname
+                ELSE rjr.request_user_nickname
+                END AS roomNickname,
+            u.profile_img AS profileImg
+        FROM room rm
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = rm.room_id
+                               AND rjr.request_user_email = #{email}
+                               AND rjr.status = '승인'
+                 JOIN users u
+                      ON u.email = #{email}
+        WHERE rm.room_id = #{roomId}
+          AND (
+            rm.host_user_email = #{email}
+                OR rjr.request_user_email IS NOT NULL
+            )
+            LIMIT 1
+    </select>
+
+    <!-- 3) 승인 멤버 닉네임 변경 -->
+    <update id="updateMemberNickname">
+        UPDATE room_join_request
+        SET request_user_nickname = #{roomNickname}
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{email}
+          AND status = '승인'
+    </update>
+
+    <!-- 4) 방장 닉네임 변경 -->
+    <update id="updateHostNickname">
+        UPDATE room
+        SET hostUserNickname = #{roomNickname}
+        WHERE room_id = #{roomId}
+          AND host_user_email = #{email}
+    </update>
+
+    <!-- 5) 내 게시글 수 (방 기준) -->
+    <select id="countMyPosts" resultType="long">
+        SELECT COUNT(*)
+        FROM board_posts
+        WHERE room_id = #{roomId}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </select>
+
+    <!-- 6) 내 댓글 수 (방 기준: posts 조인) -->
+    <select id="countMyComments" resultType="long">
+        SELECT COUNT(*)
+        FROM board_comments c
+                 JOIN board_posts p ON p.post_id = c.post_id
+        WHERE p.room_id = #{roomId}
+          AND c.user_id = #{userId}
+          AND c.deleted_at IS NULL
+          AND p.deleted_at IS NULL
+    </select>
+
+    <!-- 7) 최근 내가 쓴 게시글 N개 -->
+    <select id="selectRecentMyPosts"
+            resultType="com.example.demo.roommypage.dto.RoomMyPageResponse$RecentPost">
+        SELECT
+            post_id AS postId,
+            category,
+            title,
+            created_at AS createdAt
+        FROM board_posts
+        WHERE room_id = #{roomId}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC
+            LIMIT #{limit}
+    </select>
+
+    <!-- 8) 최근 내가 쓴 댓글 N개 (+ 원글 제목 포함) -->
+    <select id="selectRecentMyComments"
+            resultType="com.example.demo.roommypage.dto.RoomMyPageResponse$RecentComment">
+        SELECT
+            c.comment_id AS commentId,
+            c.post_id AS postId,
+            p.title AS postTitle,
+            c.content,
+            c.created_at AS createdAt
+        FROM board_comments c
+                 JOIN board_posts p ON p.post_id = c.post_id
+        WHERE p.room_id = #{roomId}
+          AND c.user_id = #{userId}
+          AND c.deleted_at IS NULL
+          AND p.deleted_at IS NULL
+        ORDER BY c.created_at DESC
+            LIMIT #{limit}
+    </select>
+
+    <select id="selectMyRooms" resultType="com.example.demo.roommypage.dto.MyRoomItem">
+        SELECT
+        rm.room_id AS roomId,
+        rm.title   AS title,
+        1          AS isHost
+        FROM room rm
+        WHERE rm.host_user_email = #{email}
+
+        UNION ALL
+
+        SELECT
+        rm.room_id AS roomId,
+        rm.title   AS title,
+        0          AS isHost
+        FROM room_join_request rjr
+        JOIN room rm ON rm.room_id = rjr.room_id
+        WHERE rjr.request_user_email = #{email}
+        AND rjr.status = '승인'
+        AND rm.host_user_email != #{email}
+
+        ORDER BY title ASC
+    </select>
+
+</mapper>

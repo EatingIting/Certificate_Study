@@ -24,8 +24,9 @@ public class ScheduleEventConverter {
         extendedProps.put("description", vo.getDescription());
         extendedProps.put("customLabel", vo.getCustomTypeLabel());
 
-        // DB에 textColor가 없으니 일단 기본값(프론트/디자인에서 나중에 통일 가능)
-        String textColor = "#ffffff";
+        String textColor = (vo.getTextColor() == null || vo.getTextColor().isBlank())
+                ? "#ffffff"
+                : vo.getTextColor().trim();
 
         return ScheduleEventResponse.builder()
                 .id(String.valueOf(vo.getScheduleId()))
@@ -42,15 +43,19 @@ public class ScheduleEventConverter {
     public static ScheduleEventResponse fromStudySchedule(StudyScheduleVO vo) {
         if (vo == null) return null;
 
-        String start = toIso(vo.getStudyDate());
+        String dateStr = toIso(vo.getStudyDate());
+        String startTime = normalizeTimeForIso(vo.getStartTime());
+        String endTime = normalizeTimeForIso(vo.getEndTime());
+        String start = (startTime != null) ? dateStr + "T" + startTime : dateStr;
+        String end = (endTime != null) ? dateStr + "T" + endTime : null;
 
         Map<String, Object> extendedProps = new HashMap<>();
         extendedProps.put("type", "STUDY");
         extendedProps.put("round", vo.getRoundNum());
         extendedProps.put("description", vo.getDescription());
+        if (startTime != null) extendedProps.put("startTime", toHHmm(startTime));
+        if (endTime != null) extendedProps.put("endTime", toHHmm(endTime));
 
-        // 스터디 일정은 실제 bar를 숨기고 칸 상단에 "n회차"만 표시하는 구조라
-        // 색이 크게 중요하진 않지만, 혹시 렌더될 때 대비해 기본값만 지정
         String bg = "#E9FADC";
         String text = "#2F6A2F";
 
@@ -58,12 +63,26 @@ public class ScheduleEventConverter {
                 .id("S" + vo.getStudyScheduleId())
                 .title(vo.getRoundNum() + "회차")
                 .start(start)
-                .end(null)
+                .end(end)
                 .extendedProps(extendedProps)
                 .backgroundColor(bg)
                 .borderColor(bg)
                 .textColor(text)
                 .build();
+    }
+
+    /** "HH:mm:ss" 또는 "HH:mm" → "HH:mm:ss" (ISO용) */
+    private static String normalizeTimeForIso(String time) {
+        if (time == null || time.isBlank()) return null;
+        String t = time.trim();
+        if (t.length() == 5) return t + ":00"; // HH:mm -> HH:mm:ss
+        return t.length() >= 8 ? t.substring(0, 8) : t; // HH:mm:ss
+    }
+
+    /** "HH:mm:ss" → "HH:mm" (프론트 time input용) */
+    private static String toHHmm(String time) {
+        if (time == null || time.length() < 5) return time;
+        return time.substring(0, 5);
     }
 
     private static String toIso(Date date) {

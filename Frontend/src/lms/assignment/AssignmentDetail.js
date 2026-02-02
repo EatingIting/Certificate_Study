@@ -1,44 +1,44 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import "./AssignmentDetail.css";
+import api from "../../api/api";
+
 
 const AssignmentDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const [submissions, setSubmissions] = useState([]);
+
+    useEffect(() => {
+        const fetchDetail = async () => {
+            try {
+                console.log("accessToken:", sessionStorage.getItem("accessToken"));
+                const res = await api.get(`/assignments/${id}/submissions`);
+
+                const mapped = (res.data || []).map((x) => ({
+                    name: x.memberName,
+                    submittedAt: x.submittedAt
+                        ? x.submittedAt.replace("T", " ").slice(0, 16)
+                        : "-",
+                    status: x.status,
+                    fileUrl: x.fileUrl,
+                }));
+
+                setSubmissions(mapped);
+            } catch (e) {
+                console.error(e);
+                alert("과제 상세 불러오기 실패");
+            }
+        };
+
+        if (id) fetchDetail();
+    }, [id]);
+
+
 
     // ✅ 모달 상태
     const [preview, setPreview] = useState(null); // { url, type }
 
-    // ✅ 데모 데이터
-    const submissions = useMemo(
-        () => [
-            {
-                name: "손00",
-                submittedAt: "2025-11-22 21:10",
-                status: "제출됨",
-                fileUrl: "/sample/sample.pdf", // pdf
-            },
-            {
-                name: "최00",
-                submittedAt: "-",
-                status: "미제출",
-                fileUrl: null,
-            },
-            {
-                name: "박00",
-                submittedAt: "2025-11-22 20:02",
-                status: "제출됨",
-                fileUrl: "/sample/sample.png", // image
-            },
-            {
-                name: "이00",
-                submittedAt: "-",
-                status: "미제출",
-                fileUrl: null,
-            },
-        ],
-        []
-    );
 
     // 파일 타입 판단
     const openPreview = (url) => {
