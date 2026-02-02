@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import './AnswerNote.css'; // 스타일 파일 필요 시 생성
-import { getHostnameWithPort } from "../../utils/backendUrl"; // 기존 유틸 사용
+import './AnswerNote.css';
+import { getHostnameWithPort } from "../../utils/backendUrl";
 
 const AnswerNote = () => {
     const { subjectId } = useParams(); // URL에서 과목 ID 가져오기
