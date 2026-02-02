@@ -85,6 +85,26 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
 
         System.out.println("📥 [WS] 수신 파라미터 → roomId=" + roomId + ", subjectId=" + subjectId + ", userEmail=" + userEmail + ", scheduleId=" + scheduleId + ", isHost=" + isHost);
 
+        // 오늘 이 방에서 강퇴된 유저는 재입장 차단 (테이블/조회 오류 시에는 입장 허용)
+        if (userEmail != null && !userEmail.isBlank()) {
+            try {
+                if (meetingRoomService.isKickedToday(roomId, userEmail)) {
+                    try {
+                        String rejectPayload = objectMapper.writeValueAsString(Map.of("type", "REJECTED", "reason", "KICKED_TODAY"));
+                        sendMessageSafe(session, new TextMessage(rejectPayload));
+                    } catch (Exception e) {
+                        System.err.println("⚠️ [RoomWebSocketHandler] REJECTED 전송 실패: " + e.getMessage());
+                    }
+                    try {
+                        session.close(CloseStatus.NORMAL);
+                    } catch (Exception ignore) {}
+                    return;
+                }
+            } catch (Exception e) {
+                System.err.println("⚠️ [RoomWebSocketHandler] isKickedToday 실패 - 입장 허용: " + e.getMessage());
+            }
+        }
+
         // 방장 → meeting_room 저장, 참여자 → meetingroom_participant 저장 (입장 로그 필수)
         try {
             meetingRoomService.handleJoin(roomId, userEmail, title, isHost, subjectId, scheduleId);
@@ -262,7 +282,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             if (t != null) t.cancel();
         }
 
-        // ✅ 재접속 중 스피너: 유저를 즉시 제거하지 않고 "재접속 중"으로 보관 (online=false)
+        // 재접속 중 스피너: 유저를 즉시 제거하지 않고 "재접속 중"으로 보관 (online=false)
         leavingUser.setOnline(false);
         Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
         disconnectedMap.put(userId, leavingUser);
@@ -297,9 +317,6 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         broadcast(roomId);
     }
 
-    /**
-     * 새 임시 방장 선정 (가장 먼저 입장한 참여자)
-     */
     private void selectNewHost(String roomId, Map<String, WebSocketSession> sessions, Map<String, RoomUser> users) {
         if (users == null || users.isEmpty()) return;
 
@@ -809,6 +826,13 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             // 대상 유저 찾기
             RoomUser targetUser = findUserById(users, targetUserId);
             if (targetUser == null) return;
+
+            // DB에 강퇴 기록 (오늘 재입장 차단). 실패해도 강퇴 처리(세션 종료)는 진행
+            try {
+                meetingRoomService.recordKicked(roomId, targetUser.getUserEmail());
+            } catch (Exception e) {
+                System.err.println("⚠️ [RoomWebSocketHandler] recordKicked 실패: " + e.getMessage());
+            }
 
             // 대상의 세션 ID 찾기
             String targetSessionId = findSessionIdByUserId(users, targetUserId);

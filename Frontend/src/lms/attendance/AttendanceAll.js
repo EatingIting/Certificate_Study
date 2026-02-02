@@ -4,24 +4,6 @@ import api from "../../api/api";
 
 import "./AttendanceAll.css";
 
-/**
- * ✅ 백엔드 응답 형태(권장)
- *
- * {
- *   studySchedule: { start, end, requiredRatio, totalSessions },
- *   attendanceLogs: [
- *     {
- *       memberId: "user@email.com",
- *       name: "닉네임(김***)",
- *       sessions: [
- *         { sessionNo: 1, studyDate: "2026-01-19", joinAt: "...", leaveAt: "..." },
- *         ...
- *       ]
- *     }
- *   ]
- * }
- */
-
 // ------- utils -------
 const toMs = (iso) => {
   if (!iso) return 0;
@@ -45,8 +27,13 @@ const calcTotalMinutes = (startHHMM, endHHMM) => {
   return Math.max(0, end - start);
 };
 
-const judgeAttendance = ({ joinAt, leaveAt }, totalMin, requiredRatio) => {
-  const attendedMin = minutesBetween(joinAt, leaveAt);
+/** 회차별 totalMin 우선: log에 startTime/endTime 있으면 그걸로, 없으면 공통 totalMin 사용 (내 출석 조회와 동일 로직) */
+const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
+  const totalMin =
+    log?.startTime && log?.endTime
+      ? calcTotalMinutes(log.startTime, log.endTime)
+      : fallbackTotalMin;
+  const attendedMin = minutesBetween(log?.joinAt, log?.leaveAt);
   const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
   const isPresent = ratio >= requiredRatio;
   return { attendedMin, ratio, isPresent };
@@ -114,7 +101,7 @@ const AttendanceAll = () => {
           ? calcTotalMinutes(log.startTime, log.endTime)
           : fallbackTotalMin;
 
-        // 로그 없으면 결석 처리(정책)
+        // 로그 없으면 결석 처리. 있으면 회차별 일정 시간(startTime/endTime)으로 totalMin 계산 후 판정
         const judged = log
           ? judgeAttendance(log, totalMinForSession, studySchedule.requiredRatio)
           : { attendedMin: 0, ratio: 0, isPresent: false };
@@ -206,7 +193,7 @@ const AttendanceAll = () => {
                       <td key={s.sessionNo} className="at-td-session">
                         <span
                           className={`at-mark ${s.isPresent ? "is-ok" : "is-absent"}`}
-                          title={`${s.attendedMin}분 참여 (${Math.round(s.ratio * 100)}%)`}
+                          title={`${s.attendedMin}분 참여 (${s.isPresent ? 100 : Math.round(s.ratio * 100)}%)`}
                         >
                           {s.isPresent ? "○" : "×"}
                         </span>

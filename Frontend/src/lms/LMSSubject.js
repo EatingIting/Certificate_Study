@@ -257,13 +257,12 @@ function LMSSubjectInner() {
                             <Route path="assignment" element={<Assignment setActiveMenu={setActiveMenu} />} />
                             <Route path="assignment/:id" element={<AssignmentDetail />} />
 
-                        {/* 게시판: 목록 / 글쓰기 / 상세 */}
-                        <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
-                        <Route path="board/write" element={<BoardWrite setActiveMenu={setActiveMenu} />} />
-                        <Route path="answernote" element={<AnswerNote setActiveMenu={setActiveMenu} />} />
-                        <Route path="board/:postId" element={<BoardDetail setActiveMenu={setActiveMenu} />} />
-                        <Route path="answernote" element={<Board setActiveMenu={setActiveMenu} />} />
-                        {/* <Route path="board/:postId/edit" element={<BoardEdit setActiveMenu={setActiveMenu} />} /> */}
+                            <Route path="board" element={<Board setActiveMenu={setActiveMenu} />} />
+                            <Route path="board/write" element={<BoardWrite setActiveMenu={setActiveMenu} />} />
+                            <Route path="board/:postId" element={<BoardDetail setActiveMenu={setActiveMenu} />} />
+                            <Route path="board/:postId/edit" element={<BoardEdit setActiveMenu={setActiveMenu} />} />
+
+                            <Route path="answernote" element={<AnswerNote setActiveMenu={setActiveMenu} />} />
 
                             <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 

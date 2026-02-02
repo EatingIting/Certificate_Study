@@ -108,8 +108,18 @@ const MyPage = () => {
                 },
             });
 
-            setJoinedStudies(joinedRes.data);
-            setCompletedStudies(completedRes.data);
+            // roomId 기준 중복 제거 (스터디장 양도 후 같은 클래스룸이 2개 보이는 현상 방지)
+            const dedupeByRoomId = (list) => {
+                const seen = new Set();
+                return (list || []).filter((s) => {
+                    const id = s.roomId;
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            };
+            setJoinedStudies(dedupeByRoomId(joinedRes.data));
+            setCompletedStudies(dedupeByRoomId(completedRes.data));
         } catch (err) {
             console.error("스터디 목록 조회 실패", err);
         }
@@ -165,6 +175,23 @@ const MyPage = () => {
             alert("수정되었습니다");
 
             setInterestCategories(tempInterestCategories);
+
+            // ✅ 닉네임 수정 즉시 전역 반영 (MainHeader / LMSContext / 화상채팅 fallback)
+            try {
+                const nextNick = (draft?.nickname || "").trim();
+                if (nextNick) {
+                    sessionStorage.setItem("nickname", nextNick);
+                    localStorage.setItem("nickname", nextNick); // 자동로그인 복원용
+                    localStorage.setItem("userName", nextNick); // MeetingPage fallback용
+                    window.dispatchEvent(
+                        new CustomEvent("user:nickname-updated", {
+                            detail: { nickname: nextNick },
+                        })
+                    );
+                }
+            } catch (e) {
+                // noop
+            }
 
             await fetchProfile();
             setEditOpen(false);
@@ -464,7 +491,7 @@ const MyPage = () => {
 
                                     <div className="study-right">
                                         {s.hostEmail === profile.email && (
-                                            <span className="badge badge-blue">방장</span>
+                                            <span className="badge badge-blue">스터디장</span>
                                         )}
                                         <span className="badge badge-green">{s.status}</span>
                                     </div>

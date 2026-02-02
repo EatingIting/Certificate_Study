@@ -1,7 +1,7 @@
 package com.example.demo.answernote.controller;
 
 import com.example.demo.answernote.dto.AnswerNoteRequestDTO;
-import com.example.demo.answernote.dto.AnswerNoteResponseDTO; // 👈 임포트 확인
+import com.example.demo.answernote.dto.AnswerNoteResponseDTO;
 import com.example.demo.answernote.service.AnswerNoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +26,6 @@ public class AnswerNoteController {
         return ResponseEntity.ok("오답노트 저장 성공");
     }
 
-    // 🚨 반환 타입을 List<AnswerNoteResponseDTO>로 명시
     @GetMapping
     public ResponseEntity<List<AnswerNoteResponseDTO>> getAnswerNotes(@RequestParam String subjectId) {
         return ResponseEntity.ok(answerNoteService.getNotesByRoom(subjectId));

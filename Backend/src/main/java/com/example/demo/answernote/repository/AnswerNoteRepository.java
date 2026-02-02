@@ -1,6 +1,6 @@
-package com.example.demo.answernote.repository; // 👈 패키지 경로 수정됨!
+package com.example.demo.answernote.repository;
 
-import com.example.demo.answernote.entity.AnswerNote; // 👈 로컬 엔티티 임포트
+import com.example.demo.answernote.entity.AnswerNote;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 

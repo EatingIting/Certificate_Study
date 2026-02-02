@@ -291,6 +291,10 @@
 }
 
 .smRowCols3 {
-    /* 이름 열을 넓혀서 닉네임 + 스터디장 뱃지가 여유 있게 보이도록 */
-    grid-template-columns: 1.55fr 1.4fr 0.9fr 1.3fr;
+    grid-template-columns: 1.2fr 1.7fr 0.9fr 1.3fr;
+}
+
+/* 방장이 아닐 때: 관리 열 없음 (이름, 이메일, 권한만) */
+.smRowCols3NoActions {
+    grid-template-columns: 1.2fr 1.7fr 0.9fr;
 }

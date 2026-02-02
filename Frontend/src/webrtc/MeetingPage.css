@@ -954,8 +954,8 @@ body {
   display: flex;
   gap: 1rem;
 
-  overflow: hidden;
-  /* 스크롤 완전 비활성화 */
+  overflow: visible;
+  /* speaking 파란 테두리가 위/좌/우에서 잘리지 않도록 (기존 hidden이 아래만 빛나는 오류 원인) */
   padding: 16px 2px 1rem 2px;
   /* 상단 패딩을 늘려서 테두리가 잘리지 않도록 */
   margin-top: 1rem;
@@ -1756,6 +1756,7 @@ body {
 }
 
 /* ✅ 파스텔톤 파란 speaking 링은 항상 존재(=class 제거 시 자연스럽게 fade-out) */
+/* z-index로 콘텐츠 위에 올려 사방 테두리가 동일하게 보이도록 */
 .video-tile::after {
   content: "";
   position: absolute;
@@ -1766,6 +1767,7 @@ body {
   opacity: 0;
   transition: opacity 420ms ease-out;
   will-change: opacity;
+  z-index: 2;
 }
 
 /* 말할 때만 깜빡 + 보이기 */
@@ -2798,4 +2800,11 @@ body.fullscreen-active .meet-sidebar {
 .strip-item.screen-sharing .video-tile-wrapper {
   border: none !important;
   padding: 0 !important;
+}
+
+/* 🔥 Speaking Indicator (Blue Border) */
+.video-tile.speaking {
+  border: 2px solid #60a5fa !important;
+  box-shadow: 0 0 0 1px #60a5fa !important;
+  transition: all 0.2s ease;
 }

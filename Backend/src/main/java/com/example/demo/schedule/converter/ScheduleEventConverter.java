@@ -24,8 +24,9 @@ public class ScheduleEventConverter {
         extendedProps.put("description", vo.getDescription());
         extendedProps.put("customLabel", vo.getCustomTypeLabel());
 
-        String textColor = (vo.getTextColor() != null && !vo.getTextColor().isBlank())
-                ? vo.getTextColor() : "#ffffff";
+        String textColor = (vo.getTextColor() == null || vo.getTextColor().isBlank())
+                ? "#ffffff"
+                : vo.getTextColor().trim();
 
         return ScheduleEventResponse.builder()
                 .id(String.valueOf(vo.getScheduleId()))

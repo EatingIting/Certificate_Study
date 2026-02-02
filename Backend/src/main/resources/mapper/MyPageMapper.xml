@@ -38,7 +38,7 @@
         WHERE email = #{email}
     </select>
 
-    <!-- 진행중 스터디 -->
+    <!-- 진행중 스터디 (같은 방이 방장+가입 양쪽에 있어도 room_id 기준 1개만) -->
     <select id="getJoinedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
         <!-- 방장이 만든 진행중 -->
@@ -54,7 +54,7 @@
 
         UNION
 
-        <!-- 가입 승인된 진행중 (방장인 방은 위에서 이미 포함되므로 제외 → 스터디장 위임 시 중복 방지) -->
+        <!-- 가입 승인된 진행중 (같은 방에 대한 요청이 여러 건이어도 room_id 기준 1개) -->
         SELECT r.room_id AS roomId,
         r.title,
         '진행중' AS status,
@@ -65,12 +65,12 @@
         JOIN room r ON j.room_id = r.room_id
         WHERE j.request_user_email = #{email}
         AND j.status = '승인'
-        AND r.host_user_email != #{email}
         AND r.ended_at <![CDATA[ >= ]]> CURDATE()
+        GROUP BY r.room_id, r.title, r.start_date, r.ended_at, r.host_user_email
 
     </select>
 
-    <!-- 완료된 스터디 -->
+    <!-- 완료된 스터디 (같은 방이 방장+가입 양쪽에 있어도 room_id 기준 1개만) -->
     <select id="getCompletedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
         <!-- 방장이 만든 종료 -->
@@ -86,7 +86,7 @@
 
         UNION
 
-        <!-- 가입 승인된 종료 (방장인 방은 위에서 이미 포함되므로 제외 → 스터디장 위임 시 중복 방지) -->
+        <!-- 가입 승인된 종료 (같은 방에 대한 요청이 여러 건이어도 room_id 기준 1개) -->
         SELECT r.room_id AS roomId,
         r.title,
         '종료' AS status,
@@ -97,8 +97,8 @@
         JOIN room r ON j.room_id = r.room_id
         WHERE j.request_user_email = #{email}
         AND j.status = '승인'
-        AND r.host_user_email != #{email}
         AND r.ended_at <![CDATA[ < ]]> CURDATE()
+        GROUP BY r.room_id, r.title, r.start_date, r.ended_at, r.host_user_email
 
     </select>
 
