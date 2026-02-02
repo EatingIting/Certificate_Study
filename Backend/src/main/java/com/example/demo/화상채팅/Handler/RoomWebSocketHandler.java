@@ -262,7 +262,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             if (t != null) t.cancel();
         }
 
-        // ✅ 재접속 중 스피너: 유저를 즉시 제거하지 않고 "재접속 중"으로 보관 (online=false)
+        // 재접속 중 스피너: 유저를 즉시 제거하지 않고 "재접속 중"으로 보관 (online=false)
         leavingUser.setOnline(false);
         Map<String, RoomUser> disconnectedMap = roomDisconnectedUsers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
         disconnectedMap.put(userId, leavingUser);
@@ -297,9 +297,6 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         broadcast(roomId);
     }
 
-    /**
-     * 새 임시 방장 선정 (가장 먼저 입장한 참여자)
-     */
     private void selectNewHost(String roomId, Map<String, WebSocketSession> sessions, Map<String, RoomUser> users) {
         if (users == null || users.isEmpty()) return;
 

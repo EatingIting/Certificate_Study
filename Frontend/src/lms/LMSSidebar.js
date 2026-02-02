@@ -15,7 +15,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
     const { user, room } = useLMS();
     const isHost = !!(user && room && user.email && room.hostUserEmail &&
         String(user.email).trim().toLowerCase() === String(room.hostUserEmail).trim().toLowerCase());
-    const isNotHost = !isHost
+    const isNotHost = !isHost;
 
     // ✅ 초기값: 전부 열림
     let [openKeys, setOpenKeys] = useState([
@@ -484,7 +484,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                     </li>
 
                     {/* ✅ 스터디 관리 (스터디장만) */}
-                    {isOwner && (
+                    {isHost && (
                         <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
                             <div
                                 className={`menu-item menu-parent ${activeMenu.startsWith("study") ? "active" : ""}`}
@@ -519,6 +519,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                             )}
                         </ul>
                     </li>
+                    )}
 
                     {/* 프로필 관리 */}
                     <li
