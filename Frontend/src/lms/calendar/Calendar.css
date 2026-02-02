@@ -196,10 +196,10 @@
 }
 
 .calDayStudyRoundWrap {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
+    display: inline-flex;     /* inline 요소처럼 동작 */
+    flex-direction: row;      /* 가로 배치 */
+    align-items: center;
+    gap: 4px;                 /* 회차 ↔ 시간 간격 */
 }
 
 .calDayStudyTime {
@@ -266,8 +266,6 @@
     font-size: 12px !important;
     font-weight: 900 !important;
 }
-
-/* ✅ 배경/글자색은 FullCalendar가 이벤트 데이터(backgroundColor/textColor)로 인라인 지정한 값을 사용 */
 
 /* 스터디 이벤트 클래스는 남아있지만, 달력에서는 숨김 처리 */
 .calEvent.study {
@@ -404,7 +402,7 @@
 .calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title-container,
 .calPage .fc-popover-body .fc-daygrid-event .fc-event-title,
 .calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title * {
-    color: #1f2937 !important;
+    color: var(--fc-event-text-color) !important;
     font-size: 13px !important;
     font-weight: 800;
 }
@@ -412,7 +410,8 @@
 /* HSK 시험 등 일반 일정도 팝업에서 글씨 보이게 (이벤트별 흰색 덮어씀) */
 .calPage .fc-popover-body .fc-daygrid-event *,
 .calPage .fc .fc-popover-body .fc-daygrid-event * {
-    color: #1f2937 !important;
+    background-color: var(--fc-event-bg-color) !important;
+    border-color: var(--fc-event-border-color) !important;
 }
 
 .calPage .fc-popover-body .fc-daygrid-event:last-child,
@@ -1006,4 +1005,59 @@
 
 .fc .fc-daygrid-day-top {
     flex-direction: row;
+}
+
+/* 날짜 row만 100px (헤더 제외) */
+.calCalendarCard .fc .fc-daygrid-body [role="row"] {
+    height: 100px !important;
+}
+
+/* ✅ FullCalendar 내부 스크롤바 제거 (월뷰에서) */
+.calCalendarCard .fc .fc-scroller,
+.calCalendarCard .fc .fc-scroller-harness {
+    overflow: hidden !important;
+}
+
+/* ✅ 스크롤바 자리(gutter) 제거 */
+.calCalendarCard .fc .fc-scroller {
+    overflow: hidden !important;
+    scrollbar-gutter: auto !important; /* 자리 고정 해제 */
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* ✅ FullCalendar 테이블 폭 강제: 오른쪽 빈 여백(스크롤바 보정 폭) 제거 */
+.calCalendarCard .fc .fc-scrollgrid-sync-table,
+.calCalendarCard .fc .fc-daygrid-body,
+.calCalendarCard .fc .fc-daygrid-body table,
+.calCalendarCard .fc .fc-col-header {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* 혹시 colgroup 때문에 삐끗하면 이것도 같이 */
+.calCalendarCard .fc table {
+  table-layout: fixed !important;
+}
+
+.calEvent .fc-event-main {
+    background: inherit;
+    color: inherit;
+}
+
+/* ✅ FullCalendar 이벤트 배경을 실제로 보이게 */
+.calCalendarCard .fc .fc-daygrid-event {
+    background-color: var(--fc-event-bg-color);
+    border-color: var(--fc-event-border-color);
+}
+
+.calCalendarCard .fc .fc-daygrid-event .fc-event-main {
+    background-color: inherit;
+    color: var(--fc-event-text-color);
+}
+
+/* ✅ 월뷰(dayGrid) 이벤트에서 내부 레이어가 배경을 덮는 문제만 차단 */
+.calCalendarCard .fc .fc-daygrid-event .fc-event-main,
+.calCalendarCard .fc .fc-daygrid-event .fc-event-main-frame {
+  background: transparent !important;
 }

@@ -415,17 +415,36 @@ function Calendar() {
                 let t = it?.extendedProps?.type;
                 let idStr = typeof it?.id === "string" ? it.id : String(it?.id ?? "");
 
-                // end는 exclusive로 온다 :contentReference[oaicite:5]{index=5}
+                // 색상: 백엔드가 backgroundColor로 주든, colorHex로 주든 다 커버
+                let bg =
+                    it?.backgroundColor ||
+                    it?.borderColor ||
+                    it?.colorHex ||
+                    it?.extendedProps?.backgroundColor ||
+                    it?.extendedProps?.colorHex ||
+                    "";
+
+                let tc =
+                    it?.textColor ||
+                    it?.extendedProps?.textColor ||
+                    "";
+
                 let ev = {
-                    id: it.id,
-                    title: it.title,
-                    start: it.start,
-                    ...(it.end ? { end: it.end } : {}),
-                    extendedProps: it.extendedProps || {},
-                    ...(it.backgroundColor ? { backgroundColor: it.backgroundColor } : {}),
-                    ...(it.borderColor ? { borderColor: it.borderColor } : {}),
-                    ...(it.textColor ? { textColor: it.textColor } : {}),
+                    id: idStr,
+                    title: it?.title || "",
+                    start: it?.start,
+                    ...(it?.end ? { end: it.end } : {}),
+                    extendedProps: it?.extendedProps || {},
                 };
+                
+                // 조건부 spread 대신 if로 넣어서 “조용히 빠지는” 문제 방지
+                if (bg) {
+                    ev.backgroundColor = bg;
+                    ev.borderColor = bg;
+                }
+                if (tc) {
+                    ev.textColor = tc;
+                }
 
                 // type이 STUDY이거나 id가 S로 시작하면 스터디 일정
                 let isStudy = t === "STUDY" || idStr.startsWith("S");
@@ -1000,6 +1019,28 @@ function Calendar() {
                                 endStr = endInclusiveYmdOf(rawEnd);
                             }
 
+                            // ✅ 배지 색상을 달력 이벤트 색상과 동일하게
+                            let badgeBg =
+                                ev.backgroundColor ||
+                                ev.borderColor ||
+                                ev.extendedProps?.backgroundColor ||
+                                ev.extendedProps?.colorHex ||
+                                "";
+
+                            let badgeText =
+                                ev.textColor ||
+                                ev.extendedProps?.textColor ||
+                                "";
+
+                            // 비어있으면(혹시 서버 누락) 기존 톤으로 안전 fallback
+                            if (!badgeBg) badgeBg = "#97c793";
+                            if (!badgeText) badgeText = "#ffffff";
+
+                            let badgeStyle = {
+                                backgroundColor: badgeBg,
+                                color: badgeText,
+                            };
+
                             let isStudy = ev.extendedProps?.type === "STUDY";
                             let round = ev.extendedProps?.round;
                             let sTime = ev.extendedProps?.startTime;
@@ -1012,7 +1053,11 @@ function Calendar() {
                             return (
                                 <div key={ev.id} className="calItem">
                                     <div className="calItemTop">
-                                        <span className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}>
+                                        {/* ✅ 여기 style 추가 */}
+                                        <span
+                                            className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}
+                                            style={badgeStyle}
+                                        >
                                             {typeLabel(ev)}
                                         </span>
 
