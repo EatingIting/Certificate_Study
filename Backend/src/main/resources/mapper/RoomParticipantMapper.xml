@@ -18,7 +18,8 @@
             u.user_id      AS userId,
             u.email        AS email,
             u.name         AS name,
-            u.nickname     AS nickname,
+            /* ✅ 방별 닉네임이 있으면 그 값을 우선 사용 */
+            COALESCE(rjr.request_user_nickname, u.nickname) AS nickname,
             u.profile_img  AS profileImg,
             rjr.requested_at AS joinedAt
         FROM room_join_request rjr
@@ -29,7 +30,7 @@
         ORDER BY rjr.requested_at DESC
     </select>
 
-    <!-- 이메일로 유저 조회(호스트 보장용) -->
+    <!-- 이메일로 유저 조회(호스트 보장용) - 기존 용도 유지 -->
     <select id="selectUserByEmail" resultType="com.example.demo.roomparticipant.RoomParticipantVO">
         SELECT
             u.user_id      AS userId,
@@ -40,6 +41,29 @@
             NULL           AS joinedAt
         FROM users u
         WHERE u.email = #{email}
+    </select>
+
+    <!-- 방장 정보 조회: 방별 닉네임 우선
+         - room_join_request에 행이 있으면 request_user_nickname
+         - 없으면 room.hostUserNickname
+         - 둘 다 없으면 users.nickname -->
+    <select id="selectHostParticipant" resultType="com.example.demo.roomparticipant.RoomParticipantVO">
+        SELECT
+            u.user_id AS userId,
+            u.email   AS email,
+            u.name    AS name,
+            COALESCE(rjr.request_user_nickname, rm.hostUserNickname, u.nickname) AS nickname,
+            u.profile_img AS profileImg,
+            NULL AS joinedAt
+        FROM room rm
+                 JOIN users u
+                      ON u.email = rm.host_user_email
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = rm.room_id
+                               AND rjr.request_user_email = rm.host_user_email
+                               AND rjr.status = '승인'
+        WHERE rm.room_id = #{roomId}
+        LIMIT 1
     </select>
 
     <!-- userId -> email -->

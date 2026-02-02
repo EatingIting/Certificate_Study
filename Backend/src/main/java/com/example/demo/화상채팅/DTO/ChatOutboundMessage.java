@@ -16,6 +16,7 @@ public class ChatOutboundMessage {
     private long timestamp;
 
     public ChatOutboundMessage(String roomId, String userId, String userName, String message, long timestamp) {
+        // 화상채팅 방용 고정 타입: CHAT (기존 프론트와 호환)
         this.type = "CHAT";
         this.roomId = roomId;
         this.userId = userId;

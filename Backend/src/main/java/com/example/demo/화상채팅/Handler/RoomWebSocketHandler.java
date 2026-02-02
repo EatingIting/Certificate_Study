@@ -488,7 +488,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         String type = inbound.getType();
         if (type == null) return;
 
-        //채팅메세지
+        //채팅메세지 (화상채팅 방 내부 전용 타입: CHAT)
         if ("CHAT".equalsIgnoreCase(type)) {
 
             String text = inbound.getMessage();
@@ -499,6 +499,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 text = text.substring(0, 1000);
             }
 
+            // 기존 프론트와의 호환을 위해 roomId 자리에 "CHAT"을 그대로 사용
             ChatOutboundMessage outbound = new ChatOutboundMessage(
                     "CHAT",
                     sender.getUserId(),

@@ -2,20 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./RoomMyPage.css";
 
-/**
- * LMS 방별 마이페이지 (room별 닉네임 관리 + 프로필 사진 표시)
- *
- * API
- * - GET   /api/rooms/{roomId}/me/mypage
- *   -> { roomNickname, profileImg, postCount, commentCount, recentPosts, recentComments }
- * - PATCH /api/rooms/{roomId}/me/nickname
- *   body: { roomNickname }
- *   -> { roomNickname, profileImg }
- *
- * - GET   /api/me/rooms
- *   -> [{ roomId, title, isHost }, ...]
- */
-
 async function requestJson(url, options) {
     let opts = options || {};
     let headers = Object.assign({}, opts.headers || {});
@@ -304,7 +290,6 @@ export default function RoomMyPage() {
                     })
                 );
             } catch (e) {
-                // noop
             }
         } catch (e) {
             setErrorMsg(e && e.message ? e.message : "닉네임 수정에 실패하였습니다.");
@@ -373,8 +358,7 @@ export default function RoomMyPage() {
                                             className="rmp-btn rmp-btnGhost"
                                             onClick={startEditNickname}
                                             disabled={loading || saving}
-                                            type="button"
-                                        >
+                                            type="button">
                                             수정
                                         </button>
                                     </div>
@@ -386,22 +370,19 @@ export default function RoomMyPage() {
                                             onChange={(e) => setNicknameDraft(e.target.value)}
                                             placeholder="닉네임 입력 (2~20자)"
                                             maxLength={20}
-                                            disabled={saving}
-                                        />
+                                            disabled={saving}/>
                                         <button
                                             className="rmp-btn"
                                             onClick={saveNickname}
                                             disabled={saving}
-                                            type="button"
-                                        >
+                                            type="button">
                                             저장
                                         </button>
                                         <button
                                             className="rmp-btn rmp-btnGhost"
                                             onClick={cancelEditNickname}
                                             disabled={saving}
-                                            type="button"
-                                        >
+                                            type="button">
                                             취소
                                         </button>
                                     </div>

@@ -25,21 +25,34 @@
 
     <select id="selectPostList" resultMap="PostMap">
         SELECT
-        p.post_id, p.room_id, p.user_id,
-        COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
-        p.category, p.title, p.content,
-        p.is_pinned, p.view_count, p.created_at, p.updated_at, p.deleted_at
+        p.post_id,
+        p.room_id,
+        p.user_id,
+        /* ✅ 방별 닉네임이 있으면 우선 사용, 없으면 글로벌 닉네임 → 이름 */
+        COALESCE(rjr.request_user_nickname, u.nickname, u.name) AS nickname,
+        p.category,
+        p.title,
+        p.content,
+        p.is_pinned,
+        p.view_count,
+        p.created_at,
+        p.updated_at,
+        p.deleted_at
         FROM board_posts p
-        LEFT JOIN users u ON u.user_id = p.user_id
+                 LEFT JOIN users u ON u.user_id = p.user_id
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = p.room_id
+                           AND rjr.request_user_email = u.email
+                           AND rjr.status = '승인'
         WHERE p.deleted_at IS NULL
-        AND p.room_id = #{roomId}
+          AND p.room_id = #{roomId}
         <if test="category != null and category != ''">
             AND p.category = #{category}
         </if>
         <if test="keyword != null and keyword != ''">
             AND (
-            p.title LIKE CONCAT('%', #{keyword}, '%')
-            OR p.content LIKE CONCAT('%', #{keyword}, '%')
+                p.title LIKE CONCAT('%', #{keyword}, '%')
+                OR p.content LIKE CONCAT('%', #{keyword}, '%')
             )
         </if>
         ORDER BY p.is_pinned DESC, p.post_id DESC
@@ -64,12 +77,25 @@
 
     <select id="selectPostById" resultMap="PostMap">
         SELECT
-            p.post_id, p.room_id, p.user_id,
-            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
-            p.category, p.title, p.content,
-            p.is_pinned, p.view_count, p.created_at, p.updated_at, p.deleted_at
+            p.post_id,
+            p.room_id,
+            p.user_id,
+            /* ✅ 단일 게시글 조회도 동일 규칙 적용 */
+            COALESCE(rjr.request_user_nickname, u.nickname, u.name) AS nickname,
+            p.category,
+            p.title,
+            p.content,
+            p.is_pinned,
+            p.view_count,
+            p.created_at,
+            p.updated_at,
+            p.deleted_at
         FROM board_posts p
                  LEFT JOIN users u ON u.user_id = p.user_id
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = p.room_id
+                           AND rjr.request_user_email = u.email
+                           AND rjr.status = '승인'
         WHERE p.post_id = #{postId}
           AND p.deleted_at IS NULL
     </select>

@@ -30,7 +30,7 @@
     </resultMap>
 
     <!-- 공통: 멤버(승인멤버 + 방장) -->
-    <!-- subjectId == room_join_request.room_id (스터디룸ID) 라는 전제 -->
+    <!-- subjectId == room_join_request.room_id == room.room_id (스터디룸ID) 라는 전제 -->
     <sql id="membersSql">
         (
             SELECT
@@ -44,10 +44,17 @@
 
             SELECT
                 mr.host_user_email AS user_email,
-                NULL AS request_user_nickname
+                /* ✅ 방장도 room_join_request 닉네임이 있으면 그걸 우선, 없으면 room.hostUserNickname 사용 */
+                COALESCE(rjr.request_user_nickname, rm.hostUserNickname) AS request_user_nickname
             FROM meeting_room mr
+                     LEFT JOIN room rm
+                               ON rm.room_id = mr.subject_id
+                     LEFT JOIN room_join_request rjr
+                               ON rjr.room_id = mr.subject_id
+                                  AND rjr.request_user_email = mr.host_user_email
+                                  AND rjr.status = '승인'
             WHERE mr.subject_id = #{subjectId}
-            GROUP BY mr.host_user_email
+            GROUP BY mr.host_user_email, COALESCE(rjr.request_user_nickname, rm.hostUserNickname)
         ) m
     </sql>
 

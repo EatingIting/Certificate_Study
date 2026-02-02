@@ -181,4 +181,44 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
             return null;
         }
     }
+
+    @Override
+    public Long findUpcomingTodayScheduleId(String subjectId) {
+        if (subjectId == null || subjectId.isBlank()) return null;
+        try {
+            return studyScheduleMapper.selectUpcomingTodayScheduleId(subjectId.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public StudyScheduleVO getBySubjectIdAndScheduleId(String subjectId, Long scheduleId) {
+        if (subjectId == null || subjectId.isBlank() || scheduleId == null) return null;
+        try {
+            return studyScheduleMapper.selectBySubjectIdAndScheduleId(subjectId.trim(), scheduleId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public StudyScheduleVO getNextSessionTodayAfter(String subjectId, Long afterScheduleId) {
+        if (subjectId == null || subjectId.isBlank() || afterScheduleId == null) return null;
+        try {
+            return studyScheduleMapper.selectNextSessionToday(subjectId.trim(), afterScheduleId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public StudyScheduleVO getNextSessionOnDateAfter(String subjectId, Date studyDate, Long afterScheduleId) {
+        if (subjectId == null || subjectId.isBlank() || studyDate == null || afterScheduleId == null) return null;
+        try {
+            return studyScheduleMapper.selectNextSessionOnDate(subjectId.trim(), studyDate, afterScheduleId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

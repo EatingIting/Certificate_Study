@@ -295,9 +295,6 @@
 
     /* [필수] 긴 단어 줄바꿈 */
     word-break: break-word; 
-    
-    /* [필수] AI 줄바꿈 및 공백 인식 */
-    white-space: pre-wrap; 
 }
 
 .tc-bubble.other {
@@ -310,6 +307,12 @@
     background-color: #97c793;
     color: white;
     border-bottom-right-radius: 4px;
+    
+    /* ✅ 내가 보낸 말풍선은 항상 가로 방향 + 자동 줄바꿈 */
+    white-space: normal;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    display: inline-block;
 }
 
 /* AI 답변 말풍선 스타일 */

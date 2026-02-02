@@ -34,8 +34,9 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
         // 같은 room_id: (1) host_user_email(스터디장) + (2) status='승인'인 request_user_email 전원
         List<RoomParticipantVO> approved = mapper.selectApprovedParticipants(roomId);
 
-        // 스터디장(host_user_email): room에는 있으나 room_join_request 승인 행에 없을 수 있으므로 별도 조회 후 맨 앞에 추가
-        RoomParticipantVO hostVo = mapper.selectUserByEmail(hostEmail);
+        // 스터디장(host_user_email): room에는 있으나 room_join_request 승인 행에 없을 수 있으므로
+        // room_id 기준으로 방별 닉네임을 우선 적용해서 조회
+        RoomParticipantVO hostVo = mapper.selectHostParticipant(roomId);
         List<RoomParticipantVO> allParticipants = new ArrayList<>();
         if (hostVo != null) {
             allParticipants.add(hostVo);
@@ -146,7 +147,8 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
 
         // 이전 방장(나)을 스터디원으로 유지: room_join_request에 승인 행이 없으면 추가 → 스터디원 관리·입장 권한 유지
         if (mapper.countApprovedByEmail(roomId, myEmail) == 0) {
-            RoomParticipantVO oldHostVo = mapper.selectUserByEmail(myEmail);
+            // 이전 방장의 방별 닉네임을 유지하기 위해 roomId 기준으로 조회
+            RoomParticipantVO oldHostVo = mapper.selectHostParticipant(roomId);
             String nickname = oldHostVo != null ? oldHostVo.getNickname() : null;
             mapper.insertApprovedMember(roomId, myEmail, targetEmail, nickname);
         }
