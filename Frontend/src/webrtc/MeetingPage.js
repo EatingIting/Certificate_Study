@@ -5363,6 +5363,16 @@ function MeetingPage({ portalRoomId }) {
 
                 if (data.type === "PONG") return;
 
+                // 강퇴된 유저 재입장 시 서버가 거부한 경우
+                if (data.type === "REJECTED" && data.reason === "KICKED_TODAY") {
+                    setToastMessage("오늘 이 방에서 내보내기되어 입장할 수 없습니다.");
+                    setShowToast(true);
+                    isLeavingRef.current = true;
+                    try { wsRef.current?.close(); } catch { }
+                    setTimeout(() => navigate(`/lms/${subjectId}`), 1500);
+                    return;
+                }
+
                 if (data.type === "REACTION") {
                     const { userId: fromUserId, emoji } = data;
 
