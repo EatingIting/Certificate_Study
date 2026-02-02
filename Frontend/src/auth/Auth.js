@@ -8,6 +8,9 @@ const logo = require("./메인로고.png");
 
 const Auth = () => {
     const navigate = useNavigate();
+    const kakaoIcon = require("./카카오.png");
+    const naverIcon = require("./네이버.png");
+    const googleIcon = require("./구글.png");
 
     const [showEmailLogin, setShowEmailLogin] = useState(false);
 
@@ -80,6 +83,7 @@ const Auth = () => {
                                 className="social-btn kakao"
                                 onClick={() => handleOAuthLogin("kakao")}
                             >
+                                <img src={kakaoIcon} alt="카카오" className="social-icon" />
                                 카카오로 시작하기
                             </button>
 
@@ -87,6 +91,7 @@ const Auth = () => {
                                 className="social-btn naver"
                                 onClick={() => handleOAuthLogin("naver")}
                             >
+                                <img src={naverIcon} alt="네이버" className="social-icon" />
                                 네이버로 시작하기
                             </button>
 
@@ -94,6 +99,7 @@ const Auth = () => {
                                 className="social-btn google"
                                 onClick={() => handleOAuthLogin("google")}
                             >
+                                <img src={googleIcon} alt="구글" className="social-icon" />
                                 구글로 시작하기
                             </button>
                         </div>
