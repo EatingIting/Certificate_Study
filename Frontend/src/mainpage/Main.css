@@ -1,0 +1,250 @@
+/* 공통 */
+.page {
+    font-family: Arial, sans-serif;
+    color: #111;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    border-bottom: 1px solid #eee;
+    margin: 0 200px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 800;
+    color: #a5dea0;
+}
+
+.nav span {
+    margin: 0 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.main-actions {
+    display: flex;
+    gap: 10px;
+}
+.login-btn {
+    border-radius: 8px;
+    border: 1px;
+    cursor: pointer;
+}
+
+.cr-btn {
+    background: #a5dea0;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* 검색 박스 */
+.search-box {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.search-box input {
+    width: 420px;
+    height: 50px;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+}
+
+.search-box button {
+    padding: 14px 20px;
+    background: #f3f4f6;
+    color: black;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+/* Hero 전체 */
+.hero {
+    position: relative;
+    text-align: center;
+    padding: 120px 20px;
+    margin: 0 200px;
+    border-radius: 50px;
+    overflow: hidden;
+}
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--hero-img) center / cover no-repeat;
+    opacity: 0.45;
+    filter: blur(0.4px);
+    z-index: 1;
+}
+
+
+
+/* 텍스트 레이어 (앞) */
+.hero h1,
+.hero p,
+.search-box {
+    position: relative;
+    z-index: 2;
+}
+
+.hero h1 {
+    font-size: 38px;
+    margin-bottom: 16px;
+}
+
+.hero p {
+    color: #666;
+    margin-bottom: 32px;
+}
+
+
+/* Category */
+.main-category {
+    padding: 30px 0px;
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.main-list {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    transition: transform 0.2s ease;
+}
+
+.main-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+
+}
+
+.circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #eef2ff;
+    color: #a5dea0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+
+}
+
+/* Study */
+.study {
+    padding: 80px 60px;
+    background: #f9fafb;
+    margin: 0 200px;
+}
+
+.study-list {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+
+
+.cardbox {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 16px;
+    padding: 20px;
+    cursor: pointer;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.cardbox:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+}
+.cardbox button {
+    margin-top: 14px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #a5dea0;
+    background: #a5dea0;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.cardbox button:hover {
+    background: #8fd3a2;
+}
+
+.thumbnail {
+    width: 100%;
+    height: 160px;
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+
+.main-tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: #eef6f0;
+    color: #1f7a41;
+    border-radius: 999px;
+    margin-top: 10px;
+
+}
+
+/* CTA */
+.cta {
+    background: #a5dea0;
+    color: white;
+    text-align: center;
+    padding: 80px 20px;
+
+}
+
+.cta button {
+    margin-top: 20px;
+    background: white;
+    color: black;
+    padding: 14px 28px;
+    border-radius: 12px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.study-sample-container{
+    width: min(1400px, 100%);
+    margin: 0 auto;
+    padding: 40px 60px;
+}
+
+.main-room-title {
+    margin-top: 15px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+h5 {
+    font-size: 14px;
+}

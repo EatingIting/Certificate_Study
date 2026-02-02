@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.마이페이지.mapper.UserInterestCategoryMapper">
+
+    <!-- 관심카테고리 저장 -->
+    <insert id="insertInterestCategory">
+        INSERT INTO user_interest_category (
+            user_id,
+            category_id,
+            created_at
+        )
+        VALUES (
+                   #{userId},
+                   #{categoryId},
+                   NOW()
+               )
+    </insert>
+
+    <!-- 관심카테고리 전체 삭제 -->
+    <delete id="deleteByUserId">
+        DELETE FROM user_interest_category
+        WHERE user_id = #{userId}
+    </delete>
+
+    <!-- 관심카테고리 조회 -->
+    <select id="findCategoryIdsByUserId" resultType="long">
+        SELECT category_id
+        FROM user_interest_category
+        WHERE user_id = #{userId}
+    </select>
+
+</mapper>

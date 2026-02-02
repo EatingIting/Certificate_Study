@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.roomcontext.RoomContextMapper">
+
+    <resultMap id="RoomBasicMap" type="com.example.demo.roomcontext.RoomBasicVO">
+        <result property="roomId" column="room_id"/>
+        <result property="title" column="title"/>
+        <result property="hostUserEmail" column="host_user_email"/>
+    </resultMap>
+
+    <!-- 방 기본 정보 + 방장 이메일 -->
+    <select id="selectRoomBasic" resultMap="RoomBasicMap">
+        SELECT
+            room_id,
+            title,
+            host_user_email
+        FROM room
+        WHERE room_id = #{roomId}
+    </select>
+
+    <!-- 현재 사용자가 이 방에서 승인된 멤버인지 -->
+    <select id="countApprovedMember" resultType="int">
+        SELECT COUNT(*)
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{email}
+          AND status = '승인'
+    </select>
+
+</mapper>

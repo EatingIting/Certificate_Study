@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.assignment.mapper.AssignmentMapper">
+
+    <!-- 1) 과제 목록: 내 제출 여부로 status 만들기 + 작성자 방별 닉네임 -->
+    <select id="selectAssignmentsByRoom" resultType="com.example.demo.assignment.dto.AssignmentListResponse">
+        SELECT
+            a.assignment_id AS assignmentId,
+            a.title AS title,
+            a.due_at AS dueAt,
+            a.created_by_email AS authorEmail,
+            -- 작성자(보통 방장)의 방별 닉네임 우선
+            COALESCE(
+                    rjr.request_user_nickname,
+                    rm.hostUserNickname,
+                    u.nickname,
+                    u.name
+            ) AS authorName,
+            CASE WHEN s.submission_id IS NULL THEN '제출 하기' ELSE '제출 완료' END AS status
+        FROM assignments a
+                 JOIN room rm
+                      ON rm.room_id = a.room_id
+                 JOIN users u
+                      ON u.email = a.created_by_email
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = a.room_id
+                               AND rjr.request_user_email = a.created_by_email
+                               AND rjr.status = '승인'
+                 LEFT JOIN assignment_submissions s
+                           ON s.assignment_id = a.assignment_id
+                               AND s.user_email = #{userEmail}
+        WHERE a.room_id = #{roomId}
+        ORDER BY a.due_at ASC, a.assignment_id DESC
+    </select>
+
+
+
+    <!-- 2) 과제 생성 -->
+    <insert id="insertAssignment"
+            parameterType="com.example.demo.assignment.vo.AssignmentVO"
+            useGeneratedKeys="true"
+            keyProperty="assignmentId">
+
+        INSERT INTO assignments (room_id, title, description, due_at, created_by_email)
+        VALUES (#{roomId}, #{title}, #{description}, #{dueAt}, #{createdByEmail})
+
+    </insert>
+
+
+    <!-- 3) 제출: (assignment_id, user_email) UNIQUE라서 중복제출이면 UPDATE -->
+    <insert id="upsertSubmission" parameterType="com.example.demo.assignment.vo.AssignmentSubmissionVO">
+        INSERT INTO assignment_submissions
+        (assignment_id, user_email, submit_title, memo, file_name, file_url, file_size, submitted_at)
+        VALUES
+            (#{assignmentId}, #{userEmail}, #{submitTitle}, #{memo}, #{fileName}, #{fileUrl}, #{fileSize}, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE
+                                 submit_title = VALUES(submit_title),
+                                 memo        = VALUES(memo),
+                                 file_name   = VALUES(file_name),
+                                 file_url    = VALUES(file_url),
+                                 file_size   = VALUES(file_size),
+                                 submitted_at = CURRENT_TIMESTAMP
+    </insert>
+
+
+    <select id="selectSubmissionDetails"
+            resultType="com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse">
+
+        SELECT
+        u.email AS userId,  <!-- DTO 필드명이 userId라 일단 유지(원하면 userEmail로 rename 추천) -->
+
+        CONCAT(
+        COALESCE(m.request_user_nickname, u.nickname, '방장'),
+        '(',
+        CASE
+        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
+        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
+        ELSE CONCAT(
+        SUBSTRING(u.name, 1, 1),
+        REPEAT('*', CHAR_LENGTH(u.name) - 2),
+        SUBSTRING(u.name, -1)
+        )
+        END,
+        ')'
+        ) AS memberName,
+
+        s.submitted_at AS submittedAt,
+
+        CASE
+        WHEN s.submission_id IS NULL THEN '미제출'
+        ELSE '제출됨'
+        END AS status,
+
+        s.file_url AS fileUrl,
+        s.file_name AS fileName
+
+        FROM assignments a
+
+        JOIN (
+        /* 1) 승인된 멤버 */
+        SELECT
+        rjr.room_id,
+        rjr.request_user_email AS user_email,
+        rjr.request_user_nickname
+        FROM room_join_request rjr
+        WHERE rjr.status = '승인'
+
+        UNION
+
+        /* 2) 방장(= 과제 작성자 email)
+             - 방장도 room_join_request에 승인 멤버로 존재할 수 있으므로
+               room_join_request / room을 조인해서 방별 닉네임을 m.request_user_nickname에 담는다. */
+        SELECT
+        a2.room_id,
+        a2.created_by_email AS user_email,
+        COALESCE(rjr2.request_user_nickname, rm2.hostUserNickname) AS request_user_nickname
+        FROM assignments a2
+        JOIN room rm2
+        ON rm2.room_id = a2.room_id
+        LEFT JOIN room_join_request rjr2
+        ON rjr2.room_id = rm2.room_id
+        AND rjr2.request_user_email = a2.created_by_email
+        AND rjr2.status = '승인'
+        ) m
+        ON m.room_id = a.room_id
+
+        JOIN users u
+        ON u.email = m.user_email
+
+        LEFT JOIN assignment_submissions s
+        ON s.assignment_id = a.assignment_id
+        AND s.user_email = u.email
+
+        WHERE a.assignment_id = #{assignmentId}
+
+        ORDER BY
+        (s.submission_id IS NULL) ASC,
+        s.submitted_at DESC,
+        COALESCE(m.request_user_nickname, u.nickname) ASC;
+
+    </select>
+
+
+
+
+</mapper>

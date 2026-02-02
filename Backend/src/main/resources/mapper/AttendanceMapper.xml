@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.attendance.mapper.AttendanceMapper">
+
+    <!-- ✅ 1) 스케줄(시간/총회차) -->
+    <select id="selectStudySchedule" resultType="com.example.demo.attendance.vo.StudyScheduleVO">
+        SELECT
+            DATE_FORMAT(MIN(start_time), '%H:%i') AS start,
+            DATE_FORMAT(MAX(end_time), '%H:%i')   AS end,
+            COUNT(*)                               AS totalSessions
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+    </select>
+
+    <!-- ✅ nested collection 매핑 -->
+    <resultMap id="memberLogMap" type="com.example.demo.attendance.dto.AttendanceMemberLogResponse">
+        <id property="memberId" column="userEmail"/>
+        <result property="name" column="memberName"/>
+        <collection property="sessions" ofType="com.example.demo.attendance.dto.AttendanceSessionLogResponse">
+            <result property="sessionNo" column="sessionNo"/>
+            <result property="studyDate" column="studyDate"/>
+            <result property="startTime" column="sessionStart"/>
+            <result property="endTime" column="sessionEnd"/>
+            <result property="joinAt" column="joinAt"/>
+            <result property="leaveAt" column="leaveAt"/>
+        </collection>
+    </resultMap>
+
+    <!-- 공통: 멤버(승인멤버 + 방장) -->
+    <!-- subjectId == room_join_request.room_id == room.room_id (스터디룸ID) 라는 전제 -->
+    <sql id="membersSql">
+        (
+            SELECT
+                rjr.request_user_email AS user_email,
+                rjr.request_user_nickname AS request_user_nickname
+            FROM room_join_request rjr
+            WHERE rjr.room_id = #{subjectId}
+              AND rjr.status = '승인'
+
+            UNION
+
+            SELECT
+                mr.host_user_email AS user_email,
+                /* ✅ 방장도 room_join_request 닉네임이 있으면 그걸 우선, 없으면 room.hostUserNickname 사용 */
+                COALESCE(rjr.request_user_nickname, rm.hostUserNickname) AS request_user_nickname
+            FROM meeting_room mr
+                     LEFT JOIN room rm
+                               ON rm.room_id = mr.subject_id
+                     LEFT JOIN room_join_request rjr
+                               ON rjr.room_id = mr.subject_id
+                                  AND rjr.request_user_email = mr.host_user_email
+                                  AND rjr.status = '승인'
+            WHERE mr.subject_id = #{subjectId}
+            GROUP BY mr.host_user_email, COALESCE(rjr.request_user_nickname, rm.hostUserNickname)
+        ) m
+    </sql>
+
+    <!-- ✅ 2) 전체 출석 로그 -->
+    <select id="selectAttendanceLogsAll" resultMap="memberLogMap">
+        SELECT
+        u.email AS userEmail,
+
+        CONCAT(
+        COALESCE(m.request_user_nickname, u.nickname, '방장'),
+        '(',
+        CASE
+        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
+        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
+        ELSE CONCAT(
+        SUBSTRING(u.name, 1, 1),
+        REPEAT('*', CHAR_LENGTH(u.name) - 2),
+        SUBSTRING(u.name, -1)
+        )
+        END,
+        ')'
+        ) AS memberName,
+
+        ss.round_num AS sessionNo,
+        DATE_FORMAT(ss.study_date, '%Y-%m-%d') AS studyDate,
+        DATE_FORMAT(MAX(ss.start_time), '%H:%i') AS sessionStart,
+        DATE_FORMAT(MAX(ss.end_time),   '%H:%i') AS sessionEnd,
+
+        DATE_FORMAT(MIN(mp.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
+        DATE_FORMAT(MAX(mp.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
+
+        FROM <include refid="membersSql"/>
+
+        JOIN users u
+        ON u.email = m.user_email
+
+        JOIN study_schedule ss
+        ON ss.subject_id = #{subjectId}
+
+        LEFT JOIN meeting_room mr
+        ON mr.subject_id = ss.subject_id
+        AND mr.schedule_id = ss.schedule_id
+
+        LEFT JOIN meetingroom_participant mp
+        ON mp.user_email = u.email
+        AND mp.subject_id = ss.subject_id
+        AND (
+            (mp.schedule_id = ss.schedule_id AND mp.room_id = mr.room_id)
+            OR
+            (mp.schedule_id IS NULL
+             AND DATE(mp.joined_at) = ss.study_date
+             AND mp.joined_at <![CDATA[<]]> CONCAT(ss.study_date, ' ', ss.end_time)
+             AND (mp.left_at IS NULL OR mp.left_at <![CDATA[>]]> CONCAT(ss.study_date, ' ', ss.start_time)))
+        )
+
+        GROUP BY
+        u.email,
+        memberName,
+        ss.round_num,
+        ss.study_date
+
+        ORDER BY
+        COALESCE(m.request_user_nickname, u.nickname) ASC,
+        ss.round_num ASC
+    </select>
+
+    <!-- ✅ 3) 내 출석 로그 -->
+    <select id="selectAttendanceLogsMy" resultMap="memberLogMap">
+        SELECT
+        u.email AS userEmail,
+
+        CONCAT(
+        COALESCE(m.request_user_nickname, u.nickname, '방장'),
+        '(',
+        CASE
+        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
+        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
+        ELSE CONCAT(
+        SUBSTRING(u.name, 1, 1),
+        REPEAT('*', CHAR_LENGTH(u.name) - 2),
+        SUBSTRING(u.name, -1)
+        )
+        END,
+        ')'
+        ) AS memberName,
+
+        ss.round_num AS sessionNo,
+        DATE_FORMAT(ss.study_date, '%Y-%m-%d') AS studyDate,
+        DATE_FORMAT(MAX(ss.start_time), '%H:%i') AS sessionStart,
+        DATE_FORMAT(MAX(ss.end_time),   '%H:%i') AS sessionEnd,
+
+        DATE_FORMAT(MIN(mp.joined_at), '%Y-%m-%dT%H:%i:%s') AS joinAt,
+        DATE_FORMAT(MAX(mp.left_at),   '%Y-%m-%dT%H:%i:%s') AS leaveAt
+
+        FROM <include refid="membersSql"/>
+
+        JOIN users u
+        ON u.email = m.user_email
+
+        JOIN study_schedule ss
+        ON ss.subject_id = #{subjectId}
+
+        LEFT JOIN meeting_room mr
+        ON mr.subject_id = ss.subject_id
+        AND mr.schedule_id = ss.schedule_id
+
+        LEFT JOIN meetingroom_participant mp
+        ON mp.user_email = u.email
+        AND mp.subject_id = ss.subject_id
+        AND (
+            (mp.schedule_id = ss.schedule_id AND mp.room_id = mr.room_id)
+            OR
+            (mp.schedule_id IS NULL
+             AND DATE(mp.joined_at) = ss.study_date
+             AND mp.joined_at <![CDATA[<]]> CONCAT(ss.study_date, ' ', ss.end_time)
+             AND (mp.left_at IS NULL OR mp.left_at <![CDATA[>]]> CONCAT(ss.study_date, ' ', ss.start_time)))
+        )
+
+        WHERE u.email = #{userEmail}
+
+        GROUP BY
+        u.email,
+        memberName,
+        ss.round_num,
+        ss.study_date
+
+        ORDER BY ss.round_num ASC
+    </select>
+
+</mapper>

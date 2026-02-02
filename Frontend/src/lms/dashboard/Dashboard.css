@@ -1,0 +1,455 @@
+.dashboard-container {
+    padding: 24px;
+    background: #f6faf6;
+    min-height: 100vh;
+}
+
+/* ✅ 그리드 레이아웃 */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas:
+    "study attendance calendarTop"
+    "board assignment calendarBottom";
+    gap: 18px;
+    align-items: stretch;
+}
+
+/* grid-area */
+.dashStudy { grid-area: study; }
+.dashAttendance { grid-area: attendance; }
+.dashBoard { grid-area: board; }
+.dashAssignment { grid-area: assignment; }
+.dashCalendarTop { grid-area: calendarTop; }
+.dashCalendarBottom { grid-area: calendarBottom; }
+
+/* ===== 공통 카드 ===== */
+.card {
+    background: #ffffff;
+    border-radius: 5px; 
+    padding: 16px 16px 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    min-height: 0;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.card-header.line {
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e7e7e7;
+}
+
+.card-title {
+    font-weight: 700;
+    font-size: 16px;
+    color: #111;
+    margin-left: 10px;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.more-btn {
+    border: none;
+    background: transparent;
+    color: #6e6e6e;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 6px 6px;
+}
+.more-btn:hover { color: #2f2f2f; }
+
+.card-linkBtn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 800;
+    color: #2c6b40;
+    padding: 6px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+.card-linkBtn:hover { background: #f1faf3; }
+
+/* ===== 시험 카드 ===== */
+.study-card-back { height: 100%; }
+
+.study-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #97c793;
+    color: #fff;
+    padding: 26px 18px;
+    height: 200px;
+    width: 100%;
+}
+
+.study-info h3 { margin: 0 0 4px; font-size: 18px; font-weight: 900; }
+.study-info p { margin: 0; font-size: 13px; opacity: 0.95; }
+
+.progress-bar {
+    width: 220px;
+    height: 9px;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 999px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+.progress { width: 55%; height: 100%; background: #ffffff; border-radius: 999px; }
+.study-icon { font-size: 70px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.15)); }
+
+/* ===== 리스트 (flex 기반) ===== */
+.table-list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    width: 100%;
+}
+
+.trow{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #222;
+    min-width: 0;
+    width: 100%;
+}
+
+.table-list .trow + .trow { margin-top: 8px; }
+
+.trow.plain { background: #fff; border: 1px solid #f0f0f0; }
+.trow.tinted { background: #f1faf3; }
+
+.tleft{
+    flex: 1 1 0;         /* ✅ 남는 폭 계산 확실하게 */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.round{
+    flex: 0 0 auto;
+    min-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 900;
+    color: #2c6b40;
+}
+
+.row-text{
+    flex: 1 1 0;
+    min-width: 1px;      /* ✅ 0 완전소멸 방지 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    text-align: left;
+}
+
+.tright{
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 0;
+}
+
+.status { font-weight: 700; font-size: 12px; white-space: nowrap; }
+.status.ok { color: #2e9a52; }
+
+.pill { padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.pill.done { background: #97c793; color: #fff; }
+.pill.pending { background: #e5f2e8; color: #2f7a4a; }
+
+/* ===== 출석률 ===== */
+.attendance-rate-box {
+    background: #97c793;
+    border-radius: 10px;
+    padding: 20px;
+    color: #ffffff;
+    height: 100px;
+    margin-top: auto;
+}
+.rate-top { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.rate-left { display: flex; align-items: center; gap: 8px; }
+.rate-badge { width: 22px; height: 22px; border-radius: 6px; }
+.rate-label { font-size: 20px; opacity: 0.95; font-weight: 600; }
+.rate-value { font-size: 18px; font-weight: 900; }
+.rate-bar {
+    width: 100%;
+    height: 9px;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 20px;
+}
+.rate-progress { width: 83%; height: 100%; background: #ffffff; border-radius: 999px; }
+
+/* =========================
+   ✅ 달력 카드(상단 오른쪽)
+========================= */
+.dashCalendarTop {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dashMiniCal {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid #eef2ee;
+    border-radius: 10px;
+    padding: 10px 10px 6px;
+    overflow: hidden;
+}
+
+.dashMiniCal .fc .fc-header-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    margin: 0 0 8px 0;
+}
+.dashMiniCal .fc .fc-toolbar-title {
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.dashMiniCal .fc .fc-button {
+    border: none !important;
+    background: #f1faf3 !important;
+    color: #2c6b40 !important;
+    font-weight: 900 !important;
+    border-radius: 10px !important;
+    padding: 5px 9px !important;
+    box-shadow: none !important;
+}
+
+.dashMiniCal .fc .fc-col-header-cell-cushion {
+    font-size: 10px;
+    font-weight: 900;
+    color: #2c6b40;
+    padding: 4px 0;
+}
+
+.dashMiniCal .fc .fc-daygrid-day-top {
+    position: relative;
+    justify-content: flex-start;
+}
+
+.dashMiniCal .fc .fc-daygrid-day-number {
+    font-weight: 900;
+    font-size: 12px;
+    padding: 4px 6px;
+    line-height: 1;
+    color: #111;
+}
+
+.dashMiniCal .fc .fc-day-sun .fc-daygrid-day-number { color: #ef4444; }
+.dashMiniCal .fc .fc-day-sat .fc-daygrid-day-number { color: #2563eb; }
+
+/* =========================
+   ✅ 점 + 툴팁
+========================= */
+.dashDotWrap {
+    position: absolute;
+    left: 8px;
+    top: 22px;
+    display: inline-flex;
+    align-items: center;
+    z-index: 5;
+}
+
+.dashDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #2c6b40;
+    box-shadow: 0 0 0 2px rgba(44, 107, 64, 0.12);
+}
+
+.dashTip {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    min-width: 180px;
+    max-width: 220px;
+    background: #ffffff;
+    border: 1px solid #e6eee1;
+    border-radius: 10px;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.10);
+    padding: 10px 10px 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+.dashDotWrap.isOpen .dashTip {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.dashTipTitle { font-size: 12px; font-weight: 900; color: #111; margin-bottom: 6px; }
+.dashTipItem { font-size: 12px; font-weight: 700; color: #374151; line-height: 1.35; }
+.dashTipMore { margin-top: 6px; font-size: 11px; font-weight: 900; color: #2c6b40; }
+
+/* =========================
+   ✅ 월별 일정 목록 카드(하단 오른쪽)
+========================= */
+.dashCalendarBottom {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dashMonthBadge {
+    font-size: 12px;
+    font-weight: 900;
+    color: #2c6b40;
+    background: #f1faf3;
+    padding: 6px 10px;
+    border-radius: 999px;
+}
+
+.dashListBody {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.table-list.dashCalListTight { margin-top: 8px; }
+
+.dashEmpty {
+    padding: 10px;
+    font-size: 13px;
+    color: #6e6e6e;
+}
+
+/* ===== 반응형 ===== */
+@media (max-width: 1100px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+      "study attendance"
+      "board assignment"
+      "calendarTop calendarTop"
+      "calendarBottom calendarBottom";
+    }
+}
+
+@media (max-width: 740px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+      "study"
+      "attendance"
+      "board"
+      "assignment"
+      "calendarTop"
+      "calendarBottom";
+    }
+    .progress-bar { width: 180px; }
+}
+
+/* ✅ 미니 달력에서 harness 높이 고정값 제거 -> 달력이 꽉 차게 */
+.dashMiniCal .fc-view-harness,
+.dashMiniCal .fc-view-harness-active {
+    height: auto !important;
+}
+
+.fc .fc-daygrid-body-natural .fc-daygrid-day-events {
+    margin-bottom: 0;
+}
+
+.dashStudy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dashboard-grid > * {
+    min-width: 0;
+}
+
+/* ✅ 전역(body) 툴팁 (Dashboard.js에서 생성) */
+.dashGlobalTip{
+    position: fixed;
+    z-index: 9999;
+    min-width: 180px;
+    max-width: 220px;
+    background: #ffffff;
+    border: 1px solid #e6eee1;
+    border-radius: 10px;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.10);
+    padding: 10px 10px 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+.dashGlobalTip.isOpen{
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* =========================
+   ✅ FINAL FIX (대시보드 스코프 한정 강제)
+   - 어떤 이유로든 row-text가 0 되면 여기서 최종적으로 잡힘
+========================= */
+.dashboard-container .table-list .trow{
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+.dashboard-container .table-list .tleft{
+    display: flex !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+.dashboard-container .table-list .row-text{
+    display: block !important;
+    flex: 1 1 0 !important;
+    min-width: 1px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #222 !important;
+}
+.dashboard-container .table-list .tright{
+    display: flex !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+}
+
+
+/* 결석 표시용(없으면 추가) */
+.status.bad {
+  background: #ffe9e9;
+  color: #d60000;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 출석률 progress가 width로 먹게(없으면 추가) */
+.rate-progress {
+  height: 100%;
+}

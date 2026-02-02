@@ -1,0 +1,94 @@
+.lms-header {
+    height: 64px;
+    padding: 0 24px;
+    background-color: #f6faf3;
+    border-bottom: 1px solid #e6eee1;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 왼쪽 */
+.lms-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-box {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    background-color: #97c793;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.lms-header-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+}
+
+.lms-header-text .title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+}
+
+.lms-header-text p {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* 오른쪽 */
+.lms-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: #6b7280;
+}
+
+.lms-header-right svg {
+    cursor: pointer;
+}
+
+.host-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background-color: #fef3c7;
+    border-radius: 12px;
+    border: 1px solid #fbbf24;
+}
+
+.host-badge .host-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: #92400e;
+}
+
+.profile {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #e5e7eb;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

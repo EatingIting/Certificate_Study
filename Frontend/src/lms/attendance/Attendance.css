@@ -1,0 +1,479 @@
+.at-page {
+    padding: 18px 18px 28px;
+}
+
+.at-card {
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(16, 24, 40, 0.08);
+    overflow: hidden;
+    border: 1px solid #eef1f5;
+
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.at-card-header {
+    background: #f7f9fc;
+    padding: 18px 22px;
+    border-bottom: 1px solid #eef1f5;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.at-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.at-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: #eaf7ee;
+    display: grid;
+    place-items: center;
+    color: #1f7a41;
+    border: 1px solid rgba(31, 122, 65, 0.15);
+}
+
+.at-icon img {
+    width: 24px;          /* 아이콘 크기 */
+    height: 24px;
+    object-fit: contain;  /* 비율 유지 */
+    display: block;
+    margin-left: 4px;
+}
+
+
+.at-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #101828;
+}
+
+.at-subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: #667085;
+}
+
+.at-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.at-action-btn {
+    border: 1px solid #e7ebf0;
+    background: #fff;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.at-action-btn:hover {
+    background: #f6f8fb;
+}
+
+.at-card-body {
+    padding: 18px 22px 22px;
+}
+
+.at-table-wrap {
+    border: 1px solid #eef1f5;
+    border-radius: 10px;
+    overflow: auto;
+    background: #fff;
+}
+
+.at-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 920px;
+}
+
+.at-table thead th {
+    text-align: center;
+    font-size: 13px;
+    color: #667085;
+    background: #f7f9fc;
+    padding: 14px 14px;
+    font-weight: 800;
+    border-bottom: 1px solid #eef1f5;
+    white-space: nowrap;
+}
+
+.at-table tbody td {
+    padding: 14px 14px;
+    border-top: 1px solid #eef1f5;
+    font-size: 14px;
+    color: #101828;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* column sizing */
+.at-th-att {
+    width: 260px;
+}
+.at-th-num,
+.at-td-num {
+    width: 70px;
+    text-align: center;
+}
+.at-th-session,
+.at-td-session {
+    width: 58px;
+    text-align: center;
+    justify-content: center;
+}
+
+/* name cell */
+.at-person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.at-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #caa87a, #9a6b3f);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.at-name {
+    font-weight: 700;
+    margin: 0 auto;
+}
+
+/* progress */
+
+.at-td-att{
+    text-align: center;
+}
+
+.at-progress {
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.at-bar {
+    width: 160px;
+    height: 12px;
+    border-radius: 999px;
+    background: #e7ebf0;
+    overflow: hidden;
+}
+
+.at-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: #8ccf9a;
+}
+
+.at-progress-text {
+    font-size: 13px;
+    color: #667085;
+    font-weight: 800;
+}
+
+/* marks (출석/결석 only) */
+.at-mark {
+    display: inline-flex;
+    width: 34px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    font-weight: 900;
+    border: 1px solid #eef1f5;
+    background: #fff;
+    color: #667085;
+}
+
+.at-mark.is-ok {
+    background: #eaf7ee;
+    border-color: rgba(31, 122, 65, 0.2);
+    color: #1f7a41;
+}
+
+.at-mark.is-absent {
+    background: #fff1f3;
+    border-color: rgba(233, 68, 75, 0.18);
+    color: #c01048;
+}
+
+/* legend */
+.at-hint {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom:10px
+}
+
+.at-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #eef1f5;
+    background: #fff;
+    color: #667085;
+    margin-bottom: 20px;
+}
+
+.at-chip--ok {
+    background: #eaf7ee;
+    color: #1f7a41;
+    border-color: rgba(31, 122, 65, 0.2);
+}
+
+.at-chip--absent {
+    background: #fff1f3;
+    color: #c01048;
+    border-color: rgba(233, 68, 75, 0.18);
+}
+
+.at-chip--rule {
+    background: #f6f8fb;
+    color: #475467;
+}
+
+.at-empty {
+    text-align: center;
+    padding: 26px 16px;
+    color: #667085;
+}
+
+/* 요약 영역 */
+.at-summary {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr; /* 출석률을 좀 더 넓게 */
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.at-summary-item {
+  background: #f8f9fb;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.at-summary-item--wide {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.at-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.at-summary-label {
+  font-size: 12px;
+  color: #888;
+}
+
+.at-summary-count {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.at-summary-value {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+/* ✅ 출석률 Progress Bar */
+.at-progressbar {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #e9edf3;         /* 트랙(회색) */
+  overflow: hidden;
+}
+
+.at-progressbar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #7fd08a;         /* 채움(초록) */
+  width: 0%;
+  transition: width 250ms ease;
+}
+
+.at-progressbar-sub {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -2px;
+}
+
+.at-progressbar-sub .at-summary-value {
+  font-size: 14px; /* 출석률 %는 작게 */
+  font-weight: 800;
+  color: #374151;
+}
+
+
+/* Attendance.css에 아래만 추가(또는 교체) */
+
+/* ===== 출석 요약 ===== */
+.at-summary {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0 20px;
+}
+
+.at-summary-item {
+  background: #f8f9fb;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.at-summary-item--wide {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.at-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.at-summary-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.at-summary-count {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.at-summary-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+}
+
+/* ===== 출석률 Progress Bar ===== */
+.at-progressbar {
+  width: 100%;
+  height: 12px;
+  background: #e5eaf0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.at-progressbar-fill {
+  height: 100%;
+  background: #7fd08a;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.at-progressbar-sub {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.at-progressbar-sub .at-summary-value {
+  font-size: 14px;
+}
+
+/* ===== 출석여부 뱃지 ===== */
+.at-badge {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.at-badge.is-ok {
+  background: rgba(46, 204, 113, 0.15);
+}
+
+.at-badge.is-absent {
+  background: rgba(231, 76, 60, 0.15);
+}
+
+.at-td-muted {
+  opacity: 0.7;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+
+/* ===== 3분할 요약 ===== */
+.at-summary-item--triple {
+  padding: 16px 18px;
+}
+
+.at-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  text-align: center;
+  gap: 8px;
+}
+
+.at-summary-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.at-summary-big {
+  font-size: 22px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.at-summary-big.is-ok {
+  color: #111827;
+}
+
+.at-summary-big.is-absent {
+  color: #111827;
+}
+
+.at-td-status {
+  text-align: center;
+}
+
+.at-td-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 회차 / 날짜 / 상태 전부 가운데 정렬 */
+.at-td-sessionno,
+.at-td-date,
+.at-td-status {
+  text-align: center;
+}
+

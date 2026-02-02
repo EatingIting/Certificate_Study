@@ -1,0 +1,8 @@
+.vscode/
+.idea/
+.env
+.claude/
+node_modules/
+
+# Spring Boot - 비밀/설정 제외 (로컬만 사용)
+Backend/src/main/resources/application.properties

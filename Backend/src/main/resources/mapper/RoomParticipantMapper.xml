@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.roomparticipant.RoomParticipantMapper">
+
+    <!-- 방장 이메일 -->
+    <select id="selectHostEmail" resultType="string">
+        SELECT host_user_email
+        FROM room
+        WHERE room_id = #{roomId}
+    </select>
+
+    <!-- 같은 room_id에서 status='승인'인 request_user_email 목록 (users 조인) -->
+    <select id="selectApprovedParticipants" resultType="com.example.demo.roomparticipant.RoomParticipantVO">
+        SELECT
+            u.user_id      AS userId,
+            u.email        AS email,
+            u.name         AS name,
+            /* ✅ 방별 닉네임이 있으면 그 값을 우선 사용 */
+            COALESCE(rjr.request_user_nickname, u.nickname) AS nickname,
+            u.profile_img  AS profileImg,
+            rjr.requested_at AS joinedAt
+        FROM room_join_request rjr
+                 JOIN users u
+                      ON u.email = rjr.request_user_email
+        WHERE rjr.room_id = #{roomId}
+          AND rjr.status = '승인'
+        ORDER BY rjr.requested_at DESC
+    </select>
+
+    <!-- 이메일로 유저 조회(호스트 보장용) - 기존 용도 유지 -->
+    <select id="selectUserByEmail" resultType="com.example.demo.roomparticipant.RoomParticipantVO">
+        SELECT
+            u.user_id      AS userId,
+            u.email        AS email,
+            u.name         AS name,
+            u.nickname     AS nickname,
+            u.profile_img  AS profileImg,
+            NULL           AS joinedAt
+        FROM users u
+        WHERE u.email = #{email}
+    </select>
+
+    <!-- 방장 정보 조회: 방별 닉네임 우선
+         - room_join_request에 행이 있으면 request_user_nickname
+         - 없으면 room.hostUserNickname
+         - 둘 다 없으면 users.nickname -->
+    <select id="selectHostParticipant" resultType="com.example.demo.roomparticipant.RoomParticipantVO">
+        SELECT
+            u.user_id AS userId,
+            u.email   AS email,
+            u.name    AS name,
+            COALESCE(rjr.request_user_nickname, rm.hostUserNickname, u.nickname) AS nickname,
+            u.profile_img AS profileImg,
+            NULL AS joinedAt
+        FROM room rm
+                 JOIN users u
+                      ON u.email = rm.host_user_email
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = rm.room_id
+                               AND rjr.request_user_email = rm.host_user_email
+                               AND rjr.status = '승인'
+        WHERE rm.room_id = #{roomId}
+        LIMIT 1
+    </select>
+
+    <!-- userId -> email -->
+    <select id="selectEmailByUserId" resultType="string">
+        SELECT email
+        FROM users
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 승인 멤버인지 -->
+    <select id="countApprovedByEmail" resultType="int">
+        SELECT COUNT(*)
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{email}
+          AND status = '승인'
+    </select>
+
+    <!-- 강퇴/탈퇴: 승인행 삭제 -->
+    <delete id="deleteApprovedByEmail">
+        DELETE FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND request_user_email = #{email}
+          AND status = '승인'
+    </delete>
+
+    <!-- 방장 위임 -->
+    <update id="updateHostEmail">
+        UPDATE room
+        SET host_user_email = #{newHostEmail}
+        WHERE room_id = #{roomId}
+    </update>
+
+    <!-- 스터디장 위임 후 이전 방장을 스터디원(승인)으로 유지 -->
+    <insert id="insertApprovedMember">
+        INSERT INTO room_join_request (
+            join_id,
+            room_id,
+            request_user_email,
+            host_user_email,
+            request_user_nickname,
+            status,
+            apply_message,
+            requested_at
+        )
+        VALUES (
+            UUID(),
+            #{roomId},
+            #{requestUserEmail},
+            #{hostUserEmail},
+            #{requestUserNickname},
+            '승인',
+            '',
+            NOW()
+        )
+    </insert>
+
+</mapper>

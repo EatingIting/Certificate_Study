@@ -1,0 +1,500 @@
+/* 컨텐츠 영역에 들어가는 마이페이지 */
+.mypage-wrap {
+  padding: 26px 10px;
+}
+
+.mypage-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 6px 0 18px;
+  color: #111;
+}
+
+.mypage-card {
+  background: #fff;
+  border: 1px solid #eef1ee;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.04);
+  overflow: hidden;
+}
+
+/* 섹션 공통 */
+.section {
+  padding: 22px 22px;
+  border-top: 1px solid #f2f4f2;
+}
+
+.section:first-child {
+  border-top: none;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.section-head h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: #111;
+}
+
+.sub-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  color: #111;
+}
+
+/* 프로필 */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.avatar-box {
+  background: #f4faf6;
+  border: 1px solid #e9f1ec;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.avatar {
+  width: 140px;
+  height: 140px;
+  border-radius: 14px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.profile-box {
+  border: 1px solid #eef1ee;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.profile-col {
+  display: grid;
+  gap: 10px;
+}
+
+.divider {
+  width: 1px;
+  background: #eef1ee;
+  align-self: stretch;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.k {
+  color: #667085;
+  font-size: 13px;
+}
+
+.v {
+  color: #111;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.kv-bio .v {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* 관심 자격증 */
+.cert-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cert-input input {
+  width: 260px;
+  max-width: 52vw;
+  border: 1px solid #e9eeea;
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+  font-size: 14px;
+}
+
+.cert-input input:focus {
+  border-color: #97c793;
+  box-shadow: 0 0 0 3px rgba(151, 199, 147, 0.18);
+}
+
+.chip-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #eef7ef;
+  border: 1px solid #dcebdc;
+  color: #1f3b25;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.chip-x {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #4a7a54;
+}
+
+/* 스터디 */
+.study-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+.study-col {
+  border-top: 1px solid #f2f4f2;
+  padding-top: 14px;
+}
+
+.study-item {
+  border: 1px solid #eef1ee;
+  border-radius: 12px;
+  padding: 14px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff;
+  margin-bottom: 12px;
+}
+
+.study-left {
+  display: grid;
+  gap: 6px;
+}
+
+.study-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111;
+}
+
+.study-sub {
+  font-size: 13px;
+  color: #667085;
+  font-weight: 600;
+}
+
+.study-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 배지 */
+.badge {
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.badge-green {
+  background: #eaf6ea;
+  color: #2a6b33;
+  border-color: #cfe8d0;
+}
+
+.badge-gray {
+  background: #f3f4f6;
+  color: #475467;
+  border-color: #e4e7ec;
+}
+
+/* 버튼 */
+.btn {
+  border: none;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.btn-ghost {
+  background: #eef7ef;
+  color: #2a6b33;
+  border: 1px solid #dcebdc;
+}
+
+.btn-soft {
+  background: #97c793;
+  color: #fff;
+}
+
+.btn-gray {
+  background: #f2f4f7;
+  color: #344054;
+  border: 1px solid #eaecf0;
+}
+
+.btn-mini {
+  padding: 8px 10px;
+  font-size: 12px;
+  background: #f2f4f7;
+  border: 1px solid #eaecf0;
+  color: #344054;
+}
+
+.btn-mini:hover,
+.btn-gray:hover {
+  filter: brightness(0.98);
+}
+
+.btn-soft:hover {
+  filter: brightness(0.96);
+}
+
+.withdraw-row {
+  display: flex;
+  justify-content: center;
+  padding-top: 14px;
+}
+
+.btn-danger {
+  background: #fff5f5;
+  border: 1px solid #ffd6d6;
+  color: #d92d20;
+  padding: 12px 18px;
+  border-radius: 12px;
+}
+
+/* empty */
+.empty,
+.empty-box {
+  color: #667085;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.empty-box {
+  border: 1px dashed #e4e7ec;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fafafa;
+}
+
+/* 모달 */
+.modal-dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 18px;
+}
+
+.modal {
+  width: 900px;
+  max-width: 95vw;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #eef1ee;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.modal-head {
+  padding: 16px 18px;
+  border-bottom: 1px solid #f2f4f2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.modal-body {
+  padding: 16px 18px;
+  max-height: 55vh;          /* ⭐ 핵심 */
+  overflow-y: auto;          /* ⭐ 넘치면 스크롤 */
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.field span {
+  font-size: 12px;
+  color: #667085;
+  font-weight: 700;
+  text-align: left;
+}
+
+.field input,
+.field textarea,
+.field select {
+  border: 1px solid #e9eeea;
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+  font-size: 14px;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: #97c793;
+  box-shadow: 0 0 0 3px rgba(151, 199, 147, 0.18);
+}
+
+.field-full {
+  grid-column: auto;
+}
+
+.modal-foot {
+  border-top: 1px solid #f2f4f2;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* 모달 */
+.modal-dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 18px;
+}
+
+.modal {
+  width: 600px !important;
+  max-width: 95vw !important;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #eef1ee;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+
+.profile-upload {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.preview-img {
+  width: 150px;
+  height: 150px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid #e4e7ec;
+  background: #fafafa;
+}
+
+.upload-btn {
+  background: #eef7ef;
+  color: #2a6b33;
+  border: 1px solid #dcebdc;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+}
+.badge-blue {
+  background: #3b82f6;
+  color: white;
+  margin-left: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.interest-row {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.interest-row select {
+  width: 160px;
+  border: 1px solid #e9eeea;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #fff;
+}
+
+.interest-row select:focus {
+  border-color: #97c793;
+  box-shadow: 0 0 0 3px rgba(151, 199, 147, 0.18);
+}
+
+.interest-row button {
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+}
