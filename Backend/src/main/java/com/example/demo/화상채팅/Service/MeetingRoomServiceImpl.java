@@ -105,14 +105,19 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             }
         }
 
-        // schedule_id: 스터디 일정 시간대 안에 들어왔을 때만 해당 회차, 그 외에는 null
+        // schedule_id: 스터디 일정 시간대 안에 들어왔을 때 해당 회차, 그 외에는 오늘 회차 조회/생성 (meeting_room.schedule_id NOT NULL 대응)
         Long safeScheduleId = null;
         if (!safeSubjectId.isEmpty()) {
             safeScheduleId = studyScheduleService.findActiveScheduleIdByCurrentTime(safeSubjectId);
             if (safeScheduleId != null) {
                 log.info("[MeetingRoomServiceImpl] 현재 시간대 회차 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
             } else {
-                log.info("[MeetingRoomServiceImpl] 스터디 일정 시간대가 아님 → schedule_id=null");
+                try {
+                    safeScheduleId = studyScheduleService.getOrCreateTodayScheduleId(safeSubjectId);
+                    log.info("[MeetingRoomServiceImpl] 일정 시간대 아님 → 오늘 회차 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
+                } catch (Exception e) {
+                    log.warn("[MeetingRoomServiceImpl] 오늘 회차 조회/생성 실패 → schedule_id=null: {}", e.getMessage());
+                }
             }
         }
 
@@ -125,9 +130,22 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             Optional<MeetingRoom> existingRoom = meetingRoomRepository.findById(id);
 
             if (existingRoom.isEmpty()) {
-                MeetingRoom room = new MeetingRoom(roomId, userEmail, safeSubjectId, safeScheduleId);
-                meetingRoomRepository.save(room);
-                log.info("[MeetingRoomServiceImpl] meeting_room 저장 완료 (schedule_id={})", safeScheduleId);
+                // DB의 meeting_room.schedule_id가 NOT NULL이면 null 불가 → 오늘 회차로 보정
+                Long scheduleIdForRoom = safeScheduleId;
+                if (scheduleIdForRoom == null) {
+                    try {
+                        scheduleIdForRoom = studyScheduleService.getOrCreateTodayScheduleId(safeSubjectId);
+                    } catch (Exception e) {
+                        log.warn("[MeetingRoomServiceImpl] meeting_room 저장 전 schedule_id 보정 실패: {}", e.getMessage());
+                    }
+                }
+                if (scheduleIdForRoom == null) {
+                    log.warn("[MeetingRoomServiceImpl] schedule_id를 확보할 수 없어 meeting_room 저장 건너뜀 (입장은 계속됨)");
+                } else {
+                    MeetingRoom room = new MeetingRoom(roomId, userEmail, safeSubjectId, scheduleIdForRoom);
+                    meetingRoomRepository.save(room);
+                    log.info("[MeetingRoomServiceImpl] meeting_room 저장 완료 (schedule_id={})", scheduleIdForRoom);
+                }
             } else {
                 MeetingRoom room = existingRoom.get();
                 room.rejoin();
