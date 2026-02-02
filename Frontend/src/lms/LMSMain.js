@@ -16,7 +16,20 @@ const LMSMain = () => {
     useEffect(() => {
         api.get("/classrooms/my")
             .then((res) => {
-                setClassList(res.data);
+                const raw = res.data || [];
+                // roomId 기준 중복 제거 (스터디장 양도 후 같은 클래스룸 2개 보이는 현상 방지)
+                const seen = new Set();
+                const deduped = raw.filter((item) => {
+                    const id = item.roomId;
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+                // 가나다순 정렬 (제목 기준)
+                const list = [...deduped].sort((a, b) =>
+                    (a.title || "").localeCompare(b.title || "", "ko")
+                );
+                setClassList(list);
             })
             .catch((err) => {
                 console.error("클래스룸 불러오기 실패", err);

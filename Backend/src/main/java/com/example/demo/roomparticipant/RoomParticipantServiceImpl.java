@@ -24,9 +24,11 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 스터디룸입니다.");
         }
 
-        // ✅ 방장만 접근
-        if (!hostEmail.equals(myEmail)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "방장만 접근할 수 있습니다.");
+        // ✅ 스터디 소속(방장 또는 승인 멤버)만 접근 가능
+        boolean isHost = hostEmail.equals(myEmail);
+        int approvedCount = mapper.countApprovedByEmail(roomId, myEmail);
+        if (!isHost && approvedCount == 0) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "스터디원만 접근할 수 있습니다.");
         }
 
         List<RoomParticipantVO> approved = mapper.selectApprovedParticipants(roomId);
@@ -59,9 +61,10 @@ public class RoomParticipantServiceImpl implements RoomParticipantService {
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
 
+        String myRole = isHost ? "OWNER" : "MEMBER";
         return new RoomParticipantListResponse(
                 roomId,
-                "OWNER",
+                myRole,
                 items.size(),
                 items);
     }

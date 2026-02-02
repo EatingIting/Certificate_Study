@@ -4,24 +4,6 @@ import api from "../../api/api";
 
 import "./AttendanceAll.css";
 
-/**
- * ✅ 백엔드 응답 형태(권장)
- *
- * {
- *   studySchedule: { start, end, requiredRatio, totalSessions },
- *   attendanceLogs: [
- *     {
- *       memberId: "user@email.com",
- *       name: "닉네임(김***)",
- *       sessions: [
- *         { sessionNo: 1, studyDate: "2026-01-19", joinAt: "...", leaveAt: "..." },
- *         ...
- *       ]
- *     }
- *   ]
- * }
- */
-
 // ------- utils -------
 const toMs = (iso) => {
   if (!iso) return 0;
@@ -114,7 +96,7 @@ const AttendanceAll = () => {
         const sessionNo = idx + 1;
         const log = byNo.get(sessionNo);
 
-        // 로그 없으면 결석 처리(정책)
+        // 로그 없으면 결석 처리. 있으면 회차별 일정 시간(startTime/endTime)으로 totalMin 계산 후 판정
         const judged = log
           ? judgeAttendance(log, totalMin, studySchedule.requiredRatio)
           : { attendedMin: 0, ratio: 0, isPresent: false };

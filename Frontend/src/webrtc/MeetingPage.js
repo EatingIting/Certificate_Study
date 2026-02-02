@@ -65,18 +65,29 @@ const UserAvatar = ({ name, size = "md", src }) => {
 // 🔥 전역 프레임 캐시 - VideoTile 리마운트 시에도 마지막 프레임 유지 (PIP 모드 깜빡임 방지)
 const globalFrameCache = new Map(); // peerId -> { imageData, width, height, timestamp }
 
-// 🔥 동일 비디오 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면 방지
+// 🔥 동일 비디오/오디오 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면 방지
+// 🔥 오디오 트랙이 추가되면 새 stream 참조 반환 → 원격 참가자 speaking 감지를 위해 필요
 function getStableStreamRef(oldStream, newStream) {
     if (!oldStream || !newStream) return newStream;
     const oldV = oldStream.getVideoTracks?.()?.[0];
     const newV = newStream.getVideoTracks?.()?.[0];
     if (!oldV || !newV) return newStream;
-    if (oldV.id === newV.id) return oldStream;
-    return newStream;
+    // 비디오 트랙이 다르면 새 stream 반환
+    if (oldV.id !== newV.id) return newStream;
+
+    // 🔥 오디오 트랙 확인: 새 스트림에 오디오가 있는데 기존에는 없으면 새 stream 반환
+    // 이래야 VideoTile에서 오디오 분석 effect가 다시 실행됨
+    const oldA = oldStream.getAudioTracks?.()?.[0];
+    const newA = newStream.getAudioTracks?.()?.[0];
+    if (newA && (!oldA || oldA.id !== newA.id)) {
+        return newStream;
+    }
+
+    return oldStream;
 }
 
 // VideoTile 내부에서 오디오 레벨을 직접 감지
-const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false, videoRef, isFilterPreparing = false, isBrowserPipMode = false }) => {
+const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomReconnecting = false, videoRef, isFilterPreparing = false, isBrowserPipMode = false, onSpeakingChange }) => {
     const internalVideoRef = useRef(null);
     const videoEl = internalVideoRef;
 
@@ -85,7 +96,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         if (videoRef) videoRef.current = el;
     };
 
-    const [isSpeakingLocally, setIsSpeakingLocally] = useState(false);
+
 
     // 🔥 Canvas 기반 렌더링을 위한 ref (검은화면/흰화면 깜빡임 방지)
     const displayCanvasRef = useRef(null);
@@ -171,119 +182,10 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         return canShowVideo;
     }, [stream, isScreen, safeUser.cameraOff, safeUser.isMe, isFilterPreparing, canShowVideo]);
 
-    // ✅ 오디오 레벨 감지(원격용)
-    // - 상대방도 말할 때 speaking이 true가 되어 파란 테두리가 뜨도록
-    // - AudioContext는 공유 + 샘플링은 저주파(120ms)로 렉 최소화
-    useEffect(() => {
-        if (!stream) {
-            setIsSpeakingLocally(false);
-            return;
-        }
+    // 스트림의 오디오 트랙 목록이 바뀔 때 effect 재실행 (오디오가 나중에 합쳐져도 분석 시작)
+    // A화면에서 B 타일이 안 빛나는 오류: B 스트림이 비디오만 있다가 오디오가 나중에 붙으면 stream 참조는 그대로라 effect가 안 돌아감
 
-        // 나는 기존 로컬 분석/상태로 처리 (중복 분석 방지)
-        if (safeUser.isMe) return;
-
-        // 서버에서 muted=true면 speaking 표시 안 함 (불필요한 분석도 스킵)
-        if (safeUser.muted) {
-            setIsSpeakingLocally(false);
-            return;
-        }
-
-        const audioTrack =
-            stream.getAudioTracks().find((t) => t.readyState === "live") || null;
-        if (!audioTrack) {
-            setIsSpeakingLocally(false);
-            return;
-        }
-
-        const ctx = getSharedAudioContext();
-        if (!ctx) return;
-
-        // 한 stream을 여러 source로 붙일 때 이슈가 날 수 있어 track-only stream 사용
-        const trackOnlyStream = new MediaStream([audioTrack]);
-
-        let source = null;
-        let analyser = null;
-        let timer = null;
-        let offTimer = null;
-
-        try {
-            analyser = ctx.createAnalyser();
-            analyser.fftSize = 256;
-            source = ctx.createMediaStreamSource(trackOnlyStream);
-            source.connect(analyser);
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            let last = false; // 현재 speaking 상태
-            let onStable = 0;
-            let ema = 0; // exponential moving average for smoothing
-
-            // 튜닝 파라미터(뚝뚝 끊김 방지)
-            const EMA_ALPHA = 0.25;   // 0~1 (클수록 반응 빠름)
-            const ON_TH = 20;         // 켜질 임계값
-            const OFF_TH = 14;        // 꺼질 임계값(히스테리시스)
-            const HOLD_OFF_MS = 650;  // 말 멈춤 직후 유지(ms)
-
-            timer = setInterval(() => {
-                try {
-                    analyser.getByteFrequencyData(dataArray);
-                } catch {
-                    return;
-                }
-
-                const avg = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length;
-                // EMA로 부드럽게(짧은 무음/변동에 덜 흔들림)
-                ema = ema === 0 ? avg : (ema * (1 - EMA_ALPHA) + avg * EMA_ALPHA);
-
-                // 히스테리시스: 켤 때/끌 때 임계값 분리
-                const aboveOn = ema > ON_TH;
-                const belowOff = ema < OFF_TH;
-
-                if (aboveOn) {
-                    // speaking ON: 빠르게 켜기 + OFF hold 타이머 취소
-                    if (offTimer) {
-                        clearTimeout(offTimer);
-                        offTimer = null;
-                    }
-                    if (!last) {
-                        onStable += 1;
-                        if (onStable >= 2) {
-                            last = true;
-                            onStable = 0;
-                            setIsSpeakingLocally(true);
-                        }
-                    } else {
-                        onStable = 0;
-                    }
-                    return;
-                }
-
-                // below threshold (or between ON/OFF band)
-                onStable = 0;
-                if (!last) return;
-
-                // speaking OFF: OFF_TH 아래로 내려갔을 때만 hold 후 끄기
-                if (belowOff && !offTimer) {
-                    offTimer = setTimeout(() => {
-                        last = false;
-                        offTimer = null;
-                        setIsSpeakingLocally(false);
-                    }, HOLD_OFF_MS);
-                }
-            }, 120);
-        } catch {
-            setIsSpeakingLocally(false);
-            return;
-        }
-
-        return () => {
-            if (timer) clearInterval(timer);
-            if (offTimer) clearTimeout(offTimer);
-            try { source?.disconnect?.(); } catch { }
-            try { analyser?.disconnect?.(); } catch { }
-            setIsSpeakingLocally(false);
-        };
-    }, [stream, safeUser.isMe, safeUser.muted]);
+    // ✅ VideoTile은 이제 순수하게 렌더링만 담당 (오디오 분석은 상위 MeetingPage에서 수행)
 
     // 🔥 stream 참조를 추적하여 변경 감지 강화
     const streamIdRef = useRef(null);
@@ -615,7 +517,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
         };
     }, [displayStream, shouldRenderVideo, displayStreamId]);
 
-    const isSpeaking = safeUser.speaking || isSpeakingLocally;
+    const isSpeaking = !!safeUser.speaking;
     const isJoining = safeUser.isJoining;
     const isReconnecting = safeUser.isReconnecting;
 
@@ -728,6 +630,7 @@ function MeetingPage({ portalRoomId }) {
     const params = useParams();
     const [searchParams] = useSearchParams();
     const location = useLocation();
+
     const navigate = useNavigate();
     const loggedRef = useRef(false);
 
@@ -4297,7 +4200,10 @@ function MeetingPage({ portalRoomId }) {
 
     const consumeProducer = async (producerId, fallbackPeerId, targetAppData) => {
         if (!producerId) return;
-        if (String(fallbackPeerId) === String(userIdRef.current)) return;
+        const myId = String(userIdRef.current);
+        const peerIdStr = String(fallbackPeerId ?? "");
+        // 본인 producer는 consume하지 않음 (유령 유저 방지). 서버가 짧은 id(예: f472)를 보낸 경우도 처리
+        if (peerIdStr === myId || (peerIdStr.length >= 4 && myId.startsWith(peerIdStr))) return;
         if (consumersRef.current.has(producerId)) return;
 
         const device = sfuDeviceRef.current;
@@ -4353,7 +4259,7 @@ function MeetingPage({ portalRoomId }) {
                     producerId,
                     kind,
                     rtpParameters,
-                    appData: { ...finalAppData },
+                    appData: { ...finalAppData, peerId }, // ✅ peerId 추가 - 오디오 모니터링에서 사용
                 });
 
                 // ✅ producerId 기준으로 consumer 저장(기존 방식 유지)
@@ -4382,7 +4288,13 @@ function MeetingPage({ portalRoomId }) {
                     peerStreamsRef.current.set(peerId, next);
                     mergedCameraStream = next;
 
-                    // console.log(`[consumer] Merged stream for peer ${peerId}: videoTracks=${next.getVideoTracks().length}, audioTracks=${next.getAudioTracks().length}`);
+                    // 🔥 디버그: consumer 스트림 상태 확인
+                    console.log(`[consume] Peer ${peerId} - kind: ${kind}, merged stream:`, {
+                        videoTracks: next.getVideoTracks().length,
+                        audioTracks: next.getAudioTracks().length,
+                        audioTrackIds: next.getAudioTracks().map(t => t.id),
+                        audioTrackStates: next.getAudioTracks().map(t => t.readyState),
+                    });
                 } else {
                     // ✅ 화면공유는 "항상 새 MediaStream"으로 만들어 리렌더 강제
                     screenStream = new MediaStream([consumer.track]);
@@ -4393,6 +4305,10 @@ function MeetingPage({ portalRoomId }) {
 
                 setParticipants((prev) => {
                     const idx = prev.findIndex((p) => String(p.id) === String(peerId));
+                    const isMe = String(peerId) === String(userIdRef.current);
+
+                    // 🔥 본인 producer에 대한 consumer는 타일 추가하지 않음 (유령 유저 User-xxxx 방지)
+                    if (idx === -1 && isMe) return prev;
 
                     // 신규 참가자
                     if (idx === -1) {
@@ -4425,13 +4341,15 @@ function MeetingPage({ portalRoomId }) {
                     const next = [...prev];
                     const p = next[idx];
 
-                    // 🔥 camera일 때 동일 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면 방지
-                    const cameraStream = isScreen ? p.stream : getStableStreamRef(p.stream, mergedCameraStream);
+                    // 🔥 핵심 수정: consumer가 들어올 때는 항상 mergedCameraStream 사용
+                    // peerStreamsRef에 저장된 최신 스트림에는 오디오 트랙이 포함되어 있음
+                    // getStableStreamRef가 오디오 트랙을 놓치는 경우가 있어서 직접 사용
+                    const cameraStream = isScreen ? p.stream : mergedCameraStream;
 
                     next[idx] = {
                         ...p,
 
-                        // ✅ screen이면 stream 건드리지 않음, camera면 stream 갱신(동일 트랙 시 참조 유지)
+                        // ✅ screen이면 stream 건드리지 않음, camera면 최신 stream 사용
                         stream: isScreen ? p.stream : cameraStream,
 
                         // ✅ screen이면 screenStream 갱신(항상 새 객체), 아니면 유지
@@ -5299,15 +5217,18 @@ function MeetingPage({ portalRoomId }) {
         const audioTrack = localStream.getAudioTracks()[0];
         if (!audioTrack) return;
 
-        const audioContext = new AudioContext();
-        const source = audioContext.createMediaStreamSource(localStream);
-        const analyser = audioContext.createAnalyser();
+        // ✅ 공유 AudioContext 사용 (suspended 방지·리소스 절약), 브라우저 정책으로 인한 말하기 감지 실패 방지
+        const ctx = getSharedAudioContext();
+        if (!ctx) return;
+        const source = ctx.createMediaStreamSource(localStream);
+        const analyser = ctx.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser);
         const data = new Uint8Array(analyser.frequencyBinCount);
 
         let speaking = false;
         const checkVolume = () => {
+            if (ctx.state === "suspended") ctx.resume().catch(() => { });
             analyser.getByteFrequencyData(data);
             const avg = data.reduce((sum, v) => sum + v, 0) / data.length;
             if (avg > 20) {
@@ -5324,7 +5245,9 @@ function MeetingPage({ portalRoomId }) {
             requestAnimationFrame(checkVolume);
         };
         checkVolume();
-        return () => audioContext.close();
+        return () => {
+            try { source.disconnect(); analyser.disconnect(); } catch { }
+        };
     }, [localStream]);
 
     useEffect(() => {
@@ -5517,8 +5440,9 @@ function MeetingPage({ portalRoomId }) {
                             const isOfflineFromServer = u.online === false;
 
                             // 스트림 복구 (React 상태 갱신 전 Ref 확인)
+                            // 🔥 refStream(peerStreamsRef)을 우선 사용: 오디오 트랙이 나중에 추가된 경우를 반영
                             const refStream = peerStreamsRef.current.get(peerId);
-                            const currentStream = old?.stream || refStream || null;
+                            const currentStream = refStream || old?.stream || null;
 
                             // 🔥 최우선 보호 규칙: live stream이 있으면 무조건 유지 (PIP 모드 전환 시 깜빡임 방지)
                             // 단, 서버가 online=false(재접속 중)로 보낸 유저는 live여도 재접속 스피너 표시
@@ -5526,8 +5450,8 @@ function MeetingPage({ portalRoomId }) {
                                 const hasLiveStream = currentStream.getVideoTracks().some(t => t.readyState === "live");
                                 if (hasLiveStream) {
                                     // live stream이 있으면 재접속 상태로 표시하지 않고 스트림 유지
-                                    // 🔥 동일 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면 방지
-                                    const stableStream = getStableStreamRef(old?.stream, currentStream);
+                                    // 🔥 핵심 수정: peerStreamsRef의 최신 스트림(currentStream) 직접 사용
+                                    // 오디오 트랙이 포함된 스트림이 반영되도록 함
                                     return {
                                         ...old,
                                         id: peerId,
@@ -5540,7 +5464,7 @@ function MeetingPage({ portalRoomId }) {
                                         cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
                                         faceEmoji: u.faceEmoji != null ? u.faceEmoji : (old?.faceEmoji ?? null),
                                         bgRemove: typeof u.bgRemove === "boolean" ? u.bgRemove : (old?.bgRemove ?? false),
-                                        stream: stableStream,
+                                        stream: currentStream,
                                         screenStream: old?.screenStream ?? null,
                                         isScreenSharing: old?.isScreenSharing ?? false,
                                         reaction: old?.reaction ?? null,
@@ -5587,10 +5511,9 @@ function MeetingPage({ portalRoomId }) {
                             const shouldKeepStream = keepMediaWhileOffline || hasLiveStream || (old?.stream && old.stream.getVideoTracks().some(t => t.readyState === "live"));
 
                             // 🔥 핵심: live stream이 있으면 절대 null로 설정하지 않음 (검은 화면 방지)
-                            // 🔥 동일 트랙이면 기존 stream 참조 유지 → PiP 시 상대방 타일 검은화면/깜빡임 방지
-                            const rawFinal = hasLiveStream ? (currentStream || old?.stream || null) :
+                            // 🔥 핵심 수정: peerStreamsRef의 최신 스트림(currentStream) 직접 사용하여 오디오 트랙 포함 보장
+                            const finalStream = hasLiveStream ? (currentStream || old?.stream || null) :
                                 ((shouldShowReconnecting && !shouldKeepStream) ? null : (currentStream || old?.stream || null));
-                            const finalStream = rawFinal && old?.stream ? getStableStreamRef(old.stream, rawFinal) : rawFinal;
                             const finalScreenStream = hasLiveStream ? (old?.screenStream ?? null) :
                                 ((shouldShowReconnecting && !shouldKeepStream) ? null : (old?.screenStream ?? null));
                             const finalIsScreenSharing = hasLiveStream ? (old?.isScreenSharing ?? false) :
@@ -6035,6 +5958,14 @@ function MeetingPage({ portalRoomId }) {
             prev.map((p) => (p.isMe ? { ...p, speaking: isSpeaking } : p))
         );
     }, [isSpeaking]);
+
+    // 다른 참가자 타일에서 오디오 레벨로 감지한 speaking을 participants 상태에 반영 (파란 테두리 유지)
+    const handleSpeakingChange = useCallback((peerId, value) => {
+        if (peerId == null) return;
+        setParticipants((prev) =>
+            prev.map((p) => (String(p.id) === String(peerId) ? { ...p, speaking: !!value } : p))
+        );
+    }, []);
 
     // 2️⃣ SFU WebSocket (4000)
     useEffect(() => {
@@ -6502,6 +6433,232 @@ function MeetingPage({ portalRoomId }) {
         if (roomStartedAt == null) setElapsedTimeDisplay("00:00:00");
     }, [roomStartedAt]);
 
+    // participants 최신 상태를 ref로 추적 (interval 내부 접근용)
+    const participantsRef = useRef(participants);
+    useEffect(() => { participantsRef.current = participants; }, [participants]);
+
+    // ✅ 중앙 집중식 오디오 모니터링 (VideoTile 개별 분석 대신 통합 관리)
+    useEffect(() => {
+        const ctx = getSharedAudioContext();
+        if (!ctx) return;
+
+        // 분석기 상태 저장소: id -> { analyser, source, ema, lastSpeaking, holdOffTimer, trackId }
+        const peerAnalysers = new Map();
+
+        // 주기적 오디오 레벨 체크 (100ms)
+        const checkAudioLevels = () => {
+            if (ctx.state === "suspended") ctx.resume().catch(() => { });
+
+            // 1. 분석 대상 수집 (로컬 + 리모트)
+            const targets = [];
+
+            // 로컬 (내 스트림) — 말할 때 '나' 타일에 파란 speaking 표시
+            if (localStreamRef.current) {
+                // participants에 있는 '나'의 id와 반드시 일치시켜야 setParticipants 시 speaking이 올바른 타일에 반영됨
+                const meParticipant = participantsRef.current?.find(p => p.isMe);
+                const myId = meParticipant != null ? String(meParticipant.id) : (user?.id != null ? String(user.id) : String(userIdRef.current || ""));
+                if (myId) targets.push({ id: myId, stream: localStreamRef.current });
+            }
+
+            // 리모트: consumersRef에서 직접 오디오 consumer의 트랙을 가져옴
+            // peerStreamsRef가 비어있는 경우가 있어서 consumersRef를 사용하는 것이 더 안정적
+            const remoteAudioByPeerId = new Map(); // peerId -> MediaStream (오디오만)
+
+            consumersRef.current.forEach((consumer, producerId) => {
+                if (consumer.track?.kind !== "audio" || consumer.track?.readyState !== "live") return;
+                const peerId = consumer.appData?.peerId;
+                if (!peerId) return;
+
+                // 나 자신은 제외
+                if (String(peerId) === String(user?.id) || String(peerId) === String(userIdRef.current)) return;
+
+                // 이미 해당 peer의 오디오가 있으면 스킵 (첫 번째 오디오만 사용)
+                if (remoteAudioByPeerId.has(String(peerId))) return;
+
+                const audioStream = new MediaStream([consumer.track]);
+                remoteAudioByPeerId.set(String(peerId), audioStream);
+            });
+
+            remoteAudioByPeerId.forEach((stream, peerId) => {
+                targets.push({ id: peerId, stream });
+            });
+
+            // 폴백: peerStreamsRef나 participantsRef에만 있는 경우 (드문 케이스)
+            peerStreamsRef.current.forEach((stream, peerId) => {
+                if (remoteAudioByPeerId.has(String(peerId))) return; // 이미 추가됨
+                if (String(peerId) === String(user?.id)) return;
+                targets.push({ id: String(peerId), stream });
+            });
+
+            // 🔍 디버그: 분석 대상 확인 (5초마다 로그)
+            const shouldLog = Date.now() % 5000 < 150;
+            if (shouldLog) {
+                console.log('[Audio Debug] Targets:', targets.map(t => ({
+                    id: t.id,
+                    hasStream: !!t.stream,
+                    audioTracks: t.stream?.getAudioTracks()?.length || 0,
+                    audioTrackStates: t.stream?.getAudioTracks()?.map(tr => tr.readyState) || []
+                })));
+                console.log('[Audio Debug] consumersRef:', [...consumersRef.current.entries()].map(([producerId, c]) => ({
+                    producerId,
+                    kind: c.track?.kind,
+                    peerId: c.appData?.peerId,
+                    trackState: c.track?.readyState
+                })));
+                console.log('[Audio Debug] peerStreamsRef size:', peerStreamsRef.current.size);
+            }
+
+            const updates = new Map(); // id -> boolean (speaking)
+            const now = Date.now();
+            let maxVol = 0;
+            let currentActiveSpeaker = null;
+
+            targets.forEach(({ id, stream }) => {
+                const audioTrack = stream.getAudioTracks().find(t => t.readyState === "live");
+
+                // 트랙 없거나 끝났으면 분석기 제거
+                if (!audioTrack) {
+                    if (peerAnalysers.has(id)) {
+                        const rec = peerAnalysers.get(id);
+                        try {
+                            rec.source.disconnect();
+                            rec.analyser.disconnect();
+                        } catch { }
+                        peerAnalysers.delete(id);
+                        updates.set(id, false);
+                    }
+                    return;
+                }
+
+                let rec = peerAnalysers.get(id);
+                // 트랙이 변경되었으면 재설정 (스트림 ID는 무시 - 매번 새로 만들어질 수 있음)
+                if (rec && rec.trackId !== audioTrack.id) {
+                    try {
+                        rec.source.disconnect();
+                        rec.analyser.disconnect();
+                    } catch { }
+                    rec = null;
+                }
+
+                if (!rec) {
+                    try {
+                        const analyser = ctx.createAnalyser();
+                        analyser.fftSize = 256;
+                        // Clone 제거: 원본 트랙 사용 (CORS 이슈 등 방지)
+                        const trackStream = new MediaStream([audioTrack]);
+                        const source = ctx.createMediaStreamSource(trackStream);
+                        source.connect(analyser);
+
+                        rec = {
+                            streamId: stream.id,
+                            trackId: audioTrack.id,
+                            analyser,
+                            source,
+                            dataArray: new Uint8Array(analyser.frequencyBinCount),
+                            ema: 0,
+                            lastSpeaking: false,
+                            holdOffTimer: 0
+                        };
+                        peerAnalysers.set(id, rec);
+                    } catch (e) {
+                        return;
+                    }
+                }
+
+                // 레벨 분석
+                try {
+                    rec.analyser.getByteFrequencyData(rec.dataArray);
+                    const sum = rec.dataArray.reduce((a, b) => a + b, 0);
+                    const avg = sum / rec.dataArray.length;
+
+                    // EMA (Exponential Moving Average)
+                    const ALPHA = 0.25;
+                    rec.ema = rec.ema * (1 - ALPHA) + avg * ALPHA;
+
+                    const ON_TH = 10;
+                    const OFF_TH = 6;
+                    const HOLD = 400;
+
+                    let isSpeaking = rec.lastSpeaking;
+
+                    if (rec.ema > ON_TH) {
+                        isSpeaking = true;
+                        rec.holdOffTimer = 0;
+                        if (rec.ema > maxVol) {
+                            maxVol = rec.ema;
+                            currentActiveSpeaker = id;
+                        }
+                    } else if (rec.ema < OFF_TH) {
+                        if (isSpeaking) {
+                            if (rec.holdOffTimer === 0) {
+                                rec.holdOffTimer = now;
+                            } else if (now - rec.holdOffTimer > HOLD) {
+                                isSpeaking = false;
+                                rec.holdOffTimer = 0;
+                            }
+                        }
+                    } else {
+                        // 히스테리시스 구간 - 유지
+                        // (반등 시 타이머 리셋)
+                        if (isSpeaking && rec.holdOffTimer > 0 && rec.ema > OFF_TH + 1) {
+                            rec.holdOffTimer = 0;
+                        }
+                    }
+
+                    if (isSpeaking !== rec.lastSpeaking) {
+                        rec.lastSpeaking = isSpeaking;
+                        updates.set(id, isSpeaking);
+                        console.log(`[Audio] Speaking state changed: ${id} = ${isSpeaking}, EMA: ${rec.ema.toFixed(1)}`);
+                    }
+
+                    // 🔍 EMA 값 확인 (말할 때만 출력)
+                    if (rec.ema > 5 && shouldLog) {
+                        console.log(`[Audio] EMA for ${id}: ${rec.ema.toFixed(1)} (threshold: ${ON_TH})`);
+                    }
+
+                    if (isSpeaking && rec.ema > maxVol) {
+                        maxVol = rec.ema;
+                        currentActiveSpeaker = id;
+                    }
+
+                } catch (e) { }
+            });
+
+            // 2. 상태 일괄 업데이트
+            if (updates.size > 0) {
+                setParticipants(prev => {
+                    let changed = false;
+                    const next = prev.map(p => {
+                        const pid = String(p.id);
+                        if (updates.has(pid)) {
+                            const newState = updates.get(pid);
+                            if (!!p.speaking !== newState) {
+                                changed = true;
+                                return { ...p, speaking: newState };
+                            }
+                        }
+                        return p;
+                    });
+                    return changed ? next : prev;
+                });
+            }
+
+            // 3. Active Speaker 자동 전환 비활성화 (사용자 경험 개선 - 너무 어지러움)
+            // if (currentActiveSpeaker) {
+            //     setActiveSpeakerId(String(currentActiveSpeaker));
+            // }
+        };
+
+        const intervalId = setInterval(checkAudioLevels, 100);
+
+        return () => {
+            clearInterval(intervalId);
+            peerAnalysers.forEach(rec => {
+                try { rec.source.disconnect(); rec.analyser.disconnect(); } catch { }
+            });
+        };
+    }, []); // mount 시 1회 실행
+
     const orderedParticipants = useMemo(() => {
         // PiP/동기화 시 같은 참가자가 두 번 들어오는 버그 방지: id 기준 중복 제거
         const seenIds = new Set();
@@ -6604,7 +6761,7 @@ function MeetingPage({ portalRoomId }) {
                                             height: '100%'
                                         }}>
                                             <VideoTile
-                                                user={userForTile(mainUser)}
+                                                user={userForTile(mainUser?.isMe ? { ...mainUser, speaking: isSpeaking } : mainUser)}
                                                 isMain
                                                 stream={mainStream}
                                                 roomReconnecting={roomReconnecting}
@@ -6613,6 +6770,7 @@ function MeetingPage({ portalRoomId }) {
                                                 videoRef={mainVideoRef}
                                                 isFilterPreparing={isFilterPreparing}
                                                 isBrowserPipMode={isBrowserPipMode}
+                                                onSpeakingChange={handleSpeakingChange}
                                             />
                                         </div>
                                         <button
@@ -6904,6 +7062,7 @@ function MeetingPage({ portalRoomId }) {
                                                                 reaction={p.reaction}
                                                                 isBrowserPipMode={isBrowserPipMode}
                                                                 isFilterPreparing={isFilterPreparing}
+                                                                onSpeakingChange={handleSpeakingChange}
                                                             />
                                                             <span className="strip-name">
                                                                 {p.isMe ? "(나)" : p.name}
@@ -6950,6 +7109,7 @@ function MeetingPage({ portalRoomId }) {
                                                 isScreen={p.isScreenSharing}
                                                 reaction={p.reaction}
                                                 isFilterPreparing={isFilterPreparing}
+                                                onSpeakingChange={handleSpeakingChange}
                                             />
                                             <span className="strip-name">
                                                 {p.isMe ? "(나)" : p.name}
@@ -6979,6 +7139,7 @@ function MeetingPage({ portalRoomId }) {
                                                 reaction={gridFullscreenUser?.isMe ? myReaction : gridFullscreenUser?.reaction}
                                                 isFilterPreparing={isFilterPreparing}
                                                 isBrowserPipMode={isBrowserPipMode}
+                                                onSpeakingChange={handleSpeakingChange}
                                             />
 
                                             {/* 전체화면 토글 버튼 */}
@@ -7220,6 +7381,7 @@ function MeetingPage({ portalRoomId }) {
                                                                 reaction={part.reaction}
                                                                 isFilterPreparing={isFilterPreparing}
                                                                 isBrowserPipMode={isBrowserPipMode}
+                                                                onSpeakingChange={handleSpeakingChange}
                                                             />
                                                             <span className="strip-name">{part.isMe ? "(나)" : part.name}</span>
                                                         </div>
@@ -7260,6 +7422,7 @@ function MeetingPage({ portalRoomId }) {
                                                     reaction={p.isMe ? myReaction : null}
                                                     isFilterPreparing={isFilterPreparing}
                                                     isBrowserPipMode={isBrowserPipMode}
+                                                    onSpeakingChange={handleSpeakingChange}
                                                 />
 
                                                 <button

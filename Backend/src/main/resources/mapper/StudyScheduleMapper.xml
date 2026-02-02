@@ -51,15 +51,14 @@
         SELECT COALESCE(MAX(round_num), 0) FROM study_schedule WHERE subject_id = #{subjectId}
     </select>
 
-    <!-- 현재 시각이 스터디 일정 시간(start_time ~ end_time) 안에 있는 회차의 schedule_id 반환. 없으면 null -->
+    <!-- 오늘 회차 중 "아직 끝나지 않은" 회차의 schedule_id 반환 (일정 시작 전 입장·진행 중 모두 해당). 없으면 null -->
     <select id="selectScheduleIdBySubjectIdAndCurrentTime" resultType="java.lang.Long">
         SELECT schedule_id
         FROM study_schedule
         WHERE subject_id = #{subjectId}
           AND study_date = CURDATE()
-          AND CURTIME() <![CDATA[>=]]> start_time
-          AND CURTIME() <![CDATA[<]]> end_time
-        ORDER BY round_num ASC
+          AND end_time <![CDATA[>=]]> CURTIME()
+        ORDER BY start_time ASC
         LIMIT 1
     </select>
 
