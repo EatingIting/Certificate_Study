@@ -27,8 +27,13 @@ const calcTotalMinutes = (startHHMM, endHHMM) => {
   return Math.max(0, end - start);
 };
 
-const judgeAttendance = ({ joinAt, leaveAt }, totalMin, requiredRatio) => {
-  const attendedMin = minutesBetween(joinAt, leaveAt);
+/** 회차별 totalMin 우선: log에 startTime/endTime 있으면 그걸로, 없으면 공통 totalMin 사용 (내 출석 조회와 동일 로직) */
+const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
+  const totalMin =
+    log?.startTime && log?.endTime
+      ? calcTotalMinutes(log.startTime, log.endTime)
+      : fallbackTotalMin;
+  const attendedMin = minutesBetween(log?.joinAt, log?.leaveAt);
   const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
   const isPresent = ratio >= requiredRatio;
   return { attendedMin, ratio, isPresent };
@@ -188,7 +193,7 @@ const AttendanceAll = () => {
                       <td key={s.sessionNo} className="at-td-session">
                         <span
                           className={`at-mark ${s.isPresent ? "is-ok" : "is-absent"}`}
-                          title={`${s.attendedMin}분 참여 (${Math.round(s.ratio * 100)}%)`}
+                          title={`${s.attendedMin}분 참여 (${s.isPresent ? 100 : Math.round(s.ratio * 100)}%)`}
                         >
                           {s.isPresent ? "○" : "×"}
                         </span>

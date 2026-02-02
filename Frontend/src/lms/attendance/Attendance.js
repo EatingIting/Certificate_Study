@@ -264,7 +264,7 @@ const Attendance = () => {
                         {s.isPresent ? "출석" : "결석"}
                       </span>
                       <span className="at-td-muted">
-                        ({s.attendedMin}분 · {Math.round(s.ratio * 100)}%)
+                        ({s.attendedMin}분 · {s.isPresent ? 100 : Math.round(s.ratio * 100)}%)
                       </span>
                     </td>
                   </tr>
