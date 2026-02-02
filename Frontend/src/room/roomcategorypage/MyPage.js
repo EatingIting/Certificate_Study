@@ -464,7 +464,7 @@ const MyPage = () => {
 
                                     <div className="study-right">
                                         {s.hostEmail === profile.email && (
-                                            <span className="badge badge-blue">방장</span>
+                                            <span className="badge badge-blue">스터디장</span>
                                         )}
                                         <span className="badge badge-green">{s.status}</span>
                                     </div>
