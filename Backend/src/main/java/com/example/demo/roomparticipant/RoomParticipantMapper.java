@@ -13,8 +13,11 @@ public interface RoomParticipantMapper {
     // 승인된 참가자 목록 (users + room_join_request)
     List<RoomParticipantVO> selectApprovedParticipants(@Param("roomId") String roomId);
 
-    // 이메일로 users 조회(호스트 정보 보장용)
+    // 이메일로 users 조회(호스트 정보 보장용) - 기존 용도 유지용
     RoomParticipantVO selectUserByEmail(@Param("email") String email);
+
+    // 방장 정보 조회 (room_id 기준, 방별 닉네임 우선)
+    RoomParticipantVO selectHostParticipant(@Param("roomId") String roomId);
 
     // userId -> email
     String selectEmailByUserId(@Param("userId") String userId);

@@ -5,15 +5,30 @@
 
 <mapper namespace="com.example.demo.assignment.mapper.AssignmentMapper">
 
-    <!-- 1) 과제 목록: 내 제출 여부로 status 만들기 -->
+    <!-- 1) 과제 목록: 내 제출 여부로 status 만들기 + 작성자 방별 닉네임 -->
     <select id="selectAssignmentsByRoom" resultType="com.example.demo.assignment.dto.AssignmentListResponse">
         SELECT
             a.assignment_id AS assignmentId,
             a.title AS title,
             a.due_at AS dueAt,
             a.created_by_email AS authorEmail,
+            -- 작성자(보통 방장)의 방별 닉네임 우선
+            COALESCE(
+                    rjr.request_user_nickname,
+                    rm.hostUserNickname,
+                    u.nickname,
+                    u.name
+            ) AS authorName,
             CASE WHEN s.submission_id IS NULL THEN '제출 하기' ELSE '제출 완료' END AS status
         FROM assignments a
+                 JOIN room rm
+                      ON rm.room_id = a.room_id
+                 JOIN users u
+                      ON u.email = a.created_by_email
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = a.room_id
+                               AND rjr.request_user_email = a.created_by_email
+                               AND rjr.status = '승인'
                  LEFT JOIN assignment_submissions s
                            ON s.assignment_id = a.assignment_id
                                AND s.user_email = #{userEmail}
@@ -95,12 +110,20 @@
 
         UNION
 
-        /* 2) 방장(= 과제 작성자 email) */
+        /* 2) 방장(= 과제 작성자 email)
+             - 방장도 room_join_request에 승인 멤버로 존재할 수 있으므로
+               room_join_request / room을 조인해서 방별 닉네임을 m.request_user_nickname에 담는다. */
         SELECT
         a2.room_id,
         a2.created_by_email AS user_email,
-        NULL AS request_user_nickname
+        COALESCE(rjr2.request_user_nickname, rm2.hostUserNickname) AS request_user_nickname
         FROM assignments a2
+        JOIN room rm2
+        ON rm2.room_id = a2.room_id
+        LEFT JOIN room_join_request rjr2
+        ON rjr2.room_id = rm2.room_id
+        AND rjr2.request_user_email = a2.created_by_email
+        AND rjr2.status = '승인'
         ) m
         ON m.room_id = a.room_id
 

@@ -12,7 +12,7 @@
         WHERE user_id = #{userId}
     </select>
 
-    <!-- 내 정보 수정 -->
+    <!-- 내 정보 수정 (글로벌 프로필) -->
     <update id="updateMyPage">
         UPDATE users
         SET name = #{name},
@@ -23,7 +23,6 @@
             profile_img = #{profileImg}
         WHERE user_id = #{userId}
     </update>
-
 
     <!-- 회원 탈퇴 -->
     <delete id="deleteByEmail">

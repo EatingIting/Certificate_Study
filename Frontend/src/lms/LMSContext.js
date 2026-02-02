@@ -120,18 +120,36 @@ export const LMSProvider = ({ children, roomId }) => {
         fetchRoomMyPage(roomId);
     }, [fetchRoomMyPage, roomId]);
 
-    // 닉네임 변경 이벤트 수신 (RoomMyPage / MyPage 저장 후 즉시 반영용)
+    // 닉네임 변경 이벤트 수신 (RoomMyPage 저장 후 LMSHeader 즉시 반영용)
     useEffect(() => {
         const onRoomNickUpdated = (e) => {
             const detail = e?.detail || {};
-            const targetRoomId = detail.roomId;
+            const targetRoomId = (detail.roomId ?? "").toString().trim();
             const nextNick = (detail.roomNickname || "").trim();
-            if (!targetRoomId || String(targetRoomId) !== String(roomId)) return;
+            const current = (roomId ?? "").toString().trim();
+            // roomId 비교 (대소문자/공백 무시)
+            if (!targetRoomId || !current) return;
+            if (targetRoomId.toLowerCase() !== current.toLowerCase()) return;
             setRoomNickname(nextNick);
+            // 서버에서 최신 방별 닉네임 재조회 (이중 적용 보장)
+            fetchRoomMyPage(roomId);
         };
 
-        const onUserNickUpdated = () => {
-            // 전역 닉네임 변경 시 user 재조회 (fallback displayName 반영)
+        const onUserNickUpdated = (e) => {
+            // 전역 닉네임 변경 시, 즉시 user.nickname을 패치하고
+            // 이후 백엔드 상태와 동기화를 위해 /users/me 재조회
+            const next = (
+                e?.detail?.nickname ||
+                sessionStorage.getItem("nickname") ||
+                localStorage.getItem("nickname") ||
+                ""
+            ).trim();
+
+            if (next) {
+                setUser((prev) =>
+                    prev ? { ...prev, nickname: next } : prev
+                );
+            }
             refreshUser();
         };
 
@@ -141,7 +159,7 @@ export const LMSProvider = ({ children, roomId }) => {
             window.removeEventListener("lms:room-nickname-updated", onRoomNickUpdated);
             window.removeEventListener("user:nickname-updated", onUserNickUpdated);
         };
-    }, [roomId, refreshUser]);
+    }, [roomId, refreshUser, fetchRoomMyPage]);
 
     // 표시용 이름 (nickname(name) 형식)
     const displayName = user

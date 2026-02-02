@@ -21,11 +21,22 @@
 
     <select id="selectByPostId" resultMap="CommentMap">
         SELECT
-            c.comment_id, c.post_id, c.user_id,
-            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
-            c.content, c.created_at, c.updated_at, c.deleted_at
+            c.comment_id,
+            c.post_id,
+            c.user_id,
+            /* ✅ 방별 닉네임이 있으면 우선 사용, 없으면 글로벌 닉네임 → 이름 */
+            COALESCE(rjr.request_user_nickname, u.nickname, u.name) AS nickname,
+            c.content,
+            c.created_at,
+            c.updated_at,
+            c.deleted_at
         FROM board_comments c
                  LEFT JOIN users u ON u.user_id = c.user_id
+                 LEFT JOIN board_posts p ON p.post_id = c.post_id
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = p.room_id
+                           AND rjr.request_user_email = u.email
+                           AND rjr.status = '승인'
         WHERE c.post_id = #{postId}
           AND c.deleted_at IS NULL
         ORDER BY c.comment_id ASC

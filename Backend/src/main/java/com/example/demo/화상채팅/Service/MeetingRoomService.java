@@ -25,4 +25,13 @@ public interface MeetingRoomService {
 
     /** 오늘 이 방에서 강퇴된 유저인지 여부 */
     boolean isKickedToday(String roomId, String userEmail);
+
+    /**
+     * 같은 날 다음 회차로 넘어갔을 때, 방에 그대로 남아 있는 참가자를
+     * 새 회차(meetingroom_participant)에 자동 배정한다.
+     *
+     * @param roomId    화상회의 방 ID
+     * @param userEmail 참가자 이메일
+     */
+    void checkAndAssignNewSessionIfNeeded(String roomId, String userEmail);
 }

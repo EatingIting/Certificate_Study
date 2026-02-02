@@ -115,6 +115,9 @@ function Calendar() {
     // "YYYY-MM-DD" / "YYYY-MM-DDTHH:mm:ss" 등에서 YYYY-MM-DD만 뽑기
     let ymdOf = (v) => String(v || "").slice(0, 10);
 
+    // 과거 코드 호환용 별칭(기존 ymdOnly 사용 부분 대응)
+    let ymdOnly = (v) => ymdOf(v);
+
     // end 표기용(포함 end):
     // - 날짜만 오는 경우(YYYY-MM-DD): FullCalendar 규칙(end exclusive)이라 하루 빼서 inclusive로 변환
     // - 시간이 포함된 경우(YYYY-MM-DDTHH:mm:ss): 이미 같은 날의 시각이므로 그대로 그 날을 사용

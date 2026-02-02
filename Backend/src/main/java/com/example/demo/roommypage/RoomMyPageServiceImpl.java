@@ -67,12 +67,13 @@ public class RoomMyPageServiceImpl implements RoomMyPageService {
             throw new IllegalArgumentException("닉네임은 2자 이상 20자 이하로 입력해주세요.");
         }
 
-        int updated = roomMyPageMapper.updateMemberNickname(roomId, email, trimmed);
-        if (updated == 0) {
-            updated = roomMyPageMapper.updateHostNickname(roomId, email, trimmed);
-        }
+        // test@test.com 과 같이 한 방에서 "방장 + 승인 멤버" 둘 다인 경우가 있어
+        // 어느 한쪽만 업데이트하면 화면마다 다른 닉네임이 보일 수 있다.
+        // 둘 다 존재하면 둘 다 동일하게 업데이트해서 일관성을 맞춘다.
+        int memberUpdated = roomMyPageMapper.updateMemberNickname(roomId, email, trimmed);
+        int hostUpdated = roomMyPageMapper.updateHostNickname(roomId, email, trimmed);
 
-        if (updated == 0) {
+        if (memberUpdated == 0 && hostUpdated == 0) {
             throw new IllegalArgumentException("승인된 멤버 또는 방장만 닉네임을 변경할 수 있습니다.");
         }
 

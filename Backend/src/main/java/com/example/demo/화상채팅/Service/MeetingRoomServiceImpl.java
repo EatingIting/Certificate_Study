@@ -8,6 +8,7 @@ import com.example.demo.화상채팅.Repository.MeetingRoomKickedUserRepository;
 import com.example.demo.화상채팅.Repository.MeetingRoomParticipantRepository;
 import com.example.demo.화상채팅.Repository.MeetingRoomRepository;
 import com.example.demo.schedule.service.StudyScheduleService;
+import com.example.demo.schedule.vo.StudyScheduleVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -266,5 +267,123 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         return kickedUserRepository.findFirstByRoomIdAndUserEmailAndKickedAtBetween(
                 roomId.trim(), userEmail.trim(), startOfDay, endOfDay
         ).isPresent();
+    }
+
+    /**
+     * 같은 날 다음 회차로 넘어갔을 때, 방에 그대로 남아 있는 참가자를
+     * 새 회차(meetingroom_participant)에 자동 배정한다.
+     *
+     * - 현재 시간에 활성인 회차가 있으면 그 회차를 우선 사용
+     * - 없으면 오늘 일정 중 "다음" 회차(시작 시간이 현재 이후인 가장 가까운 회차)를 사용
+     * - 이미 해당 회차에 참가 기록(LEFT_AT IS NULL)이 있으면 아무 것도 하지 않음
+     * - 직전에 배정된 회차보다 이전/같은 회차라면 이동하지 않음
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public void checkAndAssignNewSessionIfNeeded(String roomId, String userEmail) {
+        if (roomId == null || roomId.isBlank() || userEmail == null || userEmail.isBlank()) {
+            return;
+        }
+
+        // roomId 기준으로 subjectId 조회 (호스트 기준 행)
+        Optional<MeetingRoom> roomOpt = meetingRoomRepository.findByIdRoomId(roomId.trim());
+        if (roomOpt.isEmpty()) {
+            log.debug("[MeetingRoomServiceImpl] roomId={} 에 해당하는 meeting_room 이 없어 회차 자동 배정을 건너뜁니다.", roomId);
+            return;
+        }
+
+        MeetingRoom room = roomOpt.get();
+        String subjectId = room.getSubjectId();
+        if (subjectId == null || subjectId.isBlank()) {
+            log.warn("[MeetingRoomServiceImpl] subjectId 가 비어 있어 회차 자동 배정을 건너뜁니다. roomId={}", roomId);
+            return;
+        }
+
+        String trimmedSubjectId = subjectId.trim();
+
+        // 1) 현재 시각에 활성인 회차가 있으면 그 회차 사용
+        Long targetScheduleId = null;
+        try {
+            targetScheduleId = studyScheduleService.findActiveScheduleIdByCurrentTime(trimmedSubjectId);
+        } catch (Exception e) {
+            log.warn("[MeetingRoomServiceImpl] findActiveScheduleIdByCurrentTime 실패: {}", e.getMessage());
+        }
+
+        // 2) 활성 회차가 없으면 오늘 일정 중 다음 회차 사용
+        if (targetScheduleId == null) {
+            try {
+                targetScheduleId = studyScheduleService.findUpcomingTodayScheduleId(trimmedSubjectId);
+            } catch (Exception e) {
+                log.warn("[MeetingRoomServiceImpl] findUpcomingTodayScheduleId 실패: {}", e.getMessage());
+            }
+        }
+
+        if (targetScheduleId == null) {
+            // 오늘 더 이상 배정할 회차가 없음
+            return;
+        }
+
+        Long finalTargetScheduleId = targetScheduleId;
+
+        // 이미 해당 회차에 참가 중이면 아무 것도 하지 않음
+        Optional<MeetingRoomParticipant> existingForTarget =
+                participantRepository.findByScheduleIdAndRoomIdAndUserEmailAndLeftAtIsNull(
+                        finalTargetScheduleId, roomId.trim(), userEmail.trim()
+                );
+        if (existingForTarget.isPresent()) {
+            return;
+        }
+
+        // 바로 이전에 배정된 회차가 있다면, 그보다 "앞선" 회차로는 이동하지 않도록 방어
+        Optional<MeetingRoomParticipant> latestOpt =
+                participantRepository.findFirstByRoomIdAndUserEmailOrderByParticipantIdDesc(
+                        roomId.trim(), userEmail.trim()
+                );
+
+        if (latestOpt.isPresent() && latestOpt.get().getScheduleId() != null) {
+            Long lastScheduleId = latestOpt.get().getScheduleId();
+            if (finalTargetScheduleId.equals(lastScheduleId)) {
+                return;
+            }
+
+            try {
+                StudyScheduleVO lastVo =
+                        studyScheduleService.getBySubjectIdAndScheduleId(trimmedSubjectId, lastScheduleId);
+                StudyScheduleVO targetVo =
+                        studyScheduleService.getBySubjectIdAndScheduleId(trimmedSubjectId, finalTargetScheduleId);
+
+                if (lastVo != null && targetVo != null) {
+                    // 날짜가 다르면(다른 날 회차) 자동 이동하지 않음
+                    if (lastVo.getStudyDate() != null
+                            && targetVo.getStudyDate() != null
+                            && !lastVo.getStudyDate().equals(targetVo.getStudyDate())) {
+                        return;
+                    }
+
+                    Integer lastRound = lastVo.getRoundNum();
+                    Integer targetRound = targetVo.getRoundNum();
+                    if (lastRound != null && targetRound != null && targetRound <= lastRound) {
+                        // 이미 같은 회차 이상으로 배정되어 있으면 이동하지 않음
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                // 비교 로직 실패 시에도 예외 때문에 WebSocket 흐름이 끊기지 않도록 로그만 남기고 계속 진행
+                log.warn("[MeetingRoomServiceImpl] 회차 비교 중 예외 발생: {}", e.getMessage());
+            }
+        }
+
+        // 실제 새 회차 참가 기록 생성
+        try {
+            MeetingRoomParticipant participant =
+                    new MeetingRoomParticipant(trimmedSubjectId, finalTargetScheduleId, roomId.trim(), userEmail.trim());
+            participantRepository.save(participant);
+            log.info("[MeetingRoomServiceImpl] 회차 자동 배정 완료: roomId={}, subjectId={}, scheduleId={}, userEmail={}",
+                    roomId, trimmedSubjectId, finalTargetScheduleId, userEmail);
+        } catch (Exception e) {
+            log.error("[MeetingRoomServiceImpl] 회차 자동 배정 실패: roomId={}, userEmail={}, error={}",
+                    roomId, userEmail, e.getMessage(), e);
+            throw e;
+        }
     }
 }

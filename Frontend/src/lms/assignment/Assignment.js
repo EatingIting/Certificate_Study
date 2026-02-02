@@ -123,7 +123,8 @@ const Assignment = () => {
             id: x.assignmentId,
             title: x.title,
             dueDate: x.dueAt ? x.dueAt.slice(0, 10) : "미정",
-            author: x.authorEmail,
+            // 작성자: 방별 닉네임(authorName) 우선, 없으면 email
+            author: x.authorName || x.authorEmail,
             status: x.status,
             }));
 
