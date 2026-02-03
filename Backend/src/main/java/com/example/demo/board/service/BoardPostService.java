@@ -26,4 +26,6 @@ public interface BoardPostService {
     void setPinned(long postId, String email, boolean isPinned);
 
     void incrementViewCount(long postId);
+
+    String getWriterIdByPostId(long postId);
 }

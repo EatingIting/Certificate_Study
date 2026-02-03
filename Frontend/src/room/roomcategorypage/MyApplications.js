@@ -1,10 +1,11 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../api/api";
 import "./MyApplications.css";
 
 const MyApplications = () => {
   const navigate = useNavigate();
+    const location = useLocation();
 
   useEffect(() => {
     const token = sessionStorage.getItem("accessToken");
@@ -14,7 +15,7 @@ const MyApplications = () => {
     }
   }, [navigate]);
 
-  const [tab, setTab] = useState("sent");
+  const [tab, setTab] = useState(location.state?.tab || "sent");
   const [list, setList] = useState([]);
   const [openApplicationId, setOpenApplicationId] = useState(null);
   const [loading, setLoading] = useState(false);

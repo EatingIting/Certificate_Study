@@ -29,6 +29,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
         // 방장 알림용 WebSocket
         registry.addHandler(notificationHandler, "/ws/notification/{userId}")
-                .setAllowedOrigins("*");
+                .setAllowedOriginPatterns("*");
     }
 }
