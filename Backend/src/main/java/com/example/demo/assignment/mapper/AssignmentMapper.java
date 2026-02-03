@@ -22,6 +22,9 @@ public interface AssignmentMapper {
             @Param("assignmentId") Long assignmentId
     );
 
+    /** 제출물 파일 정보 조회 (AI 연동: file_url, file_name) */
+    AssignmentSubmissionFileDto selectSubmissionFileBySubmissionId(@Param("submissionId") Long submissionId);
+
     // ✅ matrix header (과제 목록)
     List<AssignmentMatrixAssignment> selectMatrixAssignments(@Param("roomId") String roomId);
 

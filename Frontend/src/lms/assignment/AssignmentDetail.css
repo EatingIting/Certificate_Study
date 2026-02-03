@@ -207,6 +207,103 @@
     background: #f6f8fb;
 }
 
+.ad-btns {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ad-ai-btn {
+    background: #e8f0fe;
+    border-color: #a8c7fa;
+    color: #1967d2;
+}
+
+.ad-ai-btn:hover {
+    background: #d2e3fc;
+}
+
+/* ===== AI에게 보기 모달 ===== */
+.ad-ai-modal {
+    max-width: 520px;
+    max-height: 85vh;
+    padding: 24px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* AI 모달일 때 preview 모달의 height/overflow 덮어쓰기 */
+.ad-ai-modal.ad-preview-modal {
+    height: auto;
+    min-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.ad-ai-title {
+    margin: 0 0 8px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1c2a1f;
+}
+
+.ad-ai-desc {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: #667085;
+    line-height: 1.5;
+}
+
+.ad-ai-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid #e7ebf0;
+    border-radius: 8px;
+    font-size: 14px;
+    resize: vertical;
+    margin-bottom: 12px;
+}
+
+.ad-ai-send {
+    margin-bottom: 16px;
+}
+
+.ad-ai-send:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.ad-ai-reply {
+    margin-top: 16px;
+    padding: 14px;
+    background: #f7f9fc;
+    border-radius: 8px;
+    border: 1px solid #eef1f5;
+    max-height: 50vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex-shrink: 0;
+}
+
+.ad-ai-reply strong {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #344054;
+}
+
+.ad-ai-reply-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #101828;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* empty */
 .ad-empty {
     text-align: center;
