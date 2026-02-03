@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
-import "./Board.css";
+import "./BoardCommon.css";
 import { BoardApi } from "./BoardApi";
 import { useLMS } from "../LMSContext";
 

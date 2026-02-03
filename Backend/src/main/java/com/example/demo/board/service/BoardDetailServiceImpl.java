@@ -5,6 +5,8 @@ import com.example.demo.board.vo.BoardPostVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 public class BoardDetailServiceImpl implements BoardDetailService {
 
@@ -25,17 +27,27 @@ public class BoardDetailServiceImpl implements BoardDetailService {
     @Override
     @Transactional
     public BoardPostDetailVO getDetail(long postId, boolean incView, String email) {
-        if (incView) {
+        // ✅ 수정 화면 로딩은 incView=false로 오니까, 여기서 '수정 권한' 체크
+        if (!incView) {
+            boardPostService.requireCanEdit(postId, email); // 아래에 새로 추가할 메서드
+        } else {
             boardPostService.incrementViewCount(postId);
         }
 
         BoardPostVO post = boardPostService.getPostById(postId, email);
         if (post == null) return null;
 
+        Map<String, Boolean> perm = boardPostService.getPostPermissions(postId, email);
+
+        boolean canEdit = Boolean.TRUE.equals(perm.get("canEdit"));
+        boolean canDelete = Boolean.TRUE.equals(perm.get("canDelete"));
+
         return BoardPostDetailVO.builder()
                 .post(post)
                 .attachments(boardAttachmentService.getByPostId(postId))
                 .comments(boardCommentService.getByPostId(postId))
+                .canEdit(canEdit)
+                .canDelete(canDelete)
                 .build();
     }
 

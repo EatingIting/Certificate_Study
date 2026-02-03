@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import "./Board.css";
+import "./BoardCommon.css";
 import { BoardApi } from "./BoardApi";
 
 function BoardEdit() {
@@ -59,8 +59,16 @@ function BoardEdit() {
                 setContent(post.content || "");
                 setIsPinned(!!post.isPinned);
             } catch (e) {
-                if (!alive) return;
-                setError(e?.message || "불러오기 실패");
+            if (!alive) return;
+
+            // 권한 없으면 수정 페이지에서 바로 나가게
+            if (e?.status === 403) {
+                alert(e?.message || "수정 권한이 없습니다.");
+                navigate(`/lms/${subjectId}/board/${postId}`, { replace: true });
+                return;
+            }
+
+            setError(e?.message || "불러오기 실패");
             } finally {
                 if (!alive) return;
                 setLoading(false);
