@@ -14,8 +14,10 @@ public class BoardCommentResponse {
     private String userId;
     private String nickname;
 
+    private Long parentId;
     private String content;
 
     private Timestamp createdAt;
     private Timestamp updatedAt;
+    private Timestamp deletedAt;
 }

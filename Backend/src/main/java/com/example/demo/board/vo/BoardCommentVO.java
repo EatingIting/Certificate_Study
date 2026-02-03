@@ -18,6 +18,7 @@ public class BoardCommentVO {
     private Long commentId;
     private Long postId;
     private String userId;
+    private Long parentId;
 
     private String nickname;
 

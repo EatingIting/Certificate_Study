@@ -3,11 +3,15 @@ package com.example.demo.schedule.controller;
 import com.example.demo.dto.schedule.StudyScheduleCreateRequest;
 import com.example.demo.dto.schedule.StudyScheduleUpdateRequest;
 import com.example.demo.schedule.service.StudyScheduleService;
+import com.example.demo.schedule.vo.StudyScheduleVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.sql.Date;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -15,6 +19,18 @@ import org.springframework.web.bind.annotation.*;
 public class StudyScheduleController {
 
     private final StudyScheduleService studyScheduleService;
+
+    @GetMapping
+    public List<StudyScheduleVO> getStudySchedules(
+            @RequestParam String roomId,
+            @RequestParam String start,
+            @RequestParam String end
+    ) {
+        Date startDate = Date.valueOf(start);
+        Date endDate = Date.valueOf(end);
+
+        return studyScheduleService.selectByRange(roomId, startDate, endDate);
+    }
 
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody StudyScheduleCreateRequest req) {
