@@ -1,11 +1,14 @@
 package com.example.demo.schedule.controller;
 
 import com.example.demo.dto.schedule.ScheduleCreateRequest;
+import com.example.demo.dto.schedule.ScheduleEventResponse;
 import com.example.demo.dto.schedule.ScheduleUpdateRequest;
 import com.example.demo.schedule.service.ScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -40,5 +43,14 @@ public class ScheduleController {
             @RequestParam String userId
     ) {
         scheduleService.softDelete(scheduleId, roomId, userId);
+    }
+
+    @GetMapping
+    public List<ScheduleEventResponse> list(
+            @RequestParam String roomId,
+            @RequestParam String start,
+            @RequestParam String end
+    ) {
+        return scheduleService.getEvents(roomId, start, end);
     }
 }

@@ -1,7 +1,9 @@
 package com.example.demo.schedule.service;
 
 import com.example.demo.dto.schedule.ScheduleCreateRequest;
+import com.example.demo.dto.schedule.ScheduleEventResponse;
 import com.example.demo.dto.schedule.ScheduleUpdateRequest;
+import com.example.demo.schedule.converter.ScheduleEventConverter;
 import com.example.demo.schedule.mapper.ScheduleMapper;
 import com.example.demo.schedule.vo.ScheduleVO;
 import lombok.RequiredArgsConstructor;
@@ -108,5 +110,18 @@ public class ScheduleServiceImpl implements ScheduleService {
         if (deleted == 0) {
             throw new IllegalArgumentException("해당 일정이 없거나 삭제할 수 없습니다. scheduleId=" + scheduleId);
         }
+    }
+
+    @Override
+    public List<ScheduleEventResponse> getEvents(String roomId, String start, String end) {
+
+        Date s = Date.valueOf(LocalDate.parse(start));
+        Date e = Date.valueOf(LocalDate.parse(end));
+
+        List<ScheduleVO> list = scheduleMapper.selectByRange(roomId, s, e);
+
+        return list.stream()
+                .map(ScheduleEventConverter::fromSchedule)
+                .toList();
     }
 }
