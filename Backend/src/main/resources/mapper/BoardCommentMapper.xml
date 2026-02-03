@@ -66,4 +66,19 @@
           AND deleted_at IS NULL
     </update>
 
+    <select id="selectByCommentId" resultMap="CommentMap">
+        SELECT
+            c.comment_id,
+            c.post_id,
+            c.user_id,
+            c.parent_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            c.content,
+            c.created_at,
+            c.updated_at,
+            c.deleted_at
+        FROM board_comments c LEFT JOIN users u ON u.user_id = c.user_id
+        WHERE c.comment_id = #{commentId}
+    </select>
+
 </mapper>

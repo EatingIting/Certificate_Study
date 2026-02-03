@@ -28,4 +28,8 @@ public interface BoardCommentMapper {
             @Param("commentId") long commentId,
             @Param("userId") String userId
     );
+
+    BoardCommentVO selectByCommentId(
+            @Param("commentId") Long commentId
+    );
 }

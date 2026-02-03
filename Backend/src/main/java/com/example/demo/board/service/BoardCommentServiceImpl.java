@@ -36,6 +36,31 @@ public class BoardCommentServiceImpl implements BoardCommentService {
         String userId = resolveUserIdByEmail(email);
         comment.setUserId(userId);
 
+        // 대댓글 검증
+        if (comment.getParentId() != null) {
+            long parentCommentId = comment.getParentId();
+
+            BoardCommentVO parent = boardCommentMapper.selectByCommentId(parentCommentId);
+            if (parent == null) {
+                throw new IllegalStateException("부모 댓글을 찾을 수 없습니다. (commentId=" + parentCommentId + ")");
+            }
+
+            // 같은 게시글인지 확인
+            if (parent.getPostId() != comment.getPostId()) {
+                throw new IllegalStateException("부모 댓글의 게시글이 일치하지 않습니다.");
+            }
+
+            // 1단 제한: 부모는 최상위 댓글만 가능
+            if (parent.getParentId() != null) {
+                throw new IllegalStateException("대댓글의 대댓글은 허용되지 않습니다.");
+            }
+
+            // 삭제된 댓글에는 답글 금지
+            if (parent.getDeletedAt() != null) {
+                throw new IllegalStateException("삭제된 댓글에는 답글을 달 수 없습니다.");
+            }
+        }
+
         int inserted = boardCommentMapper.insert(comment);
         if (inserted == 0 || comment.getCommentId() == null) {
             throw new IllegalStateException("댓글 등록에 실패했습니다.");
