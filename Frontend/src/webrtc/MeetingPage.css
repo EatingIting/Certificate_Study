@@ -1112,6 +1112,17 @@ body {
   height: 100%;
 }
 
+/* 그리드 타일: 카메라 꺼짐 시 아바타·이름 정중앙 배치 */
+.layout-grid .video-tile .camera-off-placeholder {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.25rem !important;
+}
+
 .grid-video-area {
   position: relative;
   /* 기준 */

@@ -6686,9 +6686,15 @@ function MeetingPage({ portalRoomId }) {
     const orderedParticipants = useMemo(() => {
         // PiP/동기화 시 같은 참가자가 두 번 들어오는 버그 방지: id 기준 중복 제거
         const seenIds = new Set();
+        let hasMe = false;
         const uniqueParticipants = participants.filter((p) => {
             const id = String(p.id);
             if (seenIds.has(id)) return false;
+            // 🔥 나(isMe)가 userId/connectionId 차이로 중복 들어온 경우 하나만 유지
+            if (p.isMe) {
+                if (hasMe) return false;
+                hasMe = true;
+            }
             seenIds.add(id);
             return true;
         });
