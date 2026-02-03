@@ -19,11 +19,27 @@
 
     <select id="selectByPostId" resultMap="CommentMap">
         SELECT
-            c.comment_id, c.post_id, c.user_id, c.parent_id,
-            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
-            c.content, c.created_at, c.updated_at, c.deleted_at
+            c.comment_id,
+            c.post_id,
+            c.user_id,
+            c.parent_id,
+            /* ✅ 스터디별 닉네임 규칙 적용 */
+            COALESCE(rjr.request_user_nickname, r.hostUserNickname, NULLIF(u.nickname, ''), u.name) AS nickname,
+            c.content,
+            c.created_at,
+            c.updated_at,
+            c.deleted_at
         FROM board_comments c
-                 LEFT JOIN users u ON u.user_id = c.user_id
+                 LEFT JOIN board_posts p
+                           ON p.post_id = c.post_id
+                 LEFT JOIN users u
+                           ON u.user_id = c.user_id
+                 LEFT JOIN room r
+                           ON r.room_id = p.room_id
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = p.room_id
+                               AND rjr.request_user_email = u.email
+                               AND rjr.status = '승인'
         WHERE c.post_id = #{postId}
         ORDER BY
             CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,
@@ -72,12 +88,23 @@
             c.post_id,
             c.user_id,
             c.parent_id,
-            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            /* ✅ 스터디별 닉네임 규칙 적용 */
+            COALESCE(rjr.request_user_nickname, r.hostUserNickname, NULLIF(u.nickname, ''), u.name) AS nickname,
             c.content,
             c.created_at,
             c.updated_at,
             c.deleted_at
-        FROM board_comments c LEFT JOIN users u ON u.user_id = c.user_id
+        FROM board_comments c
+                 LEFT JOIN board_posts p
+                           ON p.post_id = c.post_id
+                 LEFT JOIN users u
+                           ON u.user_id = c.user_id
+                 LEFT JOIN room r
+                           ON r.room_id = p.room_id
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = p.room_id
+                               AND rjr.request_user_email = u.email
+                               AND rjr.status = '승인'
         WHERE c.comment_id = #{commentId}
     </select>
 

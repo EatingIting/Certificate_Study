@@ -2018,7 +2018,7 @@ function MeetingPage({ portalRoomId }) {
                                 if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
                                 if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
                                     emojiBlackScreenToastShownRef.current = true;
-                                    setToastMessage("카메라를 보이게 해주세요.");
+                                    setToastMessage("얼굴이 보이게 해주세요.");
                                     setShowToast(true);
                                 }
                                 ctx.fillStyle = "#000000";
@@ -2038,7 +2038,7 @@ function MeetingPage({ portalRoomId }) {
                             if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
                             if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
                                 emojiBlackScreenToastShownRef.current = true;
-                                setToastMessage("카메라를 보이게 해주세요.");
+                                setToastMessage("얼굴이 보이게 해주세요.");
                                 setShowToast(true);
                             }
                             ctx.fillStyle = "#000000";
@@ -3223,7 +3223,7 @@ function MeetingPage({ portalRoomId }) {
                             if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
                             if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
                                 emojiBlackScreenToastShownRef.current = true;
-                                setToastMessage("카메라를 보이게 해주세요.");
+                                setToastMessage("얼굴이 보이게 해주세요.");
                                 setShowToast(true);
                             }
                             ctx.fillStyle = "#000000";
@@ -3241,7 +3241,7 @@ function MeetingPage({ portalRoomId }) {
                             if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
                             if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
                                 emojiBlackScreenToastShownRef.current = true;
-                                setToastMessage("카메라를 보이게 해주세요.");
+                                setToastMessage("얼굴이 보이게 해주세요.");
                                 setShowToast(true);
                             }
                             ctx.fillStyle = "#000000";
