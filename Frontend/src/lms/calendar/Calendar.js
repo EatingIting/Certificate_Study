@@ -551,8 +551,8 @@ function Calendar() {
 
                 await res.json().catch(() => null);
             } else {
-                let scheduleId = Number(editingEventId);
-                if (!scheduleId) throw new Error("수정할 scheduleId가 숫자가 아닙니다.");
+                let scheduleId = editingEventId == null || String(editingEventId).trim() === "" ? null : String(editingEventId);
+                if (!scheduleId) throw new Error("수정할 일정 ID가 없습니다.");
 
                 let res = await authFetch(
                     `/api/schedules/${scheduleId}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(
@@ -595,8 +595,8 @@ function Calendar() {
             }
 
 
-            let scheduleId = Number(id);
-            if (!scheduleId) throw new Error("삭제할 scheduleId가 숫자가 아닙니다.");
+            let scheduleId = id == null || String(id).trim() === "" ? null : String(id);
+            if (!scheduleId) throw new Error("삭제할 일정 ID가 없습니다.");
 
             let res = await authFetch(
                 `/api/schedules/${scheduleId}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(
