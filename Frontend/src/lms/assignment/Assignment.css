@@ -435,3 +435,295 @@
     border: 1px solid #e9eef3;
 }
 
+.as-matrix-wrap{
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #eef1f5;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.as-matrix-title{
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: #344054;
+}
+
+.as-matrix-table-wrap{
+  overflow-x: auto;
+}
+
+.as-matrix-table{
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.as-matrix-table th,
+.as-matrix-table td{
+  padding: 10px 10px;
+  border-top: 1px solid #eef1f5;
+  text-align: center;
+  font-size: 13px;
+}
+
+.as-mx-name{
+  text-align: left !important;
+  width: 220px;
+}
+
+.as-mx-rate{
+  width: 180px;
+}
+
+.as-mx-progress{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.as-mx-bar{
+  width: 110px;
+  height: 10px;
+  background: #e9edf2;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.as-mx-bar-fill{
+  height: 100%;
+  background: #86d19b;
+  border-radius: 999px;
+}
+
+.as-mx-text{
+  font-size: 12px;
+  color: #667085;
+}
+
+.as-mx-mark{
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-weight: 900;
+}
+
+.as-mx-mark.is-ok{
+  background: #eaf7ee;
+  color: #16794c;
+  border: 1px solid #bfe7cd;
+}
+
+.as-mx-mark.is-no{
+  background: #fdecec;
+  color: #d92d20;
+  border: 1px solid #f7c6c6;
+}
+
+.as-mx-empty{
+  padding: 14px !important;
+  color: #98a2b3;
+}
+/* 제출현황 카드 */
+.as-matrix-card {
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #eef1f5;
+  box-shadow: 0 12px 30px rgba(16, 24, 40, 0.06);
+  overflow: hidden;
+}
+
+.as-matrix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: #f7f9fc;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.as-matrix-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.as-matrix-refresh {
+  border: 1px solid #d8dde6;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.as-matrix-table-wrap {
+  padding: 12px 12px 16px;
+  overflow-x: auto;
+}
+
+/* 표 기본 */
+.as-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+.as-matrix-table th,
+.as-matrix-table td {
+  border-bottom: 1px solid #eef1f5;
+  padding: 10px 10px;
+  text-align: center;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.as-mx-name {
+  text-align: left !important;
+  min-width: 140px;
+}
+
+.as-mx-rate {
+  min-width: 150px;
+}
+
+/* 진행바 */
+.as-mx-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.as-mx-bar {
+  width: 90px;
+  height: 8px;
+  border-radius: 999px;
+  background: #eef1f5;
+  overflow: hidden;
+}
+
+.as-mx-bar-fill {
+  height: 100%;
+  background: #4caf50;
+}
+
+/* ○ × 표시 */
+.as-mx-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.as-mx-mark.is-ok {
+  background: #eaf7ee;
+  color: #1b7f3a;
+}
+
+.as-mx-mark.is-no {
+  background: #fdecec;
+  color: #c62828;
+}
+
+.as-mx-empty {
+  padding: 18px;
+  color: #7a8494;
+}
+/* ✅ 매트릭스 표는 기존 as-card 스타일 그대로 쓰기 위해 as-card를 같이 붙임 */
+.as-matrix-card {
+  margin-bottom: 16px;
+}
+
+/* 표가 과제가 많아지면 가로 스크롤 생기게 */
+.as-matrix-table {
+  min-width: 700px; /* 과제가 많으면 자동 가로스크롤 */
+}
+
+/* 이름 칸 고정 폭 + 왼쪽 정렬 */
+.as-mx-name {
+  text-align: left;
+  min-width: 140px;
+}
+
+/* 각 과제 칸 */
+.as-mx-col,
+.as-mx-cell {
+  min-width: 70px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ○ × 뱃지 */
+.as-mx-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.as-mx-mark.is-ok {
+  background: #eaf7ee;
+  color: #1b7f3a;
+}
+
+.as-mx-mark.is-no {
+  background: #fdecec;
+  color: #c62828;
+}
+
+/* ✅ 수정하기 버튼도 "미제출 버튼"처럼 행동하게 */
+.as-status--done {
+  background: #e8f4ee;
+  border-color: #bfe3cf;
+  color: #2f6f4a;
+
+  cursor: pointer;              /* ✅ 마우스 손모양 */
+  transition: filter .15s ease; /* ✅ 자연스러운 변화 */
+}
+
+.as-status--done:hover {
+  filter: brightness(0.98);     /* ✅ 색 살짝 변화 */
+}
+
+.as-status--done:active {
+  transform: translateY(1px);   /* ✅ 눌리는 느낌 (todo랑 통일) */
+}
+
+
+/* ===== 제출 / 수정 버튼 (화이트 액션 버튼) ===== */
+.as-action-btn {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+
+  cursor: pointer;
+  font-weight: 500;
+
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.06);
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.05s ease;
+}
+
+/* hover */
+.as-action-btn:hover {
+  background: #f9fafb;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.10);
+}
+
+/* active */
+.as-action-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.08);
+}
+
