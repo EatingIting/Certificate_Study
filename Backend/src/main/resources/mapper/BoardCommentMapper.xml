@@ -9,10 +9,8 @@
         <id     property="commentId" column="comment_id"/>
         <result property="postId"    column="post_id"/>
         <result property="userId"    column="user_id"/>
-
-        <!-- ✅ 추가 -->
+        <result property="parentId"  column="parent_id"/>
         <result property="nickname"  column="nickname"/>
-
         <result property="content"   column="content"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -21,31 +19,33 @@
 
     <select id="selectByPostId" resultMap="CommentMap">
         SELECT
-            c.comment_id,
-            c.post_id,
-            c.user_id,
-            /* ✅ 방별 닉네임이 있으면 우선 사용, 없으면 글로벌 닉네임 → 이름 */
-            COALESCE(rjr.request_user_nickname, u.nickname, u.name) AS nickname,
-            c.content,
-            c.created_at,
-            c.updated_at,
-            c.deleted_at
+            c.comment_id, c.post_id, c.user_id, c.parent_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            c.content, c.created_at, c.updated_at, c.deleted_at
         FROM board_comments c
                  LEFT JOIN users u ON u.user_id = c.user_id
-                 LEFT JOIN board_posts p ON p.post_id = c.post_id
-                 LEFT JOIN room_join_request rjr
-                           ON rjr.room_id = p.room_id
-                           AND rjr.request_user_email = u.email
-                           AND rjr.status = '승인'
         WHERE c.post_id = #{postId}
-          AND c.deleted_at IS NULL
-        ORDER BY c.comment_id ASC
+        ORDER BY
+            CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,
+            COALESCE(c.parent_id, c.comment_id),
+            c.created_at ASC,
+            c.comment_id ASC
     </select>
 
     <insert id="insert" parameterType="com.example.demo.board.vo.BoardCommentVO"
             useGeneratedKeys="true" keyProperty="commentId" keyColumn="comment_id">
-        INSERT INTO board_comments (post_id, user_id, content)
-        VALUES (#{postId}, #{userId}, #{content})
+        INSERT INTO board_comments
+            (post_id,
+             user_id,
+             content,
+             parent_id
+            )
+        VALUES
+            (#{postId},
+             #{userId},
+             #{content},
+             #{parentId}
+            )
     </insert>
 
     <update id="updateContent">
@@ -58,10 +58,27 @@
 
     <update id="softDelete">
         UPDATE board_comments
-        SET deleted_at = NOW()
+        SET deleted_at = NOW(),
+            content = '삭제된 댓글입니다.',
+            updated_at = NOW()
         WHERE comment_id = #{commentId}
           AND user_id = #{userId}
           AND deleted_at IS NULL
     </update>
+
+    <select id="selectByCommentId" resultMap="CommentMap">
+        SELECT
+            c.comment_id,
+            c.post_id,
+            c.user_id,
+            c.parent_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            c.content,
+            c.created_at,
+            c.updated_at,
+            c.deleted_at
+        FROM board_comments c LEFT JOIN users u ON u.user_id = c.user_id
+        WHERE c.comment_id = #{commentId}
+    </select>
 
 </mapper>
