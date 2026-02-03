@@ -39,6 +39,134 @@ function Dashboard({ setActiveMenu }) {
   });
 
   // =========================
+  // ✅ 게시판 (공지 맨 위, 그 다음 최신순 6개)
+  // =========================
+  const [dashBoard, setDashBoard] = useState({ items: [] }); // [{ postId, title, category, isPinned }]
+
+  useEffect(() => {
+    if (!subjectId) return;
+
+    const fetchDashBoard = async () => {
+      try {
+        const res = await api.get("/board/posts", {
+          params: { roomId: subjectId, page: 1, size: 30 },
+        });
+        const items = res.data?.items || [];
+        const noticeOrPinned = (p) => !!p?.isPinned || p?.category === "NOTICE";
+        const sorted = [...items]
+          .sort((a, b) => {
+            const aNotice = noticeOrPinned(a);
+            const bNotice = noticeOrPinned(b);
+            if (aNotice && !bNotice) return -1;
+            if (!aNotice && bNotice) return 1;
+            const aTime = new Date(a.createdAt || 0).getTime();
+            const bTime = new Date(b.createdAt || 0).getTime();
+            return bTime - aTime;
+          })
+          .slice(0, 6);
+        setDashBoard({ items: sorted });
+      } catch (e) {
+        console.error("DASH BOARD ERROR:", e);
+        setDashBoard({ items: [] });
+      }
+    };
+
+    fetchDashBoard();
+  }, [subjectId]);
+
+  const categoryToLabel = (code) => {
+    if (!code) return "";
+    if (code === "NOTICE") return "공지";
+    if (code === "GENERAL") return "일반";
+    if (code === "QNA") return "질문";
+    if (code === "RESOURCE") return "자료";
+    return code;
+  };
+
+  // =========================
+  // ✅ 시험 일정 (type=EXAM, 가장 가까운 1건) - D-day·프로그레스바용
+  // =========================
+  const [dashExam, setDashExam] = useState({ item: null }); // { item: { id, title, start } | null }
+
+  useEffect(() => {
+    if (!subjectId) return;
+
+    const fetchNextExam = async () => {
+      try {
+        // 1) 전용 API 시도 (백엔드에 GET .../schedule/exam/next 가 있는 경우)
+        const res = await api.get(`/rooms/${subjectId}/schedule/exam/next`);
+        const item = res.data?.item ?? null;
+        if (item?.start) {
+          setDashExam({ item });
+          return;
+        }
+      } catch (e) {
+        // 404 등: 전용 API가 없거나 실패 시 아래 폴백 사용
+      }
+
+      // 2) 폴백: 기존 일정 API로 범위 조회 후 type=EXAM 중 "오늘 이후" 시험 우선, 없으면 오늘 시험
+      try {
+        const today = new Date();
+        const todayStr =
+          `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const end = new Date(today);
+        end.setDate(end.getDate() + 120);
+        const endYmd =
+          `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+
+        const res = await api.get(
+          `/rooms/${subjectId}/schedule?start=${encodeURIComponent(todayStr)}&end=${encodeURIComponent(endYmd)}`
+        );
+        const items = Array.isArray(res.data?.items) ? res.data.items : [];
+        const exams = items.filter(
+          (it) => (it?.extendedProps?.type || it?.type) === "EXAM" && it?.start
+        );
+        exams.sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+
+        // 오늘 이후 시험 우선, 없으면 오늘 시험
+        const startYmd = (it) => (it.start || "").slice(0, 10);
+        const next =
+          exams.find((it) => startYmd(it) > todayStr) ||
+          exams.find((it) => startYmd(it) >= todayStr);
+        const item = next
+          ? {
+              id: next.id,
+              title: next.title,
+              start: typeof next.start === "string" ? next.start.slice(0, 10) : next.start,
+            }
+          : null;
+        setDashExam({ item });
+      } catch (e) {
+        console.error("DASH EXAM ERROR:", e);
+        setDashExam({ item: null });
+      }
+    };
+
+    fetchNextExam();
+  }, [subjectId]);
+
+  // D-day: 시험일(start) 기준 오늘(로컬)과의 일수 차이. 당일=0, 다음날부터 다음 시험으로 넘어감.
+  const examDday = useMemo(() => {
+    const item = dashExam?.item;
+    if (!item?.start) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startYmd = String(item.start).slice(0, 10);
+    const examDate = new Date(startYmd + "T00:00:00");
+    const diffMs = examDate - today;
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    return days < 0 ? null : days;
+  }, [dashExam?.item]);
+
+  // 프로그레스: 30일 전~시험일 기준, 하루에 한 번씩 진행 (0~100%)
+  const examProgress = useMemo(() => {
+    if (examDday == null) return 0;
+    const totalDays = 30;
+    const elapsed = totalDays - examDday;
+    return Math.min(100, Math.max(0, (elapsed / totalDays) * 100));
+  }, [examDday]);
+
+  // =========================
   // ✅ 1) 출석 대시보드 데이터 불러오기 (내 출석)
   // - 백엔드: GET /subjects/{subjectId}/attendance?scope=my
   // =========================
@@ -342,23 +470,36 @@ function Dashboard({ setActiveMenu }) {
   return (
     <div className="dashboard-container">
       <div className="dashboard-grid">
-        {/* 1) 시험 카드 */}
+        {/* 1) 시험 카드 - schedules type=EXAM 중 가장 가까운 시험, D-day·프로그레스바 */}
         <div className="card study-card-back dashStudy">
           <div className="card study-card">
-            <div className="study-info">
-              <h3>정보처리기사</h3>
-              <hr />
-              <p>
-                2026.04.27 <br />
-                D-23
-              </p>
+            {dashExam.item ? (
+              <>
+                <div className="study-info">
+                  <h3>{dashExam.item.title || "시험"}</h3>
+                  <hr />
+                  <p>
+                    {(dashExam.item.start || "").replaceAll("-", ".")} <br />
+                    D-{examDday}
+                  </p>
 
-              <div className="progress-bar">
-                <div className="progress" />
+                  <div className="progress-bar">
+                    <div
+                      className="progress"
+                      style={{ width: `${examProgress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="study-icon">🔥</div>
+              </>
+            ) : (
+              <div className="study-info study-info-empty">
+                <h3>시험 일정</h3>
+                <hr />
+                <p className="study-empty-msg">시험 일정이 없습니다.</p>
               </div>
-            </div>
-
-            <div className="study-icon">🔥</div>
+            )}
           </div>
         </div>
 
@@ -445,7 +586,7 @@ function Dashboard({ setActiveMenu }) {
           </div>
         </div>
 
-        {/* 4) 게시판 카드 */}
+        {/* 4) 게시판 카드 - 공지 맨 위, 최신순 6개 */}
         <div className="card dashBoard">
           <div className="card-header line">
             <span className="card-title">게시판</span>
@@ -455,15 +596,34 @@ function Dashboard({ setActiveMenu }) {
           </div>
 
           <ul className="table-list">
-            <li className="trow plain">
-              <span className="row-text">[자료] 2024 기출 자료 공유합니다!</span>
-            </li>
-            <li className="trow plain">
-              <span className="row-text">[자료] 필기 요약본입니다</span>
-            </li>
-            <li className="trow plain">
-              <span className="row-text">[공지] 오늘 저녁 스터디 예정입니다</span>
-            </li>
+            {(dashBoard.items || []).map((p) => (
+              <li
+                key={`post-${p.postId}`}
+                className="trow plain dashBoard-item"
+                onClick={() => {
+                  if (typeof setActiveMenu === "function") setActiveMenu("board");
+                  navigate(`/lms/${subjectId}/board/${p.postId}`);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (typeof setActiveMenu === "function") setActiveMenu("board");
+                    navigate(`/lms/${subjectId}/board/${p.postId}`);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <span className="row-text">
+                  [{categoryToLabel(p.category)}] {p.title}
+                </span>
+              </li>
+            ))}
+
+            {(dashBoard.items || []).length === 0 && (
+              <li className="trow plain">
+                <span className="row-text">게시글이 없습니다.</span>
+              </li>
+            )}
           </ul>
 
           <div className="card-footer">

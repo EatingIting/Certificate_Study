@@ -77,4 +77,19 @@
         AND deleted_at IS NULL
     </update>
 
+    <!-- type=EXAM: 오늘 이후 시험 우선, 없으면 오늘 시험 (오늘만 있으면 D-0로 표시) -->
+    <select id="selectNextExam" resultMap="ScheduleMap">
+        SELECT
+        schedule_id, room_id, user_id, title, description,
+        start_at, end_at, type, color_hex, text_color, custom_type_label,
+        created_at, updated_at, deleted_at
+        FROM schedules
+        WHERE room_id = #{roomId}
+        AND deleted_at IS NULL
+        AND type = 'EXAM'
+        AND start_at <![CDATA[>=]]> CURDATE()
+        ORDER BY (start_at <![CDATA[>]]> CURDATE()) DESC, start_at ASC
+        LIMIT 1
+    </select>
+
 </mapper>

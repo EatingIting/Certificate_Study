@@ -40,4 +40,10 @@ public class ScheduleQueryServiceImpl implements ScheduleQueryService {
 
         return ScheduleListResponse.builder().items(items).build();
     }
+
+    @Override
+    public ScheduleEventResponse getNextExam(String roomId) {
+        ScheduleVO vo = scheduleService.selectNextExam(roomId);
+        return vo == null ? null : ScheduleEventConverter.fromSchedule(vo);
+    }
 }

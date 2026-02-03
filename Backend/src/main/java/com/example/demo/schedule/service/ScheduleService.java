@@ -11,6 +11,9 @@ public interface ScheduleService {
 
     List<ScheduleVO> selectByRange(String roomId, Date start, Date endExclusive);
 
+    /** type=EXAM 중 start_at >= 오늘인 가장 가까운 시험 1건 (없으면 null) */
+    ScheduleVO selectNextExam(String roomId);
+
     Long insert(ScheduleCreateRequest req);
 
     void update(Long scheduleId, String roomId, String userId, ScheduleUpdateRequest req);
