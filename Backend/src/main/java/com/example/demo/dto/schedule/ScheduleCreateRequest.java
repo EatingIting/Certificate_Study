@@ -34,6 +34,12 @@ public class ScheduleCreateRequest {
     @Pattern(regexp = "^$|^\\d{4}-\\d{2}-\\d{2}$")
     private String end;
 
+    /** optional "HH:mm" */
+    @Pattern(regexp = "^$|^([01]?[0-9]|2[0-3]):[0-5][0-9]$")
+    private String startTime;
+    @Pattern(regexp = "^$|^([01]?[0-9]|2[0-3]):[0-5][0-9]$")
+    private String endTime;
+
     @NotBlank
     private String type; // REGISTRATION/EXAM/RESULT/OTHER
 

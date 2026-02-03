@@ -13,6 +13,8 @@
         <result property="description"       column="description"/>
         <result property="startAt"           column="start_at"/>
         <result property="endAt"             column="end_at"/>
+        <result property="startTime"         column="start_time"/>
+        <result property="endTime"           column="end_time"/>
         <result property="type"              column="type"/>
         <result property="colorHex"          column="color_hex"/>
         <result property="textColor"         column="text_color"/>
@@ -30,7 +32,7 @@
     <select id="selectByRange" resultMap="ScheduleMap">
         SELECT
         schedule_id, room_id, user_id, title, description,
-        start_at, end_at, type, color_hex, text_color, custom_type_label,
+        start_at, end_at, start_time, end_time, type, color_hex, text_color, custom_type_label,
         created_at, updated_at, deleted_at
         FROM schedules
         WHERE room_id = #{roomId}
@@ -44,10 +46,10 @@
             useGeneratedKeys="true" keyProperty="scheduleId">
         INSERT INTO schedules (
         room_id, user_id, title, description,
-        start_at, end_at, type, color_hex, text_color, custom_type_label
+        start_at, end_at, start_time, end_time, type, color_hex, text_color, custom_type_label
         ) VALUES (
         #{roomId}, #{userId}, #{title}, #{description},
-        #{startAt}, #{endAt}, #{type}, #{colorHex}, #{textColor}, #{customTypeLabel}
+        #{startAt}, #{endAt}, #{startTime}, #{endTime}, #{type}, #{colorHex}, #{textColor}, #{customTypeLabel}
         )
     </insert>
 
@@ -59,6 +61,8 @@
         description = #{description},
         start_at = #{startAt},
         end_at = #{endAt},
+        start_time = #{startTime},
+        end_time = #{endTime},
         type = #{type},
         color_hex = #{colorHex},
         text_color = #{textColor},
@@ -80,7 +84,7 @@
     <select id="selectNextExam" resultMap="ScheduleMap">
         SELECT
         schedule_id, room_id, user_id, title, description,
-        start_at, end_at, type, color_hex, text_color, custom_type_label,
+        start_at, end_at, start_time, end_time, type, color_hex, text_color, custom_type_label,
         created_at, updated_at, deleted_at
         FROM schedules
         WHERE room_id = #{roomId}

@@ -53,13 +53,15 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .description(req.getDescription())
                 .startAt(Date.valueOf(startAt))
                 .endAt(Date.valueOf(endAt)) // DB는 inclusive
+                .startTime(normalizeTime(req.getStartTime()))
+                .endTime(normalizeTime(req.getEndTime()))
                 .type(type)
                 .colorHex(req.getColorHex())
                 .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 
-        scheduleMapper.insert(vo); // mapper 그대로 :contentReference[oaicite:3]{index=3}
+        scheduleMapper.insert(vo);
         return vo.getScheduleId();
     }
 
@@ -89,13 +91,15 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .description(req.getDescription())
                 .startAt(Date.valueOf(startAt))
                 .endAt(Date.valueOf(endAt))
+                .startTime(normalizeTime(req.getStartTime()))
+                .endTime(normalizeTime(req.getEndTime()))
                 .type(type)
                 .colorHex(req.getColorHex())
                 .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 
-        int updated = scheduleMapper.update(vo); // mapper 그대로 :contentReference[oaicite:4]{index=4}
+        int updated = scheduleMapper.update(vo);
         if (updated == 0) {
             throw new IllegalArgumentException("해당 일정이 없거나 수정할 수 없습니다. scheduleId=" + scheduleId);
         }
@@ -108,5 +112,13 @@ public class ScheduleServiceImpl implements ScheduleService {
         if (deleted == 0) {
             throw new IllegalArgumentException("해당 일정이 없거나 삭제할 수 없습니다. scheduleId=" + scheduleId);
         }
+    }
+
+    /** "HH:mm" or "HH:mm:ss" → "HH:mm", blank → null */
+    private static String normalizeTime(String time) {
+        if (time == null || time.isBlank()) return null;
+        String t = time.trim();
+        if (t.length() >= 5) return t.substring(0, 5); // HH:mm
+        return t;
     }
 }

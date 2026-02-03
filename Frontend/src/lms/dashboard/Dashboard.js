@@ -39,7 +39,7 @@ function Dashboard({ setActiveMenu }) {
   });
 
   // =========================
-  // ✅ 게시판 (공지 맨 위, 그 다음 최신순 6개)
+  // 게시판 (공지 맨 위, 그 다음 최신순 6개)
   // =========================
   const [dashBoard, setDashBoard] = useState({ items: [] }); // [{ postId, title, category, isPinned }]
 
