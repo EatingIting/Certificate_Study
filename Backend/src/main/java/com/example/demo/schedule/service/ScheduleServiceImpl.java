@@ -20,7 +20,12 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Override
     public List<ScheduleVO> selectByRange(String roomId, Date start, Date endExclusive) {
-        return scheduleMapper.selectByRange(roomId, start, endExclusive); // mapper 그대로 :contentReference[oaicite:2]{index=2}
+        return scheduleMapper.selectByRange(roomId, start, endExclusive);
+    }
+
+    @Override
+    public ScheduleVO selectNextExam(String roomId) {
+        return scheduleMapper.selectNextExam(roomId);
     }
 
     @Override

@@ -27,4 +27,7 @@ public interface ScheduleMapper {
             @Param("roomId") String roomId,
             @Param("userId") String userId
     );
+
+    /** type=EXAM, start_at >= 오늘, 가장 가까운 시험 1건 */
+    ScheduleVO selectNextExam(@Param("roomId") String roomId);
 }

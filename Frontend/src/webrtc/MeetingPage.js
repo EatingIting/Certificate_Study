@@ -924,6 +924,9 @@ function MeetingPage({ portalRoomId }) {
     const faceDetectorRef = useRef(null);
     const lastFaceBoxRef = useRef(null);
     const smoothedFaceBoxRef = useRef(null);  // 🔥 이모지 떨림 방지용 smoothed 위치
+    const hasEverDrawnEmojiRef = useRef(false);  // 🔥 카메라 켤 때 한 번만 검은화면, 이후 얼굴 미감지 시에는 원본 비디오(움직임 유지)
+    const emojiBlackScreenStartedAtRef = useRef(0);   // 🔥 검은화면 시작 시각 (3초 경과 시 토스트용)
+    const emojiBlackScreenToastShownRef = useRef(false);  // 🔥 검은화면 3초 토스트 이미 표시 여부
     const lastDetectAtRef = useRef(0);
     const lastFaceBoxAtRef = useRef(0);       // ✅ 마지막으로 "유효한 얼굴 박스"를 갱신한 시각(ms)
     const faceDetectorLoadingRef = useRef(null);
@@ -1780,6 +1783,9 @@ function MeetingPage({ portalRoomId }) {
         // 🔥 WebSocket으로 filterPreparing 상태를 동기화하므로 canvas 스피너 불필요
 
         canvasPipelineActiveRef.current = true;
+        hasEverDrawnEmojiRef.current = false;  // 🔥 카메라 켤 때 한 번만 검은화면
+        emojiBlackScreenStartedAtRef.current = 0;
+        emojiBlackScreenToastShownRef.current = false;
         let frameCount = 0;
 
         // 🔥 배경 제거용 캔버스 및 세그멘터 초기화
@@ -2005,14 +2011,44 @@ function MeetingPage({ portalRoomId }) {
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.drawImage(bgFrameCanvas, 0, 0, canvas.width, canvas.height);
                     } else {
-                        // 배경제거가 켜져있지만 세그멘터가 아직 준비 안됨 -> 원본 비디오
-                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        // 배경제거가 켜져있지만 세그멘터가 아직 준비 안됨
+                        // 🔥 이모지 모드: 카메라 켤 때 한 번만 검은화면, 이후에는 원본 비디오(움직임 유지)
+                        if (isEmojiOn) {
+                            if (!hasEverDrawnEmojiRef.current) {
+                                if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
+                                if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
+                                    emojiBlackScreenToastShownRef.current = true;
+                                    setToastMessage("카메라를 보이게 해주세요.");
+                                    setShowToast(true);
+                                }
+                                ctx.fillStyle = "#000000";
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            } else {
+                                ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                            }
+                        } else {
+                            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        }
                     }
                 } else {
                     // B. 일반 비디오 (배경제거 X)
-                    // 🔥 이모지 모드가 켜져있지만 얼굴이 아직 감지되지 않았으면 원본 카메라 스트림 표시
-                    // (검은 화면 대신 카메라 스트림을 보여줌)
-                    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                    // 🔥 이모지 모드 + 얼굴 미감지: 카메라 켤 때 한 번만 검은화면, 이후에는 원본 비디오(움직임 유지)
+                    if (isEmojiOn && !lastFaceBoxRef.current) {
+                        if (!hasEverDrawnEmojiRef.current) {
+                            if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
+                            if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
+                                emojiBlackScreenToastShownRef.current = true;
+                                setToastMessage("카메라를 보이게 해주세요.");
+                                setShowToast(true);
+                            }
+                            ctx.fillStyle = "#000000";
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        } else {
+                            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        }
+                    } else {
+                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                    }
                 }
 
                 // C. 이모지 그리기 (얼굴이 감지되었을 때만)
@@ -2047,6 +2083,9 @@ function MeetingPage({ portalRoomId }) {
                         ctx.textBaseline = "middle";
                         ctx.font = `${smoothed.size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
                         ctx.fillText(faceEmojiRef.current, smoothed.x, smoothed.y);
+                        hasEverDrawnEmojiRef.current = true;  // 🔥 이모지 한 번이라도 그렸으면 이후 얼굴 미감지 시 원본 비디오 표시
+                        emojiBlackScreenStartedAtRef.current = 0;
+                        emojiBlackScreenToastShownRef.current = false;
                     }
                 }
             } // end of video rendering block
@@ -2078,9 +2117,11 @@ function MeetingPage({ portalRoomId }) {
             }
 
             // ✅ 마지막 정상 프레임 저장 (검/흰 화면 대신 freeze용)
+            // 🔥 이모지 ON + 얼굴 미감지 시 검은화면을 그렸으면 저장하지 않음 (이전 이모지 프레임 유지)
+            const drewBlackForEmoji = isEmojiOn && !lastFaceBoxRef.current;
             try {
                 const last = lastGoodFrameCanvasRef.current;
-                if (last && canvas) {
+                if (last && canvas && !drewBlackForEmoji) {
                     const lctx = last.getContext("2d");
                     if (lctx) {
                         lctx.drawImage(canvas, 0, 0, last.width, last.height);
@@ -2981,6 +3022,9 @@ function MeetingPage({ portalRoomId }) {
         //    모델이 로드되는 동안에도 원본 비디오를 캔버스에 계속 그려줘서
         //    replaceTrack 시점에 검은 화면이 나오지 않게 한다.
         faceFilterActiveRef.current = true;
+        hasEverDrawnEmojiRef.current = false;  // 🔥 카메라 켤 때 한 번만 검은화면
+        emojiBlackScreenStartedAtRef.current = 0;
+        emojiBlackScreenToastShownRef.current = false;
 
         // FaceDetector(브라우저 지원 시) 또는 MediaPipe(tasks-vision) 준비
         let detectorState = null;
@@ -3173,10 +3217,39 @@ function MeetingPage({ portalRoomId }) {
                     // 필터 준비 중에는 검은 화면만 유지 (위에서 이미 그려짐)
                     // 얼굴 감지는 계속 진행 (아래에서 처리)
                 } else if (!wantBgRemove || !frameCtx) {
-                    // 🔥 이모지 모드 여부와 관계없이 원본 비디오 그리기
-                    // (얼굴 감지 실패 시에도 검은 화면 대신 카메라 스트림 표시)
-                    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                    // 🔥 이모지 모드 + 얼굴 미감지: 카메라 켤 때 한 번만 검은화면, 이후에는 원본 비디오(움직임 유지)
+                    if (wantEmoji && !canDrawEmoji) {
+                        if (!hasEverDrawnEmojiRef.current) {
+                            if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
+                            if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
+                                emojiBlackScreenToastShownRef.current = true;
+                                setToastMessage("카메라를 보이게 해주세요.");
+                                setShowToast(true);
+                            }
+                            ctx.fillStyle = "#000000";
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        } else {
+                            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        }
+                    } else {
+                        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                    }
                 } else {
+                    // 🔥 이모지 모드 + 얼굴 미감지: 카메라 켤 때 한 번만 검은화면, 이후에는 원본 비디오(움직임 유지)
+                    if (wantEmoji && !canDrawEmoji) {
+                        if (!hasEverDrawnEmojiRef.current) {
+                            if (!emojiBlackScreenStartedAtRef.current) emojiBlackScreenStartedAtRef.current = Date.now();
+                            if (Date.now() - emojiBlackScreenStartedAtRef.current >= 3000 && !emojiBlackScreenToastShownRef.current) {
+                                emojiBlackScreenToastShownRef.current = true;
+                                setToastMessage("카메라를 보이게 해주세요.");
+                                setShowToast(true);
+                            }
+                            ctx.fillStyle = "#000000";
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        } else {
+                            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+                        }
+                    } else {
                     // 1) frameCanvas에 비디오 프레임
                     frameCtx.globalCompositeOperation = "source-over";
                     frameCtx.clearRect(0, 0, frameCanvas.width, frameCanvas.height);
@@ -3295,6 +3368,7 @@ function MeetingPage({ portalRoomId }) {
                             ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
                         }
                     }
+                    } // end else (wantEmoji && !canDrawEmoji)
                 }
             } catch {
                 // 필터 준비 중이면 마지막 정상 프레임 사용 (검은 화면 대신 freeze)
@@ -3402,6 +3476,9 @@ function MeetingPage({ portalRoomId }) {
                     ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
                     ctx.fillText(currentEmoji, smoothed.x, smoothed.y);
                     ctx.restore();
+                    hasEverDrawnEmojiRef.current = true;  // 🔥 이모지 한 번이라도 그렸으면 이후 얼굴 미감지 시 원본 비디오 표시
+                    emojiBlackScreenStartedAtRef.current = 0;
+                    emojiBlackScreenToastShownRef.current = false;
                     // 🔥 이모지가 그려진 프레임 카운트 증가
                     if (wantEmoji) filteredFramesDrawn++;
                 }
@@ -3465,9 +3542,11 @@ function MeetingPage({ portalRoomId }) {
             // 🔥 스피너 제거됨 - 필터 준비 완료 로직 제거
 
             // ✅ 마지막 정상 프레임 저장 (검/흰 화면 대신 freeze용)
+            // 🔥 이모지 ON + 얼굴 미감지 시 검은화면을 그렸으면 저장하지 않음 (이전 이모지 프레임 유지)
+            const drewBlackForEmoji = wantEmoji && !canDrawEmoji;
             try {
                 const last = faceFilterLastGoodFrameCanvasRef.current;
-                if (last && canvas) {
+                if (last && canvas && !drewBlackForEmoji) {
                     const lctx = last.getContext("2d");
                     if (lctx) {
                         lctx.drawImage(canvas, 0, 0, last.width, last.height);
@@ -6850,11 +6929,7 @@ function MeetingPage({ portalRoomId }) {
                                                             setBgRemove(next);
                                                             bgRemoveRef.current = next;
                                                             setShowReactions(false);
-                                                            // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
-                                                            // (drawLoop에서 bgRemoveRef.current를 체크하여 배경 제거 처리)
-                                                            if (!canvasPipelineActiveRef.current) {
-                                                                await turnOnCamera();
-                                                            }
+                                                            // 🔥 카메라가 이미 켜져있으면 drawLoop가 배경제거 적용. 꺼져있으면 설정만 저장(카메라 켤 때 적용)
                                                             setToastMessage(next ? "배경이 제거되었습니다." : "배경 제거가 해제되었습니다.");
                                                             setShowToast(true);
                                                         }}
@@ -6871,11 +6946,12 @@ function MeetingPage({ portalRoomId }) {
                                                                 setFaceEmoji(emoji);
                                                                 faceEmojiRef.current = emoji;
                                                                 setShowReactions(false);
-                                                                // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera로 시작
+                                                                // 🔥 카메라가 이미 켜져있으면 drawLoop가 이모지 적용. 꺼져있으면 설정만 저장(카메라 켤 때 적용)
                                                                 if (!canvasPipelineActiveRef.current) {
-                                                                    await turnOnCamera();
+                                                                    setToastMessage("이모지가 선택되었습니다. 카메라를 켜면 적용됩니다.");
+                                                                } else {
+                                                                    setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
                                                                 }
-                                                                setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
                                                                 setShowToast(true);
                                                             }}
                                                             className="reaction-btn"
@@ -7219,10 +7295,7 @@ function MeetingPage({ portalRoomId }) {
                                                             setBgRemove(next);
                                                             bgRemoveRef.current = next;
                                                             setShowReactions(false);
-                                                            // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
-                                                            if (!canvasPipelineActiveRef.current) {
-                                                                await turnOnCamera();
-                                                            }
+                                                            // 🔥 카메라가 이미 켜져있으면 drawLoop가 배경제거 적용. 꺼져있으면 설정만 저장(카메라 켤 때 적용)
                                                             setToastMessage(next ? "배경이 제거되었습니다." : "배경 제거가 해제되었습니다.");
                                                             setShowToast(true);
                                                         }}
@@ -7239,11 +7312,12 @@ function MeetingPage({ portalRoomId }) {
                                                                 setFaceEmoji(emoji);
                                                                 faceEmojiRef.current = emoji;
                                                                 setShowReactions(false);
-                                                                // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera로 시작
+                                                                // 🔥 카메라가 이미 켜져있으면 drawLoop가 이모지 적용. 꺼져있으면 설정만 저장(카메라 켤 때 적용)
                                                                 if (!canvasPipelineActiveRef.current) {
-                                                                    await turnOnCamera();
+                                                                    setToastMessage("이모지가 선택되었습니다. 카메라를 켜면 적용됩니다.");
+                                                                } else {
+                                                                    setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
                                                                 }
-                                                                setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
                                                                 setShowToast(true);
                                                             }}
                                                             className="reaction-btn"
@@ -7498,10 +7572,7 @@ function MeetingPage({ portalRoomId }) {
                                         setBgRemove(next);
                                         bgRemoveRef.current = next;
                                         setShowReactions(false);
-                                        // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera 호출
-                                        if (!canvasPipelineActiveRef.current) {
-                                            await turnOnCamera();
-                                        }
+                                        // 🔥 카메라가 이미 켜져있으면 drawLoop가 배경제거 적용. 꺼져있으면 설정만 저장(카메라 켤 때 적용)
                                         setToastMessage(next ? "배경이 제거되었습니다." : "배경 제거가 해제되었습니다.");
                                         setShowToast(true);
                                     }}
@@ -7519,11 +7590,12 @@ function MeetingPage({ portalRoomId }) {
                                             faceEmojiRef.current = emoji;
                                             // 🔥 배경 제거 상태 유지 (동시 사용 가능)
                                             setShowReactions(false);
-                                            // 🔥 canvasPipeline이 활성화되어 있지 않으면 turnOnCamera로 시작
+                                            // 🔥 카메라가 이미 켜져있으면 drawLoop가 이모지 적용. 꺼져있으면 설정만 저장(카메라 켤 때 적용)
                                             if (!canvasPipelineActiveRef.current) {
-                                                await turnOnCamera();
+                                                setToastMessage("이모지가 선택되었습니다. 카메라를 켜면 적용됩니다.");
+                                            } else {
+                                                setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
                                             }
-                                            setToastMessage("얼굴 이모지 필터가 적용되었습니다.");
                                             setShowToast(true);
                                         }}
                                         className="reaction-btn"
