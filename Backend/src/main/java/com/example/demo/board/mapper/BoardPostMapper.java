@@ -48,5 +48,9 @@ public interface BoardPostMapper {
 
     int softDeletePostByHost(@Param("postId") long postId);
 
-    int updatePinnedByHost(@Param("postId") long postId, @Param("isPinned") boolean isPinned);
+    int updatePinnedByHost(@Param("postId") long postId,
+                           @Param("isPinned") boolean isPinned);
+
+    String findWriterIdByPostId(@Param("postId") long postId);
+
 }

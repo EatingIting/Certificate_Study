@@ -79,4 +79,9 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         String path = session.getUri().getPath();
         return path.substring(path.lastIndexOf("/") + 1);
     }
+
+    public Object getOwnerSessionKeys() {
+        return ownerSessions.keySet();
+    }
+
 }
