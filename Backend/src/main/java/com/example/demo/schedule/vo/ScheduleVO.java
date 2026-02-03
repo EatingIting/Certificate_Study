@@ -27,6 +27,10 @@ public class ScheduleVO {
     private Date startAt;    // date
     private Date endAt;      // date (inclusive)
 
+    /** optional "HH:mm" */
+    private String startTime;
+    private String endTime;
+
     private String type;     // REGISTRATION/EXAM/RESULT/OTHER
     private String colorHex; // varchar(7) ex) #97c793
     private String textColor; // varchar(7) ex) #ffffff (사용자 선택)

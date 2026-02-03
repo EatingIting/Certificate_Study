@@ -54,6 +54,8 @@ function Calendar() {
         description: "",
         start: "",
         end: "",
+        startTime: "09:00",
+        endTime: "",
         type: "OTHER",
         customLabel: "",
         colorHex: "#97c793",
@@ -156,13 +158,15 @@ function Calendar() {
         return [...events, ...studyEvents];
     }, [events, studyEvents]);
 
-    /* 달력 그리드·+N개 팝업에는 일반 일정만 (스터디는 날짜칸 회차로만 표시) */
+    /* 달력 그리드·+N개 팝업에는 일반 일정만. 연속 일정(displayOrder 0)을 앞에 두어 첫 행에 배치 */
     let calendarEvents = useMemo(() => {
-        return events.filter((ev) => {
-            if (ev.extendedProps?.type === "STUDY") return false;
-            if (typeof ev.id === "string" && ev.id.startsWith("S")) return false;
-            return true;
-        });
+        return events
+            .filter((ev) => {
+                if (ev.extendedProps?.type === "STUDY") return false;
+                if (typeof ev.id === "string" && ev.id.startsWith("S")) return false;
+                return true;
+            })
+            .sort((a, b) => (a.displayOrder ?? 1) - (b.displayOrder ?? 1));
     }, [events]);
 
     /* =========================
@@ -318,6 +322,8 @@ function Calendar() {
             description: "",
             start: "",
             end: "",
+            startTime: "09:00",
+            endTime: "",
             type: "OTHER",
             customLabel: "",
             colorHex: "#97c793",
@@ -332,18 +338,32 @@ function Calendar() {
         setEditingEventId(eventLike.id);
         setOpenMenuId(null);
 
-        let startStr =
-            typeof eventLike.start === "string"
-                ? eventLike.start
-                : eventLike.startStr?.slice(0, 10) || "";
-
+        // API는 start/end를 YYYY-MM-DD만 허용 → 항상 날짜 부분만 사용
+        let startStr = ymdOf(
+            typeof eventLike.start === "string" ? eventLike.start : eventLike.startStr
+        );
+        let endRaw = typeof eventLike.end === "string" ? eventLike.end : eventLike.endStr || "";
         let endInclusive = "";
-        if (eventLike.end) {
-            let endStr =
-                typeof eventLike.end === "string"
-                    ? eventLike.end
-                    : eventLike.endStr?.slice(0, 10) || "";
+        if (endRaw) {
+            let endStr = ymdOf(endRaw);
             endInclusive = endStr ? toInclusiveEnd(endStr) : "";
+        }
+
+        // 시작/종료 시간: "YYYY-MM-DDTHH:mm" 형식이면 T 뒤 추출, 없으면 extendedProps
+        let startRaw = typeof eventLike.start === "string" ? eventLike.start : eventLike.startStr || "";
+        let startTime = "";
+        let endTime = "";
+        if (startRaw.length > 10 && startRaw.charAt(10) === "T") {
+            startTime = startRaw.slice(11, 16) || "";
+        }
+        if (!startTime && eventLike.extendedProps?.startTime) {
+            startTime = /^\d{2}:\d{2}$/.test(eventLike.extendedProps.startTime) ? eventLike.extendedProps.startTime : "";
+        }
+        if (endRaw.length > 10 && endRaw.charAt(10) === "T") {
+            endTime = endRaw.slice(11, 16) || "";
+        }
+        if (!endTime && eventLike.extendedProps?.endTime) {
+            endTime = /^\d{2}:\d{2}$/.test(eventLike.extendedProps.endTime) ? eventLike.extendedProps.endTime : "";
         }
 
         setForm({
@@ -351,6 +371,8 @@ function Calendar() {
             description: eventLike.extendedProps?.description || "",
             start: startStr,
             end: endInclusive,
+            startTime: startTime || "",
+            endTime: endTime || "",
             type: eventLike.extendedProps?.type || "OTHER",
             customLabel: eventLike.extendedProps?.customLabel || "",
             colorHex: eventLike.backgroundColor || "#97c793",
@@ -439,25 +461,41 @@ function Calendar() {
                     it?.extendedProps?.textColor ||
                     "";
 
+                // 색상 없으면 FullCalendar 기본(파란색)으로 나오므로, 항상 기본 녹색 적용
+                let defaultBg = "#97c793";
                 let ev = {
                     id: idStr,
                     title: it?.title || "",
                     start: it?.start,
                     ...(it?.end ? { end: it.end } : {}),
-                    extendedProps: it?.extendedProps || {},
+                    extendedProps: {
+                        ...(it?.extendedProps || {}),
+                    },
+                    backgroundColor: bg || defaultBg,
+                    borderColor: bg || defaultBg,
                 };
-                
-                // 조건부 spread 대신 if로 넣어서 “조용히 빠지는” 문제 방지
-                if (bg) {
-                    ev.backgroundColor = bg;
-                    ev.borderColor = bg;
-                }
                 if (tc) {
                     ev.textColor = tc;
                 }
 
                 // type이 STUDY이거나 id가 S로 시작하면 스터디 일정
                 let isStudy = t === "STUDY" || idStr.startsWith("S");
+                let startYmd = ymdOf(ev.start);
+                let endYmd = ev.end ? ymdOf(ev.end) : "";
+                let isMultiDay = !isStudy && Boolean(endYmd) && endYmd !== startYmd;
+
+                if (!isStudy && isMultiDay) {
+                    ev.allDay = true;
+                    if (typeof ev.start === "string") ev.start = startYmd;
+                    let rawEnd = typeof ev.end === "string" ? ev.end : "";
+                    if (rawEnd.length > 10) ev.end = toExclusiveEnd(endYmd);
+                    else if (typeof ev.end === "string") ev.end = endYmd;
+                    ev.displayOrder = 0;
+                    ev.extendedProps.isMultiDay = true;
+                } else if (!isStudy) {
+                    ev.displayOrder = 1;
+                }
+
                 if (isStudy) study.push(ev);
                 else normal.push(ev);
             }
@@ -521,11 +559,26 @@ function Calendar() {
             return;
         }
 
+        let startTime = (form.startTime || "").trim();
+        let endTime = (form.endTime || "").trim();
+        if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) startTime = "";
+        if (endTime && !/^\d{2}:\d{2}$/.test(endTime)) endTime = "";
+        if (startTime && endTime && endTime <= startTime) {
+            setFormError("종료 시간은 시작 시간보다 이후여야 합니다.");
+            return;
+        }
+
+        // 백엔드는 start/end를 YYYY-MM-DD 형식만 허용
+        let startYmd = (form.start || "").slice(0, 10);
+        let endYmd = hasEnd ? (form.end || "").slice(0, 10) : "";
+
         let payload = {
             title,
             description: form.description.trim(),
-            start: form.start,
-            end: hasEnd ? form.end : "",
+            start: startYmd,
+            end: endYmd,
+            startTime: startTime || "",
+            endTime: endTime || "",
             type: form.type,
             colorHex: form.colorHex,
             customLabel: form.type === "OTHER" ? form.customLabel.trim() : "",
@@ -866,7 +919,10 @@ function Calendar() {
                         expandRows={true}
                         fixedWeekCount={true}
                         showNonCurrentDates={true}
-                        dayMaxEventRows={1}
+                        dayMaxEvents={1}
+                        eventDisplay="block"
+                        eventOrder="displayOrder,allDay,-duration,start"
+                        eventOrderStrict={true}
                         events={calendarEvents}
                         dateClick={(info) => {
                             let ymd = toYmd(info.date);
@@ -1055,7 +1111,7 @@ function Calendar() {
                             let round = ev.extendedProps?.round;
                             let sTime = ev.extendedProps?.startTime;
                             let eTime = ev.extendedProps?.endTime;
-                            let timePart = sTime && eTime ? `${sTime} ~ ${eTime}` : "";
+                            let timePart = (sTime || eTime) ? [sTime, eTime].filter(Boolean).join(" ~ ") : "";
                             let displayTitle = isStudy
                                 ? `${round ? `${round}회차` : "스터디"}${timePart ? ` (${timePart})` : ""}`
                                 : ev.title;
@@ -1080,9 +1136,13 @@ function Calendar() {
 
                                         <div className="calItemRight">
                                             <span className="calDate">
-                                                {startYmd ? fmtDate(startYmd) : ""}
-                                                {endStr && endStr !== startYmd ? ` ~ ${fmtDate(endStr)}` : ""}
-                                                {isStudy && timePart ? ` (${timePart})` : ""}
+                                                <span className="calDateLine">
+                                                    {startYmd ? fmtDate(startYmd) : ""}
+                                                    {endStr && endStr !== startYmd ? ` ~ ${fmtDate(endStr)}` : ""}
+                                                </span>
+                                                {timePart ? (
+                                                    <span className="calDateLine calDateTime">{timePart}</span>
+                                                ) : null}
                                             </span>
 
                                             {isHost && (
@@ -1206,6 +1266,30 @@ function Calendar() {
                                         onChange={(e) => onChangeForm("end", e.target.value)}
                                     />
                                 </label>
+                            </div>
+
+                            <div className="calTimeSection">
+                                
+                                <div className="calRow2">
+                                    <label className="calField">
+                                        <span className="calFieldLabel">시작시간</span>
+                                        <input
+                                            type="time"
+                                            className="calInput"
+                                            value={form.startTime}
+                                            onChange={(e) => onChangeForm("startTime", e.target.value)}
+                                        />
+                                    </label>
+                                    <label className="calField">
+                                        <span className="calFieldLabel">종료시간(선택)</span>
+                                        <input
+                                            type="time"
+                                            className="calInput"
+                                            value={form.endTime}
+                                            onChange={(e) => onChangeForm("endTime", e.target.value)}
+                                        />
+                                    </label>
+                                </div>
                             </div>
 
                             <div className="calRow2">
