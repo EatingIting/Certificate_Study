@@ -1,7 +1,10 @@
 import "./LMSHeader.css";
-import { Bell, MessageCircle, User } from "lucide-react";
+import {Bell, MessageCircle, User, UserCircle, Users} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function Header() {
+    const navigate = useNavigate();
+
     return (
         <header className="lms-header">
             <div className="lms-header-left">
@@ -15,6 +18,11 @@ export default function Header() {
 
 
             <div className="lms-header-right">
+                <Users
+                    size={18}
+                    className="icon-button"
+                    onClick={() => navigate("/room")}
+                />
                 <MessageCircle size={18} />
                 <Bell size={18} />
                 <div className="profile">
