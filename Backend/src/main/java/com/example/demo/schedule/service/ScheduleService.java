@@ -1,6 +1,7 @@
 package com.example.demo.schedule.service;
 
 import com.example.demo.dto.schedule.ScheduleCreateRequest;
+import com.example.demo.dto.schedule.ScheduleEventResponse;
 import com.example.demo.dto.schedule.ScheduleUpdateRequest;
 import com.example.demo.schedule.vo.ScheduleVO;
 
@@ -19,4 +20,6 @@ public interface ScheduleService {
     void update(Long scheduleId, String roomId, String userId, ScheduleUpdateRequest req);
 
     void softDelete(Long scheduleId, String roomId, String userId);
+
+    List<ScheduleEventResponse> getEvents(String roomId, String start, String end);
 }
