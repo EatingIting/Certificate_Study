@@ -170,5 +170,19 @@
           AND deleted_at IS NULL
     </select>
 
+    <select id="findPostTitleByPostId" resultType="string">
+        SELECT title
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findRoomIdByPostId" resultType="string">
+        SELECT room_id
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
 
 </mapper>
