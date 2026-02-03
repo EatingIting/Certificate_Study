@@ -1,7 +1,9 @@
 package com.example.demo.schedule.service;
 
 import com.example.demo.dto.schedule.ScheduleCreateRequest;
+import com.example.demo.dto.schedule.ScheduleEventResponse;
 import com.example.demo.dto.schedule.ScheduleUpdateRequest;
+import com.example.demo.schedule.converter.ScheduleEventConverter;
 import com.example.demo.schedule.mapper.ScheduleMapper;
 import com.example.demo.schedule.vo.ScheduleVO;
 import lombok.RequiredArgsConstructor;
@@ -53,15 +55,13 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .description(req.getDescription())
                 .startAt(Date.valueOf(startAt))
                 .endAt(Date.valueOf(endAt)) // DB는 inclusive
-                .startTime(normalizeTime(req.getStartTime()))
-                .endTime(normalizeTime(req.getEndTime()))
                 .type(type)
                 .colorHex(req.getColorHex())
                 .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 
-        scheduleMapper.insert(vo);
+        scheduleMapper.insert(vo); // mapper 그대로 :contentReference[oaicite:3]{index=3}
         return vo.getScheduleId();
     }
 
@@ -91,15 +91,13 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .description(req.getDescription())
                 .startAt(Date.valueOf(startAt))
                 .endAt(Date.valueOf(endAt))
-                .startTime(normalizeTime(req.getStartTime()))
-                .endTime(normalizeTime(req.getEndTime()))
                 .type(type)
                 .colorHex(req.getColorHex())
                 .textColor((req.getTextColor() == null || req.getTextColor().isBlank()) ? "#ffffff" : req.getTextColor().trim())
                 .customTypeLabel(customTypeLabel)
                 .build();
 
-        int updated = scheduleMapper.update(vo);
+        int updated = scheduleMapper.update(vo); // mapper 그대로 :contentReference[oaicite:4]{index=4}
         if (updated == 0) {
             throw new IllegalArgumentException("해당 일정이 없거나 수정할 수 없습니다. scheduleId=" + scheduleId);
         }
@@ -114,11 +112,16 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
     }
 
-    /** "HH:mm" or "HH:mm:ss" → "HH:mm", blank → null */
-    private static String normalizeTime(String time) {
-        if (time == null || time.isBlank()) return null;
-        String t = time.trim();
-        if (t.length() >= 5) return t.substring(0, 5); // HH:mm
-        return t;
+    @Override
+    public List<ScheduleEventResponse> getEvents(String roomId, String start, String end) {
+
+        Date s = Date.valueOf(LocalDate.parse(start));
+        Date e = Date.valueOf(LocalDate.parse(end));
+
+        List<ScheduleVO> list = scheduleMapper.selectByRange(roomId, s, e);
+
+        return list.stream()
+                .map(ScheduleEventConverter::fromSchedule)
+                .toList();
     }
 }
