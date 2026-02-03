@@ -94,13 +94,36 @@
     font-size: 15px;
 }
 
-/* 하단 날짜 */
+/* 상단 작성자/작성시간 메타 영역 */
+.note-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* 왼쪽 닉네임, 오른쪽 날짜 */
+    margin-bottom: 24px; /* 닉네임과 본문 사이 여백 조금 더 넓게 */
+    font-size: 13px;
+    color: #666;
+}
+
+.note-author {
+    font-weight: 600;
+}
+
+/* 좌측/우측 정렬 보조 */
+.note-meta-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.note-meta-right {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* 날짜 텍스트 */
 .note-date {
-    margin-top: 15px;
     font-size: 12px;
     color: #999;
-    text-align: right;
-    font-style: italic;
 }
 
 /* 데이터 없음 상태 */

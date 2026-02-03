@@ -124,6 +124,29 @@ const AssignmentDetail = () => {
         }
     };
 
+    // 요약노트 저장 시, AI 답변에서
+    // "맨 첫 번째 ---" 와 "맨 마지막 ---" 를 기준으로
+    // 그 사이에 있는 본문만 추출하기 위한 헬퍼
+    const buildNoteAnswerText = () => {
+        if (!aiReply) return "";
+        // 기본은 전체 답변
+        let text = String(aiReply);
+
+        // 1) 맨 첫 번째 '---' 와 맨 마지막 '---' 위치 찾기
+        const firstDash = text.indexOf("---");
+        const lastDash = text.lastIndexOf("---");
+
+        // 2) 둘 다 존재하고, 서로 다른 위치일 때만
+        //    그 사이의 내용만 잘라서 사용
+        if (firstDash !== -1 && lastDash !== -1 && firstDash < lastDash) {
+            text = text.slice(firstDash + 3, lastDash).trim();
+        }
+
+        // 3) 완전히 비면 원본을 그대로 사용 (안전장치)
+        if (!text.trim()) return String(aiReply);
+        return text;
+    };
+
     const saveAsNote = async () => {
         if (!subjectId) {
             alert("subjectId를 찾을 수 없습니다.");
@@ -135,10 +158,13 @@ const AssignmentDetail = () => {
         }
         setNoteSaving(true);
         try {
+            const answerText =
+                noteType === "SUMMARY" ? buildNoteAnswerText() : String(aiReply);
+
             await api.post("/answernote", {
                 subjectId: String(subjectId),
                 question: aiMessage.trim() || "이 제출물을 보고 요약하거나 피드백해줘.",
-                answer: aiReply,
+                answer: answerText,
                 memo: "AI에게 묻기에서 저장됨",
                 type: noteType, // SUMMARY | PROBLEM
             });

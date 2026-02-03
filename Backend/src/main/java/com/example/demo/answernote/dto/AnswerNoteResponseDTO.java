@@ -12,8 +12,10 @@ public class AnswerNoteResponseDTO {
     private String memo;
     private LocalDateTime createdAt;
     private String type;
+    /** 작성자 표시용 (LMS 닉네임) */
+    private String authorName;
 
-    // 엔티티(원본)를 받아서 DTO(박스)로 옮겨담는 생성자
+    // 엔티티(원본)를 받아서 DTO(박스)로 옮겨담는 기본 생성자
     public AnswerNoteResponseDTO(AnswerNote note) {
         this.id = note.getAnswerNoteId();
         this.question = note.getQuestion();
@@ -21,5 +23,11 @@ public class AnswerNoteResponseDTO {
         this.memo = note.getMemo();
         this.createdAt = note.getCreatedAt();
         this.type = note.getNoteType() != null ? note.getNoteType().name() : null;
+    }
+
+    // authorName 을 서비스에서 주입할 수 있는 보조 생성자
+    public AnswerNoteResponseDTO(AnswerNote note, String authorName) {
+        this(note);
+        this.authorName = authorName;
     }
 }
