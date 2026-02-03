@@ -51,6 +51,7 @@
         )
     </insert>
 
+    <!-- room 소속 일정은 room_id만 일치하면 수정 가능 (생성자 user_id 불일치 시에도 호스트/멤버 수정 허용) -->
     <update id="update" parameterType="com.example.demo.schedule.vo.ScheduleVO">
         UPDATE schedules
         SET
@@ -64,7 +65,6 @@
         custom_type_label = #{customTypeLabel}
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
-        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
 
@@ -73,7 +73,6 @@
         SET deleted_at = CURRENT_TIMESTAMP
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
-        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
 
