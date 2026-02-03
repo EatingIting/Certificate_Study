@@ -304,6 +304,55 @@
     word-break: break-word;
 }
 
+/* 노트 생성 영역 */
+.ad-note-save {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #eef1f5;
+}
+
+.ad-note-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.ad-note-label {
+    font-size: 13px;
+    color: #344054;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ad-note-toggle {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ad-note-chip {
+    border: 1px solid #e7ebf0;
+    background: #fff;
+    color: #344054;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.ad-note-chip.active {
+    background: #eaf7ee;
+    border-color: rgba(31, 122, 65, 0.25);
+    color: #1f7a41;
+}
+
+.ad-note-btn {
+    width: 100%;
+}
+
 /* empty */
 .ad-empty {
     text-align: center;

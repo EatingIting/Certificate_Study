@@ -39,6 +39,10 @@ public class AnswerNote {
     @Column(name = "memo")
     private String memo;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "note_type", nullable = false, length = 16)
+    private AnswerNoteType noteType;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

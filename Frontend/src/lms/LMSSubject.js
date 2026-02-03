@@ -79,7 +79,9 @@ function LMSSubjectInner() {
         if (p.includes("/assignment")) setActiveMenu("assignment");
         else if (p.includes("/attendance")) setActiveMenu("attendance");
         else if (p.includes("/board")) setActiveMenu("board");
-        else if (p.includes("/answernote")) setActiveMenu("answernote/list");
+        else if (p.includes("/answernote/problem")) setActiveMenu("answernote/problem");
+        else if (p.includes("/answernote/summary")) setActiveMenu("answernote/summary");
+        else if (p.includes("/answernote")) setActiveMenu("answernote/all");
         else if (p.includes("/calendar")) setActiveMenu("calendar");
         else setActiveMenu("dashboard");
     }, [location.pathname]);
@@ -262,7 +264,9 @@ function LMSSubjectInner() {
                             <Route path="board/:postId" element={<BoardDetail setActiveMenu={setActiveMenu} />} />
                             <Route path="board/:postId/edit" element={<BoardEdit setActiveMenu={setActiveMenu} />} />
 
-                            <Route path="answernote" element={<AnswerNote setActiveMenu={setActiveMenu} />} />
+                            <Route path="answernote" element={<AnswerNote mode="all" />} />
+                            <Route path="answernote/summary" element={<AnswerNote mode="summary" />} />
+                            <Route path="answernote/problem" element={<AnswerNote mode="problem" />} />
 
                             <Route path="calendar" element={<Calendar setActiveMenu={setActiveMenu} />} />
 

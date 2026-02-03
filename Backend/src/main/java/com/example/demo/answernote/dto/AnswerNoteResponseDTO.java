@@ -11,6 +11,7 @@ public class AnswerNoteResponseDTO {
     private String answer;
     private String memo;
     private LocalDateTime createdAt;
+    private String type;
 
     // 엔티티(원본)를 받아서 DTO(박스)로 옮겨담는 생성자
     public AnswerNoteResponseDTO(AnswerNote note) {
@@ -19,5 +20,6 @@ public class AnswerNoteResponseDTO {
         this.answer = note.getAnswer();
         this.memo = note.getMemo();
         this.createdAt = note.getCreatedAt();
+        this.type = note.getNoteType() != null ? note.getNoteType().name() : null;
     }
 }

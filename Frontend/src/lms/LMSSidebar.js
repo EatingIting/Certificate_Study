@@ -68,7 +68,9 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             else nextActive = "board/all";
         }
 
-        if (last === "answernote") nextActive = "answernote/list";
+        if (path.includes("/answernote/problem")) nextActive = "answernote/problem";
+        else if (path.includes("/answernote/summary")) nextActive = "answernote/summary";
+        else if (last === "answernote") nextActive = "answernote/all";
 
         // 스터디 관리 라우트 동기화
         if (last === "members") nextActive = "study/members";
@@ -433,7 +435,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                         </ul>
                     </li>
 
-                    {/* 오답노트 */}
+                    {/* 노트 */}
                     <li
                         className={`menu-group ${
                             openKeys.includes("answernote") ? "open" : ""
@@ -450,7 +452,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 e.key === "Enter" && toggleParent("answernote")
                             }
                         >
-                            <span className="menu-label">오답노트</span>
+                            <span className="menu-label">노트</span>
                             <span className="arrow">
                                 {openKeys.includes("answernote") ? "▾" : "▸"}
                             </span>
@@ -459,17 +461,45 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                         <ul className="submenu">
                             <li
                                 className={`submenu-item ${
-                                    activeMenu === "answernote/list" ? "active" : ""
+                                    activeMenu === "answernote/all" ? "active" : ""
                                 }`}
                                 onClick={() =>
                                     goChild(
                                         "answernote",
-                                        "answernote/list",
+                                        "answernote/all",
                                         "answernote" // 라우트 경로 (/lms/{subjectId}/answernote)
                                     )
                                 }
                             >
                                 전체 노트
+                            </li>
+                            <li
+                                className={`submenu-item ${
+                                    activeMenu === "answernote/summary" ? "active" : ""
+                                }`}
+                                onClick={() =>
+                                    goChild(
+                                        "answernote",
+                                        "answernote/summary",
+                                        "answernote/summary"
+                                    )
+                                }
+                            >
+                                요약 노트
+                            </li>
+                            <li
+                                className={`submenu-item ${
+                                    activeMenu === "answernote/problem" ? "active" : ""
+                                }`}
+                                onClick={() =>
+                                    goChild(
+                                        "answernote",
+                                        "answernote/problem",
+                                        "answernote/problem"
+                                    )
+                                }
+                            >
+                                문제 노트
                             </li>
                         </ul>
                     </li>

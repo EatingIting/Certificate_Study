@@ -51,4 +51,29 @@ public class AiController {
             return ResponseEntity.ok("오류가 발생했어요. " + msg);
         }
     }
+
+    /**
+     * 노트 자동 분류 (SUMMARY / PROBLEM)
+     * Body: { "question": "...", "answer": "..." }
+     */
+    @PostMapping("/note/classify")
+    public ResponseEntity<String> classifyNote(@RequestBody Map<String, String> request) {
+        String question = request.get("question");
+        String answer = request.get("answer");
+
+        String prompt =
+                "다음 내용을 'SUMMARY' 또는 'PROBLEM' 중 하나로만 분류해.\n" +
+                "- SUMMARY: 요약/정리/개념정리/설명 중심\n" +
+                "- PROBLEM: 문제/퀴즈/오답노트용 질문 중심\n\n" +
+                "질문:\n" + (question == null ? "" : question) + "\n\n" +
+                "AI답변:\n" + (answer == null ? "" : answer) + "\n\n" +
+                "반드시 SUMMARY 또는 PROBLEM 중 하나만 출력해.";
+
+        String raw = openAiService.getContents(prompt);
+        String normalized = raw == null ? "" : raw.trim().toUpperCase();
+        if (normalized.contains("SUMMARY")) return ResponseEntity.ok("SUMMARY");
+        if (normalized.contains("PROBLEM")) return ResponseEntity.ok("PROBLEM");
+        // 애매하면 기본값
+        return ResponseEntity.ok("PROBLEM");
+    }
 }

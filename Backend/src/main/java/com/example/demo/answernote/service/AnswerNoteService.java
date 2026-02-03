@@ -3,6 +3,7 @@ package com.example.demo.answernote.service;
 import com.example.demo.answernote.dto.AnswerNoteRequestDTO;
 import com.example.demo.answernote.dto.AnswerNoteResponseDTO;
 import com.example.demo.answernote.entity.AnswerNote;
+import com.example.demo.answernote.entity.AnswerNoteType;
 import com.example.demo.answernote.repository.AnswerNoteRepository;
 
 import com.example.demo.LMS회원.Repository.RoomRepository;
@@ -36,6 +37,15 @@ public class AnswerNoteService {
         Room room = roomRepository.findById(dto.getSubjectId())
                 .orElseThrow(() -> new IllegalArgumentException("방을 찾을 수 없습니다."));
 
+        AnswerNoteType noteType = AnswerNoteType.PROBLEM;
+        if (dto.getType() != null && !dto.getType().isBlank()) {
+            try {
+                noteType = AnswerNoteType.valueOf(dto.getType().trim().toUpperCase());
+            } catch (Exception ignored) {
+                noteType = AnswerNoteType.PROBLEM;
+            }
+        }
+
         AnswerNote note = AnswerNote.builder()
                 .answerNoteId(UUID.randomUUID().toString())
                 .user(user)
@@ -43,6 +53,7 @@ public class AnswerNoteService {
                 .question(dto.getQuestion())
                 .answer(dto.getAnswer())
                 .memo(dto.getMemo())
+                .noteType(noteType)
                 .build();
 
         answerNoteRepository.save(note);
