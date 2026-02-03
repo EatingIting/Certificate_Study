@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import "./Board.css";
+import "./BoardCommon.css";
+import "./BoardDetail.css"
 import { BoardApi, formatKst } from "./BoardApi";
 
 function BoardDetail() {
@@ -46,14 +47,23 @@ function BoardDetail() {
         if (!postId) return;
 
         let alive = true;
+        let rid = Date.now() + "-" + Math.random().toString(16).slice(2);
 
         (async () => {
             try {
                 setLoading(true);
                 setError("");
                 setForbidden(false);
+                setDetail(null);
+                setPostMenuOpen(false);
+
+                console.log("[DETAIL REQ]", rid, "postId=", postId);
 
                 let data = await BoardApi.getDetail(postId, true);
+
+                console.log("[DETAIL RES]", rid, "canEdit/canDelete =", data?.canEdit, data?.canDelete);
+                console.log("[DETAIL RES]", rid, "raw =", data);
+
                 if (!alive) return;
 
                 setDetail(data);
@@ -123,10 +133,20 @@ function BoardDetail() {
     let onEdit = () => navigate(`/lms/${subjectId}/board/${postId}/edit`);
 
     let onDelete = async () => {
-        let ok = window.confirm("정말 삭제할까요?");
-        if (!ok) return;
-        await BoardApi.deletePost(postId);
-        onBack();
+        if (!window.confirm("정말 삭제할까요?")) return;
+
+        try {
+            await BoardApi.deletePost(postId);
+            navigate(`/lms/${subjectId}/board`, { replace: true });
+        } catch (e) {
+            // 403: 권한 없음
+            if (e?.status === 403) {
+                alert(e?.message || "삭제 권한이 없습니다.");
+                return;
+            }
+            // 기타
+            alert(e?.message || "삭제 실패");
+        }
     };
 
     let reloadComments = async () => {
@@ -285,12 +305,6 @@ function BoardDetail() {
                     <button className="bd-btn-ghost" onClick={onBack}>
                         목록
                     </button>
-                    <button className="bd-btn-ghost" onClick={onEdit}>
-                        수정
-                    </button>
-                    <button className="bd-btn-ghost" onClick={onDelete}>
-                        삭제
-                    </button>
                 </div>
             </div>
 
@@ -367,25 +381,25 @@ function BoardDetail() {
                 <div className="bd-comment-section">
                     {/* 댓글 헤더 */}
                     <div className="bd-comment-header">
-                        <div className="bd-label">
-                            댓글 {comments.length}개
-                        </div>
-
                         <button
                             type="button"
-                            className="bd-btn-ghost"
+                            className="bd-comment-toggle"
                             onClick={() => {
                                 setCommentsOpen((v) => {
                                     let next = !v;
                                     if (!next) {
-                                        setReplyTo(null);
-                                        setReplyText("");
+                                    setReplyTo(null);
+                                    setReplyText("");
                                     }
                                     return next;
                                 });
                             }}
+                            aria-expanded={commentsOpen}
                         >
-                            {commentsOpen ? "접기" : "펼치기"}
+                            <span className="bd-comment-toggle-title">
+                                댓글 <b>{comments.length}</b>개
+                            </span>
+                            <span className={`bd-comment-toggle-icon ${commentsOpen ? "open" : ""}`}>▾</span>
                         </button>
                     </div>
 

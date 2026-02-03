@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
-import "./Board.css";
+import "./BoardCommon.css";
+import "./BoardList.css"
 import { BoardApi, formatKst } from "./BoardApi";
 
 function Board() {
@@ -197,7 +198,7 @@ function Board() {
 
     if (forbidden) {
         return (
-            <div className="bd">
+            <div className="bd bd-board">
                 <div className="bd-card">
                     <div className="bd-sub" style={{ fontWeight: 700, marginBottom: 6 }}>
                         접근할 수 없습니다
@@ -219,7 +220,7 @@ function Board() {
     }
 
     return (
-        <div className="bd">
+        <div className="bd bd-board">
             <div className="bd-head">
                 <div>
                     <h2 className="bd-title">게시판{titleSuffix}</h2>
@@ -239,11 +240,21 @@ function Board() {
 
                 {!loading && !error && (
                     <div className="bd-list">
+                        {/* ✅ 테이블 헤더 */}
+                        <div className="bd-row bd-row-head" role="row">
+                            <div className="bd-col category">카테고리</div>
+                            <div className="bd-col title">제목</div>
+                            <div className="bd-col author">작성자</div>
+                            <div className="bd-col views">조회수</div>
+                            <div className="bd-col date">작성일</div>
+                        </div>
+
+                        {/* ✅ 고정글 */}
                         {pinnedPosts.length > 0 &&
                             pinnedPosts.map((p) => (
                                 <div
                                     key={`pin-${p.postId}`}
-                                    className="bd-item pinned-top"
+                                    className="bd-row bd-row-item pinned-top"
                                     onClick={() => goDetail(p.postId)}
                                     role="button"
                                     tabIndex={0}
@@ -251,42 +262,49 @@ function Board() {
                                         if (e.key === "Enter") goDetail(p.postId);
                                     }}
                                 >
-                                <span className={chipClass(p.category)}>
-                                    {categoryToLabel(p.category)}
-                                </span>
-                                <div className="bd-item-title">📌 {p.title}</div>
-                                    <div className="bd-item-meta">
-                                        {p.authorName} · {p.createdAtText}
+                                    <div className="bd-col category">
+                                        <span className={chipClass(p.category)}>{categoryToLabel(p.category)}</span>
                                     </div>
+
+                                    <div className="bd-col title">
+                                        <span className="bd-pin">📌</span> {p.title}
+                                    </div>
+
+                                    <div className="bd-col views">{p.viewCount ?? 0}</div>
+                                    <div className="bd-col author">{p.authorName}</div>
+                                    <div className="bd-col date">{p.createdAtText}</div>
                                 </div>
                             ))}
 
+                        {/* ✅ 일반글 */}
                         {listPosts.length === 0 ? (
                             <div className="bd-sub">게시글이 없습니다.</div>
                         ) : (
-                        listPosts.map((p) => (
-                            <div
-                                key={p.postId}
-                                className="bd-item"
-                                onClick={() => goDetail(p.postId)}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") goDetail(p.postId);
-                                }}
-                            >
-                            <span className={chipClass(p.category)}>
-                                {categoryToLabel(p.category)}
-                            </span>
-                            <div className="bd-item-title">{p.title}</div>
-                                <div className="bd-item-meta">
-                                    {p.authorName} · {p.createdAtText}
+                            listPosts.map((p) => (
+                                <div
+                                    key={p.postId}
+                                    className="bd-row bd-row-item"
+                                    onClick={() => goDetail(p.postId)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") goDetail(p.postId);
+                                    }}
+                                >
+                                    <div className="bd-col category">
+                                        <span className={chipClass(p.category)}>{categoryToLabel(p.category)}</span>
+                                    </div>
+
+                                    <div className="bd-col title">{p.title}</div>
+
+                                    <div className="bd-col author">{p.authorName}</div>
+                                    <div className="bd-col views">{p.viewCount ?? 0}</div>
+                                    <div className="bd-col date">{p.createdAtText}</div>
                                 </div>
-                            </div>
-                        ))
+                            ))
                         )}
                     </div>
-                )}
+                    )}
             </div>
 
             <div className="bd-card bd-bottom-search">
