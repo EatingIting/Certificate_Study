@@ -16,4 +16,6 @@ public class BoardPostDetailResponse {
     private BoardPostResponse post;
     private List<BoardAttachmentResponse> attachments;
     private List<BoardCommentResponse> comments;
+    private boolean canEdit;
+    private boolean canDelete;
 }

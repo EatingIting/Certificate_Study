@@ -1,67 +1,67 @@
 /* Board 전용 (LMS 톤) */
 .bd {
-  --primary: #97c793;
-  --primary-strong: #57ad4a;
-  --primary-soft: #a5dea0;
+    --primary: #97c793;
+    --primary-strong: #57ad4a;
+    --primary-soft: #a5dea0;
 
-  --line: #e6eee1;
-  --text: #1f2937;
-  --muted: #6b7280;
+    --line: #e6eee1;
+    --text: #1f2937;
+    --muted: #6b7280;
 
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
 
-  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
-  color: var(--text);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+    color: var(--text);
 }
 
 .bd input,
 .bd select,
 .bd textarea,
 .bd button {
-  font-family: inherit;
-  color: inherit;
+    font-family: inherit;
+    color: inherit;
 }
 
 /* ===== Header ===== */
 .bd-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .bd-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 900;
-  color: var(--text);
+    margin: 0;
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--text);
 }
 
 .bd-sub {
-  margin: 6px 0 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
+    margin: 6px 0 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
 }
 
 .bd-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 /* ===== Card ===== */
 .bd-card {
-  background: #ffffff;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 14px;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    padding: 14px;
 }
 
 /* ✅ 검색 카드만 여백 줄이기 (요청사항) */
@@ -73,46 +73,46 @@
 
 /* ===== Buttons ===== */
 .bd-btn {
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid var(--primary);
-  background: var(--primary);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid var(--primary);
+    background: var(--primary);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 900;
+    cursor: pointer;
 }
 
 .bd-btn:hover:not(:disabled) {
-  background: #86b984;
-  border-color: #86b984;
+    background: #86b984;
+    border-color: #86b984;
 }
 
 .bd-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .bd-btn-ghost {
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: #ffffff;
-  color: #2f6b3f;
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    color: #2f6b3f;
+    font-size: 13px;
+    font-weight: 900;
+    cursor: pointer;
 }
 
 .bd-btn-ghost:hover {
-  background: #f6faf3;
+    background: #f6faf3;
 }
 
 /* ===== Search block ===== */
 .bd-bottom-search {
-  margin: 0 auto; /* ✅ 화면 가운데 */
+    margin: 0 auto; /* ✅ 화면 가운데 */
 }
 
 .bd-toolbar {
@@ -124,120 +124,120 @@
 }
 
 .bd-search {
-  width: min(320px, 80vw);
-  height: 38px; /* 살짝 낮춰서 박스 여백도 같이 줄어보이게 */
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0 12px;
-  outline: none;
-  font-weight: 800;
-  background: #ffffff;
+    width: min(320px, 80vw);
+    height: 38px; /* 살짝 낮춰서 박스 여백도 같이 줄어보이게 */
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 0 12px;
+    outline: none;
+    font-weight: 800;
+    background: #ffffff;
 }
 
 .bd-search:focus {
-  border-color: var(--primary-soft);
-  box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
+    border-color: var(--primary-soft);
+    box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
 }
 
 .bd-select {
-  height: 40px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0 12px;
-  outline: none;
-  font-weight: 800;
-  background: #ffffff;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 0 12px;
+    outline: none;
+    font-weight: 800;
+    background: #ffffff;
 }
 
 .bd-select:focus {
-  border-color: var(--primary-soft);
-  box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
+    border-color: var(--primary-soft);
+    box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
 }
 
 /* ===== List ===== */
 .bd-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .bd-item {
-  display: grid;
-  grid-template-columns: 78px 1fr 140px;
-  gap: 10px;
-  align-items: center;
+    display: grid;
+    grid-template-columns: 78px 1fr 140px;
+    gap: 10px;
+    align-items: center;
 
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 12px;
-  background: #ffffff;
-  cursor: pointer;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px;
+    background: #ffffff;
+    cursor: pointer;
 }
 
 .bd-item:hover {
-  background: #f6faf3;
+    background: #f6faf3;
 }
 
 /* ✅ 목록 제목 볼드 제거 (요청사항) */
 .bd-item-title {
-  font-size: 14px;
-  font-weight: 700; /* 기존 900 -> 700 */
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    font-size: 14px;
+    font-weight: 700; /* 기존 900 -> 700 */
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .bd-item-meta {
-  justify-self: end;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--muted);
-  white-space: nowrap;
+    justify-self: end;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--muted);
+    white-space: nowrap;
 }
 
 .bd-item.pinned-top {
-  border-color: var(--primary-soft);
-  background: rgba(233, 250, 220, 0.9);
+    border-color: var(--primary-soft);
+    background: rgba(233, 250, 220, 0.9);
 }
 
 /* ===== Category Chip ===== */
 .bd-chip {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 900;
-  border: 1px solid var(--line);
-  background: #ffffff;
-  color: #2f6b3f;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 900;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    color: #2f6b3f;
 }
 
 .bd-chip.notice {
-  border-color: var(--primary);
-  background: rgba(151, 199, 147, 0.18);
-  color: #2a5d35;
+    border-color: var(--primary);
+    background: rgba(151, 199, 147, 0.18);
+    color: #2a5d35;
 }
 
 .bd-chip.general {
-  border-color: #cfe8c3;
-  background: rgba(233, 250, 220, 0.45);
-  color: #2f6b3f;
+    border-color: #cfe8c3;
+    background: rgba(233, 250, 220, 0.45);
+    color: #2f6b3f;
 }
 
 .bd-chip.qna {
-  border-color: #b9ddff;
-  background: rgba(185, 221, 255, 0.25);
-  color: #1e4f7a;
+    border-color: #b9ddff;
+    background: rgba(185, 221, 255, 0.25);
+    color: #1e4f7a;
 }
 
 .bd-chip.resource {
-  border-color: #ffd7b0;
-  background: rgba(255, 215, 176, 0.25);
-  color: #7a4a1e;
+    border-color: #ffd7b0;
+    background: rgba(255, 215, 176, 0.25);
+    color: #7a4a1e;
 }
 
 /* ===== Pagination (<< < 1..10 > >>) ===== */
@@ -251,165 +251,165 @@
 }
 
 .bd-page-btn {
-  height: 34px;
-  min-width: 34px;
-  padding: 0 10px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: #ffffff;
-  color: var(--text);
-  font-weight: 900;
-  font-size: 12px;
-  cursor: pointer;
+    height: 34px;
+    min-width: 34px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    color: var(--text);
+    font-weight: 900;
+    font-size: 12px;
+    cursor: pointer;
 }
 
 .bd-page-btn:hover:not(:disabled) {
-  background: #f6faf3;
+    background: #f6faf3;
 }
 
 .bd-page-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .bd-page-btn.active {
-  border-color: var(--primary-strong);
-  background: rgba(233, 250, 220, 0.9);
+    border-color: var(--primary-strong);
+    background: rgba(233, 250, 220, 0.9);
 }
 
 /* ===== Form ===== */
 .bd-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .bd-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .bd-label {
-  font-size: 13px;
-  font-weight: 900;
-  color: var(--text);
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--text);
 }
 
 .bd-input,
 .bd-textarea {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 12px;
-  outline: none;
-  font-weight: 700;
-  background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    outline: none;
+    font-weight: 700;
+    background: #ffffff;
 
-  font-family: inherit;
-  font-size: 14px;
+    font-family: inherit;
+    font-size: 14px;
 }
 
 .bd-input:focus,
 .bd-textarea:focus {
-  border-color: var(--primary-soft);
-  box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
+    border-color: var(--primary-soft);
+    box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
 }
 
 .bd-textarea {
-  resize: vertical;
-  line-height: 1.7;
-  min-height: 180px;
-  white-space: pre-wrap;
-  word-break: break-word;
+    resize: vertical;
+    line-height: 1.7;
+    min-height: 180px;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .bd-hint {
-  margin-top: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--muted);
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
 }
 
 /* ===== Attachments ===== */
 .bd-filebar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .bd-file {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 10px;
-  background: #fff;
-  font-weight: 700;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: #fff;
+    font-weight: 700;
 }
 
 .bd-filelist {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .bd-fileitem {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: #fff;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #fff;
 }
 
 .bd-filename {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 800;
 }
 
 .bd-filesize {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--muted);
-  white-space: nowrap;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--muted);
+    white-space: nowrap;
 }
 
 .bd-filedel {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: #fff;
-  cursor: pointer;
-  font-weight: 900;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    font-weight: 900;
 }
 
 .bd-filedel:hover {
-  background: #f6faf3;
+    background: #f6faf3;
 }
 
 /* ===== Responsive ===== */
 @media (max-width: 720px) {
-  .bd-item {
-    grid-template-columns: 78px 1fr;
-    grid-template-rows: auto auto;
-  }
+    .bd-item {
+        grid-template-columns: 78px 1fr;
+        grid-template-rows: auto auto;
+    }
 
-  .bd-item-meta {
-    grid-column: 2 / 3;
-    justify-self: start;
-    font-size: 11px;
-  }
+    .bd-item-meta {
+        grid-column: 2 / 3;
+        justify-self: start;
+        font-size: 11px;
+    }
 
-  .bd-search {
-    width: min(280px, 80vw);
-  }
+    .bd-search {
+        width: min(280px, 80vw);
+    }
 }
 
 /* =========================
@@ -418,36 +418,37 @@
 
 /* 작성자 / 작성일 / 조회수: 너무 붙는 문제 해결 */
 .bd.bd-detail .bd-detail-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;          /* 세로/가로 간격 */
-  margin-top: 12px;
-  margin-bottom: 16px;    /* 아래(본문)와 간격 */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;          /* 세로/가로 간격 */
+    margin-top: 12px;
+    margin-bottom: 16px;    /* 아래(본문)와 간격 */
+    font-size: 13px;
+    color: #888;
 }
 
 /* 본문과 댓글 입력 영역이 너무 붙는 문제 */
 .bd.bd-detail .bd-detail-body {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  white-space: pre-wrap;  /* 줄바꿈 자연스럽게 */
-  line-height: 1.7;
+    margin-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    white-space: pre-wrap;  /* 줄바꿈 자연스럽게 */
+    line-height: 1.7;
 }
 
 /* 댓글 작성 영역: 본문과 간격 더 벌리기 */
 .bd.bd-detail .bd-comment-compose {
-  margin-top: 18px;       /* 본문 아래 띄우기 */
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 18px;       /* 본문 아래 띄우기 */
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* 댓글 입력창 크기 고정 */
 .bd.bd-detail .bd-comment-compose .bd-input {
-  height: 96px;           /* 고정 높이 */
-  max-height: 96px;
-  min-height: 96px;
-  resize: none;           /* 사용자가 늘리는 거 방지 */
-  overflow: auto;
+    height: 96px;           /* 고정 높이 */
+    max-height: 96px;
+    min-height: 96px;
+    resize: none;           /* 사용자가 늘리는 거 방지 */
+    overflow: auto;
 }
 
 /* =========================
@@ -456,35 +457,35 @@
 
 /* 댓글 작성 영역을 ‘박스’로 분리 */
 .bd.bd-detail .bd-comment-compose {
-  margin-top: 18px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #f6faf3; /* 카드와 톤 차이 */
+    margin-top: 18px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #f6faf3; /* 카드와 톤 차이 */
 }
 
 /* 댓글 입력창은 고정 높이 + 박스 안에 붙게 */
 .bd.bd-detail .bd-comment-compose .bd-input {
-  height: 96px;
-  max-height: 96px;
-  min-height: 96px;
-  resize: none;
-  overflow: auto;
+    height: 96px;
+    max-height: 96px;
+    min-height: 96px;
+    resize: none;
+    overflow: auto;
 }
 
 /* 댓글 카드만 살짝 다른 배경/그림자 제거해서 ‘중첩 카드’ 느낌 제거 */
 .bd.bd-detail .bd-comment-card {
-  background: #fbfdf9;        /* 바깥 카드(#fff)와 톤 차이 */
-  box-shadow: none;           /* 중첩 카드 그림자 제거 */
-  border-color: rgba(0, 0, 0, 0.06);
+    background: #fbfdf9;        /* 바깥 카드(#fff)와 톤 차이 */
+    box-shadow: none;           /* 중첩 카드 그림자 제거 */
+    border-color: rgba(0, 0, 0, 0.06);
 }
 
 /* 댓글 카드 내부 meta(작성자/작성일)도 살짝 분리감 */
 .bd.bd-detail .bd-comment-card .bd-detail-meta {
-  gap: 6px 14px;
-  margin: 0 0 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+    gap: 6px 14px;
+    margin: 0 0 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
 }
 
 /* =========================
@@ -492,17 +493,17 @@
    ========================= */
 
 .bd.bd-detail .bd-comment-meta {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
 }
 
 /* 작성자 (왼쪽) */
 .bd.bd-detail .bd-comment-author {
-  font-weight: 600;
-  color: #333;
+    font-weight: 600;
+    color: #333;
 }
 
 /* =========================
@@ -511,30 +512,129 @@
 
 /* 댓글 카드 기준 */
 .bd.bd-detail .bd-card.bd-comment-card {
-  position: relative;
-  background: #fbfdf9;
-  box-shadow: none;
-  border-color: rgba(0, 0, 0, 0.06);
+    position: relative;
+    background: #fbfdf9;
+    box-shadow: none;
+    border-color: rgba(0, 0, 0, 0.06);
 }
 
 /* 메타 영역 */
 .bd.bd-detail .bd-card.bd-comment-card .bd-comment-meta {
-  padding-right: 110px;   /* 날짜 자리 확보 */
-  margin-bottom: 8px;
+    padding-right: 110px;   /* 날짜 자리 확보 */
+    margin-bottom: 8px;
 }
 
 /* 작성자 */
 .bd.bd-detail .bd-card.bd-comment-card .bd-comment-author {
-  font-weight: 600;
-  color: #333;
+    font-weight: 600;
+    color: #333;
 }
 
 /* 날짜: 카드 내부 우상단 */
 .bd.bd-detail .bd-card.bd-comment-card .bd-comment-date {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
-  white-space: nowrap;
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+}
+
+.bd-reply-textarea {
+   resize: none;
+}
+
+.bd-comment-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.bd-comment-body {
+    background: #fafafa;
+    border: 1px solid #eee;
+    border-radius: 4px;
+
+    padding: 16px;
+
+    display: grid;
+    gap: 16px;
+}
+
+.bd-comment-header .bd-btn-ghost {
+    padding: 0 6px;
+    font-size: 12px;
+}
+
+.bd-divider {
+    height: 1px;
+    background: #e5e5e5;
+    margin: 16px 0;
+}
+
+.bd-post-head {
+    position: relative;      /* 🔑 기준점 */
+    display: block;
+}
+
+.bd-post-menu {
+    position: absolute;      /* 🔑 핵심 */
+    top: 0;
+    right: 0;
+
+    display: inline-flex;
+    align-items: flex-start;
+}
+
+.bd-kebab-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+
+    padding: 6px 8px;
+    border-radius: 8px;
+
+    font-size: 18px;
+    line-height: 1;
+}
+
+.bd-kebab-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.bd-post-dropdown {
+    position: absolute;
+    right: 0;
+    top: 28px;
+
+    min-width: 120px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    z-index: 20;
+}
+
+.bd-post-dropdown-item {
+    width: 100%;
+    text-align: left;
+
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+
+    font-size: 14px;
+}
+
+.bd-post-dropdown-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.bd-post-dropdown-item.danger {
+    color: #c33;
 }

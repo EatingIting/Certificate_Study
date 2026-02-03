@@ -9,10 +9,7 @@
         <id     property="postId"    column="post_id"/>
         <result property="roomId"    column="room_id"/>
         <result property="userId"    column="user_id"/>
-
-        <!-- ✅ 추가 -->
         <result property="nickname"  column="nickname"/>
-
         <result property="category"  column="category"/>
         <result property="title"     column="title"/>
         <result property="content"   column="content"/>
@@ -25,10 +22,18 @@
 
     <select id="selectPostList" resultMap="PostMap">
         SELECT
-        p.post_id, p.room_id, p.user_id,
-        COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
-        p.category, p.title, p.content,
-        p.is_pinned, p.view_count, p.created_at, p.updated_at, p.deleted_at
+            p.post_id,
+            p.room_id,
+            p.user_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            p.category,
+            p.title,
+            p.content,
+            p.is_pinned,
+            p.view_count,
+            p.created_at,
+            p.updated_at,
+            p.deleted_at
         FROM board_posts p
         LEFT JOIN users u ON u.user_id = p.user_id
         WHERE p.deleted_at IS NULL
@@ -84,10 +89,18 @@
     <insert id="insertPost"
             parameterType="com.example.demo.board.vo.BoardPostVO"
             useGeneratedKeys="true" keyProperty="postId" keyColumn="post_id">
-        INSERT INTO board_posts (
-        room_id, user_id, category, title, content, is_pinned, view_count
-        ) VALUES (
-        #{roomId}, #{userId}, #{category}, #{title}, #{content},
+        INSERT INTO board_posts (room_id,
+                                 user_id,
+                                 category,
+                                 title,
+                                 content,
+                                 is_pinned,
+                                 view_count
+        ) VALUES (#{roomId},
+                  #{userId},
+                  #{category},
+                  #{title},
+                  #{content},
         <choose>
             <when test="isPinned != null">#{isPinned}</when>
             <otherwise>0</otherwise>
@@ -98,8 +111,7 @@
 
     <update id="updatePost" parameterType="com.example.demo.board.vo.BoardPostVO">
         UPDATE board_posts
-        SET
-            category = #{category},
+        SET category = #{category},
             title    = #{title},
             content  = #{content},
             is_pinned = #{isPinned}
