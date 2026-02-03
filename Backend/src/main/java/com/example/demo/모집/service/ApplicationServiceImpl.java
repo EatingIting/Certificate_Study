@@ -128,8 +128,6 @@ public class ApplicationServiceImpl implements ApplicationService {
 
             System.out.println("방장 userId hostUserId: " + hostUserId);
 
-            System.out.println("현재 접속 중인 방장 목록: "
-                    + notificationHandler.getOwnerSessionKeys());
 
             if (hostUserId != null) {
                 System.out.println("방장에게 WebSocket 알림 전송 시도");

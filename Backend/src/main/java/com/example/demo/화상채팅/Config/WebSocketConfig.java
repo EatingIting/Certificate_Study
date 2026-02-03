@@ -1,5 +1,6 @@
 package com.example.demo.화상채팅.Config;
 
+import com.example.demo.board.handler.CommentNotificationWebSocketHandler;
 import com.example.demo.모집.handler.NotificationWebSocketHandler;
 import com.example.demo.화상채팅.Handler.RoomWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
@@ -13,11 +14,13 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final RoomWebSocketHandler roomHandler;
     private final NotificationWebSocketHandler notificationHandler;
+    private final CommentNotificationWebSocketHandler commentHandler;
 
     public WebSocketConfig(RoomWebSocketHandler roomHandler,
-                           NotificationWebSocketHandler notificationHandler) {
+                           NotificationWebSocketHandler notificationHandler, CommentNotificationWebSocketHandler commentHandler) {
         this.roomHandler = roomHandler;
         this.notificationHandler = notificationHandler;
+        this.commentHandler = commentHandler;
     }
 
     @Override
@@ -29,6 +32,10 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
         // 방장 알림용 WebSocket
         registry.addHandler(notificationHandler, "/ws/notification/{userId}")
+                .setAllowedOriginPatterns("*");
+
+        //댓글 알림용
+        registry.addHandler(commentHandler, "/ws/comment/{userId}")
                 .setAllowedOriginPatterns("*");
     }
 }
