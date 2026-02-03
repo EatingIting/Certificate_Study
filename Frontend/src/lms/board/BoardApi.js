@@ -32,7 +32,9 @@ const request = async (path, options = {}) => {
         ...options,
         headers: {
             "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(token ? { 
+                Authorization: `Bearer ${token}` 
+            } : {}),
             ...(options.headers || {}),
         },
     });
@@ -43,10 +45,18 @@ const request = async (path, options = {}) => {
 
         let data = null;
         if (ct.includes("application/json")) {
-            try { data = text ? JSON.parse(text) : null; } catch {}
+            try { 
+                data = text ? JSON.parse(text) : null; 
+            } catch {
+
+            }
         } else {
             // 혹시 JSON 문자열인데 content-type이 이상한 경우도 대비
-            try { data = text ? JSON.parse(text) : null; } catch {}
+            try { 
+                data = text ? JSON.parse(text) : null; 
+            } catch {
+
+            }
         }
 
         let msg = data?.message || data?.error || text || `요청 실패 (${res.status})`;
@@ -70,7 +80,13 @@ const request = async (path, options = {}) => {
 
 export const BoardApi = {
     /** 게시글 목록 */
-    listPosts({ roomId, category, keyword, page, size }) {
+    listPosts({ 
+        roomId, 
+        category, 
+        keyword, 
+        page, 
+        size 
+    }) {
         const qs = new URLSearchParams({
             roomId,
             ...(category ? { category } : {}),
@@ -93,7 +109,13 @@ export const BoardApi = {
     },
 
     /** 게시글 작성 */
-    createPost({ roomId, category, title, content, isPinned }) {
+    createPost({ 
+        roomId, 
+        category, 
+        title, 
+        content, 
+        isPinned 
+    }) {
         return request(`/api/board/posts`, {
             method: "POST",
             body: JSON.stringify({
@@ -107,7 +129,12 @@ export const BoardApi = {
     },
 
     /** 게시글 수정 */
-    updatePost(postId, { category, title, content, isPinned }) {
+    updatePost(postId, { 
+        category, 
+        title, 
+        content, 
+        isPinned 
+    }) {
         return request(`/api/board/posts/${postId}`, {
             method: "PUT",
             body: JSON.stringify({
@@ -132,15 +159,23 @@ export const BoardApi = {
     },
 
     /** 댓글 작성 */
-    createComment(postId, { content }) {
+    createComment(postId, { 
+        content, 
+        parentId = null 
+    }) {
         return request(`/api/board/posts/${postId}/comments`, {
             method: "POST",
-            body: JSON.stringify({ content }),
+            body: JSON.stringify({ 
+                content, 
+                parentId 
+            }),
         });
     },
 
     /** 댓글 수정 */
-    updateComment(commentId, { content }) {
+    updateComment(commentId, { 
+        content 
+    }) {
         return request(`/api/board/comments/${commentId}`, {
             method: "PUT",
             body: JSON.stringify({ content }),

@@ -6,6 +6,7 @@
     box-sizing: border-box;
 }
 
+
 .rmp-header {
     display: flex;
     gap: 14px;
@@ -14,11 +15,13 @@
     margin-bottom: 14px;
 }
 
+
 .rmp-titleBox {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
+
 
 .rmp-title {
     margin: 0;
@@ -27,6 +30,7 @@
     letter-spacing: -0.2px;
 }
 
+
 .rmp-roomSelect {
     display: flex;
     flex-direction: column;
@@ -34,10 +38,12 @@
     min-width: 260px;
 }
 
+
 .rmp-label {
     font-size: 12px;
     color: #667085;
 }
+
 
 .rmp-select {
     height: 38px;
@@ -48,6 +54,7 @@
     background: #fff;
 }
 
+
 .rmp-msg {
     margin: 10px 0 14px;
     padding: 10px 12px;
@@ -56,11 +63,13 @@
     border: 1px solid transparent;
 }
 
+
 .rmp-msg.is-error {
     background: #fff1f2;
     border-color: #fecdd3;
     color: #9f1239;
 }
+
 
 .rmp-msg.is-success {
     background: #f0fdf4;
@@ -68,11 +77,13 @@
     color: #166534;
 }
 
+
 .rmp-grid {
     display: grid;
     grid-template-columns: 1.2fr 0.8fr;
     gap: 14px;
 }
+
 
 @media (max-width: 900px) {
     .rmp-grid {
@@ -89,7 +100,9 @@
     border-radius: 16px;
     padding: 14px;
     box-shadow: 0 6px 22px rgba(16, 24, 40, 0.05);
+  padding: 18px;
 }
+
 
 .rmp-cardHead {
     display: flex;
@@ -97,13 +110,23 @@
     justify-content: space-between;
     margin-bottom: 12px;
     gap: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
+
 
 .rmp-cardTitle {
     margin: 0;
     font-size: 15px;
     font-weight: 800;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
 }
+
 
 .rmp-chip {
     font-size: 12px;
@@ -113,18 +136,38 @@
     background: #f9fafb;
     color: #111827;
     white-space: nowrap;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  opacity: 0.95;
 }
+
 
 .rmp-muted {
     font-size: 12px;
     color: #98a2b3;
 }
 
+
 .rmp-profile {
     display: grid;
     grid-template-columns: 180px 1fr;
     gap: 14px;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 14px;
+  align-items: start;
+  grid-template-columns: 140px 1fr; /* 기존 120px → 140px */
+  gap: 12px;                         /* 살짝 촘촘 */
+  grid-template-columns: 168px 1fr; /* 기존 140px → 168px */
+  gap: 10px;                         /* 좌우 간격도 줄임 */
 }
+
 
 @media (max-width: 700px) {
     .rmp-profile {
@@ -140,8 +183,24 @@
     padding: 10px;
     border-radius: 14px;
     background: #f9fafb;
-    border: 1px dashed #e5e7eb;
+    border: 1px solid #e5e7eb;
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  overflow: hidden;
+  flex: none;
+
+  /* 살짝 구획감 */
+  background: rgba(0, 0, 0, 0.03);
+  width: 140px;   /* 기존 120 */
+  height: 140px;  /* 기존 120 */
+  border-radius: 18px;
+  width: 168px;      /* 기존 140 */
+  height: 168px;     /* 기존 140 */
+  border-radius: 20px;
+  flex-shrink: 0;
 }
+
 
 .rmp-avatar {
     width: 140px;
@@ -150,45 +209,92 @@
     object-fit: cover;
     border: 1px solid #e5e7eb;
     background: #fff;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
+
 
 .rmp-profileInfo {
     display: flex;
     flex-direction: column;
     gap: 10px;
+  border-radius: 14px;
+  padding: 12px 12px;
+  background: rgba(0, 0, 0, 0.03);
+  padding: 10px 10px;               /* 기존 12px → 10px */
+  max-width: 100%;                  /* 혹시 모를 확장 방지 */
+  padding: 8px 8px;     /* 기존 10px → 8px */
+  border-radius: 12px;
 }
+
 
 .rmp-row {
     display: grid;
     grid-template-columns: 110px 1fr;
     gap: 12px;
     align-items: start;
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  gap: 10px;
+  align-items: center;
+
+  padding: 8px 0;
+  grid-template-columns: 72px 1fr;  /* 기존 86px → 72px */
+  gap: 8px;
+  padding: 7px 0;
+  grid-template-columns: 64px 1fr;  /* 라벨 폭 더 축소 */
+  gap: 6px;
+  padding: 6px 0;
 }
+
 
 .rmp-rowLabel {
     font-size: 13px;
     color: #667085;
     padding-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+  padding-top: 8px;
 }
+
 
 .rmp-rowValue {
     display: flex;
     flex-direction: column;
+    padding-top: 8px;
     gap: 8px;
+  font-size: 13px;
+  line-height: 1.3;
+  font-size: 13.5px;
+  padding-top: 8px;
+  font-size: 13px;
 }
+
 
 .rmp-rowInline {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
 }
+
 
 .rmp-nickname {
     font-size: 15px;
     font-weight: 800;
     color: #111827;
+  font-weight: 700;
+  font-size: 14px;
+  font-size: 14px;
+  font-weight: 700;
 }
+
 
 .rmp-input {
     height: 38px;
@@ -197,12 +303,17 @@
     border: 1px solid #e5e7eb;
     outline: none;
     background: #fff;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
 }
+
 
 .rmp-input:focus {
     border-color: #c7d2fe;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
+
 
 .rmp-btn {
     height: 38px;
@@ -214,12 +325,17 @@
     font-size: 13px;
     cursor: pointer;
     white-space: nowrap;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
 }
+
 
 .rmp-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
 
 .rmp-btnGhost {
     border-color: #e5e7eb;
@@ -227,17 +343,20 @@
     color: #111827;
 }
 
+
 .rmp-divider {
     height: 1px;
     background: #eef2f7;
     margin: 6px 0;
 }
 
+
 .rmp-stats {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
 }
+
 
 @media (max-width: 520px) {
     .rmp-stats {
@@ -252,10 +371,12 @@
     background: #f9fafb;
 }
 
+
 .rmp-statLabel {
     font-size: 12px;
     color: #667085;
 }
+
 
 .rmp-statValue {
     margin-top: 6px;
@@ -264,17 +385,20 @@
     color: #111827;
 }
 
+
 .rmp-subTitle {
     margin: 0 0 10px;
     font-size: 13px;
     font-weight: 900;
 }
 
+
 .rmp-list {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
+
 
 .rmp-listItem {
     border: 1px solid #eef2f7;
@@ -283,11 +407,13 @@
     background: #fff;
 }
 
+
 .rmp-listTitle {
     font-size: 13px;
     font-weight: 800;
     color: #111827;
 }
+
 
 .rmp-listDesc {
     margin-top: 6px;
@@ -295,8 +421,53 @@
     color: #667085;
 }
 
+
 .rmp-footerHint {
     margin-top: 12px;
     font-size: 12px;
     color: #98a2b3;
+}
+
+
+/* 첫 줄은 위 여백 줄이고, row 사이에 은은한 divider */
+.rmp-row + .rmp-row {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+
+/* 역할을 pill처럼 */
+.rmp-rolePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+
+/* 방장일 때 살짝 강조(색은 기존 톤 따라가게) */
+.rmp-rolePill.isOwner {
+  background: rgba(0, 0, 0, 0.09);
+}
+
+
+/* 카테고리도 pill로 */
+.rmp-catPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+
+/* pill들도 살짝 작게 해서 정보 영역 과밀 방지 */
+.rmp-rolePill,
+.rmp-catPill {
+  padding: 5px 9px;
+  font-size: 11.5px;
 }
