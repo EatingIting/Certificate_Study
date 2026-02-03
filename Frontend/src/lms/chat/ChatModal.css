@@ -244,9 +244,7 @@
     display: flex;
     align-items: flex-end;
     gap: 10px;
-    
-    /* [수정] 말풍선이 화면의 90%까지 찰 수 있게 확장 */
-    max-width: 90%; 
+    width: 100%;
 }
 
 .tc-msg-row.me {
@@ -292,9 +290,9 @@
     line-height: 1.6;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     position: relative;
-
-    /* [필수] 긴 단어 줄바꿈 */
-    word-break: break-word; 
+    max-width: 80%;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .tc-bubble.other {
@@ -307,12 +305,7 @@
     background-color: #97c793;
     color: white;
     border-bottom-right-radius: 4px;
-    
-    /* ✅ 내가 보낸 말풍선은 항상 가로 방향 + 자동 줄바꿈 */
-    white-space: normal;
-    writing-mode: horizontal-tb;
-    text-orientation: mixed;
-    display: inline-block;
+    text-align: left;
 }
 
 /* AI 답변 말풍선 스타일 */
