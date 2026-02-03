@@ -18,6 +18,7 @@ const AssignmentDetail = () => {
                 console.log("first fileUrl:", res.data?.[0]?.fileUrl);
 
                 const mapped = (res.data || []).map((x) => ({
+                    submissionId: x.submissionId,
                     name: x.memberName,
                     submittedAt: x.submittedAt
                         ? x.submittedAt.replace("T", " ").slice(0, 16)
@@ -63,6 +64,43 @@ const AssignmentDetail = () => {
 
 
     const closePreview = () => setPreview(null);
+
+    // ----- AI에게 보기 (제출물 자동 읽기) -----
+    const [aiModal, setAiModal] = useState(null); // { submissionId, name } | null
+    const [aiMessage, setAiMessage] = useState("");
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiReply, setAiReply] = useState(null);
+
+    const openAiModal = (s) => {
+        if (!s?.fileUrl || s.submissionId == null) return;
+        setAiModal({ submissionId: String(s.submissionId), name: s.name });
+        setAiMessage("");
+        setAiReply(null);
+    };
+    const closeAiModal = () => setAiModal(null);
+
+    const sendToAi = async () => {
+        if (!aiModal) return;
+        setAiLoading(true);
+        setAiReply(null);
+        try {
+            const res = await api.post("/ai/chat/with-submission", {
+                message: aiMessage.trim() || "이 제출물을 보고 요약하거나 피드백해줘.",
+                submissionId: aiModal.submissionId,
+            });
+            setAiReply(res.data != null ? String(res.data) : "");
+        } catch (e) {
+            const status = e.response?.status;
+            const data = e.response?.data;
+            setAiReply(
+                status === 401
+                    ? "로그인이 필요합니다."
+                    : "요청 실패: " + (typeof data === "string" ? data : e.message || status || "알 수 없는 오류")
+            );
+        } finally {
+            setAiLoading(false);
+        }
+    };
 
     return (
         <div className="ad-page">
@@ -122,12 +160,21 @@ const AssignmentDetail = () => {
 
                                     <td>
                                         {s.fileUrl ? (
-                                            <button
-                                                className="ad-view-btn"
-                                                onClick={() => openPreview(s.fileUrl)}
-                                            >
-                                                보기
-                                            </button>
+                                            <span className="ad-btns">
+                                                <button
+                                                    className="ad-view-btn"
+                                                    onClick={() => openPreview(s.fileUrl)}
+                                                >
+                                                    보기
+                                                </button>
+                                                <button
+                                                    className="ad-view-btn ad-ai-btn"
+                                                    onClick={() => openAiModal(s)}
+                                                    title="제출물을 AI가 읽고 피드백해 줍니다"
+                                                >
+                                                    AI에게 보기
+                                                </button>
+                                            </span>
                                         ) : (
                                             <span className="ad-td-muted">-</span>
                                         )}
@@ -139,6 +186,33 @@ const AssignmentDetail = () => {
                     </div>
                 </div>
             </section>
+
+            {/* ===== AI에게 보기 모달 ===== */}
+            {aiModal && (
+                <div className="ad-preview-overlay" onClick={closeAiModal}>
+                    <div className="ad-ai-modal ad-preview-modal" onClick={(e) => e.stopPropagation()}>
+                        <button className="ad-preview-close" onClick={closeAiModal}>✕</button>
+                        <h3 className="ad-ai-title">AI에게 보기 — {aiModal.name}</h3>
+                        <p className="ad-ai-desc">제출된 파일(PDF/이미지)을 AI가 읽고 답합니다. 질문을 입력하거나 비워두면 요약·피드백을 요청합니다.</p>
+                        <textarea
+                            className="ad-ai-input"
+                            placeholder="예: 이 과제 피드백해줘 / 요약해줘"
+                            value={aiMessage}
+                            onChange={(e) => setAiMessage(e.target.value)}
+                            rows={2}
+                        />
+                        <button className="ad-view-btn ad-ai-send" onClick={sendToAi} disabled={aiLoading}>
+                            {aiLoading ? "처리 중…" : "보내기"}
+                        </button>
+                        {aiReply != null && (
+                            <div className="ad-ai-reply">
+                                <strong>AI 답변</strong>
+                                <div className="ad-ai-reply-text">{aiReply}</div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* ===== 미리보기 모달 ===== */}
             {preview && (

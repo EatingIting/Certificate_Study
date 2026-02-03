@@ -60,6 +60,7 @@
             resultType="com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse">
 
         SELECT
+        s.submission_id AS submissionId,
         u.email AS userId,
 
         CONCAT(
@@ -137,6 +138,12 @@
         memberName ASC;
 
 
+    </select>
+
+    <select id="selectSubmissionFileBySubmissionId" resultType="com.example.demo.assignment.dto.AssignmentSubmissionFileDto">
+        SELECT file_url AS fileUrl, file_name AS fileName
+        FROM assignment_submissions
+        WHERE submission_id = #{submissionId}
     </select>
 
     <select id="selectMatrixAssignments"
