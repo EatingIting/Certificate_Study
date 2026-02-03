@@ -12,6 +12,7 @@ import api from "../../api/api"; // ✅ 추가 (경로는 너 프로젝트 구�
 function Dashboard({ setActiveMenu }) {
   const navigate = useNavigate();
   const params = useParams();
+  const [calendarEvents, setCalendarEvents] = useState([]);
 
   const subjectId =
     params.roomId ||
@@ -330,29 +331,99 @@ function Dashboard({ setActiveMenu }) {
     fetchDashAssignments();
   }, [subjectId]);
 
-  // ✅ 일정 더미
-  const upcomingSchedules = [
-    { date: "01.20", title: "정보처리기사 접수 시작", dday: "D-1" },
-    { date: "01.21", title: "스터디 1회차", dday: "D-2" },
-    { date: "01.22", title: "서류 준비", dday: "D-3" },
-    { date: "01.28", title: "스터디 2회차", dday: "D-9" },
-    { date: "02.02", title: "SQLD 시험", dday: "D-14" },
-    { date: "02.04", title: "스터디 3회차", dday: "D-16" },
-    { date: "02.10", title: "면접 준비", dday: "D-22" },
-    { date: "02.15", title: "프로젝트 발표", dday: "D-27" },
-    { date: "02.18", title: "서류 제출 마감", dday: "D-30" },
-    { date: "02.25", title: "스터디 회의", dday: "D-37" },
-  ];
+    useEffect(() => {
+        if (!subjectId) return;
 
-  const parseMD = (md) => {
-    const parts = String(md || "").split(".");
-    const m = parseInt(parts[0], 10);
-    const d = parseInt(parts[1], 10);
-    if (Number.isNaN(m) || Number.isNaN(d)) return { month: 0, day: 0 };
-    return { month: m, day: d };
-  };
+        const fetchSchedules = async () => {
+            try {
+                const today = new Date();
 
-  // ✅ 달력이 보고 있는 달(아래 목록 필터용)
+                const start = new Date(today);
+                start.setMonth(start.getMonth() - 1);
+
+                const end = new Date(today);
+                end.setMonth(end.getMonth() + 3);
+
+                const startStr = start.toISOString().slice(0, 10);
+                const endStr = end.toISOString().slice(0, 10);
+
+                const normalRes = await api.get("/schedules", {
+                    params: {
+                        roomId: subjectId,
+                        start: startStr,
+                        end: endStr,
+                    },
+                });
+
+                const studyRes = await api.get("/study-schedules", {
+                    params: {
+                        roomId: subjectId,
+                        start: startStr,
+                        end: endStr,
+                    },
+                });
+
+                const normal = normalRes.data || [];
+                const study = studyRes.data || [];
+
+                console.log("일반 일정:", normal);
+                console.log("스터디 일정:", study);
+
+                setCalendarEvents([...normal, ...study]);
+
+            } catch (e) {
+                console.error("DASH SCHEDULE ERROR:", e);
+                setCalendarEvents([]);
+            }
+        };
+
+        fetchSchedules();
+    }, [subjectId]);
+
+
+    const fcEvents = useMemo(() => {
+        return calendarEvents
+            .map((ev) => {
+
+                const startRaw = ev.start || ev.studyDate;
+                if (!startRaw) return null;
+
+                const startDate =
+                    startRaw.length === 10
+                        ? startRaw + "T00:00:00"
+                        : startRaw;
+
+                let endDate = null;
+
+                if (ev.end) {
+                    endDate =
+                        ev.end.length === 10
+                            ? ev.end + "T00:00:00"
+                            : ev.end;
+                }
+
+                return {
+                    id: ev.id || ev.studyScheduleId,
+                    title: ev.title || ev.description || "스터디",
+                    start: startDate,
+                    ...(endDate ? { end: endDate } : {}),
+
+                    extendedProps: {
+                        ...(ev.extendedProps || {}),
+                        type:
+                            ev.extendedProps?.type ||
+                            ev.type ||
+                            (ev.studyDate ? "STUDY" : "GENERAL"),
+                        round: ev.roundNum || null,
+                    },
+                };
+            })
+            .filter(Boolean);
+    }, [calendarEvents]);
+
+
+
+    // ✅ 달력이 보고 있는 달(아래 목록 필터용)
   const [activeYear, setActiveYear] = useState(new Date().getFullYear());
   const [activeMonth, setActiveMonth] = useState(new Date().getMonth() + 1);
 
@@ -369,26 +440,95 @@ function Dashboard({ setActiveMenu }) {
     return `${y}-${mm}-${dd}`;
   };
 
-  const itemsByKey = useMemo(() => {
-    const map = {};
-    for (const it of upcomingSchedules) {
-      const md = parseMD(it.date);
-      if (!md.month || !md.day) continue;
+    const itemsByKey = useMemo(() => {
+        const map = {};
 
-      const key = toKey(activeYear, md.month, md.day);
-      if (!map[key]) map[key] = [];
-      map[key].push(it);
-    }
-    return map;
-  }, [upcomingSchedules, activeYear]);
+        fcEvents.forEach((ev) => {
+            const start = new Date(ev.start);
 
-  const monthItems = useMemo(() => {
-    const filtered = upcomingSchedules.filter((it) => parseMD(it.date).month === activeMonth);
-    filtered.sort((a, b) => parseMD(a.date).day - parseMD(b.date).day);
-    return filtered;
-  }, [upcomingSchedules, activeMonth]);
+            const end = ev.end
+                ? new Date(ev.end)
+                : new Date(new Date(ev.start).setDate(start.getDate() + 1));
 
-  // =========================
+            while (start < end) {
+
+                const key =
+                    `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+
+                if (!map[key]) map[key] = [];
+                map[key].push(ev);
+
+                start.setDate(start.getDate() + 1);
+            }
+
+        });
+
+        return map;
+    }, [fcEvents]);
+
+    const formatMonthRange = (ev) => {
+        const start = new Date(ev.start);
+
+        const end = ev.end
+            ? new Date(ev.end)
+            : new Date(new Date(ev.start).setDate(start.getDate() + 1));
+
+        const monthStart = new Date(activeYear, activeMonth - 1, 1);
+        const monthEnd = new Date(activeYear, activeMonth, 1);
+
+        const visibleStart = start < monthStart ? monthStart : start;
+        const visibleEnd = end > monthEnd ? monthEnd : end;
+
+        visibleEnd.setDate(visibleEnd.getDate() - 1);
+
+        const fmt = (d) =>
+            `${String(d.getMonth() + 1).padStart(2, "0")}.${String(
+                d.getDate()
+            ).padStart(2, "0")}`;
+
+        if (fmt(visibleStart) === fmt(visibleEnd)) {
+            return `[${fmt(visibleStart)}]`;
+        }
+
+        return `[${fmt(visibleStart)}~${fmt(visibleEnd)}]`;
+    };
+
+
+    const monthItems = useMemo(() => {
+        return fcEvents
+            .filter((ev) => {
+                const start = new Date(ev.start);
+                const end = ev.end ? new Date(ev.end) : new Date(ev.start);
+
+                const monthStart = new Date(activeYear, activeMonth - 1, 1);
+                const monthEnd = new Date(activeYear, activeMonth, 1);
+
+                return start < monthEnd && end > monthStart;
+            })
+            .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+    }, [fcEvents, activeYear, activeMonth]);
+
+
+
+    const calcDday = (startDate) => {
+        if (!startDate) return "";
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const target = new Date(String(startDate).slice(0, 10));
+        target.setHours(0, 0, 0, 0);
+
+        const diff = Math.floor((target - today) / (1000 * 60 * 60 * 24));
+
+        if (diff === 0) return "D-day";
+        if (diff > 0) return `D-${diff}`;
+        return "";
+    };
+
+
+
+    // =========================
   // ✅ 전역 툴팁
   // =========================
   function getGlobalTipEl() {
@@ -430,60 +570,71 @@ function Dashboard({ setActiveMenu }) {
     return () => closeGlobalTip();
   }, []);
 
-  const dayCellDidMount = (info) => {
-    const old = info.el.querySelector(".dashDotWrap");
-    if (old) old.remove();
+    const dayCellDidMount = (info) => {
+        const old = info.el.querySelector(".dashDotWrap");
+        if (old) old.remove();
 
-    const y = info.date.getFullYear();
-    const m = String(info.date.getMonth() + 1).padStart(2, "0");
-    const d = String(info.date.getDate()).padStart(2, "0");
-    const key = `${y}-${m}-${d}`;
+        const y = info.date.getFullYear();
+        const m = String(info.date.getMonth() + 1).padStart(2, "0");
+        const d = String(info.date.getDate()).padStart(2, "0");
 
-    const items = itemsByKey[key];
-    if (!items || items.length === 0) return;
+        const key = `${y}-${m}-${d}`;
 
-    const top = info.el.querySelector(".fc-daygrid-day-top");
-    if (!top) return;
+        const items = itemsByKey[key];
+        if (!items || items.length === 0) return;
 
-    const wrap = document.createElement("div");
-    wrap.className = "dashDotWrap";
-    const dot = document.createElement("span");
-    dot.className = "dashDot";
-    wrap.appendChild(dot);
-    top.appendChild(wrap);
+        const top = info.el.querySelector(".fc-daygrid-day-top");
+        if (!top) return;
 
-    const hoverTarget = info.el.querySelector(".fc-daygrid-day-frame") || info.el;
+        const wrap = document.createElement("div");
+        wrap.className = "dashDotWrap";
 
-    if (hoverTarget._dashEnter) hoverTarget.removeEventListener("mouseenter", hoverTarget._dashEnter);
-    if (hoverTarget._dashLeave) hoverTarget.removeEventListener("mouseleave", hoverTarget._dashLeave);
+        const dot = document.createElement("span");
+        dot.className = "dashDot";
 
-    const onEnter = () => {
-      const globalTip = getGlobalTipEl();
+        wrap.appendChild(dot);
+        top.appendChild(wrap);
 
-      globalTip.innerHTML = `
-        <div class="dashTipTitle">${m}.${d} 일정</div>
-        ${items
-          .slice(0, 6)
-          .map((it) => `<div class="dashTipItem">• ${it.title}</div>`)
-          .join("")}
-        ${items.length > 6 ? `<div class="dashTipMore">+ ${items.length - 6}개 더 있음</div>` : ""}
-      `;
+        const hoverTarget =
+            info.el.querySelector(".fc-daygrid-day-frame") || info.el;
 
-      globalTip.classList.add("isOpen");
-      const rect = hoverTarget.getBoundingClientRect();
-      placeGlobalTip(globalTip, rect);
+        if (hoverTarget._dashEnter) {
+            hoverTarget.removeEventListener("mouseenter", hoverTarget._dashEnter);
+        }
+
+        if (hoverTarget._dashLeave) {
+            hoverTarget.removeEventListener("mouseleave", hoverTarget._dashLeave);
+        }
+
+        const onEnter = () => {
+            const globalTip = getGlobalTipEl();
+
+            globalTip.innerHTML = `
+      <div class="dashTipTitle">${key} 일정</div>
+      ${items
+                .slice(0, 6)
+                .map((it) => `<div class="dashTipItem">• ${it.title}</div>`)
+                .join("")}
+    `;
+
+            globalTip.classList.add("isOpen");
+            placeGlobalTip(globalTip, hoverTarget.getBoundingClientRect());
+        };
+
+        const onLeave = () => closeGlobalTip();
+
+        hoverTarget.addEventListener("mouseenter", onEnter);
+        hoverTarget.addEventListener("mouseleave", onLeave);
+
+        hoverTarget._dashEnter = onEnter;
+        hoverTarget._dashLeave = onLeave;
     };
 
-    const onLeave = () => closeGlobalTip();
 
-    hoverTarget.addEventListener("mouseenter", onEnter);
-    hoverTarget.addEventListener("mouseleave", onLeave);
 
-    hoverTarget._dashEnter = onEnter;
-    hoverTarget._dashLeave = onLeave;
-  };
 
-  // ✅ 날짜 표시용 (출석 카드)
+
+    // ✅ 날짜 표시용 (출석 카드)
   const fmtYMD = (ymd) => {
     if (!ymd || ymd === "-") return "-";
     // "2026-01-19" -> "2026.01.19"
@@ -579,35 +730,43 @@ function Dashboard({ setActiveMenu }) {
         </div>
 
         {/* 3) 달력 */}
-        <div className="card dashCalendarTop">
-          <div className="card-header line">
-            <span className="card-title">달력</span>
-            <button type="button" className="card-linkBtn" onClick={() => go("calendar")}>
-              일정으로 이동 →
-            </button>
-          </div>
+          <div className="card dashCalendarTop">
+              <div className="card-header line">
+                  <span className="card-title">달력</span>
+                  <button
+                      type="button"
+                      className="card-linkBtn"
+                      onClick={() => go("calendar")}
+                  >
+                      일정으로 이동 →
+                  </button>
+              </div>
 
-          <div className="dashMiniCal">
-            <FullCalendar
-              plugins={[dayGridPlugin, interactionPlugin]}
-              initialView="dayGridMonth"
-              locale="ko"
-              height="auto"
-              expandRows={false}
-              fixedWeekCount={true}
-              showNonCurrentDates={true}
-              events={[]}
-              headerToolbar={{
-                left: "prev",
-                center: "title",
-                right: "next",
-              }}
-              datesSet={onDatesSet}
-              dayCellContent={(arg) => <span className="dashDayNum">{arg.date.getDate()}</span>}
-              dayCellDidMount={dayCellDidMount}
-            />
+              <div className="dashMiniCal">
+                  <FullCalendar
+                      key={fcEvents.length}
+                      plugins={[dayGridPlugin, interactionPlugin]}
+                      initialView="dayGridMonth"
+                      locale="ko"
+                      height="auto"
+                      fixedWeekCount={true}
+                      showNonCurrentDates={true}
+                      events={fcEvents}
+
+                      datesSet={onDatesSet}
+
+                      dayCellContent={(arg) => (
+                          <span className="dashDayNum">
+                              {arg.date.getDate()}
+                          </span>
+                      )}
+
+                      dayCellDidMount={dayCellDidMount}
+                      eventDisplay="none"
+                  />
+
+              </div>
           </div>
-        </div>
 
         {/* 4) 게시판 카드 - 공지 맨 위, 최신순 6개 */}
         <div className="card dashBoard">
@@ -695,38 +854,53 @@ function Dashboard({ setActiveMenu }) {
         </div>
 
         {/* 6) 월별 일정 목록 */}
-        <div className="card dashCalendarBottom">
-          <div className="card-header line">
-            <span className="card-title">월별 일정</span>
-            <span className="dashMonthBadge">{activeMonth}월</span>
-          </div>
+          <div className="card dashCalendarBottom">
+              <div className="card-header line">
+                  <span className="card-title">월별 일정</span>
+                  <span className="dashMonthBadge">{activeMonth}월</span>
+              </div>
 
-          <div className="dashListBody">
-            {monthItems.length === 0 ? (
-              <div className="dashEmpty">이번 달 일정이 없습니다.</div>
-            ) : (
-              <ul className="table-list dashCalListTight">
-                {monthItems.map((it, idx) => (
-                  <li key={`m-${activeMonth}-${idx}`} className="trow tinted">
+              <div className="dashListBody">
+                  {monthItems.length === 0 ? (
+                      <div className="dashEmpty">이번 달 일정이 없습니다.</div>
+                  ) : (
+                      <ul className="table-list dashCalListTight">
+                          {monthItems.map((it) => (
+                              <li key={it.id} className="trow tinted">
                     <span className="tleft">
-                      <span className="round">[{it.date}]</span>
-                      <span className="row-text">{it.title}</span>
-                    </span>
-                    <span className="tright">
-                      <span className="status ok">{it.dday}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                      <span className="round">
+                        {formatMonthRange(it)}
+                      </span>
 
-          <div className="card-footer">
-            <button type="button" className="more-btn" onClick={() => go("calendar")}>
-              더보기 &gt;
-            </button>
+                      <span className="row-text">
+                        {it.extendedProps?.type === "STUDY"
+                        ? `${it.extendedProps.round}회차 스터디`
+                        : it.title}
+                      </span>
+
+                    </span>
+
+                    <span className="tright">
+                      <span className="status ok">
+                          {calcDday(it.start)}
+                      </span>
+                    </span>
+                              </li>
+                          ))}
+                      </ul>
+                  )}
+              </div>
+
+              <div className="card-footer">
+                  <button
+                      type="button"
+                      className="more-btn"
+                      onClick={() => go("calendar")}
+                  >
+                      더보기 &gt;
+                  </button>
+              </div>
           </div>
-        </div>
       </div>
     </div>
   );
