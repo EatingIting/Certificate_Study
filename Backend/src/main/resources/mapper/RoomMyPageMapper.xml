@@ -52,6 +52,23 @@
             LIMIT 1
     </select>
 
+    <!-- 2-1) 채팅 표시명용: 방별 닉네임만 조회 (출석부와 동일 - 방장/승인멤버만, Host+Member 동일 적용) -->
+    <select id="selectRoomNicknameOptional" resultType="string">
+        SELECT
+            CASE
+                WHEN rm.host_user_email = #{email} THEN rm.hostUserNickname
+                ELSE rjr.request_user_nickname
+            END AS roomNickname
+        FROM room rm
+                 LEFT JOIN room_join_request rjr
+                           ON rjr.room_id = rm.room_id
+                               AND rjr.request_user_email = #{email}
+                               AND rjr.status = '승인'
+        WHERE rm.room_id = #{roomId}
+          AND (rm.host_user_email = #{email} OR rjr.request_user_email IS NOT NULL)
+        LIMIT 1
+    </select>
+
     <!-- 3) 승인 멤버 닉네임 변경 -->
     <update id="updateMemberNickname">
         UPDATE room_join_request

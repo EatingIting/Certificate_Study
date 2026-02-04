@@ -124,25 +124,34 @@ const AssignmentDetail = () => {
         }
     };
 
-    // 요약노트 저장 시, AI 답변에서
-    // "맨 첫 번째 ---" 와 "맨 마지막 ---" 를 기준으로
-    // 그 사이에 있는 본문만 추출하기 위한 헬퍼
+    // 요약노트 저장 시, AI 답변에서 처음/끝 멘트(인사·마무) 제외하고 본문만 추출
     const buildNoteAnswerText = () => {
         if (!aiReply) return "";
-        // 기본은 전체 답변
-        let text = String(aiReply);
+        let text = String(aiReply).trim();
 
-        // 1) 맨 첫 번째 '---' 와 맨 마지막 '---' 위치 찾기
+        // 1) '---' 기준: 첫 번째 --- 와 마지막 --- 사이만 사용 (있으면 적용)
         const firstDash = text.indexOf("---");
         const lastDash = text.lastIndexOf("---");
-
-        // 2) 둘 다 존재하고, 서로 다른 위치일 때만
-        //    그 사이의 내용만 잘라서 사용
         if (firstDash !== -1 && lastDash !== -1 && firstDash < lastDash) {
             text = text.slice(firstDash + 3, lastDash).trim();
         }
 
-        // 3) 완전히 비면 원본을 그대로 사용 (안전장치)
+        // 2) 처음 멘트 제거: 본문 시작(### 1. / 1) / **정답:** 등) 전까지 제거
+        const contentStartRe = /(?:^|\n)\s*(---\s*\n\s*)?(###\s*1[.)]|\*\*1[.)]\*\*|\d+[.)]\s|\*\*정답:\*\*)/;
+        const startMatch = text.match(contentStartRe);
+        if (startMatch) {
+            const cut = text.search(contentStartRe);
+            if (cut > 0) text = text.slice(cut).trimStart();
+        }
+
+        // 3) 맨 끝 멘트 제거: '도움이 되었길', '더 궁금한', '질문해 주세요' 등 이후 잘라내기
+        const outroRe = /\n\s*(---\s*\n\s*)?(도움이 되었길|더 궁금한|감사합니다|필요하면|언제든 질문해)/i;
+        const outroMatch = text.match(outroRe);
+        if (outroMatch) {
+            const cut = text.search(outroRe);
+            if (cut >= 0) text = text.slice(0, cut).trim();
+        }
+
         if (!text.trim()) return String(aiReply);
         return text;
     };

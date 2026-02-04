@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './ChatModal.css';
 import { getHostnameWithPort, getWsProtocol } from "../../utils/backendUrl";
+import { useLMS } from "../LMSContext";
 
 // =================================================================
 // [상수 및 환경 설정]
@@ -11,6 +12,9 @@ const MODAL_HEIGHT = 600;
 const BUTTON_SIZE = 70;
 
 const ChatModal = ({ roomId, roomName }) => {
+    // 출석부/스터디원/게시판/헤더와 동일한 표시명 (방별 닉네임 우선 → 전역 닉네임 → 이름)
+    const { displayName } = useLMS();
+
     // =================================================================
     // 1. 상태 관리 (State)
     // =================================================================
@@ -71,15 +75,16 @@ const ChatModal = ({ roomId, roomName }) => {
         };
     }, []);
 
-    // 사용자 정보 가져오기
+    // 사용자 정보: LMSContext displayName과 동일하게 (방별 닉네임 우선)
     const myInfo = useMemo(() => {
         try {
             const storedUserId = localStorage.getItem("userId") || sessionStorage.getItem("userId");
-            const storedUserName = localStorage.getItem("userName") || sessionStorage.getItem("userName") || localStorage.getItem("nickname");
-            if (storedUserId) return { userId: storedUserId, userName: storedUserName || "익명" };
+            const fallbackName = localStorage.getItem("userName") || sessionStorage.getItem("userName") || localStorage.getItem("nickname");
+            const userName = (displayName && displayName.trim()) ? displayName.trim() : (fallbackName || "익명");
+            if (storedUserId) return { userId: storedUserId, userName };
         } catch (e) { console.error(e); }
         return null;
-    }, []);
+    }, [displayName]);
 
     // 현재 모드에 따른 메시지 목록 선택
     const currentMessages = isAiMode ? aiMessages : chatMessages;
