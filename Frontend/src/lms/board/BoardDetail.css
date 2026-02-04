@@ -1,121 +1,22 @@
-/* 작성자 / 작성일 / 조회수: 너무 붙는 문제 해결 */
-.bd.bd-detail .bd-detail-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;          /* 세로/가로 간격 */
-  margin-top: 12px;
-  margin-bottom: 16px;    /* 아래(본문)와 간격 */
-  font-size: 13px;
-  color: #888;
-}
-
-/* 본문 */
-.bd.bd-detail .bd-detail-body {
-  margin-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  white-space: pre-wrap;  /* 줄바꿈 자연스럽게 */
-  line-height: 1.7;
-}
-
-/* 구분선 (현재 상세에서만 쓰고 있으니 일단 여기에 둠) */
-.bd.bd-detail .bd-divider {
-  height: 1px;
-  background: #e5e5e5;
-  margin: 16px 0;
-}
-
 /* =========================
-   댓글 섹션
+   Detail: Header (Title / Meta / Kebab)
    ========================= */
 
-.bd.bd-detail .bd-comment-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  margin-bottom: 8px;
+/* 제목 */
+.bd.bd-detail .bd-detail-title {
+    padding-left: 8px;
 }
 
-.bd.bd-detail .bd-comment-header .bd-btn-ghost {
-  padding: 0 6px;
-  font-size: 12px;
-}
-
-.bd.bd-detail .bd-comment-body {
-  background: #fafafa;
-  border: 1px solid #eee;
-  border-radius: 4px;
-
-  padding: 16px;
-
-  display: grid;
-  gap: 16px;
-}
-
-/* 댓글 작성 영역을 ‘박스’로 분리 */
-.bd.bd-detail .bd-comment-compose {
-  margin-top: 18px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #f6faf3; /* 카드와 톤 차이 */
-}
-
-/* 댓글 입력창 크기 고정 */
-.bd.bd-detail .bd-comment-compose .bd-input {
-  height: 96px;
-  max-height: 96px;
-  min-height: 96px;
-  resize: none;
-  overflow: auto;
-}
-
-/* 답글 textarea */
-.bd.bd-detail .bd-reply-textarea {
-  resize: none;
-}
-
-/* 댓글 카드 (중첩 카드 느낌 제거) */
-.bd.bd-detail .bd-comment-card {
-  background: #fbfdf9;
-  box-shadow: none;
-  border-color: rgba(0, 0, 0, 0.06);
-}
-
-/* 댓글 meta 정렬 */
-.bd.bd-detail .bd-comment-meta {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.bd.bd-detail .bd-comment-author {
-  font-weight: 600;
-  color: #333;
-}
-
-/* 댓글 날짜 우상단 고정 */
-.bd.bd-detail .bd-card.bd-comment-card {
-  position: relative;
-  background: #fbfdf9;
-  box-shadow: none;
-  border-color: rgba(0, 0, 0, 0.06);
-}
-
-.bd.bd-detail .bd-card.bd-comment-card .bd-comment-meta {
-  padding-right: 110px;   /* 날짜 자리 확보 */
-  margin-bottom: 8px;
-}
-
-.bd.bd-detail .bd-card.bd-comment-card .bd-comment-date {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
-  white-space: nowrap;
+/* 작성자 / 작성일 / 조회수 */
+.bd.bd-detail .bd-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;          /* 세로/가로 간격 */
+    margin-top: 12px;
+    margin-bottom: 16px;    /* 아래(본문)와 간격 */
+    padding-left: 8px;
+    font-size: 13px;
+    color: #888;
 }
 
 /* =========================
@@ -123,118 +24,382 @@
    ========================= */
 
 .bd.bd-detail .bd-post-head {
-  position: relative;      /* 기준점 */
-  display: block;
+    position: relative;      /* 기준점 */
+    display: block;
 }
 
 .bd.bd-detail .bd-post-menu {
-  position: absolute;
-  top: 0;
-  right: 0;
+    position: absolute;
+    top: 0;
+    right: 0;
 
-  display: inline-flex;
-  align-items: flex-start;
+    display: inline-flex;
+    align-items: flex-start;
 }
 
 .bd.bd-detail .bd-kebab-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
+    background: transparent;
+    border: none;
+    cursor: pointer;
 
-  padding: 6px 8px;
-  border-radius: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
 
-  font-size: 18px;
-  line-height: 1;
+    font-size: 18px;
+    line-height: 1;
 }
 
 .bd.bd-detail .bd-kebab-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .bd.bd-detail .bd-post-dropdown {
-  position: absolute;
-  right: 0;
-  top: 28px;
+    position: absolute;
+    right: 0;
+    top: 28px;
 
-  min-width: 120px;
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
+    min-width: 120px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
 
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-  z-index: 20;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    z-index: 20;
 }
 
 .bd.bd-detail .bd-post-dropdown-item {
-  width: 100%;
-  text-align: left;
+    width: 100%;
+    text-align: left;
 
-  padding: 10px 12px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
 
-  font-size: 14px;
+    font-size: 14px;
 }
 
 .bd.bd-detail .bd-post-dropdown-item:hover {
-  background: rgba(0, 0, 0, 0.04);
+    background: rgba(0, 0, 0, 0.04);
 }
 
 .bd.bd-detail .bd-post-dropdown-item.danger {
-  color: #c33;
+    color: #c33;
 }
 
-/* 댓글 헤더 토글 */
+/* =========================
+   Detail: Body / Divider
+   ========================= */
+
+.bd.bd-detail .bd-detail-body {
+    margin: 36px 0;          /* 🔥 위아래 숨 공간 */
+    padding: 0 4px;          /* 🔥 좌우 아주 살짝 */
+    padding-left: 8px;
+    line-height: 1.75;
+
+    white-space: pre-wrap;   /* 줄바꿈 자연스럽게 */
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 구분선 (현재 상세에서만 쓰고 있으니 일단 여기에 둠) */
+.bd.bd-detail .bd-divider {
+    height: 1px;
+    background: #e5e5e5;
+    margin: 16px 0;
+}
+
+/* =========================
+   Attachments popover
+   ========================= */
+
+/* bd-detail-body를 기준 좌표로 */
+.bd-detail-body-with-att {
+    position: relative;
+}
+
+/* 본문 줄바꿈 유지(원하면) */
+.bd-detail-content {
+    white-space: pre-wrap;
+}
+
+/* 오른쪽 위 “첨부파일 n” */
+.bd-att-wrap {
+    position: absolute;
+    top: -32px;
+    right: 0;
+    display: inline-block;
+}
+
+.bd-att-trigger {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+/* 팝오버 */
+.bd-att-popover {
+    position: absolute;
+    top: 22px;
+    right: 0;
+    width: 260px;
+    max-height: 280px;
+    overflow: auto;
+
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.14);
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+    z-index: 20;
+}
+
+.bd-att-popover-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.bd-att-popover-title {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.bd-att-close {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.bd-att-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.bd-att-item {
+    display: grid;
+    gap: 2px;
+}
+
+.bd-att-link {
+    font-size: 13px;
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+.bd-att-size {
+    font-size: 12px;
+    opacity: 0.65;
+}
+
+/* =========================
+   댓글 섹션
+   ========================= */
+
 .bd.bd-detail .bd-comment-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 8px;
 }
 
+/* 토글 버튼 */
 .bd.bd-detail .bd-comment-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
 
-  cursor: pointer;
-  font-weight: 800;
-  color: var(--text);
+    cursor: pointer;
+    font-weight: 800;
+    color: var(--text);
 }
 
 .bd.bd-detail .bd-comment-toggle:hover {
-  background: #f6faf3;
+    background: #f6faf3;
 }
 
 .bd.bd-detail .bd-comment-toggle-title b {
-  font-weight: 900;
+    font-weight: 900;
 }
 
 .bd.bd-detail .bd-comment-toggle-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
 
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: #fff;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: #fff;
 
-  transition: transform 0.15s ease;
-  font-size: 12px;
-  color: var(--muted);
+    transition: transform 0.15s ease;
+    font-size: 12px;
+    color: var(--muted);
 }
 
 .bd.bd-detail .bd-comment-toggle-icon.open {
-  transform: rotate(180deg);
+    transform: rotate(180deg);
+}
+
+/* 댓글 body 박스 */
+.bd.bd-detail .bd-comment-body {
+    background: #fafafa;
+    border: 1px solid #eee;
+    border-radius: 4px;
+
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+}
+
+/* =========================
+   댓글 카드: "가로줄 리스트" 스타일 (최신)
+   ========================= */
+
+/* 댓글 카드 공통 */
+.bd.bd-detail .bd-card.bd-comment-card {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+
+    padding: 12px 0;
+    padding-left: 16px;      /* 전체 기본 여백 */
+    border-bottom: 1px solid var(--line);
+}
+
+/* =========================
+   댓글 내부 레이아웃 (라벨 제거 버전) (최신)
+   ========================= */
+
+/* 상단: 닉네임(좌) + 액션(우) */
+.bd.bd-detail .bd-comment-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    padding-left: 0;         /* 상단(작성자/액션)은 기준선 */
+}
+
+.bd.bd-detail .bd-comment-author {
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 본문 */
+.bd.bd-detail .bd-comment-content {
+    margin-top: 6px;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    color: #333;
+}
+
+/* 하단: 날짜는 아래로 빼서 오른쪽 */
+.bd.bd-detail .bd-comment-foot {
+    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.bd.bd-detail .bd-comment-date {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+}
+
+/* 액션 버튼: ghost 말고 텍스트 링크 느낌 */
+.bd.bd-detail .bd-comment-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.bd.bd-detail .bd-comment-link {
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(0, 0, 0, 0.55);
+}
+
+.bd.bd-detail .bd-comment-link:hover {
+    color: rgba(0, 0, 0, 0.8);
+    text-decoration: underline;
+}
+
+.bd.bd-detail .bd-comment-link.danger {
+    color: rgba(195, 51, 51, 0.85);
+}
+
+.bd.bd-detail .bd-comment-link.danger:hover {
+    color: rgba(195, 51, 51, 1);
+}
+
+/* =========================
+   대댓글 (reply) + ㄴ 표시 (최신)
+   ========================= */
+
+.bd.bd-detail .bd-card.bd-comment-card.reply {
+    margin-left: 24px;
+    padding-left: 28px;
+    position: relative;
+}
+
+/* ㄴ 표시 */
+.bd.bd-detail .bd-card.bd-comment-card.reply::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 12px;
+
+    width: 10px;
+    height: 10px;
+    border-left: 1.5px solid rgba(0, 0, 0, 0.35);
+    border-bottom: 1.5px solid rgba(0, 0, 0, 0.35);
+}
+
+/* =========================
+   댓글 작성 영역
+   ========================= */
+
+.bd.bd-detail .bd-comment-compose {
+    margin-top: 18px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #f6faf3;
+}
+
+.bd.bd-detail .bd-comment-compose .bd-input {
+    height: 96px;
+    max-height: 96px;
+    min-height: 96px;
+    resize: none;
+    overflow: auto;
+}
+
+.bd.bd-detail .bd-reply-textarea {
+    resize: none;
 }

@@ -72,9 +72,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         if (last === "leave") nextActive = "study/leave";
 
         if (last === "profile") {
-            let tab = sp.get("tab");
-            if (tab === "settings") nextActive = "profile/settings";
-            else nextActive = "profile/me";
+            nextActive = "profile/me";
         }
 
         if (nextActive && nextActive !== activeMenu) {
@@ -184,13 +182,6 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         setOpenKeys((prev) =>
             prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
         );
-    };
-
-    const navigateWithPip = async (path) => {
-        if (isInMeeting) {
-            await requestPipIfMeeting();
-        }
-        navigate(path);
     };
 
     const goChild = async (parentKey, activeKey, path) => {
@@ -483,19 +474,18 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                         </ul>
                     </li>
 
-                    {/* ✅ 스터디 관리 (스터디장만) */}
-                    {isHost && (
-                        <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
-                            <div
-                                className={`menu-item menu-parent ${activeMenu.startsWith("study") ? "active" : ""}`}
-                                onClick={() => toggleParent("study")}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => e.key === "Enter" && toggleParent("study")}
-                            >
-                                <span className="menu-label">스터디 관리</span>
-                                <span className="arrow">{openKeys.includes("study") ? "▾" : "▸"}</span>
-                            </div>
+                    {/* 스터디 관리 */}
+                    <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
+                        <div
+                            className={`menu-item menu-parent ${activeMenu.startsWith("study") ? "active" : ""}`}
+                            onClick={() => toggleParent("study")}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => e.key === "Enter" && toggleParent("study")}
+                        >
+                            <span className="menu-label">스터디 관리</span>
+                            <span className="arrow">{openKeys.includes("study") ? "▾" : "▸"}</span>
+                        </div>
 
                         <ul className="submenu">
                             {/* 방장만 */}
@@ -511,7 +501,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                             {/* 스터디원만 (맨 아래) */}
                             {isNotHost && (
                                 <li
-                                    className={`submenu-item submen-danger ${activeMenu === "study/leave" ? "active" : ""}`}
+                                    className={`submenu-item submenu-danger ${activeMenu === "study/leave" ? "active" : ""}`}
                                     onClick={() => goChild("study", "study/leave", "study/leave")}
                                 >
                                     스터디 탈퇴
@@ -519,7 +509,6 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                             )}
                         </ul>
                     </li>
-                    )}
 
                     {/* 프로필 관리 */}
                     <li
@@ -548,12 +537,6 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                                 onClick={() => goChild("profile", "profile/me", "mypage?tab=me")}
                             >
                                 내정보
-                            </li>
-                            <li
-                                className={`submenu-item ${activeMenu === "profile/settings" ? "active" : ""}`}
-                                onClick={() => goChild("profile", "profile/settings", "mypage?tab=settings")}
-                            >
-                                계정 설정
                             </li>
                         </ul>
                     </li>

@@ -1,7 +1,8 @@
+// BoardDetail.js
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./BoardCommon.css";
-import "./BoardDetail.css"
+import "./BoardDetail.css";
 import { BoardApi, formatKst } from "./BoardApi";
 
 function BoardDetail() {
@@ -12,14 +13,22 @@ function BoardDetail() {
     let [error, setError] = useState("");
     let [forbidden, setForbidden] = useState(false);
     let [detail, setDetail] = useState(null);
+
     let [newComment, setNewComment] = useState("");
     let [comments, setComments] = useState([]);
     let [commentSubmitting, setCommentSubmitting] = useState(false);
+
     let [replyTo, setReplyTo] = useState(null);
     let [replyText, setReplyText] = useState("");
-    let [commentsOpen, setCommentsOpen] = useState(true);
-    let [postMenuOpen, setPostMenuOpen] = useState(false);
 
+    let [commentsOpen, setCommentsOpen] = useState(true);
+
+    let [postMenuOpen, setPostMenuOpen] = useState(false);
+    let [attachments, setAttachments] = useState([]);
+
+    let [attOpen, setAttOpen] = useState(false);
+    let attRef = useRef(null);
+    
     let postMenuRef = useRef(null);
 
     let categoryToCode = (v) => {
@@ -47,22 +56,22 @@ function BoardDetail() {
         if (!postId) return;
 
         let alive = true;
-        let rid = Date.now() + "-" + Math.random().toString(16).slice(2);
 
         (async () => {
             try {
+                setAttachments([]);
+                setAttOpen(false);
                 setLoading(true);
                 setError("");
                 setForbidden(false);
                 setDetail(null);
                 setPostMenuOpen(false);
 
-                console.log("[DETAIL REQ]", rid, "postId=", postId);
-
                 let data = await BoardApi.getDetail(postId, true);
 
-                console.log("[DETAIL RES]", rid, "canEdit/canDelete =", data?.canEdit, data?.canDelete);
-                console.log("[DETAIL RES]", rid, "raw =", data);
+                let atts = await BoardApi.listAttachments(postId);
+                if (!alive) return;
+                setAttachments(Array.isArray(atts) ? atts : []);
 
                 if (!alive) return;
 
@@ -82,6 +91,9 @@ function BoardDetail() {
         };
     }, [postId]);
 
+    /* =========================
+       게시글 메뉴 바깥 클릭 감지
+       ========================= */
     useEffect(() => {
         if (!postMenuOpen) return;
 
@@ -96,14 +108,27 @@ function BoardDetail() {
         return () => window.removeEventListener("mousedown", onDown);
     }, [postMenuOpen]);
 
-    let parentComments = comments.filter((c) => !c.parentId);
-    let repliesByParent = comments.reduce((acc, c) => {
-        if (c.parentId) {
-            if (!acc[c.parentId]) acc[c.parentId] = [];
-            acc[c.parentId].push(c);
-        }
-        return acc;
-    }, {});
+    useEffect(() => {
+        if (!attOpen) return;
+
+        let onDown = (e) => {
+            if (!attRef.current) return;
+            if (!attRef.current.contains(e.target)) {
+                setAttOpen(false);
+            }
+        };
+
+        let onEsc = (e) => {
+            if (e.key === "Escape") setAttOpen(false);
+        };
+
+        window.addEventListener("mousedown", onDown);
+        window.addEventListener("keydown", onEsc);
+        return () => {
+            window.removeEventListener("mousedown", onDown);
+            window.removeEventListener("keydown", onEsc);
+        };
+    }, [attOpen]);
 
     /* =========================
        댓글 목록
@@ -129,6 +154,15 @@ function BoardDetail() {
         };
     }, [postId]);
 
+    let parentComments = comments.filter((c) => !c.parentId);
+    let repliesByParent = comments.reduce((acc, c) => {
+        if (c.parentId) {
+            if (!acc[c.parentId]) acc[c.parentId] = [];
+            acc[c.parentId].push(c);
+        }
+        return acc;
+    }, {});
+
     let onBack = () => navigate(`/lms/${subjectId}/board`);
     let onEdit = () => navigate(`/lms/${subjectId}/board/${postId}/edit`);
 
@@ -139,12 +173,10 @@ function BoardDetail() {
             await BoardApi.deletePost(postId);
             navigate(`/lms/${subjectId}/board`, { replace: true });
         } catch (e) {
-            // 403: 권한 없음
             if (e?.status === 403) {
                 alert(e?.message || "삭제 권한이 없습니다.");
                 return;
             }
-            // 기타
             alert(e?.message || "삭제 실패");
         }
     };
@@ -178,7 +210,7 @@ function BoardDetail() {
             setCommentSubmitting(true);
             await BoardApi.createComment(postId, {
                 content: text,
-                parentId: parentCommentId
+                parentId: parentCommentId,
             });
             setReplyText("");
             setReplyTo(null);
@@ -188,7 +220,7 @@ function BoardDetail() {
         } finally {
             setCommentSubmitting(false);
         }
-    }
+    };
 
     let onDeleteComment = async (commentId) => {
         let ok = window.confirm("댓글을 삭제할까요?");
@@ -282,16 +314,13 @@ function BoardDetail() {
                 </div>
 
                 <div className="bd-card">
-                    <div className="bd-sub">
-                        삭제되었거나 존재하지 않는 글입니다.
-                    </div>
+                    <div className="bd-sub">삭제되었거나 존재하지 않는 글입니다.</div>
                 </div>
             </div>
         );
     }
 
-    let isNotice =
-        categoryToCode(post.category) === "NOTICE" || post.pinned;
+    let isNotice = categoryToCode(post.category) === "NOTICE" || post.pinned;
 
     return (
         <div className="bd bd-detail">
@@ -311,9 +340,7 @@ function BoardDetail() {
             <div className="bd-card">
                 <div className="bd-post-head">
                     <div>
-                        <div className="bd-chip notice">
-                            {isNotice ? "공지" : categoryToLabel(post.category)}
-                        </div>
+                        <div className="bd-chip notice">{isNotice ? "공지" : categoryToLabel(post.category)}</div>
 
                         <h3 className="bd-detail-title" style={{ marginTop: 10 }}>
                             {post.title}
@@ -365,21 +392,67 @@ function BoardDetail() {
                 </div>
 
                 <div className="bd-detail-meta">
-                    <span>작성자: {post.nickname}</span>
-                    <span>작성일: {formatKst(post.createdAt)}</span>
-                    <span>조회수: {post.viewCount ?? 0}</span>
+                    <span>{post.nickname}</span>
+                    <span>{formatKst(post.createdAt)}</span>
+                    <span>조회 {post.viewCount ?? 0}</span>
                 </div>
 
                 <div className="bd-divider" />
 
-                <div className="bd-detail-body">
-                    {post.content}
+                <div className="bd-detail-body bd-detail-body-with-att">
+                    {/* 오른쪽 위: 첨부파일 텍스트 */}
+                    {attachments.length > 0 && (
+                        <div className="bd-att-wrap" ref={attRef}>
+                            <button
+                                type="button"
+                                className="bd-att-trigger"
+                                onClick={() => setAttOpen((v) => !v)}
+                                aria-haspopup="dialog"
+                                aria-expanded={attOpen}
+                            >
+                                첨부파일 <b>{attachments.length}</b>
+                            </button>
+
+                            {attOpen && (
+                                <div className="bd-att-popover" role="dialog" aria-label="첨부파일 목록">
+                                    <div className="bd-att-popover-head">
+                                        <span className="bd-att-popover-title">첨부파일</span>
+                                        <button
+                                            type="button"
+                                            className="bd-att-close"
+                                            onClick={() => setAttOpen(false)}
+                                            aria-label="닫기"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <ul className="bd-att-list">
+                                        {attachments.map((a) => (
+                                            <li key={a.attachmentId || a.url} className="bd-att-item">
+                                                <a className="bd-att-link" href={a.url} target="_blank" rel="noreferrer">
+                                                    {a.originalName}
+                                                </a>
+                                                {a.sizeBytes != null && (
+                                                    <span className="bd-att-size">
+                                                        {Math.round((a.sizeBytes || 0) / 1024)} KB
+                                                    </span>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 본문 */}
+                    <div className="bd-detail-content">{post.content}</div>
                 </div>
 
                 <div className="bd-divider" />
 
                 <div className="bd-comment-section">
-                    {/* 댓글 헤더 */}
                     <div className="bd-comment-header">
                         <button
                             type="button"
@@ -388,8 +461,8 @@ function BoardDetail() {
                                 setCommentsOpen((v) => {
                                     let next = !v;
                                     if (!next) {
-                                    setReplyTo(null);
-                                    setReplyText("");
+                                        setReplyTo(null);
+                                        setReplyText("");
                                     }
                                     return next;
                                 });
@@ -403,10 +476,8 @@ function BoardDetail() {
                         </button>
                     </div>
 
-                    {/* 아래 내용(목록 + 입력창) */}
                     {commentsOpen && (
                         <div className="bd-comment-body">
-                            {/* 댓글 목록 */}
                             <div>
                                 {comments.length === 0 ? (
                                     <div className="bd-hint">댓글이 없습니다.</div>
@@ -418,47 +489,44 @@ function BoardDetail() {
                                             return (
                                                 <div key={c.commentId} style={{ display: "grid", gap: 8 }}>
                                                     {/* 부모 댓글 */}
-                                                    <div className="bd-card bd-comment-card" style={{ padding: 12 }}>
-                                                        <div className="bd-comment-meta">
-                                                            <span className="bd-comment-author">
-                                                                작성자: {c.nickname}
-                                                            </span>
-                                                            <span className="bd-comment-date">
-                                                                {formatKst(c.createdAt)}
-                                                            </span>
+                                                    <div className="bd-card bd-comment-card">
+                                                        <div className="bd-comment-top">
+                                                            <span className="bd-comment-author">{c.nickname}</span>
+
+                                                            {!isDeleted && (
+                                                                <div className="bd-comment-actions">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="bd-comment-link"
+                                                                        onClick={() => {
+                                                                            if (replyTo === c.commentId) {
+                                                                                setReplyTo(null);
+                                                                                setReplyText("");
+                                                                            } else {
+                                                                                setReplyTo(c.commentId);
+                                                                                setReplyText("");
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        답글
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        className="bd-comment-link danger"
+                                                                        onClick={() => onDeleteComment(c.commentId)}
+                                                                    >
+                                                                        삭제
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
 
-                                                        <div style={{ whiteSpace: "pre-wrap" }}>
-                                                            {c.content}
+                                                        <div className="bd-comment-content">{c.content}</div>
+
+                                                        <div className="bd-comment-foot">
+                                                            <span className="bd-comment-date">{formatKst(c.createdAt)}</span>
                                                         </div>
-
-                                                        {!isDeleted && (
-                                                            <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                                                                <button
-                                                                    type="button"
-                                                                    className="bd-btn-ghost"
-                                                                    onClick={() => {
-                                                                        if (replyTo === c.commentId) {
-                                                                            setReplyTo(null);
-                                                                            setReplyText("");
-                                                                        } else {
-                                                                            setReplyTo(c.commentId);
-                                                                            setReplyText("");
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    답글
-                                                                </button>
-
-                                                                <button
-                                                                    type="button"
-                                                                    className="bd-btn-ghost"
-                                                                    onClick={() => onDeleteComment(c.commentId)}
-                                                                >
-                                                                    삭제
-                                                                </button>
-                                                            </div>
-                                                        )}
 
                                                         {!isDeleted && replyTo === c.commentId && (
                                                             <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
@@ -485,33 +553,28 @@ function BoardDetail() {
 
                                                     {/* 대댓글 */}
                                                     {(repliesByParent[c.commentId] || []).map((r) => (
-                                                        <div
-                                                            key={r.commentId}
-                                                            className="bd-card bd-comment-card"
-                                                            style={{ padding: 12, marginLeft: 24 }}
-                                                        >
-                                                            <div className="bd-comment-meta">
-                                                                <span className="bd-comment-author">
-                                                                    작성자: {r.nickname}
-                                                                </span>
-                                                                <span className="bd-comment-date">
-                                                                    {formatKst(r.createdAt)}
-                                                                </span>
+                                                        <div key={r.commentId} className="bd-card bd-comment-card reply">
+                                                            <div className="bd-comment-top">
+                                                                <span className="bd-comment-author">{r.nickname}</span>
+
+                                                                {!r.deletedAt && (
+                                                                    <div className="bd-comment-actions">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="bd-comment-link danger"
+                                                                            onClick={() => onDeleteComment(r.commentId)}
+                                                                        >
+                                                                            삭제
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                             </div>
 
-                                                            <div style={{ whiteSpace: "pre-wrap" }}>
-                                                                {r.content}
-                                                            </div>
+                                                            <div className="bd-comment-content">{r.content}</div>
 
-                                                            {!r.deletedAt && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="bd-btn-ghost"
-                                                                    onClick={() => onDeleteComment(r.commentId)}
-                                                                >
-                                                                    삭제
-                                                                </button>
-                                                            )}
+                                                            <div className="bd-comment-foot">
+                                                                <span className="bd-comment-date">{formatKst(r.createdAt)}</span>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
