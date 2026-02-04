@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
-import "./Board.css";
+import "./BoardCommon.css";
 import { BoardApi } from "./BoardApi";
 import { useLMS } from "../LMSContext";
 
@@ -95,9 +95,10 @@ function BoardWrite() {
             setSubmitting(true);
             setError("");
 
-            // ✅ 공지일 때만 isPinned를 사용, 그 외는 무조건 false
+            // ✅ 공지일 때만 isPinned 사용
             let finalPinned = category === "공지" ? !!isPinned : false;
 
+            // 1) 글 생성 -> postId 받기
             let res = await BoardApi.createPost({
                 roomId,
                 category: categoryToCode(category),
@@ -108,11 +109,26 @@ function BoardWrite() {
 
             let postId = res?.postId;
             if (!postId) {
-                // 서버 응답이 예상과 다를 때
+                // 서버 응답이 예상과 다르면 목록으로
                 goList();
                 return;
             }
 
+            // 2) 첨부가 있으면 업로드 -> 3) attachments 메타 등록
+            if (files.length > 0) {
+                let metas = await BoardApi.uploadFiles({
+                    roomId,
+                    postId,
+                    files,
+                });
+
+                // uploadFiles 응답이 배열이 아닐 수도 있으니 방어
+                if (Array.isArray(metas) && metas.length > 0) {
+                    await BoardApi.addAttachments(postId, metas);
+                }
+            }
+
+            // 4) 상세로 이동
             navigate(`/lms/${subjectId}/board/${postId}`);
         } catch (e2) {
             setError(e2?.message || "작성 실패");
@@ -227,7 +243,7 @@ function BoardWrite() {
 
                     <div className="bd-row">
                         <label className="bd-label" htmlFor="bw-files">
-                            첨부파일 (현재는 저장만 가능 / 업로드 연동은 다음 단계)
+                            첨부파일
                         </label>
 
                         <div className="bd-filebar">
@@ -268,10 +284,6 @@ function BoardWrite() {
                         ) : (
                             <div className="bd-hint">첨부파일이 없습니다.</div>
                         )}
-
-                        <div className="bd-hint">
-                            * 다음 단계에서 “파일 업로드 API(S3/서버 저장)” 또는 “URL 첨부 메타 저장”으로 맞춰서 연동할 수 있어.
-                        </div>
                     </div>
 
                     <div className="bd-actions" style={{ justifyContent: "flex-end" }}>

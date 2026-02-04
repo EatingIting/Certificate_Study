@@ -18,4 +18,7 @@ public class BoardPostDetailVO {
     private BoardPostVO post;
     private List<BoardPostAttachmentVO> attachments;
     private List<BoardCommentVO> comments;
+
+    private boolean canEdit;
+    private boolean canDelete;
 }
