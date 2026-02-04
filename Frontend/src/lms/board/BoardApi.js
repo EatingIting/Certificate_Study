@@ -6,7 +6,7 @@ export const formatKst = (ts) => {
     let d = new Date(ts);
     if (Number.isNaN(d.getTime())) return String(ts);
 
-    // ✅ 강제로 +9시간
+    // 강제로 +9시간
     d.setHours(d.getHours() + 9);
 
     let pad = (n) => String(n).padStart(2, "0");
@@ -186,6 +186,59 @@ export const BoardApi = {
     deleteComment(commentId) {
         return request(`/api/board/comments/${commentId}`, {
             method: "DELETE",
+        });
+    },
+
+    /** 첨부 업로드 (S3 업로드 API 호출) */
+    async uploadFiles({ roomId, postId, files }) {
+        let token = getToken();
+
+        let form = new FormData();
+        form.append("roomId", roomId);
+        form.append("postId", String(postId));
+        files.forEach((f) => form.append("files", f));
+
+        let res = await fetch(`${API_BASE}/api/board/uploads`, {
+            method: "POST",
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                // ❗ Content-Type 절대 넣지 마! (multipart boundary 자동)
+            },
+            body: form,
+        });
+
+        if (!res.ok) {
+            let text = await res.text().catch(() => "");
+            let msg = text || `업로드 실패 (${res.status})`;
+            let err = new Error(msg);
+            err.status = res.status;
+            throw err;
+        }
+
+        // 업로드는 보통 JSON 반환
+        return await res.json();
+    },
+
+    /** 첨부 메타 등록 (postId에 연결) */
+    addAttachments(postId, metas) {
+        return request(`/api/board/posts/${postId}/attachments`, {
+            method: "POST",
+            body: JSON.stringify(metas),
+        });
+    },
+
+    /** 첨부 목록 조회 */
+    listAttachments(postId) {
+        return request(`/api/board/posts/${postId}/attachments`, {
+            method: "GET",
+        });
+    },
+
+    /** 첨부 전체 교체 */
+    replaceAttachments(postId, metas) {
+        return request(`/api/board/posts/${postId}/attachments`, {
+            method: "PUT",
+            body: JSON.stringify(metas),
         });
     },
 };

@@ -656,6 +656,7 @@ function MeetingPage({ portalRoomId }) {
         requestBrowserPip,
         isPipMode,
         isBrowserPipMode,
+        customPipData,
         pipVideoRef, // 🔥 브라우저 PIP용 숨겨진 video element ref
     } = useMeeting();
 
@@ -1311,6 +1312,24 @@ function MeetingPage({ portalRoomId }) {
 
     /* 브라우저 pip 관련 로직 */
     const mainVideoRef = useRef(null);
+    const gridFullscreenVideoRef = useRef(null);
+    /** 그리드 일반 모드: 참가자 id → video element (타일별 PiP용) */
+    const gridTileVideoRefsRef = useRef({});
+    const gridTileRefStableRef = useRef({});
+    const getGridTileVideoRef = useCallback((id) => {
+        const idKey = String(id);
+        if (!gridTileRefStableRef.current[idKey]) {
+            gridTileRefStableRef.current[idKey] = {
+                get current() {
+                    return gridTileVideoRefsRef.current[idKey];
+                },
+                set current(v) {
+                    gridTileVideoRefsRef.current[idKey] = v;
+                },
+            };
+        }
+        return gridTileRefStableRef.current[idKey];
+    }, []);
 
     const userId = userIdRef.current;
     // ✅ 방별 닉네임(roomNickname)을 최우선으로 사용
@@ -2154,13 +2173,18 @@ function MeetingPage({ portalRoomId }) {
         console.log("[turnOnCamera] canvas pipeline started immediately, emoji mode:", faceModeRef.current, "emoji:", faceEmojiRef.current);
     };
 
-    // ✅ 전체화면 상태 감지(원본 유지)
+    // ✅ 전체화면 상태 감지(원본 유지). 그리드 전체화면에서 Esc로 나올 때도 그리드 복원
     useEffect(() => {
         const handleFullscreenChange = () => {
             const fullscreenEl = document.fullscreenElement;
             setIsFullscreen(!!fullscreenEl);
-            if (fullscreenEl) document.body.classList.add("fullscreen-active");
-            else document.body.classList.remove("fullscreen-active");
+            if (fullscreenEl) {
+                document.body.classList.add("fullscreen-active");
+            } else {
+                document.body.classList.remove("fullscreen-active");
+                // 그리드 전체화면에서 브라우저로 나가면(Esc 등) 그리드 타일이 다시 보이도록
+                setIsGridFullscreen(false);
+            }
         };
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
@@ -6816,6 +6840,103 @@ function MeetingPage({ portalRoomId }) {
                 : gridFullscreenUser?.stream;
     const isGridScreenShare = !!gridFullscreenUser?.isScreenSharing;
 
+    // 그리드 전체화면 PiP (동일한 requestBrowserPip/createAvatarStream 사용)
+    const handleGridBrowserPip = useCallback(async () => {
+        const video = gridFullscreenVideoRef.current;
+        if (!video) return;
+
+        if (!document.pictureInPictureElement) {
+            const stream = video.srcObject || gridFullscreenStream;
+            const peerName = gridFullscreenUser?.name || "참가자";
+            const peerId = gridFullscreenUser?.id != null ? String(gridFullscreenUser.id) : "";
+
+            if (!stream || !stream.getVideoTracks().some((t) => t.readyState === "live")) {
+                const avatarStream = createAvatarStream(peerName);
+                video.srcObject = avatarStream;
+                video.muted = true;
+                try {
+                    await video.play();
+                } catch { }
+            } else {
+                if (!video.srcObject && gridFullscreenStream) {
+                    video.srcObject = gridFullscreenStream;
+                    video.muted = true;
+                    try {
+                        await video.play();
+                    } catch { }
+                }
+                if (video.readyState < 2) {
+                    await new Promise((resolve) => {
+                        const onCanPlay = () => {
+                            video.removeEventListener("canplay", onCanPlay);
+                            resolve();
+                        };
+                        video.addEventListener("canplay", onCanPlay);
+                        setTimeout(resolve, 1000);
+                    });
+                }
+            }
+            const success = await requestBrowserPip(video, video.srcObject || stream, peerName, peerId);
+            if (!success) {
+                video.requestPictureInPicture().catch((e) => console.warn("[PiP] grid fullscreen failed:", e));
+            }
+        }
+    }, [requestBrowserPip, gridFullscreenUser, gridFullscreenStream, createAvatarStream]);
+
+    // 그리드 일반 모드: 타일별 PiP
+    const handleGridTileBrowserPip = useCallback(
+        async (p) => {
+            const video = gridTileVideoRefsRef.current[String(p.id)];
+            if (!video) return;
+
+            if (!document.pictureInPictureElement) {
+                const stream =
+                    p.isScreenSharing ? p.screenStream : p.isMe ? localStream : p.stream;
+                const peerName = p?.name || "참가자";
+                const peerId = p?.id != null ? String(p.id) : "";
+
+                if (!stream || !stream.getVideoTracks().some((t) => t.readyState === "live")) {
+                    const avatarStream = createAvatarStream(peerName);
+                    video.srcObject = avatarStream;
+                    video.muted = true;
+                    try {
+                        await video.play();
+                    } catch { }
+                } else {
+                    if (!video.srcObject && stream) {
+                        video.srcObject = stream;
+                        video.muted = true;
+                        try {
+                            await video.play();
+                        } catch { }
+                    }
+                    if (video.readyState < 2) {
+                        await new Promise((resolve) => {
+                            const onCanPlay = () => {
+                                video.removeEventListener("canplay", onCanPlay);
+                                resolve();
+                            };
+                            video.addEventListener("canplay", onCanPlay);
+                            setTimeout(resolve, 1000);
+                        });
+                    }
+                }
+                const success = await requestBrowserPip(
+                    video,
+                    video.srcObject || stream,
+                    peerName,
+                    peerId
+                );
+                if (!success) {
+                    video.requestPictureInPicture().catch((e) =>
+                        console.warn("[PiP] grid tile failed:", e)
+                    );
+                }
+            }
+        },
+        [requestBrowserPip, localStream, createAvatarStream]
+    );
+
     const _sv = streamVersion;
 
     return (
@@ -6962,112 +7083,108 @@ function MeetingPage({ portalRoomId }) {
                                                 </div>
                                             )}
 
-                                            {/* 💬 전체화면 사이드바 (채팅/참여자) */}
+                                            {/* 💬 전체화면 사이드바 (참여자 목록 + 채팅 합침, 비전체화면과 동일) */}
                                             <div className={`fullscreen-sidebar ${sidebarOpen ? "open" : ""}`}>
                                                 <div className="fullscreen-sidebar-inner">
                                                     <div className="fullscreen-sidebar-header">
-                                                        <h2 className="sidebar-title">
-                                                            {sidebarView === "chat" ? "회의 채팅" : "참여자 목록"}
-                                                        </h2>
+                                                        <h2 className="sidebar-title">참여자 목록</h2>
                                                         <button onClick={() => setSidebarOpen(false)} className="close-btn">
                                                             <X size={20} />
                                                         </button>
                                                     </div>
 
-                                                    {sidebarView === "chat" && (
-                                                        <>
-                                                            <div className="fullscreen-chat-area custom-scrollbar" ref={chatAreaRef}>
-                                                                {messages.map((msg) => (
-                                                                    <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
-                                                                        <div className="msg-content-wrapper">
-                                                                            {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
-                                                                            <div className="msg-bubble">{msg.text}</div>
+                                                    <div className="fullscreen-participants-area custom-scrollbar">
+                                                        <div className="section-label">참여 중 ({participants.length})</div>
+                                                        {participants.map((p) => (
+                                                            <div key={p.id} className={`participant-card ${p.isMe ? "me" : ""}`}>
+                                                                <div className="p-info">
+                                                                    <UserAvatar name={p.name} />
+                                                                    <div>
+                                                                        <div className={`p-name ${p.isMe ? "me" : ""}`}>
+                                                                            {p.name} {p.isMe ? "(나)" : ""} {p.isHost ? "👑" : ""}
                                                                         </div>
-                                                                        <span className="msg-time">
-                                                                            {msg.userName}, {msg.time}
-                                                                        </span>
+                                                                        <div className="p-role">{p.isHost ? "방장" : (p.isMe ? "나" : "참여자")}</div>
                                                                     </div>
-                                                                ))}
-                                                                <div ref={chatEndRef} />
-                                                            </div>
-                                                            <div className="fullscreen-chat-input-area">
-                                                                <form onSubmit={handleSendMessage} className="chat-form">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={chatDraft}
-                                                                        onChange={(e) => setChatDraft(e.target.value)}
-                                                                        placeholder="메시지를 입력하세요..."
-                                                                        className="chat-input"
-                                                                    />
-                                                                    <button type="submit" className="send-btn" disabled={!chatDraft.trim()}>
-                                                                        <Send size={16} />
-                                                                    </button>
-                                                                </form>
-                                                            </div>
-                                                        </>
-                                                    )}
-
-                                                    {sidebarView === "participants" && (
-                                                        <div className="fullscreen-participants-area custom-scrollbar">
-                                                            <div className="section-label">참여 중 ({participants.length})</div>
-                                                            {participants.map((p) => (
-                                                                <div key={p.id} className={`participant-card ${p.isMe ? "me" : ""}`}>
-                                                                    <div className="p-info">
-                                                                        <UserAvatar name={p.name} />
-                                                                        <div>
-                                                                            <div className={`p-name ${p.isMe ? "me" : ""}`}>
-                                                                                {p.name} {p.isMe ? "(나)" : ""} {p.isHost ? "👑" : ""}
-                                                                            </div>
-                                                                            <div className="p-role">{p.isHost ? "방장" : (p.isMe ? "나" : "참여자")}</div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="p-status">
-                                                                        {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} />}
-                                                                        {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} />}
-                                                                        {!p.isMe && amIHost && (
-                                                                            <div className="host-menu-container">
-                                                                                <button className="more-btn" onClick={() => toggleHostMenu(p.id)}>
-                                                                                    <MoreHorizontal size={16} />
-                                                                                </button>
-                                                                                {hostMenuTargetId === p.id && (
-                                                                                    <div className="host-menu-dropdown">
-                                                                                        {!p.muted ? (
-                                                                                            <button onClick={() => handleForceMute(p.id)}>
-                                                                                                <MicOff size={14} /> 마이크 끄기
-                                                                                            </button>
-                                                                                        ) : (
-                                                                                            <button onClick={() => handleForceUnmute(p.id)}>
-                                                                                                <Mic size={14} /> 마이크 켜기
-                                                                                            </button>
-                                                                                        )}
-                                                                                        {!p.cameraOff ? (
-                                                                                            <button onClick={() => handleForceCameraOff(p.id)}>
-                                                                                                <VideoOff size={14} /> 카메라 끄기
-                                                                                            </button>
-                                                                                        ) : (
-                                                                                            <button onClick={() => handleForceCameraOn(p.id)}>
-                                                                                                <Video size={14} /> 카메라 켜기
-                                                                                            </button>
-                                                                                        )}
-                                                                                        <button className="kick-btn" onClick={() => handleKick(p.id)}>
-                                                                                            <X size={14} /> 내보내기
+                                                                </div>
+                                                                <div className="p-status">
+                                                                    {p.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} />}
+                                                                    {p.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} />}
+                                                                    {!p.isMe && amIHost && (
+                                                                        <div className="host-menu-container">
+                                                                            <button className="more-btn" onClick={() => toggleHostMenu(p.id)}>
+                                                                                <MoreHorizontal size={16} />
+                                                                            </button>
+                                                                            {hostMenuTargetId === p.id && (
+                                                                                <div className="host-menu-dropdown">
+                                                                                    {!p.muted ? (
+                                                                                        <button onClick={() => handleForceMute(p.id)}>
+                                                                                            <MicOff size={14} /> 마이크 끄기
                                                                                         </button>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
+                                                                                    ) : (
+                                                                                        <button onClick={() => handleForceUnmute(p.id)}>
+                                                                                            <Mic size={14} /> 마이크 켜기
+                                                                                        </button>
+                                                                                    )}
+                                                                                    {!p.cameraOff ? (
+                                                                                        <button onClick={() => handleForceCameraOff(p.id)}>
+                                                                                            <VideoOff size={14} /> 카메라 끄기
+                                                                                        </button>
+                                                                                    ) : (
+                                                                                        <button onClick={() => handleForceCameraOn(p.id)}>
+                                                                                            <Video size={14} /> 카메라 켜기
+                                                                                        </button>
+                                                                                    )}
+                                                                                    <button className="kick-btn" onClick={() => handleKick(p.id)}>
+                                                                                        <X size={14} /> 내보내기
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                            ))}
-                                                            {amIHost && (
-                                                                <div className="invite-section">
-                                                                    <button className="invite-btn" onClick={handleInvite}>
-                                                                        <Share size={16} /> 초대하기
-                                                                    </button>
+                                                            </div>
+                                                        ))}
+                                                        {amIHost && (
+                                                            <div className="invite-section">
+                                                                <button className="invite-btn" onClick={handleInvite}>
+                                                                    <Share size={16} /> 초대하기
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="sidebar-chat-divider">
+                                                        <span>채팅</span>
+                                                    </div>
+
+                                                    <div className="fullscreen-chat-area custom-scrollbar" ref={chatAreaRef}>
+                                                        {messages.map((msg) => (
+                                                            <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
+                                                                <div className="msg-content-wrapper">
+                                                                    {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
+                                                                    <div className="msg-bubble">{msg.text}</div>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                <span className="msg-time">
+                                                                    {msg.userName}, {msg.time}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                        <div ref={chatEndRef} />
+                                                    </div>
+                                                    <div className="fullscreen-chat-input-area">
+                                                        <form onSubmit={handleSendMessage} className="chat-form">
+                                                            <input
+                                                                type="text"
+                                                                value={chatDraft}
+                                                                onChange={(e) => setChatDraft(e.target.value)}
+                                                                placeholder="메시지를 입력하세요..."
+                                                                className="chat-input"
+                                                            />
+                                                            <button type="submit" className="send-btn" disabled={!chatDraft.trim()}>
+                                                                <Send size={16} />
+                                                            </button>
+                                                        </form>
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -7118,16 +7235,10 @@ function MeetingPage({ portalRoomId }) {
                                                     onClick={() => setShowReactions(!showReactions)}
                                                 />
                                                 <ButtonControl
-                                                    label="채팅"
-                                                    icon={MessageSquare}
-                                                    active={sidebarOpen && sidebarView === "chat"}
-                                                    onClick={() => toggleSidebar("chat")}
-                                                />
-                                                <ButtonControl
-                                                    label="참여자"
-                                                    icon={Users}
-                                                    active={sidebarOpen && sidebarView === "participants"}
-                                                    onClick={() => toggleSidebar("participants")}
+                                                    label={sidebarOpen ? "사이드바 닫기" : "사이드바 열기"}
+                                                    icon={sidebarOpen ? PanelRightClose : PanelRightOpen}
+                                                    active={sidebarOpen}
+                                                    onClick={toggleSidebarOpen}
                                                 />
                                                 <div className="divider" />
                                                 <ButtonControl
@@ -7236,17 +7347,41 @@ function MeetingPage({ portalRoomId }) {
                                     >
                                         {/* 메인 비디오 영역 */}
                                         <div className="grid-fullscreen-video-area">
-                                            <VideoTile
-                                                user={userForTile(gridFullscreenUser)}
-                                                isMain
-                                                stream={gridFullscreenStream}
-                                                roomReconnecting={roomReconnecting}
-                                                isScreen={isGridScreenShare}
-                                                reaction={gridFullscreenUser?.isMe ? myReaction : gridFullscreenUser?.reaction}
-                                                isFilterPreparing={isFilterPreparing}
-                                                isBrowserPipMode={isBrowserPipMode}
-                                                onSpeakingChange={handleSpeakingChange}
-                                            />
+                                            {isBrowserPipMode && String(gridFullscreenUser?.id) === String(customPipData?.peerId) && (
+                                                <div className="pip-mode-overlay">
+                                                    <div className="pip-mode-banner">PiP 모드 이용중</div>
+                                                </div>
+                                            )}
+                                            <div
+                                                style={{
+                                                    opacity: isBrowserPipMode && String(gridFullscreenUser?.id) === String(customPipData?.peerId) ? 0 : 1,
+                                                    pointerEvents: isBrowserPipMode && String(gridFullscreenUser?.id) === String(customPipData?.peerId) ? "none" : "auto",
+                                                    position: "absolute",
+                                                    inset: 0,
+                                                }}
+                                            >
+                                                <VideoTile
+                                                    user={userForTile(gridFullscreenUser)}
+                                                    isMain
+                                                    stream={gridFullscreenStream}
+                                                    roomReconnecting={roomReconnecting}
+                                                    isScreen={isGridScreenShare}
+                                                    reaction={gridFullscreenUser?.isMe ? myReaction : gridFullscreenUser?.reaction}
+                                                    videoRef={gridFullscreenVideoRef}
+                                                    isFilterPreparing={isFilterPreparing}
+                                                    isBrowserPipMode={isBrowserPipMode}
+                                                    onSpeakingChange={handleSpeakingChange}
+                                                />
+                                            </div>
+
+                                            <button
+                                                className="grid-fullscreen-pip-btn"
+                                                onClick={handleGridBrowserPip}
+                                                title="PiP"
+                                                type="button"
+                                            >
+                                                <PictureInPicture2 size={22} />
+                                            </button>
 
                                             {/* 전체화면 토글 버튼 */}
                                             <button
@@ -7328,113 +7463,108 @@ function MeetingPage({ portalRoomId }) {
                                                 </div>
                                             )}
 
-                                            {/* 사이드바 */}
+                                            {/* 사이드바 (참여자 목록 + 채팅 합침, 비전체화면과 동일) */}
                                             <div className={`grid-fullscreen-sidebar ${sidebarOpen ? "open" : ""}`}>
                                                 <div className="grid-fullscreen-sidebar-inner">
                                                     <div className="grid-fullscreen-sidebar-header">
-                                                        <h2 className="sidebar-title">
-                                                            {sidebarView === "chat" ? "회의 채팅" : "참여자 목록"}
-                                                        </h2>
+                                                        <h2 className="sidebar-title">참여자 목록</h2>
                                                         <button onClick={() => setSidebarOpen(false)} className="close-btn">
                                                             <X size={20} />
                                                         </button>
                                                     </div>
 
-                                                    {sidebarView === "chat" && (
-                                                        <>
-                                                            <div className="grid-fullscreen-chat-area custom-scrollbar" ref={chatAreaRef}>
-                                                                {messages.map((msg) => (
-                                                                    <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
-                                                                        <div className="msg-content-wrapper">
-                                                                            {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
-                                                                            <div className="msg-bubble">{msg.text}</div>
+                                                    <div className="grid-fullscreen-participants-area custom-scrollbar">
+                                                        <div className="section-label">참여 중 ({participants.length})</div>
+                                                        {participants.map((part) => (
+                                                            <div key={part.id} className={`participant-card ${part.isMe ? "me" : ""}`}>
+                                                                <div className="p-info">
+                                                                    <UserAvatar name={part.name} />
+                                                                    <div>
+                                                                        <div className={`p-name ${part.isMe ? "me" : ""}`}>
+                                                                            {part.name} {part.isMe ? "(나)" : ""} {part.isHost ? "👑" : ""}
                                                                         </div>
-                                                                        <span className="msg-time">
-                                                                            {msg.userName}, {msg.time}
-                                                                        </span>
+                                                                        <div className="p-role">{part.isHost ? "방장" : (part.isMe ? "나" : "참여자")}</div>
                                                                     </div>
-                                                                ))}
-                                                                <div ref={chatEndRef} />
-                                                            </div>
-
-                                                            <div className="grid-fullscreen-chat-input-area">
-                                                                <form onSubmit={handleSendMessage} className="chat-form">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={chatDraft}
-                                                                        onChange={(e) => setChatDraft(e.target.value)}
-                                                                        placeholder="메시지를 입력하세요..."
-                                                                        className="chat-input"
-                                                                    />
-                                                                    <button type="submit" className="send-btn" disabled={!chatDraft.trim()}>
-                                                                        <Send size={16} />
-                                                                    </button>
-                                                                </form>
-                                                            </div>
-                                                        </>
-                                                    )}
-
-                                                    {sidebarView === "participants" && (
-                                                        <div className="grid-fullscreen-participants-area custom-scrollbar">
-                                                            <div className="section-label">참여 중 ({participants.length})</div>
-                                                            {participants.map((part) => (
-                                                                <div key={part.id} className={`participant-card ${part.isMe ? "me" : ""}`}>
-                                                                    <div className="p-info">
-                                                                        <UserAvatar name={part.name} />
-                                                                        <div>
-                                                                            <div className={`p-name ${part.isMe ? "me" : ""}`}>
-                                                                                {part.name} {part.isMe ? "(나)" : ""} {part.isHost ? "👑" : ""}
-                                                                            </div>
-                                                                            <div className="p-role">{part.isHost ? "방장" : (part.isMe ? "나" : "참여자")}</div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="p-status">
-                                                                        {part.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} />}
-                                                                        {part.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} />}
-                                                                        {!part.isMe && amIHost && (
-                                                                            <div className="host-menu-container">
-                                                                                <button className="more-btn" onClick={() => toggleHostMenu(part.id)}>
-                                                                                    <MoreHorizontal size={16} />
-                                                                                </button>
-                                                                                {hostMenuTargetId === part.id && (
-                                                                                    <div className="host-menu-dropdown">
-                                                                                        {!part.muted ? (
-                                                                                            <button onClick={() => handleForceMute(part.id)}>
-                                                                                                <MicOff size={14} /> 마이크 끄기
-                                                                                            </button>
-                                                                                        ) : (
-                                                                                            <button onClick={() => handleForceUnmute(part.id)}>
-                                                                                                <Mic size={14} /> 마이크 켜기
-                                                                                            </button>
-                                                                                        )}
-                                                                                        {!part.cameraOff ? (
-                                                                                            <button onClick={() => handleForceCameraOff(part.id)}>
-                                                                                                <VideoOff size={14} /> 카메라 끄기
-                                                                                            </button>
-                                                                                        ) : (
-                                                                                            <button onClick={() => handleForceCameraOn(part.id)}>
-                                                                                                <Video size={14} /> 카메라 켜기
-                                                                                            </button>
-                                                                                        )}
-                                                                                        <button className="kick-btn" onClick={() => handleKick(part.id)}>
-                                                                                            <X size={14} /> 내보내기
+                                                                </div>
+                                                                <div className="p-status">
+                                                                    {part.muted ? <MicOff size={16} className="icon-red" /> : <Mic size={16} />}
+                                                                    {part.cameraOff ? <VideoOff size={16} className="icon-red" /> : <Video size={16} />}
+                                                                    {!part.isMe && amIHost && (
+                                                                        <div className="host-menu-container">
+                                                                            <button className="more-btn" onClick={() => toggleHostMenu(part.id)}>
+                                                                                <MoreHorizontal size={16} />
+                                                                            </button>
+                                                                            {hostMenuTargetId === part.id && (
+                                                                                <div className="host-menu-dropdown">
+                                                                                    {!part.muted ? (
+                                                                                        <button onClick={() => handleForceMute(part.id)}>
+                                                                                            <MicOff size={14} /> 마이크 끄기
                                                                                         </button>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
+                                                                                    ) : (
+                                                                                        <button onClick={() => handleForceUnmute(part.id)}>
+                                                                                            <Mic size={14} /> 마이크 켜기
+                                                                                        </button>
+                                                                                    )}
+                                                                                    {!part.cameraOff ? (
+                                                                                        <button onClick={() => handleForceCameraOff(part.id)}>
+                                                                                            <VideoOff size={14} /> 카메라 끄기
+                                                                                        </button>
+                                                                                    ) : (
+                                                                                        <button onClick={() => handleForceCameraOn(part.id)}>
+                                                                                            <Video size={14} /> 카메라 켜기
+                                                                                        </button>
+                                                                                    )}
+                                                                                    <button className="kick-btn" onClick={() => handleKick(part.id)}>
+                                                                                        <X size={14} /> 내보내기
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                            ))}
-                                                            {amIHost && (
-                                                                <div className="invite-section">
-                                                                    <button className="invite-btn" onClick={handleInvite}>
-                                                                        <Share size={16} /> 초대하기
-                                                                    </button>
+                                                            </div>
+                                                        ))}
+                                                        {amIHost && (
+                                                            <div className="invite-section">
+                                                                <button className="invite-btn" onClick={handleInvite}>
+                                                                    <Share size={16} /> 초대하기
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="sidebar-chat-divider">
+                                                        <span>채팅</span>
+                                                    </div>
+
+                                                    <div className="grid-fullscreen-chat-area custom-scrollbar" ref={chatAreaRef}>
+                                                        {messages.map((msg) => (
+                                                            <div key={msg.id} className={`chat-msg ${msg.isMe ? "me" : "others"}`}>
+                                                                <div className="msg-content-wrapper">
+                                                                    {!msg.isMe && <UserAvatar name={msg.userName} size="sm" />}
+                                                                    <div className="msg-bubble">{msg.text}</div>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                <span className="msg-time">
+                                                                    {msg.userName}, {msg.time}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                        <div ref={chatEndRef} />
+                                                    </div>
+                                                    <div className="grid-fullscreen-chat-input-area">
+                                                        <form onSubmit={handleSendMessage} className="chat-form">
+                                                            <input
+                                                                type="text"
+                                                                value={chatDraft}
+                                                                onChange={(e) => setChatDraft(e.target.value)}
+                                                                placeholder="메시지를 입력하세요..."
+                                                                className="chat-input"
+                                                            />
+                                                            <button type="submit" className="send-btn" disabled={!chatDraft.trim()}>
+                                                                <Send size={16} />
+                                                            </button>
+                                                        </form>
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -7509,25 +7639,54 @@ function MeetingPage({ portalRoomId }) {
 
                                 {/* 그리드 타일들 (전체화면이 아닐 때만 표시) */}
                                 {!isGridFullscreen &&
-                                    orderedParticipants.map((p) => (
+                                    orderedParticipants.map((p) => {
+                                        const isThisTilePip = isBrowserPipMode && String(p.id) === String(customPipData?.peerId);
+                                        return (
                                         <div key={p.id} className="grid-tile">
                                             <div className="grid-video-area">
-                                                <VideoTile
-                                                    user={userForTile(p)}
-                                                    stream={
-                                                        p.isScreenSharing
-                                                            ? p.screenStream
-                                                            : p.isMe
-                                                                ? localStream
-                                                                : p.stream
-                                                    }
-                                                    roomReconnecting={roomReconnecting}
-                                                    isScreen={p.isScreenSharing}
-                                                    reaction={p.isMe ? myReaction : null}
-                                                    isFilterPreparing={isFilterPreparing}
-                                                    isBrowserPipMode={isBrowserPipMode}
-                                                    onSpeakingChange={handleSpeakingChange}
-                                                />
+                                                {isThisTilePip && (
+                                                    <div className="grid-tile-pip-mode-overlay">
+                                                        <span className="pip-mode-banner">PiP 모드 이용중</span>
+                                                    </div>
+                                                )}
+                                                <div
+                                                    style={{
+                                                        opacity: isThisTilePip ? 0 : 1,
+                                                        pointerEvents: isThisTilePip ? "none" : "auto",
+                                                        position: "absolute",
+                                                        inset: 0,
+                                                    }}
+                                                >
+                                                    <VideoTile
+                                                        user={userForTile(p)}
+                                                        stream={
+                                                            p.isScreenSharing
+                                                                ? p.screenStream
+                                                                : p.isMe
+                                                                    ? localStream
+                                                                    : p.stream
+                                                        }
+                                                        videoRef={getGridTileVideoRef(p.id)}
+                                                        roomReconnecting={roomReconnecting}
+                                                        isScreen={p.isScreenSharing}
+                                                        reaction={p.isMe ? myReaction : null}
+                                                        isFilterPreparing={isFilterPreparing}
+                                                        isBrowserPipMode={isBrowserPipMode}
+                                                        onSpeakingChange={handleSpeakingChange}
+                                                    />
+                                                </div>
+
+                                                <button
+                                                    className="grid-tile-pip-btn"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleGridTileBrowserPip(p);
+                                                    }}
+                                                    title="PiP"
+                                                    type="button"
+                                                >
+                                                    <PictureInPicture2 size={18} />
+                                                </button>
 
                                                 <button
                                                     className="grid-fullscreen-btn"
@@ -7541,7 +7700,8 @@ function MeetingPage({ portalRoomId }) {
                                                 </button>
                                             </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                             </div>
                         )}
                     </div>

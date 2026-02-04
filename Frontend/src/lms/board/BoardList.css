@@ -1,0 +1,225 @@
+/* =========================
+   Bottom Search (카드/정렬)
+   ========================= */
+
+/* 검색 카드만 여백 줄이기 */
+.bd.bd-board .bd-card.bd-bottom-search {
+    padding: 10px 12px;
+    display: flex;
+    justify-content: center;
+}
+
+/* 검색 카드 가운데 */
+.bd.bd-board .bd-bottom-search {
+    margin: 0 auto;
+}
+
+.bd.bd-board .bd-toolbar {
+    display: inline-flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+}
+
+.bd.bd-board .bd-search {
+    width: min(320px, 80vw);
+    height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0 12px;
+    outline: none;
+    font-weight: 800;
+    background: #ffffff;
+}
+
+.bd.bd-board .bd-search:focus {
+    border-color: var(--primary-soft);
+    box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
+}
+
+/* =========================
+   List wrapper
+   ========================= */
+
+.bd.bd-board .bd-list {
+    display: flex;
+    flex-direction: column;
+}
+
+/* =========================
+   테이블형 목록 (카테고리 | 제목 | 작성자 | 조회수 | 작성일)
+   ========================= */
+
+.bd.bd-board .bd-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 120px 80px 120px;
+    gap: 10px;
+    align-items: center;
+}
+
+.bd.bd-board .bd-col {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* =========================
+   Header row
+   ========================= */
+
+.bd.bd-board .bd-row-head {
+    padding: 10px 12px;
+    border-top: 1px solid var(--line);
+    border-bottom: 2px solid var(--line);
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+
+    background: #fafcf9;
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--muted);
+}
+
+.bd.bd-board .bd-row-head .bd-col {
+    text-align: center; /* 헤더 전부 가운데 */
+}
+
+/* =========================
+   Item row
+   ========================= */
+
+.bd.bd-board .bd-row-item {
+    padding: 14px 12px;
+    cursor: pointer;
+
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+}
+
+/* 첫 행 위에도 라인 하나 */
+.bd.bd-board .bd-row-item:first-of-type {
+    border-top: 1px solid var(--line);
+}
+
+.bd.bd-board .bd-row-item:hover {
+    background: #f6faf3;
+}
+
+/* 목록 정렬 규칙 */
+.bd.bd-board .bd-row-item .bd-col {
+    text-align: left;
+}
+
+.bd.bd-board .bd-row-item .bd-col.category,
+.bd.bd-board .bd-row-item .bd-col.author,
+.bd.bd-board .bd-row-item .bd-col.views,
+.bd.bd-board .bd-row-item .bd-col.date {
+    text-align: center;
+}
+
+/* 제목 톤 + 정렬 */
+.bd.bd-board .bd-row-item .bd-col.title {
+    text-align: left;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* 작성자/조회수/작성일 톤 */
+.bd.bd-board .bd-row-item .bd-col.author,
+.bd.bd-board .bd-row-item .bd-col.views,
+.bd.bd-board .bd-row-item .bd-col.date {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--muted);
+}
+
+/* pinned row */
+.bd.bd-board .bd-row-item.pinned-top {
+    background: rgba(233, 250, 220, 0.7);
+    border-bottom-color: var(--primary-soft);
+}
+
+.bd.bd-board .bd-pin {
+    margin-right: 4px;
+}
+
+.bd-comment-count {
+    margin-left: 6px;
+    font-size: 0.85em;
+    color: #888;
+    font-weight: 600;
+}
+
+/* =========================
+   Pagination (<< < 1..10 > >>)
+   ========================= */
+
+.bd.bd-board .bd-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+
+.bd.bd-board .bd-page-btn {
+    height: 34px;
+    min-width: 34px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    color: var(--text);
+    font-weight: 900;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.bd.bd-board .bd-page-btn:hover:not(:disabled) {
+    background: #f6faf3;
+}
+
+.bd.bd-board .bd-page-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.bd.bd-board .bd-page-btn.active {
+    border-color: var(--primary-strong);
+    background: rgba(233, 250, 220, 0.9);
+}
+
+/* =========================
+   Responsive (목록 전용)
+   ========================= */
+
+@media (max-width: 720px) {
+    .bd.bd-board .bd-row-head {
+        display: none;
+    }
+
+    .bd.bd-board .bd-row-item {
+        grid-template-columns: 78px 1fr;
+        grid-template-rows: auto auto;
+    }
+
+    .bd.bd-board .bd-row-item .bd-col.author,
+    .bd.bd-board .bd-row-item .bd-col.views,
+    .bd.bd-board .bd-row-item .bd-col.date {
+        grid-column: 2 / 3;
+        text-align: left;
+        font-size: 11px;
+    }
+
+    .bd.bd-board .bd-col.views::before { content: "조회수 · "; }
+    .bd.bd-board .bd-col.author::before { content: "작성자 · "; }
+    .bd.bd-board .bd-col.date::before { content: "작성일 · "; }
+
+    .bd.bd-board .bd-search {
+        width: min(280px, 80vw);
+    }
+}

@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -18,10 +20,25 @@ public class AiController {
     private final OpenAiService openAiService;
     private final AiSubmissionService aiSubmissionService;
 
+    /** 일반 채팅. 직전까지의 전체 대화(history)를 넘기면 LLM이 모든 맥락을 기억한 채 답변함. */
     @PostMapping("/chat")
-    public ResponseEntity<String> chat(@RequestBody Map<String, String> request) {
-        String userMessage = request.get("message");
-        String answer = openAiService.getContents(userMessage);
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<String> chat(@RequestBody Map<String, Object> request) {
+        String userMessage = request.get("message") != null ? String.valueOf(request.get("message")) : null;
+        List<Map<String, String>> history = new ArrayList<>();
+        if (request.get("history") instanceof List) {
+            for (Object item : (List<?>) request.get("history")) {
+                if (item instanceof Map) {
+                    Map<?, ?> m = (Map<?, ?>) item;
+                    String role = m.get("role") != null ? String.valueOf(m.get("role")) : null;
+                    String content = m.get("content") != null ? String.valueOf(m.get("content")) : null;
+                    if (role != null && !role.isBlank() && content != null) {
+                        history.add(Map.of("role", role, "content", content));
+                    }
+                }
+            }
+        }
+        String answer = openAiService.getContentsWithFullHistory(userMessage != null ? userMessage : "", history);
         return ResponseEntity.ok(answer);
     }
 
@@ -32,7 +49,13 @@ public class AiController {
     @PostMapping("/chat/with-submission")
     public ResponseEntity<String> chatWithSubmission(@RequestBody Map<String, String> request) {
         String message = request.get("message");
+        if (message != null && !message.isBlank()) {
+            message = "사용자 질문: " + message;
+        }
+
         String submissionIdStr = request.get("submissionId");
+
+
         if (submissionIdStr == null || submissionIdStr.isBlank()) {
             return ResponseEntity.badRequest().body("submissionId가 필요합니다.");
         }
@@ -44,7 +67,13 @@ public class AiController {
         }
         try {
             String answer = aiSubmissionService.chatWithSubmission(submissionId, message);
-            return ResponseEntity.ok(answer);
+            // "1. 분류: SUMMARY/PROBLEM" 줄과 "2. 답변:" / "2 답변:" 문구 제거
+            if (answer != null) {
+                answer = answer.replaceFirst("(?m)^\\s*1\\.\\s*분류\\s*:\\s*(SUMMARY|PROBLEM)\\s*\\n?", "");
+                answer = answer.replaceFirst("(?m)^\\s*2\\.?\\s*답변\\s*:\\s*\\n?", "");
+                answer = answer.trim();
+            }
+            return ResponseEntity.ok(answer != null ? answer : "");
         } catch (Exception e) {
             log.error("/api/ai/chat/with-submission 실패. submissionId={}", submissionId, e);
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -66,6 +95,7 @@ public class AiController {
                 "반드시 SUMMARY 또는 PROBLEM 중 하나만 출력해.";
 
         String raw = openAiService.getContents(prompt);
+
         String normalized = raw == null ? "" : raw.trim().toUpperCase();
         if (normalized.contains("SUMMARY")) return ResponseEntity.ok("SUMMARY");
         if (normalized.contains("PROBLEM")) return ResponseEntity.ok("PROBLEM");

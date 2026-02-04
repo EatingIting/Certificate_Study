@@ -30,4 +30,21 @@ public class AnswerNoteController {
     public ResponseEntity<List<AnswerNoteResponseDTO>> getAnswerNotes(@RequestParam String subjectId) {
         return ResponseEntity.ok(answerNoteService.getNotesByRoom(subjectId));
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<String> updateAnswerNote(
+            @AuthenticationPrincipal String email,
+            @PathVariable String id,
+            @RequestBody AnswerNoteRequestDTO dto) {
+        answerNoteService.updateNote(id, email, dto);
+        return ResponseEntity.ok("노트가 수정되었습니다.");
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteAnswerNote(
+            @AuthenticationPrincipal String email,
+            @PathVariable String id) {
+        answerNoteService.deleteNote(id, email);
+        return ResponseEntity.ok("노트가 삭제되었습니다.");
+    }
 }

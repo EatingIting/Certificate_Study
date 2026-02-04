@@ -46,4 +46,12 @@ public class AnswerNote {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    /** 수정 시 question, answer, memo, noteType 만 변경 */
+    public void updateContent(String question, String answer, String memo, AnswerNoteType noteType) {
+        if (question != null) this.question = question;
+        if (answer != null) this.answer = answer;
+        if (memo != null) this.memo = memo;
+        if (noteType != null) this.noteType = noteType;
+    }
 }

@@ -26,4 +26,8 @@ public interface BoardPostService {
     void setPinned(long postId, String email, boolean isPinned);
 
     void incrementViewCount(long postId);
+
+    void requireCanEdit(long postId, String email);
+
+    Map<String, Boolean> getPostPermissions(long postId, String email);
 }
