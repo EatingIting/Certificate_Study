@@ -12,11 +12,23 @@ const MODAL_WIDTH = 360;
 const MODAL_HEIGHT = 600;
 const BUTTON_SIZE = 70;
 
-// 출석 리스트 뷰 계산용 (AttendanceAll과 동일 로직)
+// 출석 리스트 뷰 계산용 (AttendanceAll과 동일 로직: 참여시간 = 회차 구간과의 오버랩만 인정)
 const toMs = (iso) => (iso ? new Date(iso).getTime() : 0) || 0;
 const minutesBetween = (startIso, endIso) => {
     const s = toMs(startIso), e = toMs(endIso);
     return s && e && e > s ? Math.floor((e - s) / 60000) : 0;
+};
+const minutesOverlapInSession = (log) => {
+    if (!log?.studyDate || !log?.startTime || !log?.endTime || !log?.joinAt || !log?.leaveAt) return 0;
+    const pad = (t) => (String(t).length >= 8 ? t : t + ":00");
+    const sessionStart = new Date(log.studyDate + "T" + pad(log.startTime)).getTime();
+    const sessionEnd = new Date(log.studyDate + "T" + pad(log.endTime)).getTime();
+    const joinMs = toMs(log.joinAt);
+    const leaveMs = toMs(log.leaveAt);
+    const overlapStart = Math.max(joinMs, sessionStart);
+    const overlapEnd = Math.min(leaveMs, sessionEnd);
+    if (overlapEnd <= overlapStart) return 0;
+    return Math.floor((overlapEnd - overlapStart) / 60000);
 };
 const calcTotalMinutes = (startHHMM, endHHMM) => {
     if (!startHHMM || !endHHMM) return 0;
@@ -26,7 +38,7 @@ const calcTotalMinutes = (startHHMM, endHHMM) => {
 };
 const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
     const totalMin = log?.startTime && log?.endTime ? calcTotalMinutes(log.startTime, log.endTime) : fallbackTotalMin;
-    const attendedMin = minutesBetween(log?.joinAt, log?.leaveAt);
+    const attendedMin = log?.studyDate && log?.startTime && log?.endTime ? minutesOverlapInSession(log) : minutesBetween(log?.joinAt, log?.leaveAt);
     const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
     return { attendedMin, ratio, isPresent: ratio >= requiredRatio };
 };
@@ -54,7 +66,7 @@ const ChatModal = ({ roomId, roomName }) => {
     const [aiMessages, setAiMessages] = useState([{       // AI 채팅 메시지 목록 (초기값)
         userId: 'AI_BOT',
         userName: 'AI 튜터',
-        message: `안녕하세요! 과제에 대해 궁금한 점을 물어보세요!`,
+        message: `안녕하세요! LMS에서 궁금한 점을 물어보세요!`,
         createdAt: new Date().toISOString(),
         isAiResponse: true
     }]);
@@ -66,7 +78,7 @@ const ChatModal = ({ roomId, roomName }) => {
     const [loadingSubmissionForIndex, setLoadingSubmissionForIndex] = useState(null); // 메시지 인덱스 또는 null
     // "xxx님의 과제를 요약할까요? 예상문제를 낼까요?" 대상 제출자 → 이후 '과제 요약'/'예상문제' 입력 시 사용
     const [lastAskedSubmission, setLastAskedSubmission] = useState(null); // { submissionId, name } | null
-    // 과제 요약/예상문제 로딩 단계: 1 = DB에서 문제 가져오는중, 2 = 요약/예상문제 만드는 중
+    // 과제 요약/예상문제 로딩 단계: 1 = DB에서 파일 가져오는중, 2 = 요약/예상문제 만드는 중
     const [loadingPhaseForSubmission, setLoadingPhaseForSubmission] = useState(null); // 1 | 2 | null
     // '과제 목록 보여줘' / '과제' 키워드 입력 시 그 메시지 아래에만 과제 목록 표시 (null이면 목록 미표시)
     const [showAssignmentListAfterIndex, setShowAssignmentListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
@@ -74,6 +86,10 @@ const ChatModal = ({ roomId, roomName }) => {
     const [attendanceData, setAttendanceData] = useState(null); // { studySchedule, attendanceLogs } | null
     const [loadingAttendance, setLoadingAttendance] = useState(false);
     const [showAttendanceListAfterIndex, setShowAttendanceListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
+    // 일정: '일정' 키워드 입력 시 해당 메시지 아래에 일정 목록 표시
+    const [scheduleList, setScheduleList] = useState([]); // { id, title, startYmd, startDisplay, endDisplay, type }[]
+    const [loadingSchedule, setLoadingSchedule] = useState(false);
+    const [showScheduleListAfterIndex, setShowScheduleListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
 
     // 모달 위치 및 드래그 관련 Ref
     const [position, setPosition] = useState({ x: window.innerWidth - 100, y: window.innerHeight - 100 });
@@ -326,6 +342,7 @@ const ChatModal = ({ roomId, roomName }) => {
         setSubmissionListAfterMessage({});
         setShowAssignmentListAfterIndex(null);
         setShowAttendanceListAfterIndex(null);
+        setShowScheduleListAfterIndex(null);
 
         const fetchAssignments = async () => {
             try {
@@ -412,6 +429,45 @@ const ChatModal = ({ roomId, roomName }) => {
             setAttendanceData(null);
         } finally {
             setLoadingAttendance(false);
+        }
+    };
+
+    // 일정 목록 로드 (채팅 패널용, 이번 달 + 다음 달)
+    const fetchScheduleList = async () => {
+        if (!roomId) return;
+        setLoadingSchedule(true);
+        try {
+            const now = new Date();
+            const toYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endExclusive = new Date(now.getFullYear(), now.getMonth() + 2, 1); // 다음다음달 1일(미포함)
+            const startYmd = toYmd(start);
+            const endExclusiveYmd = toYmd(endExclusive);
+            const res = await api.get(`/rooms/${roomId}/schedule`, { params: { start: startYmd, end: endExclusiveYmd } });
+            const items = res.data?.items || [];
+            const mapped = items.map((it) => {
+                const startStr = it?.start ? String(it.start).slice(0, 16).replace("T", " ") : "";
+                const endStr = it?.end ? String(it.end).slice(0, 16).replace("T", " ") : "";
+                const startYmd = (it?.start || "").toString().slice(0, 10);
+                const [, m, d] = startYmd.split("-");
+                const startDisplay = startYmd && m && d ? `${Number(m)}.${Number(d)}` : "";
+                const type = it?.extendedProps?.type || (String(it?.id || "").startsWith("S") ? "STUDY" : "OTHER");
+                return {
+                    id: it?.id,
+                    title: it?.title || "(제목 없음)",
+                    startYmd,
+                    startDisplay,
+                    startStr,
+                    endStr,
+                    type
+                };
+            });
+            setScheduleList(mapped);
+        } catch (e) {
+            console.error("일정 목록 로드 실패:", e);
+            setScheduleList([]);
+        } finally {
+            setLoadingSchedule(false);
         }
     };
 
@@ -688,6 +744,24 @@ const ChatModal = ({ roomId, roomName }) => {
 
     const toggleAiMode = () => setIsAiMode(!isAiMode);
 
+    // 첫 인사 아래 빠른 실행 버튼: 과제 제출 현황 / 출석 현황 / 일정 목록
+    const handleQuickAction = (type) => {
+        const labels = { assignment: "과제 제출 현황", attendance: "출석 현황", schedule: "일정 목록" };
+        const newIndex = aiMessages.length;
+        setAiMessages((prev) => [
+            ...prev,
+            { userId: myInfo.userId, message: labels[type], createdAt: new Date().toISOString(), isAiResponse: false }
+        ]);
+        if (type === "assignment") setShowAssignmentListAfterIndex(newIndex);
+        else if (type === "attendance") {
+            setShowAttendanceListAfterIndex(newIndex);
+            fetchAttendanceList();
+        } else if (type === "schedule") {
+            setShowScheduleListAfterIndex(newIndex);
+            fetchScheduleList();
+        }
+    };
+
     const handleSend = async (text = inputValue) => {
         if (!text.trim()) return;
         if (!myInfo) return;
@@ -710,6 +784,13 @@ const ChatModal = ({ roomId, roomName }) => {
             if (text.includes("출석")) {
                 setShowAttendanceListAfterIndex(userMessageIndex);
                 fetchAttendanceList();
+                return;
+            }
+
+            // '일정'이 포함된 모든 입력 → 해당 메시지 아래에 일정 목록 표시, AI 호출 안 함
+            if (text.includes("일정")) {
+                setShowScheduleListAfterIndex(userMessageIndex);
+                fetchScheduleList();
                 return;
             }
 
@@ -875,14 +956,31 @@ const ChatModal = ({ roomId, roomName }) => {
                 return;
             }
 
-            setAiMessages(prev => [...prev, { userId: 'AI_BOT', userName: 'AI 튜터', message: "...", createdAt: new Date().toISOString(), isAiResponse: true, isLoading: true }]);
+            setAiMessages(prev => [...prev, { userId: 'AI_BOT', userName: 'AI 튜터', message: "질문에 알맞은 답변을 생각 중입니다.", createdAt: new Date().toISOString(), isAiResponse: true, isLoading: true }]);
 
             try {
+                // 직전까지의 전체 대화를 history로 보내 LLM이 모든 맥락을 기억하게 함 (state 반영 전이므로 현재 메시지 목록 = 지금까지의 대화)
+                const history = [];
+                for (let i = 1; i < currentMessages.length; i++) {
+                    const msg = currentMessages[i];
+                    if (msg.isLoading || !msg.message?.trim()) continue;
+                    history.push({
+                        role: msg.isAiResponse ? "assistant" : "user",
+                        content: msg.message.trim()
+                    });
+                }
+                // 토큰 제한 방지를 위해 최근 30개 메시지만 전송 (백엔드에서도 30개로 제한)
+                const trimmedHistory = history.length > 30 ? history.slice(-30) : history;
+
                 const token = sessionStorage.getItem("accessToken") || localStorage.getItem("accessToken");
                 const res = await fetch(`${apiBaseUrl}/api/ai/chat`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-                    body: JSON.stringify({ message: text, subject: roomName || "일반 지식" })
+                    body: JSON.stringify({
+                        message: text,
+                        subject: roomName || "일반 지식",
+                        history: trimmedHistory
+                    })
                 });
 
                 if (!res.ok) throw new Error("AI Error");
@@ -985,6 +1083,21 @@ const ChatModal = ({ roomId, roomName }) => {
                                     </div>
                                 );
                             })()}
+                            {/* 첫 인사 아래: 빠른 실행 버튼 (과제 / 출석 / 일정) */}
+                            {currentMessages.length > 0 && currentMessages[0].isAiResponse && (
+                                <div className="chat-ai-quick-actions">
+                                    <div className="chat-ai-quick-actions-title">바로 확인하기</div>
+                                    <button type="button" className="chat-ai-quick-btn" onClick={() => handleQuickAction("assignment")}>
+                                        ○ 과제 제출 현황
+                                    </button>
+                                    <button type="button" className="chat-ai-quick-btn" onClick={() => handleQuickAction("attendance")}>
+                                        ○ 출석 현황
+                                    </button>
+                                    <button type="button" className="chat-ai-quick-btn" onClick={() => handleQuickAction("schedule")}>
+                                        ○ 일정 목록
+                                    </button>
+                                </div>
+                            )}
                             {/* 2) 사용자 답변 → (과제 목록은 '과제' 키워드 입력 시 해당 메시지 아래에만) → 제출한 사람 리스트 → AI 답변 순 */}
                             {currentMessages.slice(1).map((msg, i) => {
                                 const idx = i + 1;
@@ -1003,7 +1116,7 @@ const ChatModal = ({ roomId, roomName }) => {
                                                             <div className="sticker-text">{msg.message}</div>
                                                         ) : msg.isLoading && msg.loadingSubmissionType ? (
                                                             loadingPhaseForSubmission === 1
-                                                                ? "DB에서 문제 가져오는중..."
+                                                                ? "DB에서 파일 가져오는중..."
                                                                 : msg.loadingSubmissionType === "summary"
                                                                     ? "요약하는 중..."
                                                                     : "예상문제 만드는 중..."
@@ -1094,6 +1207,29 @@ const ChatModal = ({ roomId, roomName }) => {
                                                             </tbody>
                                                         </table>
                                                     </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* '일정' 입력 시 해당 사용자 메시지 아래에 일정 목록 표시 */}
+                                        {isMe && showScheduleListAfterIndex === idx && (
+                                            <div className="chat-ai-assignment-panel chat-ai-schedule-panel">
+                                                <div className="chat-ai-panel-title">📅 일정 목록</div>
+                                                {loadingSchedule ? (
+                                                    <div className="chat-ai-panel-loading">불러오는 중...</div>
+                                                ) : scheduleList.length === 0 ? (
+                                                    <div className="chat-ai-panel-empty">일정이 없습니다.</div>
+                                                ) : (
+                                                    <ul className="chat-ai-assignment-list chat-ai-schedule-list">
+                                                        {scheduleList.map((s) => (
+                                                            <li key={s.id} className="chat-ai-assignment-item chat-ai-schedule-item">
+                                                                <span className="chat-ai-schedule-title">{s.title}</span>
+                                                                <span className="chat-ai-schedule-date">
+                                                                    {s.startDisplay}
+                                                                    {s.type === "STUDY" ? " (스터디)" : ""}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
                                                 )}
                                             </div>
                                         )}
