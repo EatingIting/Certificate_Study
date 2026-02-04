@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -18,10 +20,25 @@ public class AiController {
     private final OpenAiService openAiService;
     private final AiSubmissionService aiSubmissionService;
 
+    /** 일반 채팅. 직전까지의 전체 대화(history)를 넘기면 LLM이 모든 맥락을 기억한 채 답변함. */
     @PostMapping("/chat")
-    public ResponseEntity<String> chat(@RequestBody Map<String, String> request) {
-        String userMessage = request.get("message");
-        String answer = openAiService.getContents(userMessage);
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<String> chat(@RequestBody Map<String, Object> request) {
+        String userMessage = request.get("message") != null ? String.valueOf(request.get("message")) : null;
+        List<Map<String, String>> history = new ArrayList<>();
+        if (request.get("history") instanceof List) {
+            for (Object item : (List<?>) request.get("history")) {
+                if (item instanceof Map) {
+                    Map<?, ?> m = (Map<?, ?>) item;
+                    String role = m.get("role") != null ? String.valueOf(m.get("role")) : null;
+                    String content = m.get("content") != null ? String.valueOf(m.get("content")) : null;
+                    if (role != null && !role.isBlank() && content != null) {
+                        history.add(Map.of("role", role, "content", content));
+                    }
+                }
+            }
+        }
+        String answer = openAiService.getContentsWithFullHistory(userMessage != null ? userMessage : "", history);
         return ResponseEntity.ok(answer);
     }
 
