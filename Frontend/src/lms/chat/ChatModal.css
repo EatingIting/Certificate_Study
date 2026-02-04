@@ -344,6 +344,54 @@
     font-size: 11px;
 }
 
+/* AI 모드: 출석 현황 패널 */
+.chat-ai-attendance-panel .chat-ai-panel-title { margin-bottom: 8px; }
+.chat-ai-attendance-table-wrap {
+    max-height: 200px;
+    overflow: auto;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.06);
+    background: white;
+}
+.chat-ai-attendance-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+.chat-ai-attendance-table th,
+.chat-ai-attendance-table td {
+    padding: 6px 8px;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+}
+.chat-ai-attendance-table th {
+    background: #f7fafc;
+    color: #4a5568;
+    font-weight: 600;
+}
+.chat-ai-at-name { text-align: left !important; min-width: 52px; }
+.chat-ai-at-ratio {
+    min-width: 64px;
+    position: relative;
+}
+.chat-ai-at-ratio-bar {
+    display: block;
+    height: 4px;
+    background: #97c793;
+    border-radius: 2px;
+    min-width: 2px;
+}
+.chat-ai-at-ratio-text {
+    display: block;
+    font-size: 10px;
+    color: #718096;
+    margin-top: 2px;
+}
+.chat-ai-at-session { min-width: 20px; font-size: 10px; }
+.chat-ai-at-mark { min-width: 22px; }
+.chat-ai-at-ok { color: #38a169; font-weight: 600; }
+.chat-ai-at-absent { color: #e53e3e; font-weight: 600; }
+
 /* 과제 요약/예상문제 응답 아래 저장 버튼 */
 .chat-ai-save-buttons {
     display: flex;

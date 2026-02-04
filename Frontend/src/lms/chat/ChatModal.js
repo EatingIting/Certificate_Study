@@ -12,6 +12,25 @@ const MODAL_WIDTH = 360;
 const MODAL_HEIGHT = 600;
 const BUTTON_SIZE = 70;
 
+// 출석 리스트 뷰 계산용 (AttendanceAll과 동일 로직)
+const toMs = (iso) => (iso ? new Date(iso).getTime() : 0) || 0;
+const minutesBetween = (startIso, endIso) => {
+    const s = toMs(startIso), e = toMs(endIso);
+    return s && e && e > s ? Math.floor((e - s) / 60000) : 0;
+};
+const calcTotalMinutes = (startHHMM, endHHMM) => {
+    if (!startHHMM || !endHHMM) return 0;
+    const [sh, sm] = startHHMM.split(":").map(Number);
+    const [eh, em] = endHHMM.split(":").map(Number);
+    return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+};
+const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
+    const totalMin = log?.startTime && log?.endTime ? calcTotalMinutes(log.startTime, log.endTime) : fallbackTotalMin;
+    const attendedMin = minutesBetween(log?.joinAt, log?.leaveAt);
+    const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
+    return { attendedMin, ratio, isPresent: ratio >= requiredRatio };
+};
+
 const ChatModal = ({ roomId, roomName }) => {
     // 출석부/스터디원/게시판/헤더와 동일한 표시명 (방별 닉네임 우선 → 전역 닉네임 → 이름)
     const { displayName } = useLMS();
@@ -51,6 +70,10 @@ const ChatModal = ({ roomId, roomName }) => {
     const [loadingPhaseForSubmission, setLoadingPhaseForSubmission] = useState(null); // 1 | 2 | null
     // '과제 목록 보여줘' / '과제' 키워드 입력 시 그 메시지 아래에만 과제 목록 표시 (null이면 목록 미표시)
     const [showAssignmentListAfterIndex, setShowAssignmentListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
+    // 출석: '출석' 키워드 입력 시 해당 메시지 아래에 전체 출석 리스트 표시
+    const [attendanceData, setAttendanceData] = useState(null); // { studySchedule, attendanceLogs } | null
+    const [loadingAttendance, setLoadingAttendance] = useState(false);
+    const [showAttendanceListAfterIndex, setShowAttendanceListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
 
     // 모달 위치 및 드래그 관련 Ref
     const [position, setPosition] = useState({ x: window.innerWidth - 100, y: window.innerHeight - 100 });
@@ -302,6 +325,7 @@ const ChatModal = ({ roomId, roomName }) => {
         setAssignmentList([]);
         setSubmissionListAfterMessage({});
         setShowAssignmentListAfterIndex(null);
+        setShowAttendanceListAfterIndex(null);
 
         const fetchAssignments = async () => {
             try {
@@ -375,6 +399,42 @@ const ChatModal = ({ roomId, roomName }) => {
             }
         ]);
     };
+
+    // 전체 출석 리스트 로드 (채팅 패널용)
+    const fetchAttendanceList = async () => {
+        if (!roomId) return;
+        setLoadingAttendance(true);
+        try {
+            const res = await api.get(`/subjects/${roomId}/attendance`, { params: { scope: "all" } });
+            setAttendanceData(res.data || null);
+        } catch (e) {
+            console.error("출석 리스트 로드 실패:", e);
+            setAttendanceData(null);
+        } finally {
+            setLoadingAttendance(false);
+        }
+    };
+
+    // 출석 데이터 → 채팅 패널용 뷰 (이름, 출석률, 회차별 ○/×)
+    const attendanceViewRows = useMemo(() => {
+        if (!attendanceData?.attendanceLogs?.length || !attendanceData?.studySchedule) return [];
+        const schedule = attendanceData.studySchedule;
+        const totalSessions = schedule.totalSessions || 0;
+        const fallbackTotalMin = calcTotalMinutes(schedule.start, schedule.end);
+        const requiredRatio = schedule.requiredRatio ?? 0.9;
+        return (attendanceData.attendanceLogs || []).map((m) => {
+            const sessionsOrdered = m.sessions || [];
+            const sessionsView = Array.from({ length: totalSessions }).map((_, idx) => {
+                const log = sessionsOrdered[idx];
+                const totalMinForSession = log?.startTime && log?.endTime ? calcTotalMinutes(log.startTime, log.endTime) : fallbackTotalMin;
+                const judged = log ? judgeAttendance(log, totalMinForSession, requiredRatio) : { isPresent: false };
+                return judged;
+            });
+            const presentCount = sessionsView.filter((s) => s.isPresent).length;
+            const ratioOverall = totalSessions === 0 ? 0 : Math.round((presentCount / totalSessions) * 100);
+            return { memberId: m.memberId, name: m.name, presentCount, totalSessions, ratioOverall, sessionsView };
+        });
+    }, [attendanceData]);
 
     // 과제 목록에서 과제 클릭 시: 사용자 답변처럼 메시지 추가 후, 그 뒤에 제출한 사람 리스트 표시
     const handleClickAssignmentInList = (assignment) => {
@@ -643,6 +703,13 @@ const ChatModal = ({ roomId, roomName }) => {
             // '과제'가 포함된 모든 입력 → 해당 메시지 아래에 과제 목록 표시, AI 호출 안 함 (과제목록, 과제 목록, 과제 제출 현황, 과제 현황 등)
             if (text.includes("과제")) {
                 setShowAssignmentListAfterIndex(userMessageIndex);
+                return;
+            }
+
+            // '출석'이 포함된 모든 입력 → 해당 메시지 아래에 전체 출석 리스트 표시, AI 호출 안 함
+            if (text.includes("출석")) {
+                setShowAttendanceListAfterIndex(userMessageIndex);
+                fetchAttendanceList();
                 return;
             }
 
@@ -986,6 +1053,47 @@ const ChatModal = ({ roomId, roomName }) => {
                                                             </li>
                                                         ))}
                                                     </ul>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* '출석' 입력 시 해당 사용자 메시지 아래에 전체 출석 리스트 표시 */}
+                                        {isMe && showAttendanceListAfterIndex === idx && (
+                                            <div className="chat-ai-assignment-panel chat-ai-attendance-panel">
+                                                <div className="chat-ai-panel-title">📅 출석 현황</div>
+                                                {loadingAttendance ? (
+                                                    <div className="chat-ai-panel-loading">불러오는 중...</div>
+                                                ) : attendanceViewRows.length === 0 ? (
+                                                    <div className="chat-ai-panel-empty">출석 데이터가 없습니다.</div>
+                                                ) : (
+                                                    <div className="chat-ai-attendance-table-wrap">
+                                                        <table className="chat-ai-attendance-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th className="chat-ai-at-name">이름</th>
+                                                                    <th className="chat-ai-at-ratio">출석률</th>
+                                                                    {Array.from({ length: attendanceData?.studySchedule?.totalSessions || 0 }).map((_, i) => (
+                                                                        <th key={i} className="chat-ai-at-session">{i + 1}</th>
+                                                                    ))}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {attendanceViewRows.map((r) => (
+                                                                    <tr key={r.memberId}>
+                                                                        <td className="chat-ai-at-name">{r.name}</td>
+                                                                        <td className="chat-ai-at-ratio">
+                                                                            <span className="chat-ai-at-ratio-bar" style={{ width: `${r.ratioOverall}%` }} />
+                                                                            <span className="chat-ai-at-ratio-text">({r.presentCount}/{r.totalSessions}) {r.ratioOverall}%</span>
+                                                                        </td>
+                                                                        {r.sessionsView.map((s, i) => (
+                                                                            <td key={i} className="chat-ai-at-mark">
+                                                                                <span className={s.isPresent ? "chat-ai-at-ok" : "chat-ai-at-absent"}>{s.isPresent ? "○" : "×"}</span>
+                                                                            </td>
+                                                                        ))}
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 )}
                                             </div>
                                         )}
