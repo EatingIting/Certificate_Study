@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import "./LMSMain.css";
 import { toBackendUrl } from "../utils/backendUrl";
 
@@ -7,10 +7,52 @@ const ClassCard = ({ data, loginUserEmail }) => {
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
 
+    const dropdownRef = useRef(null);
+
     const isHost = data.isHost === 1;
 
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (
+                dropdownRef.current &&
+                !dropdownRef.current.contains(e.target)
+            ) {
+                setOpen(false);
+            }
+        };
+
+        if (open) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [open]);
+
+    const handleEdit = async () => {
+        try {
+            setOpen(false); // 메뉴 닫기
+
+            const res = await fetch(
+                toBackendUrl(`/api/rooms/${data.roomId}`)
+            );
+
+            const studyData = await res.json();
+
+            navigate("/room/create", {
+                state: { study: studyData },
+            });
+        } catch (error) {
+            console.error(error);
+            alert("수정 페이지 이동 실패");
+        }
+    };
+
     const handleExit = async () => {
-        const confirmText = prompt("클래스를 나가려면 '클래스 나가기'를 입력하세요.");
+        const confirmText = prompt(
+            "클래스를 나가려면 '클래스 나가기'를 입력하세요."
+        );
 
         if (confirmText !== "클래스 나가기") {
             alert("입력이 일치하지 않습니다. 취소되었습니다.");
@@ -18,6 +60,8 @@ const ClassCard = ({ data, loginUserEmail }) => {
         }
 
         try {
+            setOpen(false); // 메뉴 닫기
+
             await fetch(toBackendUrl(`/api/rooms/${data.roomId}`), {
                 method: "DELETE",
             });
@@ -49,7 +93,7 @@ const ClassCard = ({ data, loginUserEmail }) => {
                     {isHost && (
                         <div
                             className="dropdown-wrapper"
-                            onMouseLeave={() => setOpen(false)}
+                            ref={dropdownRef}
                         >
                             <button
                                 className="more-btn"
@@ -60,7 +104,17 @@ const ClassCard = ({ data, loginUserEmail }) => {
 
                             {open && (
                                 <div className="dropdown-menu">
-                                    <div className="exit" onClick={handleExit}>
+                                    <div
+                                        className="edit"
+                                        onClick={handleEdit}
+                                    >
+                                        수정하기
+                                    </div>
+
+                                    <div
+                                        className="exit"
+                                        onClick={handleExit}
+                                    >
                                         클래스 나가기
                                     </div>
                                 </div>
@@ -74,12 +128,17 @@ const ClassCard = ({ data, loginUserEmail }) => {
                 <button
                     className="enter-btn"
                     onClick={() => {
-                        // ✅ URL에 roomId(UUID) 사용 → /lms/UUID/...
-                        // ✅ subjectId(숫자)도 세션에 저장 (백엔드 참조용)
                         if (data?.roomId) {
-                            sessionStorage.setItem("lms.activeRoomId", data.roomId);
-                            sessionStorage.setItem("lms.activeSubjectId", String(data.subjectId ?? ""));
+                            sessionStorage.setItem(
+                                "lms.activeRoomId",
+                                data.roomId
+                            );
+                            sessionStorage.setItem(
+                                "lms.activeSubjectId",
+                                String(data.subjectId ?? "")
+                            );
                         }
+
                         navigate(`/lms/${data.roomId}`);
                     }}
                 >
