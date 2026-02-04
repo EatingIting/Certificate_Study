@@ -403,3 +403,28 @@
 .bd.bd-detail .bd-reply-textarea {
     resize: none;
 }
+
+/* =========================
+   삭제된 댓글 카드 축소 (우선순위 강화)
+   ========================= */
+
+/* 부모 + 대댓글 공통 */
+.bd.bd-detail .bd-card.bd-comment-card.deleted,
+.bd.bd-detail .bd-card.bd-comment-card.reply.deleted {
+    padding: 4px 0;          /* 🔥 세로 최소화 */
+    padding-left: 16px;      /* 기본 댓글 기준선 유지 */
+}
+
+/* 대댓글(Reply) 삭제 상태 */
+.bd.bd-detail .bd-card.bd-comment-card.reply.deleted {
+    padding: 4px 0;
+    padding-left: 28px;      /* reply 기본 들여쓰기 유지 */
+}
+
+/* 본문을 한 줄 알림처럼 */
+.bd.bd-detail .bd-card.bd-comment-card.deleted .bd-comment-content {
+    margin-top: 8px;
+    line-height: 1.2;
+    font-size: 14px;
+    color: #9aa0a6;
+}
