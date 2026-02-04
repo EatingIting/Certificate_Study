@@ -69,28 +69,28 @@
     <!-- 신청 -->
     <insert id="insertApplication">
         INSERT INTO room_join_request (
-        join_id,
-        request_user_email,
-        request_user_nickname,
-        host_user_email,
-        room_id,
-        status,
-        apply_message,
-        requested_at
+            join_id,
+            request_user_email,
+            request_user_nickname,
+            host_user_email,
+            room_id,
+            status,
+            apply_message,
+            requested_at
         )
         SELECT
-        #{joinId},
-        #{requestUserEmail},
-        #{requestUserNickname},
-        r.host_user_email,
-        #{roomId},
-        '신청중',
-        #{applyMessage},
-        NOW()
+            #{joinId},
+            #{requestUserEmail},
+            #{requestUserNickname},
+            r.host_user_email,
+            #{roomId},
+            '신청중',
+            #{applyMessage},
+            NOW()
         FROM room r
         WHERE r.room_id = #{roomId}
-        AND r.host_user_email != #{requestUserEmail}
-        AND r.status = 'OPEN'
+          AND r.host_user_email != #{requestUserEmail}
+          AND r.status = 'OPEN'
     </insert>
 
 
