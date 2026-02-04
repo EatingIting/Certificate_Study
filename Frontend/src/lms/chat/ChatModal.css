@@ -380,10 +380,13 @@
     font-size: 11px;
 }
 
-/* AI 모드: 출석 현황 패널 */
-.chat-ai-attendance-panel .chat-ai-panel-title { margin-bottom: 8px; }
+/* AI 모드: 출석 현황 패널 (글씨 적당히, 가로 스크롤 허용) */
+.chat-ai-attendance-panel .chat-ai-panel-title {
+    margin-bottom: 8px;
+    font-size: 14px;
+}
 .chat-ai-attendance-table-wrap {
-    max-height: 200px;
+    max-height: 220px;
     overflow-x: auto;
     overflow-y: auto;
     border-radius: 8px;
@@ -409,11 +412,11 @@
     width: 100%;
     min-width: max-content;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: 13px;
 }
 .chat-ai-attendance-table th,
 .chat-ai-attendance-table td {
-    padding: 6px 8px;
+    padding: 8px 12px;
     text-align: center;
     border-bottom: 1px solid #eee;
 }
@@ -421,27 +424,38 @@
     background: #f7fafc;
     color: #4a5568;
     font-weight: 600;
+    font-size: 13px;
 }
-.chat-ai-at-name { text-align: left !important; min-width: 52px; }
+.chat-ai-at-name {
+    text-align: left !important;
+    min-width: 78px;
+    font-size: 13px;
+}
 .chat-ai-at-ratio {
-    min-width: 64px;
+    min-width: 88px;
     position: relative;
 }
 .chat-ai-at-ratio-bar {
     display: block;
-    height: 4px;
+    height: 5px;
     background: #97c793;
-    border-radius: 2px;
+    border-radius: 3px;
     min-width: 2px;
 }
 .chat-ai-at-ratio-text {
     display: block;
-    font-size: 10px;
+    font-size: 12px;
     color: #718096;
-    margin-top: 2px;
+    margin-top: 3px;
 }
-.chat-ai-at-session { min-width: 20px; font-size: 10px; }
-.chat-ai-at-mark { min-width: 22px; }
+.chat-ai-at-session {
+    min-width: 28px;
+    font-size: 13px;
+}
+.chat-ai-at-mark {
+    min-width: 28px;
+    font-size: 14px;
+}
 .chat-ai-at-ok { color: #38a169; font-weight: 600; }
 .chat-ai-at-absent { color: #e53e3e; font-weight: 600; }
 
@@ -468,6 +482,37 @@
     font-size: 11px;
     color: #718096;
     flex-shrink: 0;
+}
+
+/* AI 모드: 게시글 조회 패널 (최근 5개) */
+.chat-ai-board-panel .chat-ai-panel-title { margin-bottom: 8px; }
+.chat-ai-board-list {
+    max-height: 180px;
+    overflow-y: auto;
+}
+.chat-ai-board-item {
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+.chat-ai-board-item:hover {
+    background: #f0f4ff;
+    box-shadow: 0 1px 4px rgba(108, 92, 231, 0.12);
+}
+.chat-ai-board-title {
+    font-size: 13px;
+    color: #2d3748;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+.chat-ai-board-meta {
+    font-size: 10px;
+    color: #718096;
 }
 
 /* 과제 요약/예상문제 응답 아래 저장 버튼 */

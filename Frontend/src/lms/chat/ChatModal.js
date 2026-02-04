@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './ChatModal.css';
 import { getHostnameWithPort, getWsProtocol } from "../../utils/backendUrl";
 import { useLMS } from "../LMSContext";
@@ -90,6 +91,12 @@ const ChatModal = ({ roomId, roomName }) => {
     const [scheduleList, setScheduleList] = useState([]); // { id, title, startYmd, startDisplay, endDisplay, type }[]
     const [loadingSchedule, setLoadingSchedule] = useState(false);
     const [showScheduleListAfterIndex, setShowScheduleListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
+    // 게시판: '게시글'/'게시판' 키워드 또는 게시글 조회 버튼 시 최근 5개 게시글 목록 표시
+    const [boardList, setBoardList] = useState([]); // { postId, title, nickname, createdAt, category }[]
+    const [loadingBoard, setLoadingBoard] = useState(false);
+    const [showBoardListAfterIndex, setShowBoardListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
+
+    const navigate = useNavigate();
 
     // 모달 위치 및 드래그 관련 Ref
     const [position, setPosition] = useState({ x: window.innerWidth - 100, y: window.innerHeight - 100 });
@@ -343,6 +350,7 @@ const ChatModal = ({ roomId, roomName }) => {
         setShowAssignmentListAfterIndex(null);
         setShowAttendanceListAfterIndex(null);
         setShowScheduleListAfterIndex(null);
+        setShowBoardListAfterIndex(null);
 
         const fetchAssignments = async () => {
             try {
@@ -445,18 +453,35 @@ const ChatModal = ({ roomId, roomName }) => {
             const endExclusiveYmd = toYmd(endExclusive);
             const res = await api.get(`/rooms/${roomId}/schedule`, { params: { start: startYmd, end: endExclusiveYmd } });
             const items = res.data?.items || [];
+            const addDays = (ymd, delta) => {
+                if (!ymd || ymd.length < 10) return "";
+                const dt = new Date(ymd.slice(0, 10).replace(/-/g, "/"));
+                dt.setDate(dt.getDate() + delta);
+                const y = dt.getFullYear(), m = String(dt.getMonth() + 1).padStart(2, "0"), d = String(dt.getDate()).padStart(2, "0");
+                return `${y}-${m}-${d}`;
+            };
             const mapped = items.map((it) => {
                 const startStr = it?.start ? String(it.start).slice(0, 16).replace("T", " ") : "";
                 const endStr = it?.end ? String(it.end).slice(0, 16).replace("T", " ") : "";
                 const startYmd = (it?.start || "").toString().slice(0, 10);
+                const endYmdRaw = (it?.end || "").toString().slice(0, 10);
                 const [, m, d] = startYmd.split("-");
                 const startDisplay = startYmd && m && d ? `${Number(m)}.${Number(d)}` : "";
+                // 같은 날짜(스터디 회차 등)면 기간 표시 안 함. end가 시작일보다 뒤인 경우에만 미포함 end → 포함일로 하루 빼서 표시
+                let dateDisplay = startDisplay;
+                if (endYmdRaw && endYmdRaw > startYmd) {
+                    const endYmdInclusive = addDays(endYmdRaw, -1);
+                    const endParts = endYmdInclusive.split("-");
+                    const endDisplay = endParts[1] && endParts[2] ? `${Number(endParts[1])}.${Number(endParts[2])}` : "";
+                    if (endDisplay && endYmdInclusive !== startYmd) dateDisplay = `${startDisplay} ~ ${endDisplay}`;
+                }
                 const type = it?.extendedProps?.type || (String(it?.id || "").startsWith("S") ? "STUDY" : "OTHER");
                 return {
                     id: it?.id,
                     title: it?.title || "(제목 없음)",
                     startYmd,
                     startDisplay,
+                    dateDisplay,
                     startStr,
                     endStr,
                     type
@@ -468,6 +493,29 @@ const ChatModal = ({ roomId, roomName }) => {
             setScheduleList([]);
         } finally {
             setLoadingSchedule(false);
+        }
+    };
+
+    // 게시판 최근 5개 목록 로드 (채팅 패널용)
+    const fetchBoardList = async () => {
+        if (!roomId) return;
+        setLoadingBoard(true);
+        try {
+            const res = await api.get("/board/posts", { params: { roomId, page: 1, size: 5 } });
+            const items = (res.data?.items || []).slice(0, 5);
+            const sorted = [...items].sort((a, b) => (b.postId || 0) - (a.postId || 0));
+            setBoardList(sorted.map((p) => ({
+                postId: p.postId,
+                title: p.title || "(제목 없음)",
+                nickname: p.nickname || "",
+                createdAt: p.createdAt ? String(p.createdAt).replace("T", " ").slice(0, 16) : "",
+                category: p.category || ""
+            })));
+        } catch (e) {
+            console.error("게시글 목록 로드 실패:", e);
+            setBoardList([]);
+        } finally {
+            setLoadingBoard(false);
         }
     };
 
@@ -744,9 +792,9 @@ const ChatModal = ({ roomId, roomName }) => {
 
     const toggleAiMode = () => setIsAiMode(!isAiMode);
 
-    // 첫 인사 아래 빠른 실행 버튼: 과제 제출 현황 / 출석 현황 / 일정 목록
+    // 첫 인사 아래 빠른 실행 버튼: 과제 제출 현황 / 출석 현황 / 일정 목록 / 게시글 조회
     const handleQuickAction = (type) => {
-        const labels = { assignment: "과제 제출 현황", attendance: "출석 현황", schedule: "일정 목록" };
+        const labels = { assignment: "과제 제출 현황", attendance: "출석 현황", schedule: "일정 목록", board: "게시글 조회" };
         const newIndex = aiMessages.length;
         setAiMessages((prev) => [
             ...prev,
@@ -759,6 +807,9 @@ const ChatModal = ({ roomId, roomName }) => {
         } else if (type === "schedule") {
             setShowScheduleListAfterIndex(newIndex);
             fetchScheduleList();
+        } else if (type === "board") {
+            setShowBoardListAfterIndex(newIndex);
+            fetchBoardList();
         }
     };
 
@@ -791,6 +842,13 @@ const ChatModal = ({ roomId, roomName }) => {
             if (text.includes("일정")) {
                 setShowScheduleListAfterIndex(userMessageIndex);
                 fetchScheduleList();
+                return;
+            }
+
+            // '게시판' 또는 '게시글'이 포함된 입력 → 해당 메시지 아래에 최근 5개 게시글 목록 표시, AI 호출 안 함
+            if (text.includes("게시판") || text.includes("게시글")) {
+                setShowBoardListAfterIndex(userMessageIndex);
+                fetchBoardList();
                 return;
             }
 
@@ -903,7 +961,7 @@ const ChatModal = ({ roomId, roomName }) => {
 
             // 제출물 기반 요청 (lastAskedSubmission 있음 = 방금 닉네임 매칭했거나 이전에 선택함) + 요약/예상문제 키워드 → 바로 API 호출
             if (lastAskedSubmission && (hasSummaryKeyword || hasProblemKeyword)) {
-                // 사용자 메시지(예: "2과목 요약해줘", "1과목 예상문제 내줘")를 그대로 전달해 AI가 해당 부분만 처리하도록 함
+                // 사용자 메시지(예: "2과목 요약해줘", "1과목 예상문제 내줘")를 그대로 전달해 AI가 해당 부분만 처리
                 const loadingType = hasProblemKeyword ? "problem" : "summary";
                 setLoadingPhaseForSubmission(1);
                 setAiMessages((prev) => [
@@ -1083,7 +1141,7 @@ const ChatModal = ({ roomId, roomName }) => {
                                     </div>
                                 );
                             })()}
-                            {/* 첫 인사 아래: 빠른 실행 버튼 (과제 / 출석 / 일정) */}
+                            {/* 첫 인사 아래: 빠른 실행 버튼 (과제 / 출석 / 일정 / 게시글 조회) */}
                             {currentMessages.length > 0 && currentMessages[0].isAiResponse && (
                                 <div className="chat-ai-quick-actions">
                                     <div className="chat-ai-quick-actions-title">바로 확인하기</div>
@@ -1095,6 +1153,9 @@ const ChatModal = ({ roomId, roomName }) => {
                                     </button>
                                     <button type="button" className="chat-ai-quick-btn" onClick={() => handleQuickAction("schedule")}>
                                         ○ 일정 목록
+                                    </button>
+                                    <button type="button" className="chat-ai-quick-btn" onClick={() => handleQuickAction("board")}>
+                                        ○ 게시글 조회
                                     </button>
                                 </div>
                             )}
@@ -1224,9 +1285,33 @@ const ChatModal = ({ roomId, roomName }) => {
                                                             <li key={s.id} className="chat-ai-assignment-item chat-ai-schedule-item">
                                                                 <span className="chat-ai-schedule-title">{s.title}</span>
                                                                 <span className="chat-ai-schedule-date">
-                                                                    {s.startDisplay}
+                                                                    {s.dateDisplay}
                                                                     {s.type === "STUDY" ? " (스터디)" : ""}
                                                                 </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* '게시글 조회' 또는 '게시판'/'게시글' 입력 시 해당 메시지 아래에 최근 5개 게시글 목록 표시 */}
+                                        {isMe && showBoardListAfterIndex === idx && (
+                                            <div className="chat-ai-assignment-panel chat-ai-board-panel">
+                                                <div className="chat-ai-panel-title">📌 최근 게시글 (5개)</div>
+                                                {loadingBoard ? (
+                                                    <div className="chat-ai-panel-loading">불러오는 중...</div>
+                                                ) : boardList.length === 0 ? (
+                                                    <div className="chat-ai-panel-empty">게시글이 없습니다.</div>
+                                                ) : (
+                                                    <ul className="chat-ai-assignment-list chat-ai-board-list">
+                                                        {boardList.map((p) => (
+                                                            <li
+                                                                key={p.postId}
+                                                                className="chat-ai-assignment-item chat-ai-board-item"
+                                                                onClick={(e) => { e.stopPropagation(); navigate(`/lms/${roomId}/board/${p.postId}`); }}
+                                                            >
+                                                                <span className="chat-ai-board-title">{p.title}</span>
+                                                                <span className="chat-ai-board-meta">{p.nickname} · {p.createdAt}</span>
                                                             </li>
                                                         ))}
                                                     </ul>
