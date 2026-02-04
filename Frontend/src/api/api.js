@@ -1,23 +1,11 @@
 import axios from "axios";
-import { getBackendOrigin } from "../utils/backendUrl";
 
-// HTTPS 환경에서는 절대 URL 사용, HTTP 환경에서는 상대 경로 사용
-const getBaseURL = () => {
-    if (process.env.REACT_APP_API_BASE_URL) {
-        return process.env.REACT_APP_API_BASE_URL;
-    }
-    
-    // HTTPS로 접속하는 경우 절대 URL 사용 (Mixed Content 방지)
-    if (window.location.protocol === "https:") {
-        return `${getBackendOrigin()}/api`;
-    }
-    
-    // HTTP 환경에서는 상대 경로 사용 (프록시 활용)
-    return "/api";
-};
-
+// API 엔드포인트 기본값:
+// - 개발 환경: React dev server → setupProxy.js 가 /api 를 8080으로 프록시
+// - 운영 환경: nginx 가 /api 를 Spring(8080)으로 프록시
+// ⇒ 프론트에서는 기본적으로 '/api' 만 쓰고, 필요할 때만 .env 로 절대 경로를 override
 const api = axios.create({
-    baseURL: getBaseURL(),
+    baseURL: process.env.REACT_APP_API_BASE_URL || "/api",
     headers: {
         "Content-Type": "application/json",
     },

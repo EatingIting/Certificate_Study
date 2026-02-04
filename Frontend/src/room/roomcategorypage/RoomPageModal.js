@@ -2,6 +2,7 @@ import "./RoomPageModal.css";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/api";
+import { toBackendUrl } from "../../utils/backendUrl";
 
 const formatKoreanDate = (value) => {
   if (!value) return "미정";
@@ -73,7 +74,8 @@ const RoomPageModal = ({ open, onClose, study }) => {
 
     if (img.startsWith("http")) return img;
 
-    return `http://localhost:8080${img}`;
+    // 백엔드 이미지 경로를 EC2 탄력적 IP 기준으로 변환
+    return toBackendUrl(img);
   };
 
   const handleSubmit = async () => {

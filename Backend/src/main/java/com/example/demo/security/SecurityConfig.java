@@ -145,15 +145,24 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
+        // WebRTC + OAuth + nginx 뒤 구조를 고려한 전역 CORS 설정
+        // - 개발: http://localhost:3000, http://127.0.0.1:3000
+        // - 운영: http(s)://3.35.119.96, 도메인 추가 시에도 대응 가능하도록 패턴 사용
         config.setAllowedOriginPatterns(List.of("*"));
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(List.of("*"));
+
+        // 인증(JWT) 포함 모든 헤더 허용
+        config.setAllowedHeaders(List.of("*", "Authorization"));
+
+        // 클라이언트에서 Authorization, Content-Type 확인 가능
         config.setExposedHeaders(List.of("Authorization", "Content-Type"));
-        config.setAllowCredentials(false);
+
+        // JWT를 헤더로 주고 받으므로 credential 허용
+        config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return source;

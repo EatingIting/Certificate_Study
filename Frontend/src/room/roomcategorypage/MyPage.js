@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api/api";
 import "./MyPage.css";
+import { toBackendUrl } from "../../utils/backendUrl";
 import { useNavigate } from "react-router-dom";
 
 const MyPage = () => {
@@ -132,7 +133,8 @@ const MyPage = () => {
             return img;
         }
 
-        return `http://localhost:8080${img}`;
+        // 프로필 이미지를 EC2 백엔드 기준 URL로 변환
+        return toBackendUrl(img);
     };
 
     const openEdit = () => {

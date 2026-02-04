@@ -83,23 +83,44 @@ const AssignmentDetail = () => {
     };
     const closeAiModal = () => setAiModal(null);
 
+    // AI 답변은 항상 본문을
+    // ---
+    // (내용)
+    // ---
+    // 형태로 감싸도록 후처리
+    const wrapWithTripleDash = (raw) => {
+        let text = raw != null ? String(raw).trim() : "";
+        if (!text) return "";
+
+        const dashMatches = text.match(/---/g) || [];
+        // 이미 --- 가 2번 이상 들어 있으면 그대로 사용
+        if (dashMatches.length >= 2) {
+            return text;
+        }
+        // 아니면 앞뒤에 ---를 붙여줌
+        return `---\n${text}\n---`;
+    };
+
     const sendToAi = async () => {
         if (!aiModal) return;
         setAiLoading(true);
         setAiReply(null);
         try {
+            const baseMessage =
+                aiMessage.trim() || "이 제출물을 보고 요약하거나 피드백해줘.";
             const res = await api.post("/ai/chat/with-submission", {
-                message: aiMessage.trim() || "이 제출물을 보고 요약하거나 피드백해줘.",
+                message: baseMessage,
                 submissionId: aiModal.submissionId,
             });
-            const replyText = res.data != null ? String(res.data) : "";
+            const replyTextRaw = res.data != null ? String(res.data) : "";
+            const replyText = wrapWithTripleDash(replyTextRaw);
             setAiReply(replyText);
 
             // 자동 분류 (요약/문제)
             setNoteTypeLoading(true);
             try {
                 const c = await api.post("/ai/note/classify", {
-                    question: aiMessage.trim() || "이 제출물을 보고 요약하거나 피드백해줘.",
+                    question: baseMessage,
                     answer: replyText,
                 });
                 const t = (c.data != null ? String(c.data) : "").toUpperCase().includes("SUMMARY")

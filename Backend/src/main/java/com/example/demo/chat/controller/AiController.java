@@ -52,10 +52,6 @@ public class AiController {
         }
     }
 
-    /**
-     * 노트 자동 분류 (SUMMARY / PROBLEM)
-     * Body: { "question": "...", "answer": "..." }
-     */
     @PostMapping("/note/classify")
     public ResponseEntity<String> classifyNote(@RequestBody Map<String, String> request) {
         String question = request.get("question");

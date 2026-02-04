@@ -54,7 +54,9 @@ function Calendar() {
         description: "",
         start: "",
         end: "",
-        startTime: "09:00",
+        type: "OTHER",
+        customLabel: "",
+                startTime: "09:00",
         endTime: "",
         type: "OTHER",
         customLabel: "",
@@ -1113,7 +1115,7 @@ function Calendar() {
                             let eTime = ev.extendedProps?.endTime;
                             let timePart = (sTime || eTime) ? [sTime, eTime].filter(Boolean).join(" ~ ") : "";
                             let displayTitle = isStudy
-                                ? `${round ? `${round}회차` : "스터디"}${timePart ? ` (${timePart})` : ""}`
+                                ? `${round ? `${round}회차 스터디` : "스터디"}`
                                 : ev.title;
 
                             return (
@@ -1269,7 +1271,6 @@ function Calendar() {
                             </div>
 
                             <div className="calTimeSection">
-                                
                                 <div className="calRow2">
                                     <label className="calField">
                                         <span className="calFieldLabel">시작시간</span>
@@ -1290,25 +1291,10 @@ function Calendar() {
                                         />
                                     </label>
                                 </div>
-                            </div>
 
-                            <div className="calRow2">
+                                {/* 일정 종류가 OTHER일 때 사용할 커스텀 라벨 입력 */}
                                 <label className="calField">
-                                    <span className="calFieldLabel">유형</span>
-                                    <select
-                                        className="calSelect"
-                                        value={form.type}
-                                        onChange={(e) => onChangeForm("type", e.target.value)}
-                                    >
-                                        <option value="REGISTRATION">접수</option>
-                                        <option value="EXAM">시험</option>
-                                        <option value="RESULT">발표</option>
-                                        <option value="OTHER">기타</option>
-                                    </select>
-                                </label>
-
-                                <label className="calField">
-                                    <span className="calFieldLabel">기타 라벨(선택)</span>
+                                    <span className="calFieldLabel">직접 라벨(선택)</span>
                                     <input
                                         className="calInput"
                                         value={form.customLabel}
