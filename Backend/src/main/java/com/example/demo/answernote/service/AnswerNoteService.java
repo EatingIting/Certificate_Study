@@ -62,6 +62,38 @@ public class AnswerNoteService {
         answerNoteRepository.save(note);
     }
 
+    /** 노트 수정 (본인 노트만) */
+    public void updateNote(String noteId, String userEmail, AnswerNoteRequestDTO dto) {
+        AnswerNote note = answerNoteRepository.findById(noteId)
+                .orElseThrow(() -> new IllegalArgumentException("노트를 찾을 수 없습니다."));
+        if (note.getUser() == null || !userEmail.equals(note.getUser().getEmail())) {
+            throw new IllegalArgumentException("본인의 노트만 수정할 수 있습니다.");
+        }
+        AnswerNoteType noteType = note.getNoteType();
+        if (dto.getType() != null && !dto.getType().isBlank()) {
+            try {
+                noteType = AnswerNoteType.valueOf(dto.getType().trim().toUpperCase());
+            } catch (Exception ignored) { }
+        }
+        note.updateContent(
+                dto.getQuestion() != null ? dto.getQuestion() : note.getQuestion(),
+                dto.getAnswer() != null ? dto.getAnswer() : note.getAnswer(),
+                dto.getMemo(),
+                noteType
+        );
+        answerNoteRepository.save(note);
+    }
+
+    /** 노트 삭제 (본인 노트만) */
+    public void deleteNote(String noteId, String userEmail) {
+        AnswerNote note = answerNoteRepository.findById(noteId)
+                .orElseThrow(() -> new IllegalArgumentException("노트를 찾을 수 없습니다."));
+        if (note.getUser() == null || !userEmail.equals(note.getUser().getEmail())) {
+            throw new IllegalArgumentException("본인의 노트만 삭제할 수 있습니다.");
+        }
+        answerNoteRepository.delete(note);
+    }
+
     // 2. 조회
     @Transactional(readOnly = true)
     public List<AnswerNoteResponseDTO> getNotesByRoom(String roomId) {
