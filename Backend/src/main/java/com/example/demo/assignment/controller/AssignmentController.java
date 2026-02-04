@@ -2,6 +2,7 @@ package com.example.demo.assignment.controller;
 
 import com.example.demo.assignment.dto.AssignmentCreateRequest;
 import com.example.demo.assignment.dto.AssignmentListResponse;
+import com.example.demo.assignment.dto.AssignmentMatrixResponse;
 import com.example.demo.assignment.service.AssignmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -71,5 +72,12 @@ public class AssignmentController {
             @PathVariable Long assignmentId
     ) {
         return ResponseEntity.ok(assignmentService.getSubmissionDetails(assignmentId));
+    }
+
+    @GetMapping("/rooms/{roomId}/assignments/submission-matrix")
+    public ResponseEntity<AssignmentMatrixResponse> getSubmissionMatrix(
+            @PathVariable String roomId
+    ) {
+        return ResponseEntity.ok(assignmentService.getSubmissionMatrix(roomId));
     }
 }

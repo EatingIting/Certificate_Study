@@ -11,4 +11,6 @@ import lombok.*;
 public class BoardCommentCreateRequest {
     @NotBlank
     private String content;
+
+    private Long parentId;
 }

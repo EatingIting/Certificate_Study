@@ -347,7 +347,7 @@ function Dashboard({ setActiveMenu }) {
                 const startStr = start.toISOString().slice(0, 10);
                 const endStr = end.toISOString().slice(0, 10);
 
-                const res = await api.get("/schedules", {
+                const normalRes = await api.get("/schedules", {
                     params: {
                         roomId: subjectId,
                         start: startStr,
@@ -355,7 +355,22 @@ function Dashboard({ setActiveMenu }) {
                     },
                 });
 
-                setCalendarEvents(res.data || []);
+                const studyRes = await api.get("/study-schedules", {
+                    params: {
+                        roomId: subjectId,
+                        start: startStr,
+                        end: endStr,
+                    },
+                });
+
+                const normal = normalRes.data || [];
+                const study = studyRes.data || [];
+
+                console.log("일반 일정:", normal);
+                console.log("스터디 일정:", study);
+
+                setCalendarEvents([...normal, ...study]);
+
             } catch (e) {
                 console.error("DASH SCHEDULE ERROR:", e);
                 setCalendarEvents([]);
@@ -365,22 +380,46 @@ function Dashboard({ setActiveMenu }) {
         fetchSchedules();
     }, [subjectId]);
 
+
     const fcEvents = useMemo(() => {
-        return calendarEvents.map((ev) => {
-            const raw = ev.start || ev.startDate;
+        return calendarEvents
+            .map((ev) => {
 
-            const localDate = raw.length === 10
-                ? raw + "T00:00:00"
-                : raw;
+                const startRaw = ev.start || ev.studyDate;
+                if (!startRaw) return null;
 
-            return {
-                id: ev.id || ev.scheduleId,
-                title: ev.title,
-                start: localDate,
-            };
-        });
+                const startDate =
+                    startRaw.length === 10
+                        ? startRaw + "T00:00:00"
+                        : startRaw;
+
+                let endDate = null;
+
+                if (ev.end) {
+                    endDate =
+                        ev.end.length === 10
+                            ? ev.end + "T00:00:00"
+                            : ev.end;
+                }
+
+                return {
+                    id: ev.id || ev.studyScheduleId,
+                    title: ev.title || ev.description || "스터디",
+                    start: startDate,
+                    ...(endDate ? { end: endDate } : {}),
+
+                    extendedProps: {
+                        ...(ev.extendedProps || {}),
+                        type:
+                            ev.extendedProps?.type ||
+                            ev.type ||
+                            (ev.studyDate ? "STUDY" : "GENERAL"),
+                        round: ev.roundNum || null,
+                    },
+                };
+            })
+            .filter(Boolean);
     }, [calendarEvents]);
-
 
 
 
@@ -405,36 +444,69 @@ function Dashboard({ setActiveMenu }) {
         const map = {};
 
         fcEvents.forEach((ev) => {
-            const key = String(ev.start).slice(0, 10);
+            const start = new Date(ev.start);
 
-            if (!map[key]) map[key] = [];
-            map[key].push(ev);
+            const end = ev.end
+                ? new Date(ev.end)
+                : new Date(new Date(ev.start).setDate(start.getDate() + 1));
+
+            while (start < end) {
+
+                const key =
+                    `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+
+                if (!map[key]) map[key] = [];
+                map[key].push(ev);
+
+                start.setDate(start.getDate() + 1);
+            }
+
         });
 
         return map;
     }, [fcEvents]);
 
+    const formatMonthRange = (ev) => {
+        const start = new Date(ev.start);
 
+        const end = ev.end
+            ? new Date(ev.end)
+            : new Date(new Date(ev.start).setDate(start.getDate() + 1));
+
+        const monthStart = new Date(activeYear, activeMonth - 1, 1);
+        const monthEnd = new Date(activeYear, activeMonth, 1);
+
+        const visibleStart = start < monthStart ? monthStart : start;
+        const visibleEnd = end > monthEnd ? monthEnd : end;
+
+        visibleEnd.setDate(visibleEnd.getDate() - 1);
+
+        const fmt = (d) =>
+            `${String(d.getMonth() + 1).padStart(2, "0")}.${String(
+                d.getDate()
+            ).padStart(2, "0")}`;
+
+        if (fmt(visibleStart) === fmt(visibleEnd)) {
+            return `[${fmt(visibleStart)}]`;
+        }
+
+        return `[${fmt(visibleStart)}~${fmt(visibleEnd)}]`;
+    };
 
 
     const monthItems = useMemo(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
         return fcEvents
             .filter((ev) => {
-                const startDate = new Date(String(ev.start).slice(0, 10));
-                startDate.setHours(0, 0, 0, 0);
+                const start = new Date(ev.start);
+                const end = ev.end ? new Date(ev.end) : new Date(ev.start);
 
-                const month = Number(String(ev.start).slice(5, 7));
-                if (month !== activeMonth) return false;
+                const monthStart = new Date(activeYear, activeMonth - 1, 1);
+                const monthEnd = new Date(activeYear, activeMonth, 1);
 
-                if (startDate < today) return false;
-
-                return true;
+                return start < monthEnd && end > monthStart;
             })
             .sort((a, b) => String(a.start).localeCompare(String(b.start)));
-    }, [fcEvents, activeMonth]);
+    }, [fcEvents, activeYear, activeMonth]);
 
 
 
@@ -451,7 +523,7 @@ function Dashboard({ setActiveMenu }) {
 
         if (diff === 0) return "D-day";
         if (diff > 0) return `D-${diff}`;
-        return "지남";
+        return "";
     };
 
 
@@ -557,6 +629,7 @@ function Dashboard({ setActiveMenu }) {
         hoverTarget._dashEnter = onEnter;
         hoverTarget._dashLeave = onLeave;
     };
+
 
 
 
@@ -796,10 +869,15 @@ function Dashboard({ setActiveMenu }) {
                               <li key={it.id} className="trow tinted">
                     <span className="tleft">
                       <span className="round">
-                          [{String(it.start).slice(0, 10).slice(5).replace("-", ".")}]
+                        {formatMonthRange(it)}
                       </span>
 
-                      <span className="row-text">{it.title}</span>
+                      <span className="row-text">
+                        {it.extendedProps?.type === "STUDY"
+                        ? `${it.extendedProps.round}회차 스터디`
+                        : it.title}
+                      </span>
+
                     </span>
 
                     <span className="tright">

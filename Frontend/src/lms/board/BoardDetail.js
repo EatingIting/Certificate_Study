@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./Board.css";
 import { BoardApi, formatKst } from "./BoardApi";
@@ -14,6 +14,12 @@ function BoardDetail() {
     let [newComment, setNewComment] = useState("");
     let [comments, setComments] = useState([]);
     let [commentSubmitting, setCommentSubmitting] = useState(false);
+    let [replyTo, setReplyTo] = useState(null);
+    let [replyText, setReplyText] = useState("");
+    let [commentsOpen, setCommentsOpen] = useState(true);
+    let [postMenuOpen, setPostMenuOpen] = useState(false);
+
+    let postMenuRef = useRef(null);
 
     let categoryToCode = (v) => {
         if (!v) return "";
@@ -65,6 +71,29 @@ function BoardDetail() {
             alive = false;
         };
     }, [postId]);
+
+    useEffect(() => {
+        if (!postMenuOpen) return;
+
+        let onDown = (e) => {
+            if (!postMenuRef.current) return;
+            if (!postMenuRef.current.contains(e.target)) {
+                setPostMenuOpen(false);
+            }
+        };
+
+        window.addEventListener("mousedown", onDown);
+        return () => window.removeEventListener("mousedown", onDown);
+    }, [postMenuOpen]);
+
+    let parentComments = comments.filter((c) => !c.parentId);
+    let repliesByParent = comments.reduce((acc, c) => {
+        if (c.parentId) {
+            if (!acc[c.parentId]) acc[c.parentId] = [];
+            acc[c.parentId].push(c);
+        }
+        return acc;
+    }, {});
 
     /* =========================
        댓글 목록
@@ -120,6 +149,26 @@ function BoardDetail() {
             setCommentSubmitting(false);
         }
     };
+
+    let onCreateReply = async (parentCommentId) => {
+        let text = replyText.trim();
+        if (!text) return;
+
+        try {
+            setCommentSubmitting(true);
+            await BoardApi.createComment(postId, {
+                content: text,
+                parentId: parentCommentId
+            });
+            setReplyText("");
+            setReplyTo(null);
+            await reloadComments();
+        } catch (e) {
+            alert(e?.message || "답글 작성 실패");
+        } finally {
+            setCommentSubmitting(false);
+        }
+    }
 
     let onDeleteComment = async (commentId) => {
         let ok = window.confirm("댓글을 삭제할까요?");
@@ -194,6 +243,8 @@ function BoardDetail() {
     }
 
     let post = detail?.post;
+    let canEdit = !!detail?.canEdit;
+    let canDelete = !!detail?.canDelete;
 
     if (!post) {
         return (
@@ -244,13 +295,60 @@ function BoardDetail() {
             </div>
 
             <div className="bd-card">
-                <div className="bd-chip notice">
-                    {isNotice ? "공지" : categoryToLabel(post.category)}
-                </div>
+                <div className="bd-post-head">
+                    <div>
+                        <div className="bd-chip notice">
+                            {isNotice ? "공지" : categoryToLabel(post.category)}
+                        </div>
 
-                <h3 className="bd-detail-title" style={{ marginTop: 10 }}>
-                    {post.title}
-                </h3>
+                        <h3 className="bd-detail-title" style={{ marginTop: 10 }}>
+                            {post.title}
+                        </h3>
+                    </div>
+
+                    {(canEdit || canDelete) && (
+                        <div className="bd-post-menu" ref={postMenuRef}>
+                            <button
+                                type="button"
+                                className="bd-kebab-btn"
+                                onClick={() => setPostMenuOpen((v) => !v)}
+                                aria-label="게시글 메뉴"
+                            >
+                                ︙
+                            </button>
+
+                            {postMenuOpen && (
+                                <div className="bd-post-dropdown">
+                                    {canEdit && (
+                                        <button
+                                            type="button"
+                                            className="bd-post-dropdown-item"
+                                            onClick={() => {
+                                                setPostMenuOpen(false);
+                                                onEdit();
+                                            }}
+                                        >
+                                            수정
+                                        </button>
+                                    )}
+
+                                    {canDelete && (
+                                        <button
+                                            type="button"
+                                            className="bd-post-dropdown-item danger"
+                                            onClick={async () => {
+                                                setPostMenuOpen(false);
+                                                await onDelete();
+                                            }}
+                                        >
+                                            삭제
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 <div className="bd-detail-meta">
                     <span>작성자: {post.nickname}</span>
@@ -258,58 +356,177 @@ function BoardDetail() {
                     <span>조회수: {post.viewCount ?? 0}</span>
                 </div>
 
+                <div className="bd-divider" />
+
                 <div className="bd-detail-body">
                     {post.content}
                 </div>
 
-                {/* 댓글 작성 */}
-                <div className="bd-comment-compose" style={{ display: "flex", gap: 10 }}>
-                    <textarea
-                        className="bd-input"
-                        rows={3}
-                        placeholder="댓글을 입력하세요."
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        disabled={commentSubmitting}
-                        style={{ flex: 1 }}
-                    />
-                    <button
-                        className="bd-btn"
-                        type="button"
-                        disabled={commentSubmitting || !newComment.trim()}
-                        onClick={onCreateComment}
-                    >
-                        등록
-                    </button>
-                </div>
+                <div className="bd-divider" />
 
-                {/* 댓글 목록 */}
-                <div style={{ marginTop: 16 }}>
-                    <div className="bd-label" style={{ marginBottom: 8 }}>
-                        댓글 {comments.length}개
+                <div className="bd-comment-section">
+                    {/* 댓글 헤더 */}
+                    <div className="bd-comment-header">
+                        <div className="bd-label">
+                            댓글 {comments.length}개
+                        </div>
+
+                        <button
+                            type="button"
+                            className="bd-btn-ghost"
+                            onClick={() => {
+                                setCommentsOpen((v) => {
+                                    let next = !v;
+                                    if (!next) {
+                                        setReplyTo(null);
+                                        setReplyText("");
+                                    }
+                                    return next;
+                                });
+                            }}
+                        >
+                            {commentsOpen ? "접기" : "펼치기"}
+                        </button>
                     </div>
 
-                    {comments.length === 0 ? (
-                        <div className="bd-hint">댓글이 없습니다.</div>
-                    ) : (
-                        <div style={{ display: "grid", gap: 10 }}>
-                            {comments.map((c) => (
-                                <div    key={c.commentId} className="bd-card bd-comment-card" style={{ padding: 12 }}>
-                                    <div className="bd-comment-meta">
-                                        <span className="bd-comment-author">
-                                            작성자: {c.nickname}
-                                        </span>
+                    {/* 아래 내용(목록 + 입력창) */}
+                    {commentsOpen && (
+                        <div className="bd-comment-body">
+                            {/* 댓글 목록 */}
+                            <div>
+                                {comments.length === 0 ? (
+                                    <div className="bd-hint">댓글이 없습니다.</div>
+                                ) : (
+                                    <div style={{ display: "grid", gap: 10 }}>
+                                        {parentComments.map((c) => {
+                                            let isDeleted = !!c.deletedAt;
 
-                                        <span className="bd-comment-date">
-                                            {formatKst(c.createdAt)}
-                                        </span>
-                                    </div>
+                                            return (
+                                                <div key={c.commentId} style={{ display: "grid", gap: 8 }}>
+                                                    {/* 부모 댓글 */}
+                                                    <div className="bd-card bd-comment-card" style={{ padding: 12 }}>
+                                                        <div className="bd-comment-meta">
+                                                            <span className="bd-comment-author">
+                                                                작성자: {c.nickname}
+                                                            </span>
+                                                            <span className="bd-comment-date">
+                                                                {formatKst(c.createdAt)}
+                                                            </span>
+                                                        </div>
 
-                                    <div style={{ whiteSpace: "pre-wrap" }}>
-                                        {c.content}
+                                                        <div style={{ whiteSpace: "pre-wrap" }}>
+                                                            {c.content}
+                                                        </div>
+
+                                                        {!isDeleted && (
+                                                            <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                                                                <button
+                                                                    type="button"
+                                                                    className="bd-btn-ghost"
+                                                                    onClick={() => {
+                                                                        if (replyTo === c.commentId) {
+                                                                            setReplyTo(null);
+                                                                            setReplyText("");
+                                                                        } else {
+                                                                            setReplyTo(c.commentId);
+                                                                            setReplyText("");
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    답글
+                                                                </button>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="bd-btn-ghost"
+                                                                    onClick={() => onDeleteComment(c.commentId)}
+                                                                >
+                                                                    삭제
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {!isDeleted && replyTo === c.commentId && (
+                                                            <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                                                                <textarea
+                                                                    className="bd-input bd-reply-textarea"
+                                                                    rows={2}
+                                                                    placeholder="답글을 입력하세요."
+                                                                    value={replyText}
+                                                                    onChange={(e) => setReplyText(e.target.value)}
+                                                                    disabled={commentSubmitting}
+                                                                    style={{ flex: 1 }}
+                                                                />
+                                                                <button
+                                                                    className="bd-btn"
+                                                                    type="button"
+                                                                    disabled={commentSubmitting || !replyText.trim()}
+                                                                    onClick={() => onCreateReply(c.commentId)}
+                                                                >
+                                                                    등록
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 대댓글 */}
+                                                    {(repliesByParent[c.commentId] || []).map((r) => (
+                                                        <div
+                                                            key={r.commentId}
+                                                            className="bd-card bd-comment-card"
+                                                            style={{ padding: 12, marginLeft: 24 }}
+                                                        >
+                                                            <div className="bd-comment-meta">
+                                                                <span className="bd-comment-author">
+                                                                    작성자: {r.nickname}
+                                                                </span>
+                                                                <span className="bd-comment-date">
+                                                                    {formatKst(r.createdAt)}
+                                                                </span>
+                                                            </div>
+
+                                                            <div style={{ whiteSpace: "pre-wrap" }}>
+                                                                {r.content}
+                                                            </div>
+
+                                                            {!r.deletedAt && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="bd-btn-ghost"
+                                                                    onClick={() => onDeleteComment(r.commentId)}
+                                                                >
+                                                                    삭제
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                </div>
-                            ))}
+                                )}
+                            </div>
+
+                            {/* 댓글 작성 */}
+                            <div className="bd-comment-compose" style={{ display: "flex", gap: 10 }}>
+                                <textarea
+                                    className="bd-input"
+                                    rows={3}
+                                    placeholder="댓글을 입력하세요."
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    disabled={commentSubmitting}
+                                    style={{ flex: 1 }}
+                                />
+                                <button
+                                    className="bd-btn"
+                                    type="button"
+                                    disabled={commentSubmitting || !newComment.trim()}
+                                    onClick={onCreateComment}
+                                >
+                                    등록
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

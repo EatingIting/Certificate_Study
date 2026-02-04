@@ -20,6 +20,10 @@ public interface RoomMyPageMapper {
     RoomMyPageResponse selectRoomMyPage(@Param("roomId") String roomId,
                                         @Param("email") String email);
 
+    /** 채팅 접속자 표시명용: 방별 닉네임 (방장=hostUserNickname, 승인멤버=request_user_nickname). 미가입 시 null */
+    String selectRoomNicknameOptional(@Param("roomId") String roomId,
+                                      @Param("email") String email);
+
     // 승인 멤버 닉네임 변경
     int updateMemberNickname(@Param("roomId") String roomId,
                              @Param("email") String email,

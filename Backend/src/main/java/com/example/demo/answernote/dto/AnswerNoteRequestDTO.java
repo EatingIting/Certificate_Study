@@ -8,4 +8,6 @@ public class AnswerNoteRequestDTO {
     private String question;
     private String answer;
     private String memo;
+    /** SUMMARY | PROBLEM (없으면 PROBLEM로 저장) */
+    private String type;
 }

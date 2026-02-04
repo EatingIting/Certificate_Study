@@ -51,6 +51,9 @@ dependencies {
 
 	// 환경변수 env
 	implementation 'me.paulschwarz:spring-dotenv:4.0.0'
+
+	// PDF 텍스트 추출 (과제 제출물 AI 읽기)
+	implementation 'org.apache.pdfbox:pdfbox:3.0.3'
 }
 
 tasks.named('test') {

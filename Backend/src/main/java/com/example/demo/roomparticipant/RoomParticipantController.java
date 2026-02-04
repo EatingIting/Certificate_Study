@@ -44,6 +44,17 @@ public class RoomParticipantController {
         return service.transferOwner(roomId, myEmail, request);
     }
 
+    // ✅ 탈퇴 전 비밀번호 검증(본인)
+    @PostMapping("/{roomId}/participants/me/verify-password")
+    public ActionResultResponse verifyLeavePassword(
+            @PathVariable String roomId,
+            @RequestBody VerifyLeaveRoomPasswordRequest request,
+            Authentication authentication
+    ) {
+        String myEmail = authentication.getName();
+        return service.verifyLeavePassword(roomId, myEmail, request);
+    }
+
     // ✅ 탈퇴(본인) - DTO 없이 처리
     @DeleteMapping("/{roomId}/participants/me")
     public ActionResultResponse leaveRoom(
