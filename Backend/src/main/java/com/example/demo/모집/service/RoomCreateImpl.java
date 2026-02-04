@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,13 +44,11 @@ public class RoomCreateImpl implements RoomCreateService {
         vo.setDeadline(request.getDeadline());
 
         if (request.getImage() != null && !request.getImage().isEmpty()) {
-
             try {
                 String imageUrl = s3Uploader.upload(request.getImage());
                 vo.setRoomImg(imageUrl);
 
             } catch (Exception e) {
-                e.printStackTrace();
                 throw new RuntimeException("S3 이미지 업로드 실패: " + e.getMessage());
             }
         }
@@ -91,7 +90,6 @@ public class RoomCreateImpl implements RoomCreateService {
 
         vo.setGender(request.getGender());
         vo.setMaxParticipants(request.getMaxParticipants());
-
         vo.setCategoryId(request.getCategoryId());
 
         vo.setStartDate(request.getStartDate());
@@ -102,17 +100,29 @@ public class RoomCreateImpl implements RoomCreateService {
         String roomImg = existing.getRoomImg();
 
         if (request.getImage() != null && !request.getImage().isEmpty()) {
-
             try {
                 roomImg = s3Uploader.upload(request.getImage());
-
             } catch (Exception e) {
-                e.printStackTrace();
                 throw new RuntimeException("S3 이미지 수정 실패: " + e.getMessage());
             }
         }
 
         vo.setRoomImg(roomImg);
+
+        // ✅ deadline 수정 시 CLOSED → OPEN 복구 처리
+        vo.setStatus(existing.getStatus());
+
+        if ("CLOSED".equals(existing.getStatus())) {
+
+            int current = mapper.countApprovedParticipants(roomId);
+
+            boolean notFull = current < request.getMaxParticipants();
+            boolean deadlineValid = request.getDeadline().isAfter(LocalDate.now());
+
+            if (notFull && deadlineValid) {
+                vo.setStatus("OPEN");
+            }
+        }
 
         mapper.updateRoom(vo);
     }

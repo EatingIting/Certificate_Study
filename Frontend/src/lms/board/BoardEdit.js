@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import "./Board.css";
+import "./BoardCommon.css";
 import { BoardApi } from "./BoardApi";
 
 function BoardEdit() {
@@ -15,6 +15,46 @@ function BoardEdit() {
     let [title, setTitle] = useState("");
     let [content, setContent] = useState("");
     let [isPinned, setIsPinned] = useState(false);
+
+    // 첨부(기존 + 새로 추가)
+    let fileInputRef = useRef(null);
+
+    let [serverAttachments, setServerAttachments] = useState([]); // 서버에 이미 있는 첨부들
+    let [newFiles, setNewFiles] = useState([]); // 새로 추가할 파일들
+
+    let maxFiles = 5;
+    let maxEachBytes = 10 * 1024 * 1024;
+
+    let formatBytes = (bytes) => {
+        if (bytes < 1024) return `${bytes} B`;
+        let kb = bytes / 1024;
+        if (kb < 1024) return `${kb.toFixed(1)} KB`;
+        let mb = kb / 1024;
+        return `${mb.toFixed(1)} MB`;
+    };
+
+    let onPickFiles = (e) => {
+        let picked = Array.from(e.target.files || []);
+        if (picked.length === 0) return;
+
+        // 서버첨부 + 새파일 총합이 maxFiles 넘지 않게
+        let canAdd = Math.max(0, maxFiles - (serverAttachments.length + newFiles.length));
+        let sliced = picked.slice(0, canAdd);
+
+        // 용량 제한
+        sliced = sliced.filter((f) => f.size <= maxEachBytes);
+
+        setNewFiles((prev) => [...prev, ...sliced]);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    let removeServerAttachmentAt = (idx) => {
+        setServerAttachments((prev) => prev.filter((_, i) => i !== idx));
+    };
+
+    let removeNewFileAt = (idx) => {
+        setNewFiles((prev) => prev.filter((_, i) => i !== idx));
+    };
 
     let categoryToCode = (v) => {
         if (!v) return "GENERAL";
@@ -46,6 +86,9 @@ function BoardEdit() {
 
                 // 수정 화면은 조회수 증가시키면 애매해서 false
                 let data = await BoardApi.getDetail(postId, false);
+                let atts = await BoardApi.listAttachments(postId);
+                if (!alive) return;
+                setServerAttachments(Array.isArray(atts) ? atts : []);
                 if (!alive) return;
 
                 let post = data?.post;
@@ -59,8 +102,16 @@ function BoardEdit() {
                 setContent(post.content || "");
                 setIsPinned(!!post.isPinned);
             } catch (e) {
-                if (!alive) return;
-                setError(e?.message || "불러오기 실패");
+            if (!alive) return;
+
+            // 권한 없으면 수정 페이지에서 바로 나가게
+            if (e?.status === 403) {
+                alert(e?.message || "수정 권한이 없습니다.");
+                navigate(`/lms/${subjectId}/board/${postId}`, { replace: true });
+                return;
+            }
+
+            setError(e?.message || "불러오기 실패");
             } finally {
                 if (!alive) return;
                 setLoading(false);
@@ -87,16 +138,41 @@ function BoardEdit() {
         if (!isValid) return;
 
         try {
-        setSubmitting(true);
+            setSubmitting(true);
             setError("");
 
+            // 1) 글 수정
             await BoardApi.updatePost(postId, {
                 category: categoryToCode(category),
                 title: title.trim(),
                 content: content.trim(),
                 isPinned: category === "공지" ? !!isPinned : false,
-                pinned:   category === "공지" ? !!isPinned : false,
             });
+
+            // 2) 새 파일 업로드(있으면)
+            let uploadedMetas = [];
+            if (newFiles.length > 0) {
+                uploadedMetas = await BoardApi.uploadFiles({
+                    roomId: subjectId, // 너 프로젝트에서 subjectId == roomId
+                    postId,
+                    files: newFiles,
+                });
+            }
+
+            // 3) 최종 첨부 리스트 만들기 (기존 남길 것 + 새 업로드)
+            let finalReq = [
+                ...serverAttachments.map((a) => ({
+                    originalName: a.originalName,
+                    fileKey: a.fileKey || null,
+                    url: a.url,
+                    sizeBytes: a.sizeBytes ?? 0,
+                    mimeType: a.mimeType || null,
+                })),
+                ...(Array.isArray(uploadedMetas) ? uploadedMetas : []),
+            ];
+
+            // 4) attachments 전체 교체(PUT)
+            await BoardApi.replaceAttachments(postId, finalReq);
 
             onBack();
         } catch (e2) {
@@ -226,6 +302,80 @@ function BoardEdit() {
                             disabled={submitting}
                         />
                         <div className="bd-hint">{content.length}/5000</div>
+                    </div>
+
+                    {/* 첨부파일 */}
+                    <div className="bd-row">
+                        <label className="bd-label" htmlFor="be-files">
+                            첨부파일
+                        </label>
+
+                        <div className="bd-filebar">
+                            <input
+                                ref={fileInputRef}
+                                id="be-files"
+                                className="bd-file"
+                                type="file"
+                                multiple
+                                onChange={onPickFiles}
+                                disabled={submitting}
+                            />
+                        </div>
+
+                        {/* 기존(서버) 첨부 */}
+                        {serverAttachments.length > 0 ? (
+                            <ul className="bd-filelist">
+                                {serverAttachments.map((a, idx) => (
+                                    <li key={`srv-${a.attachmentId}-${idx}`} className="bd-fileitem">
+                                        <a className="bd-filename" href={a.url} target="_blank" rel="noreferrer">
+                                            {a.originalName}
+                                        </a>
+                                        <span className="bd-filesize">{formatBytes(a.sizeBytes || 0)}</span>
+                                        <button
+                                            type="button"
+                                            className="bd-filedel"
+                                            onClick={() => removeServerAttachmentAt(idx)}
+                                            disabled={submitting}
+                                            title="삭제(저장 시 반영)"
+                                        >
+                                            ✕
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <div className="bd-hint">기존 첨부파일이 없습니다.</div>
+                        )}
+
+                        {/* 새로 추가한 파일 */}
+                        {newFiles.length > 0 && (
+                            <>
+                                <div className="bd-hint" style={{ marginTop: 8 }}>
+                                    새로 추가한 파일
+                                </div>
+                                <ul className="bd-filelist">
+                                    {newFiles.map((f, idx) => (
+                                        <li key={`new-${f.name}-${f.size}-${idx}`} className="bd-fileitem">
+                                            <span className="bd-filename">{f.name}</span>
+                                            <span className="bd-filesize">{formatBytes(f.size)}</span>
+                                            <button
+                                                type="button"
+                                                className="bd-filedel"
+                                                onClick={() => removeNewFileAt(idx)}
+                                                disabled={submitting}
+                                                title="삭제"
+                                            >
+                                                ✕
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+
+                        <div className="bd-hint">
+                            최대 {maxFiles}개 / 개당 {formatBytes(maxEachBytes)} 이하
+                        </div>
                     </div>
 
                     <div className="bd-actions" style={{ justifyContent: "flex-end" }}>

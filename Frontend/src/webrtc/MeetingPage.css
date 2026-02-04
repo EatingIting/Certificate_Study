@@ -60,6 +60,35 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* 그리드 모드: meet-stage가 뷰포트 아래까지 내려가도록 높이 확보 → 채팅창이 잘리지 않도록 */
+.subject-content .meet-layout:has(.layout-grid) {
+  min-height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+}
+
+.subject-content .meet-layout:has(.layout-grid) .meet-main {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.subject-content .meet-layout:has(.layout-grid) .meet-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.subject-content .meet-layout:has(.layout-grid) .layout-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .meet-main {
   flex: 1;
   position: relative;
@@ -1077,6 +1106,7 @@ body {
   width: 100%;
   height: 100%;
   max-width: 1400px;
+  position: relative;
 
   /* 고정 컬럼 수로 변경하여 사이드바 열릴 때 재배치 방지 */
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -1091,6 +1121,23 @@ body {
 
   /* 사이드바 열릴 때 부드러운 전환 */
   transition: none;
+}
+
+/* 그리드 타일: 해당 타일만 PiP 모드일 때 검은화면 + "PiP 모드 이용중" */
+.grid-tile .grid-tile-pip-mode-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: #000;
+  border-radius: inherit;
+  display: flex;
+  align-items: flex-start;
+  padding: 12px;
+}
+
+.grid-tile .grid-tile-pip-mode-overlay .pip-mode-banner {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
 }
 
 /* .video-tile-wrapper {
@@ -1126,6 +1173,90 @@ body {
 .grid-video-area {
   position: relative;
   /* 기준 */
+}
+
+.grid-fullscreen-pip-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 52px;
+
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.grid-fullscreen-pip-btn:hover {
+  background: rgba(151, 199, 147, 0.9);
+  transform: scale(1.08);
+}
+
+/* 그리드 전체화면 시 PiP 버튼 표시 */
+.grid-fullscreen-container:fullscreen .grid-fullscreen-video-area .grid-fullscreen-pip-btn,
+.grid-fullscreen-container:-webkit-full-screen .grid-fullscreen-video-area .grid-fullscreen-pip-btn {
+  bottom: 24px;
+  right: 76px;
+  width: 44px;
+  height: 44px;
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 2500;
+}
+
+.grid-fullscreen-container:hover .grid-fullscreen-pip-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 그리드 일반 모드: 타일별 PiP 버튼 */
+/* 그리드 타일: PiP 버튼 — 전체화면 버튼과 동일 크기·정렬 */
+.grid-tile .grid-tile-pip-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 54px;
+
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.grid-tile:hover .grid-tile-pip-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.grid-tile .grid-tile-pip-btn:hover {
+  background: rgba(151, 199, 147, 0.9);
+  transform: scale(1.1);
 }
 
 .grid-fullscreen-btn {
@@ -1613,6 +1744,15 @@ body {
   transition: margin-right 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
+/* 그리드 전체화면 PiP 모드: 검은화면 오버레이가 영역 전체 덮도록 */
+.grid-fullscreen-video-area .pip-mode-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border-radius: 0;
+  min-height: 0;
+}
+
 .grid-fullscreen-video-area .video-tile {
   position: absolute;
   inset: 0;
@@ -1813,6 +1953,18 @@ body {
   .video-tile.speaking::after {
     animation: none;
   }
+}
+
+/* 전체화면에서는 하늘색 마이크(speaking) 테두리 비표시 */
+body.fullscreen-active .main-stage .video-tile.speaking::after,
+body.fullscreen-active .grid-fullscreen-container .video-tile.speaking::after {
+  opacity: 0 !important;
+  animation: none !important;
+}
+body.fullscreen-active .main-stage .video-tile.speaking,
+body.fullscreen-active .grid-fullscreen-container .video-tile.speaking {
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .video-stream-mock {
@@ -2402,6 +2554,20 @@ body.fullscreen-active .meet-sidebar {
   flex-direction: column;
   gap: 1rem;
   min-height: 0;
+}
+
+/* 그리드 모드: 사이드바 여백 확보 — 참여자 영역 축소 가능, 채팅 영역 항상 보이게 */
+.meet-layout:has(.layout-grid) .meet-sidebar .participants-area {
+  min-height: 120px;
+  max-height: min(360px, 40vh);
+}
+
+.meet-layout:has(.layout-grid) .meet-sidebar .chat-area {
+  min-height: 100px;
+}
+
+.meet-layout:has(.layout-grid) .meet-sidebar .chat-input-area {
+  flex-shrink: 0;
 }
 
 /* 참여자 목록 / 채팅 구분선 */

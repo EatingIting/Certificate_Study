@@ -15,4 +15,6 @@ public interface RoomCreateMapper {
     List<RoomCreateVO> findAllRooms();
 
     RoomCreateVO findRoomById(String roomId);
+
+    int countApprovedParticipants(String roomId);
 }

@@ -161,13 +161,12 @@ export const LMSProvider = ({ children, roomId }) => {
         };
     }, [roomId, refreshUser, fetchRoomMyPage]);
 
-    // 표시용 이름 (nickname(name) 형식)
+    // 표시용 이름 (헤더용: nickname(name) 형식)
     const displayName = user
         ? (() => {
               const roomNick = (roomNickname && roomNickname.trim()) || "";
               const nickname = (user.nickname && user.nickname.trim()) || "";
               const name = (user.name && user.name.trim()) || "";
-              
               // ✅ 방별 닉네임이 있으면 최우선
               if (roomNick.length > 0 && name.length > 0) {
                   return `${roomNick}(${name})`;

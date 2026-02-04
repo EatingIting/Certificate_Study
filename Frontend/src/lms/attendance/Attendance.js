@@ -36,6 +36,20 @@ const minutesBetween = (startIso, endIso) => {
   return Math.floor((e - s) / 60000);
 };
 
+/** 회차 시간(studyDate+startTime~endTime)과 참여(joinAt~leaveAt)이 겹치는 분. 스케줄 밖 참여는 인정하지 않음 */
+const minutesOverlapInSession = (log) => {
+  if (!log?.studyDate || !log?.startTime || !log?.endTime || !log?.joinAt || !log?.leaveAt) return 0;
+  const pad = (t) => (String(t).length >= 8 ? t : t + ":00");
+  const sessionStart = new Date(log.studyDate + "T" + pad(log.startTime)).getTime();
+  const sessionEnd = new Date(log.studyDate + "T" + pad(log.endTime)).getTime();
+  const joinMs = toMs(log.joinAt);
+  const leaveMs = toMs(log.leaveAt);
+  const overlapStart = Math.max(joinMs, sessionStart);
+  const overlapEnd = Math.min(leaveMs, sessionEnd);
+  if (overlapEnd <= overlapStart) return 0;
+  return Math.floor((overlapEnd - overlapStart) / 60000);
+};
+
 const calcTotalMinutes = (startHHMM, endHHMM) => {
   if (!startHHMM || !endHHMM) return 0;
   const [sh, sm] = startHHMM.split(":").map(Number);
@@ -45,13 +59,16 @@ const calcTotalMinutes = (startHHMM, endHHMM) => {
   return Math.max(0, end - start);
 };
 
-/** 회차별 totalMin 우선: log에 startTime/endTime 있으면 그걸로, 없으면 공통 totalMin 사용 */
+/** 회차별 totalMin 우선: 참여시간은 회차 구간과의 오버랩으로만 인정 (스케줄 밖 입장은 결석) */
 const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
   const totalMin =
     log?.startTime && log?.endTime
       ? calcTotalMinutes(log.startTime, log.endTime)
       : fallbackTotalMin;
-  const attendedMin = minutesBetween(log?.joinAt, log?.leaveAt);
+  const attendedMin =
+    log?.studyDate && log?.startTime && log?.endTime
+      ? minutesOverlapInSession(log)
+      : minutesBetween(log?.joinAt, log?.leaveAt);
   const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
   const isPresent = ratio >= requiredRatio;
   return { attendedMin, ratio, isPresent };

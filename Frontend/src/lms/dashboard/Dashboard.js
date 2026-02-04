@@ -227,6 +227,19 @@ function Dashboard({ setActiveMenu }) {
           return Math.floor((e - s) / 60000);
         };
 
+        const minutesOverlapInSession = (log) => {
+          if (!log?.studyDate || !log?.startTime || !log?.endTime || !log?.joinAt || !log?.leaveAt) return 0;
+          const pad = (t) => (String(t).length >= 8 ? t : t + ":00");
+          const sessionStart = new Date(log.studyDate + "T" + pad(log.startTime)).getTime();
+          const sessionEnd = new Date(log.studyDate + "T" + pad(log.endTime)).getTime();
+          const joinMs = toMs(log.joinAt);
+          const leaveMs = toMs(log.leaveAt);
+          const overlapStart = Math.max(joinMs, sessionStart);
+          const overlapEnd = Math.min(leaveMs, sessionEnd);
+          if (overlapEnd <= overlapStart) return 0;
+          return Math.floor((overlapEnd - overlapStart) / 60000);
+        };
+
         const calcTotalMinutes = (startHHMM, endHHMM) => {
           if (!startHHMM || !endHHMM) return 0;
           const [sh, sm] = startHHMM.split(":").map(Number);
@@ -236,14 +249,17 @@ function Dashboard({ setActiveMenu }) {
           return Math.max(0, end - start);
         };
 
-        // ✅ Attendance 페이지 로직과 동일하게: 회차별 startTime/endTime 우선
+        // ✅ 참여시간 = 회차 구간(studyDate+startTime~endTime)과의 오버랩만 인정 (스케줄 밖 입장은 결석)
         const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
           const totalMin =
             log?.startTime && log?.endTime
               ? calcTotalMinutes(log.startTime, log.endTime)
               : fallbackTotalMin;
 
-          const attendedMin = minutesBetween(log?.joinAt, log?.leaveAt);
+          const attendedMin =
+            log?.studyDate && log?.startTime && log?.endTime
+              ? minutesOverlapInSession(log)
+              : minutesBetween(log?.joinAt, log?.leaveAt);
           const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
           const isPresent = ratio >= requiredRatio;
 

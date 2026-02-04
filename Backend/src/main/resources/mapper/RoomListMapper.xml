@@ -43,7 +43,6 @@
                 END AS subCategoryName
 
         FROM room r
-
                  LEFT JOIN category c ON r.categoryId = c.id
                  LEFT JOIN category mid ON c.parent_id = mid.id
 
@@ -81,6 +80,7 @@
         DELETE FROM room
         WHERE room_id = #{roomId}
     </delete>
+
 
     <!-- 관심 자격증 기반 모집방 조회 -->
     <select id="selectRoomsByCategoryIds"
@@ -139,5 +139,18 @@
     </select>
 
 
+    <!-- CLOSED 방 다시 OPEN 처리 -->
+    <update id="reopenValidRooms">
+        UPDATE room r
+        SET r.status = 'OPEN'
+        WHERE r.status = 'CLOSED'
+          AND r.deadline &gt;= CURDATE()
+          AND (
+                  SELECT COUNT(*)
+                  FROM room_join_request rjr
+                  WHERE rjr.room_id = r.room_id
+                    AND rjr.status = '승인'
+              ) &lt; r.max_participants
+    </update>
 
 </mapper>
