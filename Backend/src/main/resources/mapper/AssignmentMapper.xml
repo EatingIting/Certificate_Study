@@ -64,21 +64,14 @@
         u.email AS userId,
 
         CONCAT(
-        CASE
-        WHEN m.role = 'HOST' THEN '방장'
-        ELSE COALESCE(m.request_user_nickname, '방장') -- 사실 MEMBER면 nickname 있음
-        END,
-        '(',
-        CASE
-        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
-        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
-        ELSE CONCAT(
-        SUBSTRING(u.name, 1, 1),
-        REPEAT('*', CHAR_LENGTH(u.name) - 2),
-        SUBSTRING(u.name, -1)
-        )
-        END,
-        ')'
+            COALESCE(NULLIF(TRIM(m.request_user_nickname), ''), '방장'),
+            '(',
+            CASE
+                WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
+                WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
+                ELSE CONCAT(SUBSTRING(u.name, 1, 1), REPEAT('*', CHAR_LENGTH(u.name) - 2), SUBSTRING(u.name, -1))
+            END,
+            ')'
         ) AS memberName,
 
         s.submitted_at AS submittedAt,
@@ -90,19 +83,23 @@
         FROM assignments a
 
         JOIN (
-        /* HOST: room 테이블에서 호스트 */
+        /* HOST: 방장도 room_join_request 닉네임 우선, 없으면 room.hostUserNickname (출석부/채팅과 동일) */
         SELECT
             a1.room_id,
             r.host_user_email AS user_email,
-            NULL AS request_user_nickname,
+            COALESCE(rjr.request_user_nickname, r.hostUserNickname) AS request_user_nickname,
             'HOST' AS role
         FROM assignments a1
         JOIN room r ON r.room_id = a1.room_id
+        LEFT JOIN room_join_request rjr
+            ON rjr.room_id = a1.room_id
+               AND rjr.request_user_email = r.host_user_email
+               AND TRIM(rjr.status) IN ('승인', '승인됨', 'APPROVED')
         WHERE a1.assignment_id = #{assignmentId}
 
         UNION ALL
 
-        /* 승인 MEMBER (다국어/공백 포함) */
+        /* 승인 MEMBER */
         SELECT
             rjr.room_id,
             rjr.request_user_email AS user_email,
@@ -125,7 +122,7 @@
         WHERE a.assignment_id = #{assignmentId}
 
         ORDER BY
-        (m.role = 'HOST') DESC,      -- 방장 위로
+        (m.role = 'HOST') DESC,
         (s.submission_id IS NULL) ASC,
         s.submitted_at DESC,
         memberName ASC;
@@ -157,21 +154,14 @@
             u.email AS userId,
 
             CONCAT(
-                    CASE
-                        WHEN m.role = 'HOST' THEN '방장'
-                        ELSE COALESCE(m.request_user_nickname, '방장')
-                        END,
-                    '(',
-                    CASE
-                        WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
-                        WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
-                        ELSE CONCAT(
-                                SUBSTRING(u.name, 1, 1),
-                                REPEAT('*', CHAR_LENGTH(u.name) - 2),
-                                SUBSTRING(u.name, -1)
-                             )
-                        END,
-                    ')'
+                COALESCE(NULLIF(TRIM(m.request_user_nickname), ''), '방장'),
+                '(',
+                CASE
+                    WHEN CHAR_LENGTH(u.name) = 1 THEN u.name
+                    WHEN CHAR_LENGTH(u.name) = 2 THEN CONCAT(SUBSTRING(u.name, 1, 1), '*')
+                    ELSE CONCAT(SUBSTRING(u.name, 1, 1), REPEAT('*', CHAR_LENGTH(u.name) - 2), SUBSTRING(u.name, -1))
+                END,
+                ')'
             ) AS memberName,
 
             a.assignment_id AS assignmentId,
@@ -183,18 +173,22 @@
         FROM assignments a
 
                  JOIN (
-            /* HOST: room 테이블 호스트 */
+            /* HOST: 방장도 room_join_request 닉네임 우선, 없으면 room.hostUserNickname */
             SELECT
                 r.room_id,
                 r.host_user_email AS user_email,
-                NULL AS request_user_nickname,
+                COALESCE(rjr.request_user_nickname, r.hostUserNickname) AS request_user_nickname,
                 'HOST' AS role
             FROM room r
+            LEFT JOIN room_join_request rjr
+                ON rjr.room_id = r.room_id
+                   AND rjr.request_user_email = r.host_user_email
+                   AND TRIM(rjr.status) IN ('승인', '승인됨', 'APPROVED')
             WHERE r.room_id = #{roomId}
 
             UNION ALL
 
-            /* 승인 MEMBER (다국어/공백 포함) */
+            /* 승인 MEMBER */
             SELECT
                 rjr.room_id,
                 rjr.request_user_email AS user_email,

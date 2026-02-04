@@ -32,7 +32,13 @@ public class AiController {
     @PostMapping("/chat/with-submission")
     public ResponseEntity<String> chatWithSubmission(@RequestBody Map<String, String> request) {
         String message = request.get("message");
+        if (message != null && !message.isBlank()) {
+            message = "사용자 질문: " + message;
+        }
+
         String submissionIdStr = request.get("submissionId");
+
+
         if (submissionIdStr == null || submissionIdStr.isBlank()) {
             return ResponseEntity.badRequest().body("submissionId가 필요합니다.");
         }
@@ -44,7 +50,13 @@ public class AiController {
         }
         try {
             String answer = aiSubmissionService.chatWithSubmission(submissionId, message);
-            return ResponseEntity.ok(answer);
+            // "1. 분류: SUMMARY/PROBLEM" 줄과 "2. 답변:" / "2 답변:" 문구 제거
+            if (answer != null) {
+                answer = answer.replaceFirst("(?m)^\\s*1\\.\\s*분류\\s*:\\s*(SUMMARY|PROBLEM)\\s*\\n?", "");
+                answer = answer.replaceFirst("(?m)^\\s*2\\.?\\s*답변\\s*:\\s*\\n?", "");
+                answer = answer.trim();
+            }
+            return ResponseEntity.ok(answer != null ? answer : "");
         } catch (Exception e) {
             log.error("/api/ai/chat/with-submission 실패. submissionId={}", submissionId, e);
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -70,6 +82,7 @@ public class AiController {
                 "반드시 SUMMARY 또는 PROBLEM 중 하나만 출력해.";
 
         String raw = openAiService.getContents(prompt);
+
         String normalized = raw == null ? "" : raw.trim().toUpperCase();
         if (normalized.contains("SUMMARY")) return ResponseEntity.ok("SUMMARY");
         if (normalized.contains("PROBLEM")) return ResponseEntity.ok("PROBLEM");
