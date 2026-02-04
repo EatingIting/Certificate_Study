@@ -2,6 +2,7 @@ import "./Main.css";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
+import { toBackendUrl } from "../utils/backendUrl";
 import heroImg from "./메인메인.png";
 
 function Main() {
@@ -78,7 +79,8 @@ function Main() {
 
         if (img.startsWith("http")) return img;
 
-        return `http://localhost:8080${img}`;
+        // 스터디 썸네일 이미지를 EC2 백엔드 기준 URL로 변환
+        return toBackendUrl(img);
     };
 
     return (

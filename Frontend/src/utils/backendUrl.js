@@ -1,24 +1,25 @@
 // Frontend runtime backend URL helpers.
 // 목적:
-// - 개발(React dev server) / 배포(다른 PC에서 접속) 환경 모두에서
-//   'localhost' 하드코딩으로 생기는 네트워크 오류를 피한다.
+// - 개발(React dev server) / 운영(nginx 리버스 프록시) 환경을 분리해서 생각한다.
+// - 운영 환경에서는 nginx가 `/api`, `/ws`, `/sfu` 를 각각 Spring / SFU 로 프록시한다.
+// - 프론트에서는 IP/포트 하드코딩 없이 "현재 접속한 호스트"만 사용한다.
 //
-// 우선순위:
-// 1) REACT_APP_BACKEND_ORIGIN (예: "https://example.com" 또는 "http://192.168.0.10:8080")
-// 2) 기본값: 현재 hostname + 8080 포트 (http)
+// ✅ 권장 구조
+// - 개발 환경: localhost:3000  → (setupProxy.js) →  localhost:8080(SPRING) / 4000(SFU)
+// - 운영 환경: 3.35.119.96:80 → (nginx)        →  localhost:8080(SPRING) / 4000(SFU)
+//
+// 따라서 프론트 기준 기본값은 다음과 같다.
+// - HTTP API:  /api/...
+// - WS       : ws(s)://{현재호스트}/ws/...
+// - SFU      : ws(s)://{현재호스트}/sfu/...
 
 export function getBackendOrigin() {
     const envOrigin = process.env.REACT_APP_BACKEND_ORIGIN;
     if (envOrigin && typeof envOrigin === "string") {
         return envOrigin.replace(/\/+$/, "");
     }
-
-    // ✅ https 접속 시: nginx 프록시를 통해 같은 호스트로 요청 (포트 없음)
-    // ✅ http 접속 시: 직접 백엔드 8080 포트로 요청
-    if (window.location.protocol === "https:") {
-        return `https://${window.location.hostname}`;
-    }
-    return `http://${window.location.hostname}:8080`;
+    // 기본값: 빈 문자열 → 상대 경로(`/api`, `/files` 등)를 그대로 사용
+    return "";
 }
 
 export function getWsProtocol() {
@@ -27,28 +28,16 @@ export function getWsProtocol() {
 }
 
 export function getHostnameWithPort() {
-    // ✅ 요청사항:
-    // - https로 접속하면 포트를 붙이지 않음 (nginx 443/기본 포트)
-    // - http로 접속하면 포트를 유지 (개발 3000 등)
-    if (window.location.protocol === "https:") {
-        return window.location.hostname;
-    }
-    const port = window.location.port;
-    return `${window.location.hostname}${port ? `:${port}` : ""}`;
+    // 현재 접속 중인 호스트 + 포트 그대로 사용 (dev: localhost:3000, prod: 3.35.119.96 등)
+    const { hostname, port } = window.location;
+    return port ? `${hostname}:${port}` : hostname;
 }
 
-export function getWsBackendOrigin(port = 8080) {
+export function getWsBackendOrigin() {
     const envOrigin = process.env.REACT_APP_BACKEND_WS_ORIGIN;
-    if (envOrigin && typeof envOrigin === "string") {
-        return envOrigin.replace(/\/+$/, "");
-    }
+    if (envOrigin) return envOrigin.replace(/\/+$/, "");
 
-    // ✅ https 접속 시: nginx 프록시를 통해 wss로 연결 (포트 없음)
-    // ✅ http 접속 시: 직접 백엔드 포트로 ws 연결
-    if (window.location.protocol === "https:") {
-        return `wss://${window.location.hostname}`;
-    }
-    return `ws://${window.location.hostname}:${port}`;
+    return `${getWsProtocol()}://${getHostnameWithPort()}`;
 }
 
 export function toBackendUrl(pathOrUrl) {
@@ -62,13 +51,13 @@ export function toBackendUrl(pathOrUrl) {
     return `${origin}${path}`;
 }
 
-export function toWsBackendUrl(pathOrUrl, port = 8080) {
+export function toWsBackendUrl(pathOrUrl) {
     if (!pathOrUrl) return "";
 
     // 이미 절대 URL이면 그대로 사용
     if (/^wss?:\/\//i.test(pathOrUrl)) return pathOrUrl;
 
-    const origin = getWsBackendOrigin(port);
+    const origin = getWsBackendOrigin();
     const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
     return `${origin}${path}`;
 }
