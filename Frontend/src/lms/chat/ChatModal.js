@@ -114,6 +114,7 @@ const ChatModal = ({ roomId, roomName }) => {
     const ws = useRef(null);        // 웹소켓 객체
     const scrollRef = useRef(null); // 스크롤 자동 이동용
     const modalRef = useRef(null);  // 모달 DOM
+    const streamingTimers = useRef(new Map()); // AI 타자 효과용 타이머
 
     // =================================================================
     // 2. 유틸리티 및 초기 설정
@@ -159,6 +160,58 @@ const ChatModal = ({ roomId, roomName }) => {
         hours = hours % 12;
         hours = hours ? hours : 12;
         return `${ampm} ${hours}:${minutes < 10 ? '0' + minutes : minutes}`;
+    };
+
+    // AI 답변을 한 글자씩 보여주는 타자 효과
+    const startStreamingAiMessage = (fullText = "", extra = {}, options = {}) => {
+        const { clearLoading = false } = options;
+        const text = typeof fullText === "string" ? fullText : String(fullText || "");
+        const streamId = `stream-${Date.now()}-${Math.random()}`;
+        const createdAt = extra.createdAt || new Date().toISOString();
+
+        setAiMessages((prev) => {
+            const base = clearLoading ? prev.filter((m) => !m.isLoading) : prev;
+            return [
+                ...base,
+                {
+                    userId: "AI_BOT",
+                    userName: "AI 튜터",
+                    isAiResponse: true,
+                    message: "",
+                    streamId,
+                    createdAt,
+                    ...extra
+                }
+            ];
+        });
+
+        // 타자 속도 튜닝: 느리게 보이도록 한 번에 추가되는 글자 수를 줄임
+        // (너무 긴 답변도 무한히 오래 걸리지 않게, 길이에 따라 최소 chunk를 조금씩 올림)
+        const chunk = Math.max(1, Math.round(text.length / 180));
+        const timer = setInterval(() => {
+            setAiMessages((prev) =>
+                prev.map((m) =>
+                    m.streamId === streamId
+                        ? { ...m, message: text.slice(0, Math.min(m.message.length + chunk, text.length)) }
+                        : m
+                )
+            );
+
+            const current = streamingTimers.current.get(streamId)?.progress || 0;
+            const next = current + chunk;
+            streamingTimers.current.set(streamId, { timer, progress: next });
+            if (next >= text.length) {
+                clearInterval(timer);
+                streamingTimers.current.delete(streamId);
+                setAiMessages((prev) =>
+                    prev.map((m) =>
+                        m.streamId === streamId ? { ...m, message: text, streamId: undefined } : m
+                    )
+                );
+            }
+        }, 35);
+
+        streamingTimers.current.set(streamId, { timer, progress: 0 });
     };
 
     // 🟢 [API] 요약노트/문제노트 저장 (type: 'SUMMARY' | 'PROBLEM')
@@ -672,6 +725,14 @@ const ChatModal = ({ roomId, roomName }) => {
         return () => clearTimeout(t);
     }, [loadingPhaseForSubmission]);
 
+    // 컴포넌트 언마운트 시 진행 중인 스트리밍 정리
+    useEffect(() => {
+        return () => {
+            streamingTimers.current.forEach(({ timer }) => clearInterval(timer));
+            streamingTimers.current.clear();
+        };
+    }, []);
+
 
     // 메시지 추가 시 스크롤 자동 이동 (열려있을 때만)
     useEffect(() => {
@@ -825,12 +886,6 @@ const ChatModal = ({ roomId, roomName }) => {
             const userMessageIndex = currentMessages.length;
             setAiMessages(prev => [...prev, { userId: myInfo.userId, message: text, createdAt: new Date().toISOString(), isAiResponse: false }]);
 
-            // '과제'가 포함된 모든 입력 → 해당 메시지 아래에 과제 목록 표시, AI 호출 안 함 (과제목록, 과제 목록, 과제 제출 현황, 과제 현황 등)
-            if (text.includes("과제")) {
-                setShowAssignmentListAfterIndex(userMessageIndex);
-                return;
-            }
-
             // '출석'이 포함된 모든 입력 → 해당 메시지 아래에 전체 출석 리스트 표시, AI 호출 안 함
             if (text.includes("출석")) {
                 setShowAttendanceListAfterIndex(userMessageIndex);
@@ -924,6 +979,25 @@ const ChatModal = ({ roomId, roomName }) => {
                 (text.includes("객관식") && text.includes("문제")) ||
                 (text.includes("주관식") && (text.includes("내줘") || text.includes("내주") || text.includes("문제")));
 
+            // '과제' 키워드가 있어도 "요약/예상문제" 의도면 목록을 띄우지 않음
+            // (예: "과제를 요약해줘"가 과제목록으로 빠지는 문제 방지)
+            const trimmedText = (text || "").trim();
+            const isAssignmentListIntent =
+                trimmedText === "과제" ||
+                trimmedText === "과제!" ||
+                trimmedText === "과제?" ||
+                text.includes("과제 목록") ||
+                text.includes("과제목록") ||
+                text.includes("과제 보여") ||
+                text.includes("과제 알려") ||
+                text.includes("과제 제출") ||
+                text.includes("제출 현황") ||
+                text.includes("과제 현황");
+            if (text.includes("과제") && isAssignmentListIntent && !hasSummaryKeyword && !hasProblemKeyword) {
+                setShowAssignmentListAfterIndex(userMessageIndex);
+                return;
+            }
+
             // 프롬프트에 제출한 사람 닉네임이 있으면: 미제출이면 안내, 제출+요약/문제 키워드 있으면 바로 진행, 없으면 "요약할까요? 예상문제?"만 표시
             const matchedSubmission = findSubmissionNameFromMessage(text, submissionListAfterMessage);
             if (matchedSubmission) {
@@ -983,20 +1057,14 @@ const ChatModal = ({ roomId, roomName }) => {
                     });
                     const replyText = res.data != null ? String(res.data) : "";
                     setLoadingPhaseForSubmission(null);
-                    setAiMessages((prev) => {
-                        const clean = prev.filter((msg) => !msg.isLoading);
-                        return [
-                            ...clean,
-                            {
-                                userId: "AI_BOT",
-                                userName: "AI 튜터",
-                                message: replyText,
-                                createdAt: new Date().toISOString(),
-                                isAiResponse: true,
-                                saveButtons: { question: text, answer: replyText, type: loadingType }
-                            }
-                        ];
-                    });
+                    startStreamingAiMessage(
+                        replyText,
+                        {
+                            createdAt: new Date().toISOString(),
+                            saveButtons: { question: text, answer: replyText, type: loadingType }
+                        },
+                        { clearLoading: true }
+                    );
                 } catch (err) {
                     setLoadingPhaseForSubmission(null);
                     const is400 = err.response?.status === 400;
@@ -1049,10 +1117,11 @@ const ChatModal = ({ roomId, roomName }) => {
                     aiReply =
                         "안녕하세요! 과제 제출 현황이나 목록이 궁금하시다면 '과제 목록을 보여줘' 또는 '과제'라고 입력해보세요. 과제 목록을 확인한 뒤, 원하는 과제의 제출한 사람을 선택하면 요약이나 예상문제를 요청할 수 있어요.";
                 }
-                setAiMessages(prev => {
-                    const clean = prev.filter(msg => !msg.isLoading);
-                    return [...clean, { userId: 'AI_BOT', userName: 'AI 튜터', message: aiReply, createdAt: new Date().toISOString(), isAiResponse: true }];
-                });
+                startStreamingAiMessage(
+                    aiReply,
+                    { createdAt: new Date().toISOString() },
+                    { clearLoading: true }
+                );
             } catch (err) {
                 setAiMessages(prev => prev.map(msg => msg.isLoading ? { ...msg, message: "AI 오류", isLoading: false } : msg));
             }
