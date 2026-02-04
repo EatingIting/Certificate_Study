@@ -27,5 +27,7 @@ public interface BoardPostService {
 
     void incrementViewCount(long postId);
 
-    String getWriterIdByPostId(long postId);
+    void requireCanEdit(long postId, String email);
+
+    Map<String, Boolean> getPostPermissions(long postId, String email);
 }

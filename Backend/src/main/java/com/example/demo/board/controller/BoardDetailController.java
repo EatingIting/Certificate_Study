@@ -47,12 +47,8 @@ public class BoardDetailController {
 
         BoardPostDetailResponse body = BoardConverter.toPostDetailResponse(vo);
 
-        String myUserId = vo.getPost().getUserId();
-        String postUserId = vo.getPost().getUserId();
-
-        boolean canEdit = postUserId != null && postUserId.equals(myUserId);
-        body.setCanEdit(canEdit);
-        body.setCanDelete(canEdit);
+        body.setCanEdit(vo.isCanEdit());
+        body.setCanDelete(vo.isCanEdit());
 
         return ResponseEntity.ok(body);
     }

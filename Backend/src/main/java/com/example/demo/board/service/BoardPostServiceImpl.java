@@ -34,6 +34,7 @@ public class BoardPostServiceImpl implements BoardPostService {
     }
 
     private void requireMember(String roomId, String email) {
+        // 방장은 room.host_user_email에만 있고 room_join_request에 없을 수 있으므로, 방장이면 통과
         String hostEmail = roomParticipantMapper.selectHostEmail(roomId);
         if (hostEmail != null && email != null
                 && hostEmail.trim().equalsIgnoreCase(email.trim())) {
@@ -45,13 +46,14 @@ public class BoardPostServiceImpl implements BoardPostService {
 
     private void requireHost(String roomId, String email) {
         String hostEmail = roomParticipantMapper.selectHostEmail(roomId);
-        if (hostEmail == null || !hostEmail.equals(email)) {
+        if (hostEmail == null || email == null || !hostEmail.trim().equalsIgnoreCase(email.trim())) {
             throw new AccessDeniedException("방장만 접근 가능합니다.");
         }
     }
-
     private boolean isNotice(BoardPostVO post) {
-        return post != null && "공지".equals(post.getCategory());
+        if (post == null || post.getCategory() == null) return false;
+        String c = post.getCategory();
+        return "공지".equals(c) || "NOTICE".equalsIgnoreCase(c);
     }
 
     @Override
@@ -78,7 +80,7 @@ public class BoardPostServiceImpl implements BoardPostService {
         BoardPostVO post = boardPostMapper.selectPostById(postId);
         if (post == null) return null;
 
-        requireMember(post.getRoomId(), email);
+        requireMember(post.getRoomId(), email); // post에 roomId 있어야 함(보통 있음)
         return post;
     }
 
@@ -89,10 +91,7 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         post.setUserId(getUserIdByEmail(email));
         int inserted = boardPostMapper.insertPost(post);
-
-        if (inserted == 0 || post.getPostId() == null)
-            throw new IllegalStateException("게시글 등록에 실패했습니다.");
-
+        if (inserted == 0 || post.getPostId() == null) throw new IllegalStateException("게시글 등록에 실패했습니다.");
         return post.getPostId();
     }
 
@@ -112,9 +111,7 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         post.setUserId(getUserIdByEmail(email));
         int updated = boardPostMapper.updatePost(post);
-
-        if (updated == 0)
-            throw new IllegalStateException("게시글 수정 불가");
+        if (updated == 0) throw new IllegalStateException("게시글 수정 불가 (작성자 아님/삭제됨/존재하지 않음)");
     }
 
     @Override
@@ -124,6 +121,7 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         requireMember(saved.getRoomId(), email);
 
+        // 공지글: 방장만 삭제
         if (isNotice(saved)) {
             requireHost(saved.getRoomId(), email);
             int updated = boardPostMapper.softDeletePostByHost(postId);
@@ -131,11 +129,26 @@ public class BoardPostServiceImpl implements BoardPostService {
             return;
         }
 
+        // 일반글: 작성자 먼저 시도
         String userId = getUserIdByEmail(email);
         int updated = boardPostMapper.softDeletePost(postId, userId);
+        if (updated > 0) return;
 
-        if (updated == 0)
-            throw new IllegalStateException("게시글 삭제 불가");
+        // 여기서 requireHost를 바로 호출하지 말고,
+        // 방장인지 확인해서 메시지를 더 정확히 내기
+        String hostEmail = roomParticipantMapper.selectHostEmail(saved.getRoomId());
+        boolean isHost = hostEmail != null && email != null
+                && hostEmail.trim().equalsIgnoreCase(email.trim());
+
+        if (!isHost) {
+            throw new AccessDeniedException("삭제 권한이 없습니다. (작성자 또는 방장만 삭제 가능)");
+        }
+
+        // 방장이면 방장 삭제 수행
+        int updatedByHost = boardPostMapper.softDeletePostByHost(postId);
+        if (updatedByHost == 0) {
+            throw new IllegalStateException("게시글 삭제 실패(이미 삭제됨/존재하지 않음)");
+        }
     }
 
     @Override
@@ -145,18 +158,16 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         requireMember(saved.getRoomId(), email);
 
-        if (isNotice(saved)) {
-            requireHost(saved.getRoomId(), email);
-            int updated = boardPostMapper.updatePinnedByHost(postId, isPinned);
-            if (updated == 0) throw new IllegalStateException("공지글 고정 변경 실패");
-            return;
+        // pinned는 공지글에서만
+        if (!isNotice(saved)) {
+            throw new AccessDeniedException("상단 고정은 공지글에서만 가능합니다.");
         }
 
-        String userId = getUserIdByEmail(email);
-        int updated = boardPostMapper.updatePinned(postId, userId, isPinned);
+        // 공지글 pinned는 방장만
+        requireHost(saved.getRoomId(), email);
 
-        if (updated == 0)
-            throw new IllegalStateException("고정 변경 불가");
+        int updated = boardPostMapper.updatePinnedByHost(postId, isPinned);
+        if (updated == 0) throw new IllegalStateException("공지글 고정 변경 실패");
     }
 
     @Override
@@ -164,8 +175,48 @@ public class BoardPostServiceImpl implements BoardPostService {
         boardPostMapper.incrementViewCount(postId);
     }
 
+    public void requireCanEdit(long postId, String email) {
+        BoardPostVO saved = boardPostMapper.selectPostById(postId);
+        if (saved == null) throw new IllegalStateException("게시글이 존재하지 않습니다.");
+
+        requireMember(saved.getRoomId(), email);
+
+        // 공지글: 방장만 수정 가능
+        if (isNotice(saved)) {
+            requireHost(saved.getRoomId(), email);
+            return;
+        }
+
+        // 일반글: 작성자만 수정 가능
+        String myUserId = getUserIdByEmail(email);
+        if (!myUserId.equals(saved.getUserId())) {
+            throw new AccessDeniedException("작성자만 수정할 수 있습니다.");
+        }
+    }
+
     @Override
-    public String getWriterIdByPostId(long postId) {
-        return boardPostMapper.findWriterIdByPostId(postId);
+    public Map<String, Boolean> getPostPermissions(long postId, String email) {
+        BoardPostVO saved = boardPostMapper.selectPostById(postId);
+        if (saved == null) throw new IllegalStateException("게시글이 존재하지 않습니다.");
+
+        requireMember(saved.getRoomId(), email);
+
+        // 내 userId(UUID)
+        String myUserId = getUserIdByEmail(email);
+
+        // 작성자 여부(UUID vs UUID)
+        boolean owner = myUserId != null && myUserId.equals(saved.getUserId());
+
+        // 방장 여부(email vs hostEmail)
+        String hostEmail = roomParticipantMapper.selectHostEmail(saved.getRoomId());
+        boolean host = hostEmail != null && email != null
+                && hostEmail.trim().equalsIgnoreCase(email.trim());
+
+        boolean notice = isNotice(saved);
+
+        boolean canEdit = notice ? host : owner;
+        boolean canDelete = notice ? host : (owner || host);
+
+        return Map.of("canEdit", canEdit, "canDelete", canDelete);
     }
 }
