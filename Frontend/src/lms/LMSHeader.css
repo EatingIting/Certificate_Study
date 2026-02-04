@@ -64,6 +64,8 @@
 
 .lms-header-right svg {
     cursor: pointer;
+    display: block;
+    vertical-align: middle;
 }
 
 .host-badge {
@@ -91,4 +93,114 @@
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Bell 전체 wrapper — 옆 아이콘과 같은 줄에 맞춤 */
+.notif-wrapper {
+    position: relative;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notif-wrapper svg {
+    display: block;
+    vertical-align: middle;
+}
+
+/* 빨간 숫자 배지 */
+.notif-badge {
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    background: red;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 드롭다운 박스 */
+.notif-dropdown {
+    position: absolute;
+    top: 32px;
+    right: 0;
+    width: 280px;
+
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+
+    padding: 12px;
+    z-index: 9999;
+
+    /* 알림 많으면 스크롤 */
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+/* 제목 */
+.notif-title {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 12px;
+    color: #111827;
+}
+
+/* 알림 없음 */
+.notif-empty {
+    font-size: 13px;
+    color: gray;
+    text-align: center;
+    padding: 12px;
+}
+
+/* 알림 하나 */
+.notif-item {
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+
+    background: #f9fafb;
+    transition: 0.2s;
+    cursor: pointer;
+
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* hover */
+.notif-item:hover {
+    background: #eef6ff;
+}
+
+/* 게시글 제목 */
+.notif-item strong {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1f2937;
+
+    /* 제목 길면 ... 처리 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 댓글 미리보기 */
+.notif-item p {
+    font-size: 12px;
+    margin: 0;
+    color: #555;
+
+    /* 여러 줄 방지 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

@@ -84,7 +84,10 @@ public class ApplicationServiceImpl implements ApplicationService {
             String applyMessage
     ) {
 
-        // 성별 제한 검사
+        System.out.println("===== 신청 요청 들어옴 =====");
+        System.out.println("신청자 이메일: " + requestUserEmail);
+        System.out.println("신청자 닉네임: " + requestUserNickname);
+        System.out.println("스터디 roomId: " + roomId);
 
         String userGender =
                 applicationMapper.getUserGender(requestUserEmail);
@@ -96,11 +99,9 @@ public class ApplicationServiceImpl implements ApplicationService {
             throw new IllegalStateException("성별 제한으로 신청할 수 없습니다.");
         }
 
-        // 현재 신청 상태 조회
         String status =
                 applicationMapper.findStatus(roomId, requestUserEmail);
 
-        // 신청한 적 없음 → insert
         if (status == null) {
 
             int result = applicationMapper.insertApplication(
@@ -115,18 +116,22 @@ public class ApplicationServiceImpl implements ApplicationService {
                 throw new IllegalStateException("본인이 작성한 스터디에는 신청할 수 없습니다.");
             }
 
-            // 방장에게 실시간 WebSocket 알림 보내기
+            System.out.println("신청 DB 저장 완료");
 
-            // 1) roomId로 방장 이메일 조회
             String hostEmail =
                     applicationMapper.getHostEmailByRoomId(roomId);
 
-            // 2) hostEmail → hostUserId 변환
+            System.out.println("방장 이메일 hostEmail: " + hostEmail);
+
             String hostUserId =
                     userMapper.findUserIdByEmail(hostEmail);
 
-            // 3) 방장에게 알림 전송
+            System.out.println("방장 userId hostUserId: " + hostUserId);
+
+
             if (hostUserId != null) {
+                System.out.println("방장에게 WebSocket 알림 전송 시도");
+
                 notificationHandler.sendToOwner(
                         hostUserId,
                         requestUserNickname + " 님이 스터디 신청을 보냈습니다!"
@@ -136,7 +141,6 @@ public class ApplicationServiceImpl implements ApplicationService {
             return;
         }
 
-        // 거절 상태면 → update로 재신청
         if ("거절".equals(status)) {
 
             applicationMapper.reapply(
@@ -146,12 +150,15 @@ public class ApplicationServiceImpl implements ApplicationService {
                     applyMessage
             );
 
-            // 재신청도 방장에게 알림 보내기
+            System.out.println("재신청 DB 업데이트 완료");
+
             String hostEmail =
                     applicationMapper.getHostEmailByRoomId(roomId);
 
             String hostUserId =
                     userMapper.findUserIdByEmail(hostEmail);
+
+            System.out.println("재신청 방장 userId: " + hostUserId);
 
             if (hostUserId != null) {
                 notificationHandler.sendToOwner(
@@ -163,7 +170,7 @@ public class ApplicationServiceImpl implements ApplicationService {
             return;
         }
 
-        // 신청중 또는 승인 상태면 재신청 불가
         throw new IllegalStateException("이미 신청 중이거나 승인된 스터디입니다.");
     }
+
 }

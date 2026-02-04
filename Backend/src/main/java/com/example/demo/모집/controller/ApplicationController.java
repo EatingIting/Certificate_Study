@@ -23,10 +23,12 @@ public class ApplicationController {
     public void applyToRoom(
             Authentication authentication,
             @RequestBody ApplicationVO applicationVO
+
     ) {
         if (authentication == null) {
             throw new RuntimeException("인증 정보가 없습니다.");
         }
+
 
         try {
             applicationService.applyToRoom(

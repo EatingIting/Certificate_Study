@@ -34,7 +34,6 @@ public class BoardPostServiceImpl implements BoardPostService {
     }
 
     private void requireMember(String roomId, String email) {
-        // 방장은 room.host_user_email에만 있고 room_join_request에 없을 수 있으므로, 방장이면 통과
         String hostEmail = roomParticipantMapper.selectHostEmail(roomId);
         if (hostEmail != null && email != null
                 && hostEmail.trim().equalsIgnoreCase(email.trim())) {
@@ -79,7 +78,7 @@ public class BoardPostServiceImpl implements BoardPostService {
         BoardPostVO post = boardPostMapper.selectPostById(postId);
         if (post == null) return null;
 
-        requireMember(post.getRoomId(), email); // post에 roomId 있어야 함(보통 있음)
+        requireMember(post.getRoomId(), email);
         return post;
     }
 
@@ -90,7 +89,10 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         post.setUserId(getUserIdByEmail(email));
         int inserted = boardPostMapper.insertPost(post);
-        if (inserted == 0 || post.getPostId() == null) throw new IllegalStateException("게시글 등록에 실패했습니다.");
+
+        if (inserted == 0 || post.getPostId() == null)
+            throw new IllegalStateException("게시글 등록에 실패했습니다.");
+
         return post.getPostId();
     }
 
@@ -103,14 +105,16 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         if (isNotice(saved)) {
             requireHost(saved.getRoomId(), email);
-            int updated = boardPostMapper.updatePostByHost(post); // ⭐ 새로 추가
+            int updated = boardPostMapper.updatePostByHost(post);
             if (updated == 0) throw new IllegalStateException("공지글 수정 실패");
             return;
         }
 
         post.setUserId(getUserIdByEmail(email));
         int updated = boardPostMapper.updatePost(post);
-        if (updated == 0) throw new IllegalStateException("게시글 수정 불가 (작성자 아님/삭제됨/존재하지 않음)");
+
+        if (updated == 0)
+            throw new IllegalStateException("게시글 수정 불가");
     }
 
     @Override
@@ -122,14 +126,16 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         if (isNotice(saved)) {
             requireHost(saved.getRoomId(), email);
-            int updated = boardPostMapper.softDeletePostByHost(postId); // ⭐ 새로 추가
+            int updated = boardPostMapper.softDeletePostByHost(postId);
             if (updated == 0) throw new IllegalStateException("공지글 삭제 실패");
             return;
         }
 
         String userId = getUserIdByEmail(email);
         int updated = boardPostMapper.softDeletePost(postId, userId);
-        if (updated == 0) throw new IllegalStateException("게시글 삭제 불가 (작성자 아님/삭제됨/존재하지 않음)");
+
+        if (updated == 0)
+            throw new IllegalStateException("게시글 삭제 불가");
     }
 
     @Override
@@ -141,18 +147,25 @@ public class BoardPostServiceImpl implements BoardPostService {
 
         if (isNotice(saved)) {
             requireHost(saved.getRoomId(), email);
-            int updated = boardPostMapper.updatePinnedByHost(postId, isPinned); // ⭐ 새로 추가
+            int updated = boardPostMapper.updatePinnedByHost(postId, isPinned);
             if (updated == 0) throw new IllegalStateException("공지글 고정 변경 실패");
             return;
         }
 
-        String userId = getUserIdByEmail(email); // ✅ 버그 수정 포인트
+        String userId = getUserIdByEmail(email);
         int updated = boardPostMapper.updatePinned(postId, userId, isPinned);
-        if (updated == 0) throw new IllegalStateException("고정 변경 불가 (작성자 아님/삭제됨/존재하지 않음)");
+
+        if (updated == 0)
+            throw new IllegalStateException("고정 변경 불가");
     }
 
     @Override
     public void incrementViewCount(long postId) {
         boardPostMapper.incrementViewCount(postId);
+    }
+
+    @Override
+    public String getWriterIdByPostId(long postId) {
+        return boardPostMapper.findWriterIdByPostId(postId);
     }
 }
