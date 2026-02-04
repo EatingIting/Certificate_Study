@@ -1,4 +1,8 @@
-/* ✅ 검색 카드만 여백 줄이기 */
+/* =========================
+   Bottom Search (카드/정렬)
+   ========================= */
+
+/* 검색 카드만 여백 줄이기 */
 .bd.bd-board .bd-card.bd-bottom-search {
     padding: 10px 12px;
     display: flex;
@@ -34,11 +38,13 @@
     box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
 }
 
-/* ===== List wrapper ===== */
+/* =========================
+   List wrapper
+   ========================= */
+
 .bd.bd-board .bd-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
 }
 
 /* =========================
@@ -58,7 +64,10 @@
     white-space: nowrap;
 }
 
-/* 헤더 */
+/* =========================
+   Header row
+   ========================= */
+
 .bd.bd-board .bd-row-head {
     padding: 10px 12px;
     border-top: 1px solid var(--line);
@@ -74,12 +83,15 @@
 }
 
 .bd.bd-board .bd-row-head .bd-col {
-    text-align: center; /* ✅ 헤더 전부 가운데 */
+    text-align: center; /* 헤더 전부 가운데 */
 }
 
-/* 목록 행 */
+/* =========================
+   Item row
+   ========================= */
+
 .bd.bd-board .bd-row-item {
-    padding: 10px 12px;
+    padding: 14px 12px;
     cursor: pointer;
 
     border-bottom: 1px solid var(--line);
@@ -95,24 +107,21 @@
     background: #f6faf3;
 }
 
-/* ✅ 목록 정렬 규칙 */
+/* 목록 정렬 규칙 */
 .bd.bd-board .bd-row-item .bd-col {
     text-align: left;
 }
 
 .bd.bd-board .bd-row-item .bd-col.category,
+.bd.bd-board .bd-row-item .bd-col.author,
 .bd.bd-board .bd-row-item .bd-col.views,
 .bd.bd-board .bd-row-item .bd-col.date {
     text-align: center;
 }
 
-.bd.bd-board .bd-row-item .bd-col.title,
-.bd.bd-board .bd-row-item .bd-col.author {
-    text-align: left;
-}
-
-/* 제목 톤 */
+/* 제목 톤 + 정렬 */
 .bd.bd-board .bd-row-item .bd-col.title {
+    text-align: left;
     font-size: 14px;
     font-weight: 700;
     color: var(--text);
@@ -137,7 +146,17 @@
     margin-right: 4px;
 }
 
-/* ===== Pagination (<< < 1..10 > >>) ===== */
+.bd-comment-count {
+    margin-left: 6px;
+    font-size: 0.85em;
+    color: #888;
+    font-weight: 600;
+}
+
+/* =========================
+   Pagination (<< < 1..10 > >>)
+   ========================= */
+
 .bd.bd-board .bd-pagination {
     display: flex;
     align-items: center;
@@ -174,7 +193,10 @@
     background: rgba(233, 250, 220, 0.9);
 }
 
-/* ===== Responsive (목록 전용) ===== */
+/* =========================
+   Responsive (목록 전용)
+   ========================= */
+
 @media (max-width: 720px) {
     .bd.bd-board .bd-row-head {
         display: none;
