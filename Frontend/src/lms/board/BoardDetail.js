@@ -297,6 +297,7 @@ function BoardDetail() {
     let post = detail?.post;
     let canEdit = !!detail?.canEdit;
     let canDelete = !!detail?.canDelete;
+    let visibleCommentCount = comments.filter((c) => !c.deletedAt).length;
 
     if (!post) {
         return (
@@ -470,7 +471,7 @@ function BoardDetail() {
                             aria-expanded={commentsOpen}
                         >
                             <span className="bd-comment-toggle-title">
-                                댓글 <b>{comments.length}</b>개
+                                댓글 <b>{visibleCommentCount}</b>개
                             </span>
                             <span className={`bd-comment-toggle-icon ${commentsOpen ? "open" : ""}`}>▾</span>
                         </button>
@@ -489,9 +490,9 @@ function BoardDetail() {
                                             return (
                                                 <div key={c.commentId} style={{ display: "grid", gap: 8 }}>
                                                     {/* 부모 댓글 */}
-                                                    <div className="bd-card bd-comment-card">
+                                                    <div className={`bd-card bd-comment-card ${isDeleted ? "deleted" : ""}`}>
                                                         <div className="bd-comment-top">
-                                                            <span className="bd-comment-author">{c.nickname}</span>
+                                                            {!isDeleted && <span className="bd-comment-author">{c.nickname}</span>}
 
                                                             {!isDeleted && (
                                                                 <div className="bd-comment-actions">
@@ -521,8 +522,10 @@ function BoardDetail() {
                                                                 </div>
                                                             )}
                                                         </div>
-
-                                                        <div className="bd-comment-content">{c.content}</div>
+                                                        
+                                                        <div className={`bd-comment-content ${isDeleted ? "deleted" : ""}`}>
+                                                            {isDeleted ? "삭제된 댓글입니다" : c.content}
+                                                        </div>
 
                                                         <div className="bd-comment-foot">
                                                             <span className="bd-comment-date">{formatKst(c.createdAt)}</span>
@@ -552,31 +555,40 @@ function BoardDetail() {
                                                     </div>
 
                                                     {/* 대댓글 */}
-                                                    {(repliesByParent[c.commentId] || []).map((r) => (
-                                                        <div key={r.commentId} className="bd-card bd-comment-card reply">
-                                                            <div className="bd-comment-top">
-                                                                <span className="bd-comment-author">{r.nickname}</span>
+                                                    {(repliesByParent[c.commentId] || []).map((r) => {
+                                                        let isReplyDeleted = !!r.deletedAt;
 
-                                                                {!r.deletedAt && (
-                                                                    <div className="bd-comment-actions">
-                                                                        <button
-                                                                            type="button"
-                                                                            className="bd-comment-link danger"
-                                                                            onClick={() => onDeleteComment(r.commentId)}
-                                                                        >
-                                                                            삭제
-                                                                        </button>
-                                                                    </div>
-                                                                )}
+                                                        return (
+                                                            <div className={`bd-card bd-comment-card reply ${isReplyDeleted ? "deleted" : ""}`}>
+                                                                <div className="bd-comment-top">
+                                                                    {!isReplyDeleted && (
+                                                                        <span className="bd-comment-author">{r.nickname}</span>
+                                                                    )}
+                                                                    {!isReplyDeleted && (
+                                                                        <div className="bd-comment-actions">
+                                                                            <button
+                                                                                type="button"
+                                                                                className="bd-comment-link danger"
+                                                                                onClick={() => onDeleteComment(r.commentId)}
+                                                                            >
+                                                                                삭제
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className={`bd-comment-content ${isReplyDeleted ? "deleted" : ""}`}>
+                                                                    {isReplyDeleted ? "삭제된 댓글입니다" : r.content}
+                                                                </div>
+
+                                                                <div className="bd-comment-foot">
+                                                                    <span className="bd-comment-date">
+                                                                        {formatKst(r.createdAt)}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-
-                                                            <div className="bd-comment-content">{r.content}</div>
-
-                                                            <div className="bd-comment-foot">
-                                                                <span className="bd-comment-date">{formatKst(r.createdAt)}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             );
                                         })}
