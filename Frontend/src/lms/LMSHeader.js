@@ -1,11 +1,9 @@
 import "./LMSHeader.css";
-import { Bell, MessageCircle, User, Star } from "lucide-react";
-import { useLMS } from "./LMSContext";
+import {Bell, MessageCircle, User, UserCircle, Users} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function Header() {
-    const { displayName, loading, roomTitle, roomLoading, user, room } = useLMS();
-    const isHost = !!(user && room && user.email && room.hostUserEmail &&
-        String(user.email).trim().toLowerCase() === String(room.hostUserEmail).trim().toLowerCase());
+    const navigate = useNavigate();
 
     return (
         <header className="lms-header">
@@ -22,12 +20,11 @@ export default function Header() {
 
 
             <div className="lms-header-right">
-                {isHost && (
-                    <div className="host-badge" title="스터디장">
-                        <Star size={18} fill="#fbbf24" color="#fbbf24" />
-                        <span className="host-text">(스터디장)</span>
-                    </div>
-                )}
+                <Users
+                    size={18}
+                    className="icon-button"
+                    onClick={() => navigate("/room")}
+                />
                 <MessageCircle size={18} />
                 <Bell size={18} />
                 <div className="profile">
