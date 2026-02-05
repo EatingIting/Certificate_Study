@@ -21,14 +21,28 @@ import {
 } from "@pixiv/three-vrm";
 
 // --- ICE (STUN/TURN) ---
+// TURN: 도메인 기반 사용 (IP 대신, 운영 안정성 향상)
+// transport 명시 필수 (UDP/TCP 모두 지원)
 const ICE_SERVERS = [
     { urls: "stun:stun.l.google.com:19302" },
     {
-        urls: "turn:15.165.181.93:3478",
+        urls: [
+            "turn:onsil.study:3478?transport=udp",
+            "turn:onsil.study:3478?transport=tcp",
+        ],
         username: "test",
         credential: "test",
     },
 ];
+
+// SFU 시그널링: nginx 프록시 사용. 포트(:4000) 붙이면 안 됨.
+// 경로는 nginx 설정과 일치해야 함 (301 리다이렉트 방지)
+const SFU_WS_BASE = "onsil.study";
+function getSfuWsUrl() {
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    // nginx location /sfu { ... } 또는 location /sfu/ { ... } 설정에 맞춰 조정
+    return `${protocol}://${SFU_WS_BASE}/sfu`;
+}
 
 // --- Components ---
 
@@ -4586,7 +4600,12 @@ function MeetingPage({ portalRoomId }) {
                 // ✅ producer close (mediasoup consumer 이벤트)
                 consumer.on?.("producerclose", cleanupThisConsumer);
             } catch (e) {
-                console.error("consume failed", e);
+                console.error("[consume] Failed to consume remote stream", {
+                    producerId,
+                    peerId: fallbackPeerId,
+                    error: e?.message || String(e),
+                    hint: "ICE/DTLS 연결 실패일 수 있음. SFU announcedIp 및 UDP 40000-49999 포트 확인.",
+                });
 
                 // 실패 시도 중간 생성된 consumer 정리
                 try {
@@ -6104,7 +6123,7 @@ function MeetingPage({ portalRoomId }) {
         );
     }, []);
 
-    // 2️⃣ SFU WebSocket (4000)
+    // 2️⃣ SFU WebSocket (nginx proxy → wss://onsil.study/sfu/ , 포트 없음)
     useEffect(() => {
         effectAliveRef.current = true;
         if (!roomId) return;
@@ -6141,8 +6160,10 @@ function MeetingPage({ portalRoomId }) {
             console.log("[MeetingPage] 재접속 시작 알림 전송");
         }
 
-        // ✅ SFU 시그널링: nginx 프록시를 통해 wss://onsil.study/sfu/ (포트 4000 직접 사용 금지)
-        const sfuWsUrl = (window.location.protocol === "https:" ? "wss://" : "ws://") + "onsil.study/sfu/";
+        const sfuWsUrl = getSfuWsUrl();
+        if (process.env.NODE_ENV !== "test") {
+            console.log("[SFU] Connecting to", sfuWsUrl, "(no :4000 – nginx proxy)");
+        }
         const sfuWs = new WebSocket(sfuWsUrl);
         sfuWsRef.current = sfuWs;
 
@@ -6207,6 +6228,14 @@ function MeetingPage({ portalRoomId }) {
                     iceServers: ICE_SERVERS,
                     pcConfig: { iceServers: ICE_SERVERS },
                 };
+
+                // ✅ TURN 적용 확인 로그
+                if (process.env.NODE_ENV !== "test") {
+                    console.log(`[transport] Creating ${direction} transport with ICE_SERVERS:`, {
+                        stun: ICE_SERVERS.find(s => s.urls.includes("stun:")),
+                        turn: ICE_SERVERS.find(s => Array.isArray(s.urls) && s.urls.some(u => u.includes("turn:"))),
+                    });
+                }
 
                 if (direction === "send") {
                     const sendTransport = device.createSendTransport(transportOptions);
@@ -6330,25 +6359,10 @@ function MeetingPage({ portalRoomId }) {
                     }
 
                     await drainPending();
-                    hasFinishedInitialSyncRef.current = true;
 
-                    // ✅ recvTransport 생성 완료 시 roomReconnecting 강제 해제
-                    setRoomReconnecting(false);
-
-                    // ✅ 모든 참가자의 스피너 강제 해제
-                    setParticipants(prev => prev.map(p => ({
-                        ...p,
-                        isReconnecting: false,
-                        isJoining: false,
-                        isLoading: false,
-                        reconnectStartedAt: undefined
-                    })));
-
+                    // ✅ roomReconnecting 유지 → room:sync useEffect가 recvTransportReady 변경 감지 후 room:sync 전송
+                    // room:sync:response 수신 후 setRoomReconnecting(false) 및 hasFinishedInitialSyncRef 설정
                     bumpStreamVersion();
-
-                    // recvTransport가 준비되었고 roomReconnecting이면 room:sync 재시도
-                    // useEffect가 자동으로 처리하도록 함 (roomReconnecting이 true이고 recvTransport가 준비되면)
-                    // 여기서는 별도로 처리하지 않음
                 }
                 return;
             }
@@ -6441,7 +6455,12 @@ function MeetingPage({ portalRoomId }) {
         };
 
         sfuWs.onerror = (error) => {
-            console.error("❌ SFU WS ERROR", error);
+            console.error("❌ SFU WS ERROR", {
+                error,
+                url: sfuWsUrl,
+                readyState: sfuWs.readyState,
+                hint: "nginx /sfu/ 프록시 설정 또는 SFU 서버 상태 확인 필요",
+            });
             setRoomReconnecting(false);
         };
 
