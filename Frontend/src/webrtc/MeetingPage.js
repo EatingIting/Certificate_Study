@@ -6141,10 +6141,9 @@ function MeetingPage({ portalRoomId }) {
             console.log("[MeetingPage] 재접속 시작 알림 전송");
         }
 
-        // ✅ 요청하신 형태: https ? wss : ws
-        // ✅ window.location.hostname(=IP/도메인)로 4000(SFU) 직접 연결
-        const protocol = getWsProtocol();
-        const sfuWs = new WebSocket(`${protocol}://${window.location.hostname}:4000/sfu/`);
+        // ✅ SFU 시그널링: nginx 프록시를 통해 wss://onsil.study/sfu/ (포트 4000 직접 사용 금지)
+        const sfuWsUrl = (window.location.protocol === "https:" ? "wss://" : "ws://") + "onsil.study/sfu/";
+        const sfuWs = new WebSocket(sfuWsUrl);
         sfuWsRef.current = sfuWs;
 
         const drainPending = async () => {
