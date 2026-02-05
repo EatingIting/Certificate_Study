@@ -726,12 +726,22 @@ const ChatModal = ({ roomId, roomName }) => {
             }
         };
 
-        socket.onclose = () => { console.log("🔌 웹소켓 연결 종료"); };
+        socket.onclose = () => {
+            console.log("🔌 웹소켓 연결 종료");
+            if (ws.current === socket) {
+                ws.current = null;
+            }
+        };
 
         return () => {
-            if (socket.readyState === WebSocket.OPEN) socket.close();
+            if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+                socket.close();
+            }
+            if (ws.current === socket) {
+                ws.current = null;
+            }
         };
-    }, [isOpen, roomId, myInfo, wsUrl, roomNickname]); 
+    }, [roomId, myInfo, wsUrl, roomNickname]); 
 
     // AI 로딩 및 스크롤 처리
     useEffect(() => {
@@ -1309,7 +1319,12 @@ const ChatModal = ({ roomId, roomName }) => {
                         className="tc-input"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
                         placeholder="메시지 입력"
                     />
                     <button className={`tc-send-btn ${isAiMode ? 'ai-mode' : ''}`} onClick={() => handleSend()}>전송</button>
