@@ -26,6 +26,8 @@ services:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_KEY=${AWS_SECRET_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # OAuth2 redirect_uri 기준 URL (onsil.study 등, Nginx X-Forwarded 미전달 시)
+      - APP_OAUTH2_BASE_URL=${APP_OAUTH2_BASE_URL:-}
     ports:
       - "8080:8080"
     networks:
