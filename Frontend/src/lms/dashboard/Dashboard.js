@@ -91,29 +91,19 @@ function Dashboard({ setActiveMenu }) {
   useEffect(() => {
     if (!subjectId) return;
 
-    const fetchNextExam = async () => {
-      try {
-        // 1) 전용 API 시도 (백엔드에 GET .../schedule/exam/next 가 있는 경우)
-        const res = await api.get(`/rooms/${subjectId}/schedule/exam/next`);
-        const item = res.data?.item ?? null;
-        if (item?.start) {
-          setDashExam({ item });
-          return;
-        }
-      } catch (e) {
-        // 404 등: 전용 API가 없거나 실패 시 아래 폴백 사용
-      }
+    const getClientTodayStr = () => {
+      const t = new Date();
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    };
 
-      // 2) 폴백: 기존 일정 API로 범위 조회 후 type=EXAM 중 "오늘 이후" 시험 우선, 없으면 오늘 시험
-      try {
-        const today = new Date();
-        const todayStr =
-          `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-        const end = new Date(today);
+    const fetchNextExam = async () => {
+      const todayStr = getClientTodayStr();
+
+      const fetchFromScheduleRange = async () => {
+        const end = new Date();
         end.setDate(end.getDate() + 120);
         const endYmd =
           `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
-
         const res = await api.get(
           `/rooms/${subjectId}/schedule?start=${encodeURIComponent(todayStr)}&end=${encodeURIComponent(endYmd)}`
         );
@@ -122,19 +112,39 @@ function Dashboard({ setActiveMenu }) {
           (it) => (it?.extendedProps?.type || it?.type) === "EXAM" && it?.start
         );
         exams.sort((a, b) => (a.start || "").localeCompare(b.start || ""));
-
-        // 오늘 이후 시험 우선, 없으면 오늘 시험
         const startYmd = (it) => (it.start || "").slice(0, 10);
         const next =
           exams.find((it) => startYmd(it) > todayStr) ||
-          exams.find((it) => startYmd(it) >= todayStr);
-        const item = next
+          exams.find((it) => startYmd(it) === todayStr);
+        return next
           ? {
               id: next.id,
               title: next.title,
               start: typeof next.start === "string" ? next.start.slice(0, 10) : next.start,
             }
           : null;
+      };
+
+      try {
+        let item = null;
+        try {
+          const res = await api.get(`/rooms/${subjectId}/schedule/exam/next`);
+          item = res.data?.item ?? null;
+        } catch {
+          // 전용 API 없음 → 폴백
+        }
+
+        const startYmd = (it) => (it?.start && String(it.start).slice(0, 10)) || "";
+        if (item?.start && startYmd(item) < todayStr) {
+          // 받은 시험이 과거(클라이언트 기준) → 다음 시험 찾기
+          item = await fetchFromScheduleRange();
+        }
+        if (!item?.start) {
+          item = await fetchFromScheduleRange();
+        }
+        if (item?.start && startYmd(item) < todayStr) {
+          item = null;
+        }
         setDashExam({ item });
       } catch (e) {
         console.error("DASH EXAM ERROR:", e);
@@ -145,7 +155,7 @@ function Dashboard({ setActiveMenu }) {
     fetchNextExam();
   }, [subjectId]);
 
-  // D-day: 시험일(start) 기준 오늘(로컬)과의 일수 차이. 당일=0, 다음날부터 다음 시험으로 넘어감.
+  // D-day: 시험일(start) 기준 오늘(로컬)과의 일수 차이. 당일=0, 과거면 null.
   const examDday = useMemo(() => {
     const item = dashExam?.item;
     if (!item?.start) return null;
@@ -157,6 +167,19 @@ function Dashboard({ setActiveMenu }) {
     const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
     return days < 0 ? null : days;
   }, [dashExam?.item]);
+
+  // 표시용 라벨: 며칠 남았으면 D-n, 당일만 D-day. (과거 시험은 카드에 안 보이므로 "지남" 없음)
+  const examDdayLabel = useMemo(() => {
+    if (!dashExam?.item?.start) return "";
+    if (examDday != null && examDday > 0) return `D-${examDday}`;
+    const today = new Date();
+    const todayStr =
+      `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const startYmd = String(dashExam.item.start).slice(0, 10);
+    if (startYmd === todayStr || examDday === 0) return "D-day";
+    if (examDday != null && examDday >= 0) return `D-${examDday}`;
+    return "";
+  }, [examDday, dashExam?.item?.start]);
 
   // 프로그레스: 30일 전~시험일 기준, 하루에 한 번씩 진행 (0~100%)
   const examProgress = useMemo(() => {
@@ -473,14 +496,14 @@ function Dashboard({ setActiveMenu }) {
         {/* 1) 시험 카드 - schedules type=EXAM 중 가장 가까운 시험, D-day·프로그레스바 */}
         <div className="card study-card-back dashStudy">
           <div className="card study-card">
-            {dashExam.item ? (
+            {dashExam.item && examDday !== null ? (
               <>
                 <div className="study-info">
                   <h3>{dashExam.item.title || "시험"}</h3>
                   <hr />
                   <p>
                     {(dashExam.item.start || "").replaceAll("-", ".")} <br />
-                    {examDday === 0 ? "D-day" : `D-${examDday}`}
+                    {examDdayLabel}
                   </p>
 
                   <div className="progress-bar">
