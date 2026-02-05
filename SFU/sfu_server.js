@@ -1,3 +1,7 @@
+/**
+ * SFU 시그널링: HTTP/WS 전용 (인증서·.pem 파일 사용 안 함)
+ * Spring ↔ SFU는 VPC 내부 ws:// 로만 연결
+ */
 import http from "http";
 import express from "express";
 import cors from "cors";
@@ -361,10 +365,25 @@ wss.on("connection", (ws) => {
         peer.transports.set(transport.id, { transport, direction });
 
         transport.on("icestatechange", (state) => {
-          console.log("[transport] ICE state:", state);
+          console.log(`[transport] ICE state: ${state} (${direction}, peerId: ${peer.peerId}, transportId: ${transport.id})`);
+          if (state === "failed" || state === "disconnected") {
+            console.error(`[transport] ICE ${state} - 연결 실패 가능성`, {
+              peerId: peer.peerId,
+              direction,
+              transportId: transport.id,
+              announcedIp: config.webRtcTransport.listenIps[0].announcedIp,
+            });
+          }
         });
         transport.on("dtlsstatechange", (state) => {
-          console.log("[transport] DTLS state:", state);
+          console.log(`[transport] DTLS state: ${state} (${direction}, peerId: ${peer.peerId}, transportId: ${transport.id})`);
+          if (state === "failed" || state === "closed") {
+            console.error(`[transport] DTLS ${state}`, {
+              peerId: peer.peerId,
+              direction,
+              transportId: transport.id,
+            });
+          }
           if (state === "closed") {
             try { transport.close(); } catch { }
             peer.transports.delete(transport.id);
@@ -372,13 +391,19 @@ wss.on("connection", (ws) => {
         });
         transport.on("close", () => peer.transports.delete(transport.id));
 
+        console.log(`[transport] Created ${direction} transport`, {
+          transportId: transport.id,
+          peerId: peer.peerId,
+          iceCandidatesCount: transport.iceCandidates?.length || 0,
+          announcedIp: config.webRtcTransport.listenIps[0].announcedIp,
+        });
+
         reply({
           transportId: transport.id,
           direction,
           iceParameters: transport.iceParameters,
           iceCandidates: transport.iceCandidates,
           dtlsParameters: transport.dtlsParameters,
-
         });
         return;
       }
@@ -414,6 +439,12 @@ wss.on("connection", (ws) => {
 
         const producer = await t.transport.produce({ kind, rtpParameters, appData });
         peer.producers.set(producer.id, producer);
+        console.log(`[producer] Created ${kind} producer`, {
+          producerId: producer.id,
+          peerId: peer.peerId,
+          roomId: room.roomId,
+          appData: appData || {},
+        });
 
         const notifyClose = () => {
           peer.producers.delete(producer.id);
@@ -458,6 +489,13 @@ wss.on("connection", (ws) => {
         // paused: true 유지. 향후 Simulcast/SVC 시 preferedLayers / maxSpatialLayer 등 고려
         const consumer = await t.transport.consume({ producerId, rtpCapabilities, paused: true });
         peer.consumers.set(consumer.id, consumer);
+        console.log(`[consumer] Created ${consumer.kind} consumer`, {
+          consumerId: consumer.id,
+          producerId,
+          consumerPeerId: peer.peerId,
+          producerPeerId,
+          roomId: room.roomId,
+        });
 
         // 비디오 consumer 생성 직후 키프레임 요청 → 상대방 화면 초반 화질 개선 (mediasoup Consumer API)
         if (consumer.kind === "video") {
