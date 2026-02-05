@@ -5098,22 +5098,22 @@ function MeetingPage({ portalRoomId }) {
 
     useEffect(() => {
         const handleBeforeUnload = () => {
-            // ❗ 통화 종료 버튼일 때만 LEAVE
-            if (!isLeavingRef.current) {
-                console.log("[beforeunload] ignored (PiP / LMS 이동)");
-                return;
-            }
+            // ✅ LMS/사이트를 완전히 떠날 때는 항상 즉시 회의 종료
+            // (재접속 유예 시간 없이 바로 LEAVE + 소켓 정리)
+            isLeavingRef.current = true;
 
             try {
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(
-                        JSON.stringify({ type: "LEAVE" })
-                    );
+                    wsRef.current.send(JSON.stringify({ type: "LEAVE" }));
                 }
             } catch { }
 
             try {
                 wsRef.current?.close();
+            } catch { }
+
+            try {
+                sfuWsRef.current?.close();
             } catch { }
         };
 
