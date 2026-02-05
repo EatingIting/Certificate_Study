@@ -36,12 +36,12 @@ const ICE_SERVERS = [
 ];
 
 // SFU 시그널링: nginx 프록시 사용. 포트(:4000) 붙이면 안 됨.
-// nginx 설정: location /sfu/ { proxy_pass http://172.31.57.169:4000/; }
-const SFU_WS_BASE = "onsil.study";
+// REACT_APP_SFU_WS_HOST 빌드 시 설정 시 해당 호스트 사용, 미설정 시 현재 도메인(same-origin)
+const SFU_WS_BASE = process.env.REACT_APP_SFU_WS_HOST || "";
 function getSfuWsUrl() {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    // nginx location /sfu/ (슬래시 포함)에 맞춤
-    return `${protocol}://${SFU_WS_BASE}/sfu/`;
+    const host = SFU_WS_BASE || window.location.hostname;
+    return `${protocol}://${host}/sfu/`;
 }
 
 // --- Components ---
@@ -6819,14 +6819,16 @@ function MeetingPage({ portalRoomId }) {
                 } catch (e) { }
             });
 
-            // 2. 상태 일괄 업데이트
+            // 2. 상태 일괄 업데이트 (p.id는 connectionId 또는 userId, consumer.appData.peerId는 서버가 보낸 peerId → 둘 다로 매칭)
             if (updates.size > 0) {
                 setParticipants(prev => {
                     let changed = false;
                     const next = prev.map(p => {
-                        const pid = String(p.id);
-                        if (updates.has(pid)) {
-                            const newState = updates.get(pid);
+                        const idStr = String(p.id);
+                        const userIdStr = p.userId != null ? String(p.userId) : null;
+                        const matchedKey = updates.has(idStr) ? idStr : (userIdStr && updates.has(userIdStr) ? userIdStr : null);
+                        if (matchedKey != null) {
+                            const newState = updates.get(matchedKey);
                             if (!!p.speaking !== newState) {
                                 changed = true;
                                 return { ...p, speaking: newState };

@@ -1,0 +1,14 @@
+.git
+.gitignore
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.idea
+*.iml
+*.ipr
+*.iws
+out/
+.env
+*.md
+**/keystore.p12
+uploads/
