@@ -77,6 +77,20 @@ public class OAuth2BaseUrlRequestFilter extends OncePerRequestFilter {
                 if (port > 0) return port;
                 return "https".equalsIgnoreCase(scheme) ? 443 : 80;
             }
+            @Override
+            public boolean isSecure() {
+                return "https".equalsIgnoreCase(scheme);
+            }
+            @Override
+            public StringBuffer getRequestURL() {
+                StringBuffer url = new StringBuffer();
+                url.append(scheme).append("://").append(host);
+                if (port > 0 && !(("https".equalsIgnoreCase(scheme) && port == 443) || ("http".equalsIgnoreCase(scheme) && port == 80))) {
+                    url.append(":").append(port);
+                }
+                url.append(getRequestURI());
+                return url;
+            }
         };
 
         log.debug("[OAuth2BaseUrl] wrapped request for {} -> {}://{}", uri, scheme, host);

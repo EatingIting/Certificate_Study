@@ -2,6 +2,7 @@ import "./Main.css";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
+import { getBackendOrigin } from "../utils/backendUrl";
 import heroImg from "./메인메인.png";
 
 function Main() {
@@ -78,7 +79,7 @@ function Main() {
 
         if (img.startsWith("http")) return img;
 
-        return `http://localhost:8080${img}`;
+        return `${getBackendOrigin()}${img}`;
     };
 
     return (

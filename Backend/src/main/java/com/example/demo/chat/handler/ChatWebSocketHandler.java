@@ -2,7 +2,7 @@ package com.example.demo.chat.handler;
 
 import com.example.demo.chat.dto.ChatMessageDTO;
 import com.example.demo.chat.service.ChatDisplayNameService;
-import com.example.demo.chat.service.ChatService; // 🟢 [1] 서비스 임포트
+import com.example.demo.chat.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,8 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
-    // private final ChatMessageRepository chatMessageRepository; // ❌ 기존 레포지토리 제거
-    private final ChatService chatService; // 🟢 [2] 서비스 주입으로 변경
+    private final ChatService chatService;
     private final ChatDisplayNameService chatDisplayNameService;
 
     // 메모리 내에 접속자 관리 (Key: RoomId, Value: Session Set)
@@ -78,7 +77,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             chatMessageDTO.setUserName(displayName);
         }
 
-        // 🟢 [3] ChatService를 통해 DB 저장 (이름, 타입 포함)
         try {
             // 메시지 타입이 없으면 기본값 TALK
             String msgType = (chatMessageDTO.getType() != null) ? chatMessageDTO.getType() : "TALK";
@@ -116,8 +114,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 퇴장 후 갱신된 명단 전송
         broadcastUserList(roomId);
     }
-
-    // ---  유틸리티 메서드 (기존 동일) ---
 
     // 방 전체 메시지 전송
     private void broadcastToRoom(String roomId, ChatMessageDTO messageDTO) {
