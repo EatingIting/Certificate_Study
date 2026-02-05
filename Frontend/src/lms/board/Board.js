@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import "./BoardCommon.css";
 import "./BoardList.css"
 import { BoardApi, formatKst } from "./BoardApi";
+import { ReactComponent as ClipIcon } from "./clip.svg";
 
 function Board() {
     let navigate = useNavigate();
@@ -287,6 +288,13 @@ function Board() {
 
                                     <div className="bd-col title">
                                         <span className="bd-pin">📌</span> {p.title}
+
+                                        {(p.attachmentCount ?? 0) > 0 && (
+                                            <span className="bd-attach-icon" aria-label="첨부파일 있음" title="첨부파일 있음">
+                                                <ClipIcon />
+                                            </span>
+                                        )}
+
                                         {(p.commentCount ?? 0) > 0 && (
                                             <span className="bd-comment-count">[{p.commentCount}]</span>
                                         )}
@@ -319,6 +327,11 @@ function Board() {
 
                                     <div className="bd-col title">
                                         {p.title}
+                                        {(p.attachmentCount ?? 0) > 0 && (
+                                            <span className="bd-attach-icon" aria-label="첨부파일 있음" title="첨부파일 없음">
+                                                <ClipIcon />
+                                            </span>
+                                        )}
                                         {(p.commentCount ?? 0) > 0 && (
                                             <span className="bd-comment-count">[{p.commentCount}]</span>
                                         )}

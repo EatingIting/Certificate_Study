@@ -32,4 +32,5 @@ public class BoardPostVO {
     private Timestamp deletedAt;
 
     private Integer commentCount;
+    private Integer attachmentCount;
 }

@@ -6,19 +6,20 @@
 <mapper namespace="com.example.demo.board.mapper.BoardPostMapper">
 
     <resultMap id="PostMap" type="com.example.demo.board.vo.BoardPostVO">
-        <id     property="postId"       column="post_id"/>
-        <result property="roomId"       column="room_id"/>
-        <result property="userId"       column="user_id"/>
-        <result property="nickname"     column="nickname"/>
-        <result property="category"     column="category"/>
-        <result property="title"        column="title"/>
-        <result property="content"      column="content"/>
-        <result property="isPinned"     column="is_pinned"/>
-        <result property="viewCount"    column="view_count"/>
-        <result property="createdAt"    column="created_at"/>
-        <result property="updatedAt"    column="updated_at"/>
-        <result property="deletedAt"    column="deleted_at"/>
-        <result property="commentCount" column="comment_count"/>
+        <id     property="postId"          column="post_id"/>
+        <result property="roomId"          column="room_id"/>
+        <result property="userId"          column="user_id"/>
+        <result property="nickname"        column="nickname"/>
+        <result property="category"        column="category"/>
+        <result property="title"           column="title"/>
+        <result property="content"         column="content"/>
+        <result property="isPinned"        column="is_pinned"/>
+        <result property="viewCount"       column="view_count"/>
+        <result property="createdAt"       column="created_at"/>
+        <result property="updatedAt"       column="updated_at"/>
+        <result property="deletedAt"       column="deleted_at"/>
+        <result property="commentCount"    column="comment_count"/>
+        <result property="attachmentCount" column="attachment_count"/>
     </resultMap>
 
     <select id="selectPostList" resultMap="PostMap">
@@ -39,7 +40,11 @@
             (SELECT COUNT(*)
              FROM board_comments c
              WHERE c.post_id = p.post_id
-               AND c.deleted_at IS NULL) AS comment_count
+               AND c.deleted_at IS NULL) AS comment_count,
+            (SELECT COUNT(*)
+             FROM board_post_attachments a
+             WHERE a.post_id = p.post_id) AS attachment_count
+
         FROM board_posts p
                  LEFT JOIN users u
                            ON u.user_id = p.user_id
@@ -213,5 +218,11 @@
           AND deleted_at IS NULL
     </select>
 
+
+    <delete id="hardDeleteOlderThanDays">
+        DELETE FROM board_posts
+        WHERE deleted_at IS NOT NULL
+          AND deleted_at <![CDATA[<]]> DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </delete>
 
 </mapper>

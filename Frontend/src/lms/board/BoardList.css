@@ -223,3 +223,22 @@
         width: min(280px, 80vw);
     }
 }
+
+.bd-attach-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    vertical-align: middle;
+    color: #999;          /* clip.svg가 currentColor면 적용됨 */
+}
+
+.bd-attach-icon svg {
+    width: 13px;
+    height: 13px;
+    display: block;
+}
+
+.bd-row-item .bd-col.title {
+    display: flex;
+    align-items: center;
+}
