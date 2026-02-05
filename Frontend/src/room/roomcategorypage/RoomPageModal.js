@@ -2,7 +2,8 @@ import "./RoomPageModal.css";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/api";
-import { toBackendUrl } from "../../utils/backendUrl";
+import { getBackendOrigin } from "../../utils/backendUrl";
+import sampleImg from "../../mainpage/sample.jpg";
 
 const formatKoreanDate = (value) => {
   if (!value) return "미정";
@@ -70,12 +71,11 @@ const RoomPageModal = ({ open, onClose, study }) => {
   const handleGoStep2 = () => setStep(2);
 
   const getImageUrl = (img) => {
-    if (!img) return "/sample.jpg";
+    if (!img) return sampleImg;
 
     if (img.startsWith("http")) return img;
 
-    // 백엔드 이미지 경로를 EC2 탄력적 IP 기준으로 변환
-    return toBackendUrl(img);
+    return `${getBackendOrigin()}${img}`;
   };
 
   const handleSubmit = async () => {
@@ -137,7 +137,7 @@ const RoomPageModal = ({ open, onClose, study }) => {
                         alt="스터디 사진"
                         className="sr2-study-img"
                         onError={(e) => {
-                          e.currentTarget.src = "/sample.jpg";
+                          e.currentTarget.src = sampleImg;
                         }}
                     />
                   </div>

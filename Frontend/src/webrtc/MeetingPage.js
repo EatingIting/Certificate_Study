@@ -20,6 +20,30 @@ import {
     VRMUtils,
 } from "@pixiv/three-vrm";
 
+// --- ICE (STUN/TURN) ---
+// TURN: 도메인 기반 사용 (IP 대신, 운영 안정성 향상)
+// transport 명시 필수 (UDP/TCP 모두 지원)
+const ICE_SERVERS = [
+    { urls: "stun:stun.l.google.com:19302" },
+    {
+        urls: [
+            "turn:onsil.study:3478?transport=udp",
+            "turn:onsil.study:3478?transport=tcp",
+        ],
+        username: "test",
+        credential: "test",
+    },
+];
+
+// SFU 시그널링: nginx 프록시 사용. 포트(:4000) 붙이면 안 됨.
+// REACT_APP_SFU_WS_HOST 빌드 시 설정 시 해당 호스트 사용, 미설정 시 현재 도메인(same-origin)
+const SFU_WS_BASE = process.env.REACT_APP_SFU_WS_HOST || "";
+function getSfuWsUrl() {
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const host = SFU_WS_BASE || window.location.hostname;
+    return `${protocol}://${host}/sfu/`;
+}
+
 // --- Components ---
 
 // ✅ 공유 AudioContext (타일마다 새로 만들면 렉/리소스 증가)
@@ -801,6 +825,8 @@ function MeetingPage({ portalRoomId }) {
     });
 
     const [roomReconnecting, setRoomReconnecting] = useState(true);
+    /** SFU WS 끊김 시 재연결 트리거 (검은화면 방지) */
+    const [sfuReconnectKey, setSfuReconnectKey] = useState(0);
 
     const [participantCount, setParticipantCount] = useState(1);
     const [chatDraft, setChatDraft] = useState("");
@@ -4426,6 +4452,7 @@ function MeetingPage({ portalRoomId }) {
                             ...prev,
                             {
                                 id: peerId,
+                                userId: peerId,
                                 name: displayName,
                                 isMe: false,
 
@@ -4576,7 +4603,12 @@ function MeetingPage({ portalRoomId }) {
                 // ✅ producer close (mediasoup consumer 이벤트)
                 consumer.on?.("producerclose", cleanupThisConsumer);
             } catch (e) {
-                console.error("consume failed", e);
+                console.error("[consume] Failed to consume remote stream", {
+                    producerId,
+                    peerId: fallbackPeerId,
+                    error: e?.message || String(e),
+                    hint: "ICE/DTLS 연결 실패일 수 있음. SFU announcedIp 및 UDP 40000-49999 포트 확인.",
+                });
 
                 // 실패 시도 중간 생성된 consumer 정리
                 try {
@@ -5581,6 +5613,7 @@ function MeetingPage({ portalRoomId }) {
                                     return {
                                         ...old,
                                         id: participantId,
+                                        userId: peerId,
                                         name: u.userName,
                                         joinAt: u.joinAt,
                                         isMe: false,
@@ -6094,7 +6127,7 @@ function MeetingPage({ portalRoomId }) {
         );
     }, []);
 
-    // 2️⃣ SFU WebSocket (4000)
+    // 2️⃣ SFU WebSocket (nginx proxy → wss://onsil.study/sfu , 포트 없음)
     useEffect(() => {
         effectAliveRef.current = true;
         if (!roomId) return;
@@ -6131,10 +6164,20 @@ function MeetingPage({ portalRoomId }) {
             console.log("[MeetingPage] 재접속 시작 알림 전송");
         }
 
-        // ✅ 요청하신 형태: https ? wss : ws
-        // ✅ window.location.hostname(=IP/도메인)로 4000(SFU) 직접 연결
-        const protocol = getWsProtocol();
-        const sfuWs = new WebSocket(`${protocol}://${window.location.hostname}:4000/sfu/`);
+        // 재연결 시 이전 transport/device 정리 (끊김 후 재연결)
+        if (sfuWsRef.current != null) {
+            try { sendTransportRef.current?.close(); } catch { }
+            try { recvTransportRef.current?.close(); } catch { }
+            try { sfuDeviceRef.current?.close?.(); } catch { }
+            sendTransportRef.current = null;
+            recvTransportRef.current = null;
+            sfuDeviceRef.current = null;
+        }
+        const sfuWsUrl = getSfuWsUrl();
+        if (process.env.NODE_ENV !== "test") {
+            console.log("[SFU] Connecting to", sfuWsUrl, "(no :4000 – nginx proxy)");
+        }
+        const sfuWs = new WebSocket(sfuWsUrl);
         sfuWsRef.current = sfuWs;
 
         const drainPending = async () => {
@@ -6189,13 +6232,37 @@ function MeetingPage({ portalRoomId }) {
                 const device = sfuDeviceRef.current;
                 if (!device) return;
 
-                if (direction === "send") {
-                    const sendTransport = device.createSendTransport({
-                        id: transportId,
-                        iceParameters,
-                        iceCandidates,
-                        dtlsParameters,
+                // RTCPeerConnection에 STUN/TURN 주입 (패턴 A + B 호환)
+                const transportOptions = {
+                    id: transportId,
+                    iceParameters,
+                    iceCandidates,
+                    dtlsParameters,
+                    iceServers: ICE_SERVERS,
+                    pcConfig: { iceServers: ICE_SERVERS },
+                };
+
+                // ✅ TURN 적용 확인 로그
+                if (process.env.NODE_ENV !== "test") {
+                    console.log(`[transport] Creating ${direction} transport with ICE_SERVERS:`, {
+                        stun: ICE_SERVERS.find(s => s.urls.includes("stun:")),
+                        turn: ICE_SERVERS.find(s => Array.isArray(s.urls) && s.urls.some(u => u.includes("turn:"))),
                     });
+                }
+
+                if (direction === "send") {
+                    const sendTransport = device.createSendTransport(transportOptions);
+
+                    // ⭐ TURN 강제 주입 (mediasoup Transport 생성 후 PC config 고정이므로 setConfiguration 필요)
+                    if (sendTransport?._handler?._pc) {
+                        const pc = sendTransport._handler._pc;
+                        const currentConfig = pc.getConfiguration();
+                        pc.setConfiguration({
+                            ...currentConfig,
+                            iceServers: ICE_SERVERS,
+                        });
+                        console.log("✅ TURN injected into sendTransport PC");
+                    }
 
                     sendTransport.on("connect", ({ dtlsParameters }, cb) => {
                         const reqId = safeUUID();
@@ -6270,12 +6337,18 @@ function MeetingPage({ portalRoomId }) {
                 }
 
                 if (direction === "recv") {
-                    const recvTransport = device.createRecvTransport({
-                        id: transportId,
-                        iceParameters,
-                        iceCandidates,
-                        dtlsParameters,
-                    });
+                    const recvTransport = device.createRecvTransport(transportOptions);
+
+                    // ⭐ TURN 강제 주입 (mediasoup Transport 생성 후 PC config 고정이므로 setConfiguration 필요)
+                    if (recvTransport?._handler?._pc) {
+                        const pc = recvTransport._handler._pc;
+                        const currentConfig = pc.getConfiguration();
+                        pc.setConfiguration({
+                            ...currentConfig,
+                            iceServers: ICE_SERVERS,
+                        });
+                        console.log("✅ TURN injected into recvTransport PC");
+                    }
 
                     recvTransport.on("connect", ({ dtlsParameters }, cb) => {
                         const reqId = safeUUID();
@@ -6299,25 +6372,10 @@ function MeetingPage({ portalRoomId }) {
                     }
 
                     await drainPending();
-                    hasFinishedInitialSyncRef.current = true;
 
-                    // ✅ recvTransport 생성 완료 시 roomReconnecting 강제 해제
-                    setRoomReconnecting(false);
-
-                    // ✅ 모든 참가자의 스피너 강제 해제
-                    setParticipants(prev => prev.map(p => ({
-                        ...p,
-                        isReconnecting: false,
-                        isJoining: false,
-                        isLoading: false,
-                        reconnectStartedAt: undefined
-                    })));
-
+                    // ✅ roomReconnecting 유지 → room:sync useEffect가 recvTransportReady 변경 감지 후 room:sync 전송
+                    // room:sync:response 수신 후 setRoomReconnecting(false) 및 hasFinishedInitialSyncRef 설정
                     bumpStreamVersion();
-
-                    // recvTransport가 준비되었고 roomReconnecting이면 room:sync 재시도
-                    // useEffect가 자동으로 처리하도록 함 (roomReconnecting이 true이고 recvTransport가 준비되면)
-                    // 여기서는 별도로 처리하지 않음
                 }
                 return;
             }
@@ -6410,7 +6468,14 @@ function MeetingPage({ portalRoomId }) {
         };
 
         sfuWs.onerror = (error) => {
-            console.error("❌ SFU WS ERROR", error);
+            const urlUsed = getSfuWsUrl();
+            console.error("❌ SFU WS ERROR", {
+                error,
+                url: urlUsed,
+                expected: "wss://onsil.study/sfu",
+                readyState: sfuWs.readyState,
+                hint: "1) nginx location /sfu/ 프록시 확인 2) SFU 서버(4000) 실행 확인 3) 빌드 후 재배포 확인",
+            });
             setRoomReconnecting(false);
         };
 
@@ -6425,6 +6490,11 @@ function MeetingPage({ portalRoomId }) {
                 try { a.srcObject = null; } catch { }
             });
             audioElsRef.current.clear();
+            // 통화 중 끊김(프록시/네트워크) 시 재연결 시도 → 검은화면 복구
+            if (!isLeavingRef.current) {
+                setRoomReconnecting(true);
+                setSfuReconnectKey((prev) => prev + 1);
+            }
         };
 
         return () => {
@@ -6453,7 +6523,7 @@ function MeetingPage({ portalRoomId }) {
             try { sfuWsRef.current?.close(); } catch { }
             sfuWsRef.current = null;
         };
-    }, [roomId, userId]); // isPipMode를 의존성에서 제거하여 재연결 방지
+    }, [roomId, userId, sfuReconnectKey]); // sfuReconnectKey: SFU 끊김 시 재연결
 
     useEffect(() => {
         // 로컬스토리지에 저장 (재접속/새로고침 시 복원)
@@ -6751,14 +6821,16 @@ function MeetingPage({ portalRoomId }) {
                 } catch (e) { }
             });
 
-            // 2. 상태 일괄 업데이트
+            // 2. 상태 일괄 업데이트 (p.id는 connectionId 또는 userId, consumer.appData.peerId는 서버가 보낸 peerId → 둘 다로 매칭)
             if (updates.size > 0) {
                 setParticipants(prev => {
                     let changed = false;
                     const next = prev.map(p => {
-                        const pid = String(p.id);
-                        if (updates.has(pid)) {
-                            const newState = updates.get(pid);
+                        const idStr = String(p.id);
+                        const userIdStr = p.userId != null ? String(p.userId) : null;
+                        const matchedKey = updates.has(idStr) ? idStr : (userIdStr && updates.has(userIdStr) ? userIdStr : null);
+                        if (matchedKey != null) {
+                            const newState = updates.get(matchedKey);
                             if (!!p.speaking !== newState) {
                                 changed = true;
                                 return { ...p, speaking: newState };

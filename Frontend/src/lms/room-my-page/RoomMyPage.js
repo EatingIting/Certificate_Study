@@ -2,6 +2,20 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./RoomMyPage.css";
 
+/**
+ * LMS 방별 마이페이지 (room별 닉네임 관리 + 프로필 사진 표시)
+ *
+ * API
+ * - GET   /api/rooms/{roomId}/me/mypage
+ *   -> { roomNickname, profileImg, postCount, commentCount, recentPosts, recentComments }
+ * - PATCH /api/rooms/{roomId}/me/nickname
+ *   body: { roomNickname }
+ *   -> { roomNickname, profileImg }
+ *
+ * - GET   /api/me/rooms
+ *   -> [{ roomId, title, isHost }, ...]
+ */
+
 async function requestJson(url, options) {
     let opts = options || {};
     let headers = Object.assign({}, opts.headers || {});
@@ -149,6 +163,7 @@ export default function RoomMyPage() {
     let [recentComments, setRecentComments] = useState([]);
 
     let [categoryName, setCategoryName] = useState("");
+    let [categoryLoading, setCategoryLoading] = useState(false);
 
     let selectedRoom = useMemo(() => {
         let found = rooms.find((r) => r.roomId === selectedRoomId);
@@ -212,28 +227,33 @@ export default function RoomMyPage() {
         (async () => {
             try {
                 setLoading(true);
+                setCategoryLoading(true);
                 setErrorMsg("");
                 setSuccessMsg("");
 
-                let data = await fetchRoomMyPage(selectedRoomId);
+                let [myPage, info] = await Promise.all([
+                    fetchRoomMyPage(selectedRoomId),
+                    fetchRoomInfo(selectedRoomId),
+                ]);
+                
                 if (!mounted) return;
 
-                setNickname(data.nickname || "");
-                setProfileImageUrl(data.profileImageUrl || "");
-                setPostCount(data.postCount || 0);
-                setCommentCount(data.commentCount || 0);
-                setRecentPosts(data.recentPosts || []);
-                setRecentComments(data.recentComments || []);
+                setNickname(myPage.nickname || "");
+                setProfileImageUrl(myPage.profileImageUrl || "");
+                setPostCount(myPage.postCount || 0);
+                setCommentCount(myPage.commentCount || 0);
+                setRecentPosts(myPage.recentPosts || []);
+                setRecentComments(myPage.recentComments || []);
                 setIsNicknameEditing(false);
-                setNicknameDraft(data.nickname || "");
-                let info = await fetchRoomInfo(selectedRoomId);
-                if (!mounted) return;
+                setNicknameDraft(myPage.nickname || "");
                 setCategoryName(info.categoryName || "");
             } catch (e) {
                 if (!mounted) return;
                 setErrorMsg(e && e.message ? e.message : "프로필 정보를 불러오지 못했습니다.");
+                setCategoryName("");
             } finally {
                 if (!mounted) return;
+                setCategoryLoading(false);
                 setLoading(false);
             }
         })();
@@ -301,16 +321,6 @@ export default function RoomMyPage() {
 
             setIsNicknameEditing(false);
             setSuccessMsg("닉네임이 수정되었습니다.");
-
-            // ✅ LMS 헤더/화상채팅 쪽에 즉시 반영 (roomNickname 우선 사용)
-            try {
-                window.dispatchEvent(
-                    new CustomEvent("lms:room-nickname-updated", {
-                        detail: { roomId: selectedRoomId, roomNickname: updated.nickname || next },
-                    })
-                );
-            } catch (e) {
-            }
         } catch (e) {
             setErrorMsg(e && e.message ? e.message : "닉네임 수정에 실패하였습니다.");
         } finally {
@@ -378,7 +388,8 @@ export default function RoomMyPage() {
                                             className="rmp-btn rmp-btnGhost"
                                             onClick={startEditNickname}
                                             disabled={loading || saving}
-                                            type="button">
+                                            type="button"
+                                        >
                                             수정
                                         </button>
                                     </div>
@@ -390,19 +401,22 @@ export default function RoomMyPage() {
                                             onChange={(e) => setNicknameDraft(e.target.value)}
                                             placeholder="닉네임 입력 (2~20자)"
                                             maxLength={20}
-                                            disabled={saving}/>
+                                            disabled={saving}
+                                        />
                                         <button
                                             className="rmp-btn"
                                             onClick={saveNickname}
                                             disabled={saving}
-                                            type="button">
+                                            type="button"
+                                        >
                                             저장
                                         </button>
                                         <button
                                             className="rmp-btn rmp-btnGhost"
                                             onClick={cancelEditNickname}
                                             disabled={saving}
-                                            type="button">
+                                            type="button"
+                                        >
                                             취소
                                         </button>
                                     </div>

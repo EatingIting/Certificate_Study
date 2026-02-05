@@ -27,9 +27,9 @@ public class BoardDetailServiceImpl implements BoardDetailService {
     @Override
     @Transactional
     public BoardPostDetailVO getDetail(long postId, boolean incView, String email) {
-        // ✅ 수정 화면 로딩은 incView=false로 오니까, 여기서 '수정 권한' 체크
+        // 수정 화면 로딩은 incView=false로 오니까, 여기서 '수정 권한' 체크
         if (!incView) {
-            boardPostService.requireCanEdit(postId, email); // 아래에 새로 추가할 메서드
+            boardPostService.requireCanEdit(postId, email);
         } else {
             boardPostService.incrementViewCount(postId);
         }

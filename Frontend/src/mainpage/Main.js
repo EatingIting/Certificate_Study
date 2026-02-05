@@ -2,8 +2,9 @@ import "./Main.css";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
-import { toBackendUrl } from "../utils/backendUrl";
+import { getBackendOrigin } from "../utils/backendUrl";
 import heroImg from "./메인메인.png";
+import sampleImg from "./sample.jpg";
 
 function Main() {
     const navigate = useNavigate();
@@ -75,12 +76,11 @@ function Main() {
     };
 
     const getImageUrl = (img) => {
-        if (!img) return "/sample.jpg";
+        if (!img) return sampleImg;
 
         if (img.startsWith("http")) return img;
 
-        // 스터디 썸네일 이미지를 EC2 백엔드 기준 URL로 변환
-        return toBackendUrl(img);
+        return `${getBackendOrigin()}${img}`;
     };
 
     return (
@@ -135,8 +135,7 @@ function Main() {
                                             alt="스터디 썸네일"
                                             className="thumb-img"
                                             onError={(e) => {
-                                                e.currentTarget.src =
-                                                    "/sample.jpg";
+                                                e.currentTarget.src = sampleImg;
                                             }}
                                         />
                                     </div>
@@ -178,7 +177,7 @@ function Main() {
                                     alt="스터디 썸네일"
                                     className="thumb-img"
                                     onError={(e) => {
-                                        e.currentTarget.src = "/sample.jpg";
+                                        e.currentTarget.src = sampleImg;
                                     }}
                                 />
                             </div>

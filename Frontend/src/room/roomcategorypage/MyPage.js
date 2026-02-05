@@ -3,6 +3,8 @@ import api from "../../api/api";
 import "./MyPage.css";
 import { toBackendUrl } from "../../utils/backendUrl";
 import { useNavigate } from "react-router-dom";
+import { getBackendOrigin } from "../../utils/backendUrl";
+import defaultImg from "../../mainpage/default.jpg";
 
 const MyPage = () => {
     const [profile, setProfile] = useState(null);
@@ -127,14 +129,13 @@ const MyPage = () => {
     };
 
     const getImageUrl = (img) => {
-        if (!img) return "/default.jpg";
+        if (!img) return defaultImg;
 
         if (img.startsWith("http")) {
             return img;
         }
 
-        // 프로필 이미지를 EC2 백엔드 기준 URL로 변환
-        return toBackendUrl(img);
+        return `${getBackendOrigin()}${img}`;
     };
 
     const openEdit = () => {
@@ -625,7 +626,7 @@ const MyPage = () => {
                                             src={previewImage}
                                             alt="preview"
                                             onError={(e) => {
-                                                e.currentTarget.src = "/default.jpg";
+                                                e.currentTarget.src = defaultImg;
                                             }}
                                         />
 
