@@ -11,6 +11,8 @@
     flex-direction: column;
     gap: 14px;
     width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
 
     font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
         "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
@@ -168,9 +170,11 @@
 }
 
 .bd-textarea {
-    resize: vertical;
+    resize: none;
     line-height: 1.7;
-    min-height: 180px;
+    height: 260px;
+    min-height: 260px;
+    max-height: 260px;
     white-space: pre-wrap;
     word-break: break-word;
 }

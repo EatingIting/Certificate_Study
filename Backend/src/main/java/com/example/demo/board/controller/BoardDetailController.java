@@ -48,7 +48,7 @@ public class BoardDetailController {
         BoardPostDetailResponse body = BoardConverter.toPostDetailResponse(vo);
 
         body.setCanEdit(vo.isCanEdit());
-        body.setCanDelete(vo.isCanEdit());
+        body.setCanDelete(vo.isCanDelete());
 
         return ResponseEntity.ok(body);
     }
