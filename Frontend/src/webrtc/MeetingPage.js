@@ -20,6 +20,16 @@ import {
     VRMUtils,
 } from "@pixiv/three-vrm";
 
+// --- ICE (STUN/TURN) ---
+const ICE_SERVERS = [
+    { urls: "stun:stun.l.google.com:19302" },
+    {
+        urls: "turn:15.165.181.93:3478",
+        username: "test",
+        credential: "test",
+    },
+];
+
 // --- Components ---
 
 // ✅ 공유 AudioContext (타일마다 새로 만들면 렉/리소스 증가)
@@ -6189,13 +6199,29 @@ function MeetingPage({ portalRoomId }) {
                 const device = sfuDeviceRef.current;
                 if (!device) return;
 
+                // RTCPeerConnection에 STUN/TURN 주입 (패턴 A + B 호환)
+                const transportOptions = {
+                    id: transportId,
+                    iceParameters,
+                    iceCandidates,
+                    dtlsParameters,
+                    iceServers: ICE_SERVERS,
+                    pcConfig: { iceServers: ICE_SERVERS },
+                };
+
                 if (direction === "send") {
-                    const sendTransport = device.createSendTransport({
-                        id: transportId,
-                        iceParameters,
-                        iceCandidates,
-                        dtlsParameters,
-                    });
+                    const sendTransport = device.createSendTransport(transportOptions);
+
+                    // ⭐ TURN 강제 주입 (mediasoup Transport 생성 후 PC config 고정이므로 setConfiguration 필요)
+                    if (sendTransport?._handler?._pc) {
+                        const pc = sendTransport._handler._pc;
+                        const currentConfig = pc.getConfiguration();
+                        pc.setConfiguration({
+                            ...currentConfig,
+                            iceServers: ICE_SERVERS,
+                        });
+                        console.log("✅ TURN injected into sendTransport PC");
+                    }
 
                     sendTransport.on("connect", ({ dtlsParameters }, cb) => {
                         const reqId = safeUUID();
@@ -6270,12 +6296,18 @@ function MeetingPage({ portalRoomId }) {
                 }
 
                 if (direction === "recv") {
-                    const recvTransport = device.createRecvTransport({
-                        id: transportId,
-                        iceParameters,
-                        iceCandidates,
-                        dtlsParameters,
-                    });
+                    const recvTransport = device.createRecvTransport(transportOptions);
+
+                    // ⭐ TURN 강제 주입 (mediasoup Transport 생성 후 PC config 고정이므로 setConfiguration 필요)
+                    if (recvTransport?._handler?._pc) {
+                        const pc = recvTransport._handler._pc;
+                        const currentConfig = pc.getConfiguration();
+                        pc.setConfiguration({
+                            ...currentConfig,
+                            iceServers: ICE_SERVERS,
+                        });
+                        console.log("✅ TURN injected into recvTransport PC");
+                    }
 
                     recvTransport.on("connect", ({ dtlsParameters }, cb) => {
                         const reqId = safeUUID();
