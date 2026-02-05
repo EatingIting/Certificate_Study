@@ -1,4 +1,4 @@
-package com.example.demo.chat.service; // 👈 패키지명 확인!
+package com.example.demo.chat.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +32,6 @@ public class OpenAiService {
     @Value("${openai.api.url}")
     private String apiUrl;
 
-    /** Vision용 모델 (이미지 인식). 없으면 기본 채팅 모델 사용 */
     @Value("${openai.vision.model:${openai.model:gpt-4o}}")
     private String visionModel;
 

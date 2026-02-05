@@ -24,7 +24,7 @@ public class ChatMessage {
     @Column(name = "user_id")
     private String userId;
 
-    // 🟢 [추가] 보낸 사람 이름 (화면 표시용)
+    // 보낸 사람 이름 (화면 표시용)
     @Column(name = "user_name")
     private String userName;
 
@@ -32,7 +32,7 @@ public class ChatMessage {
     @Column(name = "message", columnDefinition = "TEXT")
     private String messageText;
 
-    // 🟢 [추가] 메시지 타입 (TALK: 일반, AI: 봇 답변)
+    // 메시지 타입 (TALK: 일반, AI: 봇 답변)
     @Column(name = "message_type")
     private String messageType;
 

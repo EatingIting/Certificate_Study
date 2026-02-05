@@ -3,7 +3,6 @@
    ================================================================= */
 .chat-floating-btn {
     position: fixed;
-    /* top, left는 JS에서 드래그로 제어하므로 CSS에서는 제거 */
     width: 70px;
     height: 70px;
     background-color: #97c793; /* 기본 테마: 초록 */
@@ -62,8 +61,6 @@
    ================================================================= */
 .tc-wrapper {
     position: fixed;
-    /* top, left는 JS에서 드래그로 제어 */
-    
     background-color: #f5f7fb;
     border-radius: 20px;
     box-shadow: 0 5px 25px rgba(0,0,0,0.15);
@@ -74,8 +71,6 @@
     border: 1px solid rgba(0,0,0,0.05);
     overflow: hidden; /* 내부 컨텐츠가 둥근 모서리를 넘지 않게 */
 
-    /* [수정] 8방향 리사이즈를 위해 resize: both 제거됨 */
-    /* JS에서 스타일을 제어하지만, 초기 로딩 시 깜빡임 방지를 위해 기본값 유지 */
     width: 360px;
     height: 600px;
     
@@ -93,7 +88,7 @@
 
 
 /* =================================================================
-   [NEW] 8방향 리사이즈 핸들 (투명 영역)
+   8방향 리사이즈 핸들 (투명 영역)
    - 마우스를 가장자리에 대면 커서가 바뀝니다.
    ================================================================= */
 .resizer {
@@ -420,7 +415,6 @@
     border-radius: 18px;
     font-size: 14px;
     
-    /* [수정] 가독성을 위해 줄 간격 1.6으로 설정 */
     line-height: 1.6;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     position: relative;
