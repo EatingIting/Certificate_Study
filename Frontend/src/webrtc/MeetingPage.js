@@ -4452,6 +4452,7 @@ function MeetingPage({ portalRoomId }) {
                             ...prev,
                             {
                                 id: peerId,
+                                userId: peerId,
                                 name: displayName,
                                 isMe: false,
 
@@ -5612,6 +5613,7 @@ function MeetingPage({ portalRoomId }) {
                                     return {
                                         ...old,
                                         id: participantId,
+                                        userId: peerId,
                                         name: u.userName,
                                         joinAt: u.joinAt,
                                         isMe: false,

@@ -45,7 +45,7 @@ const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
 };
 
 const ChatModal = ({ roomId, roomName }) => {
-    // 출석부/스터디원/게시판/헤더와 동일한 표시명 (방별 닉네임 우선 → 전역 닉네임 → 이름)
+    // 출석부/스터디원/게시판/헤더와 동일한 표시명
     const { displayName } = useLMS();
 
     // =================================================================
@@ -54,7 +54,13 @@ const ChatModal = ({ roomId, roomName }) => {
     const [isOpen, setIsOpen] = useState(false);         // 채팅창 열림 여부
     const [isMenuOpen, setIsMenuOpen] = useState(false); // 햄버거 메뉴 열림 여부
     const [showStickerMenu, setShowStickerMenu] = useState(false); // 이모티콘 메뉴
-    const [unreadCount, setUnreadCount] = useState(0);   // 읽지 않은 메시지 수
+    
+    // 안 읽은 개수 (초기값: 로컬 스토리지에서 복구)
+    const [unreadCount, setUnreadCount] = useState(() => {
+        if (!roomId) return 0;
+        const saved = localStorage.getItem(`unread_${roomId}`);
+        return saved ? parseInt(saved, 10) : 0;
+    });
 
     const [isAiMode, setIsAiMode] = useState(false);     // AI 모드 여부
     const [inputValue, setInputValue] = useState("");    // 입력창 값
@@ -72,9 +78,9 @@ const ChatModal = ({ roomId, roomName }) => {
         isAiResponse: true
     }]);
 
-    // AI 모드: 과제 목록 / 메시지별 제출한 사람 목록 (메시지 인덱스 → 제출 목록)
+    // AI 모드 관련 상태들
     const [assignmentList, setAssignmentList] = useState([]);
-    const [submissionListAfterMessage, setSubmissionListAfterMessage] = useState({}); // { [index]: { assignmentId, title, submissions } }
+    const [submissionListAfterMessage, setSubmissionListAfterMessage] = useState({});
     const [loadingAssignments, setLoadingAssignments] = useState(false);
     const [loadingSubmissionForIndex, setLoadingSubmissionForIndex] = useState(null); // 메시지 인덱스 또는 null
     // "xxx님의 과제를 요약할까요? 예상문제를 낼까요?" 대상 제출자 → 이후 '과제 요약'/'예상문제' 입력 시 사용
@@ -116,6 +122,14 @@ const ChatModal = ({ roomId, roomName }) => {
     const modalRef = useRef(null);  // 모달 DOM
     const streamingTimers = useRef(new Map()); // AI 타자 효과용 타이머
 
+    // 최신 메시지 목록을 실시간으로 추적하는 Ref (타이밍 이슈 해결용)
+    const latestMessagesRef = useRef(chatMessages);
+
+    // chatMessages가 변할 때마다 Ref도 업데이트
+    useEffect(() => {
+        latestMessagesRef.current = chatMessages;
+    }, [chatMessages]);
+
     // =================================================================
     // 2. 유틸리티 및 초기 설정
     // =================================================================
@@ -125,19 +139,12 @@ const ChatModal = ({ roomId, roomName }) => {
         const host = getHostnameWithPort();
         const wsProtocol = getWsProtocol();
         const httpProtocol = wsProtocol === 'wss' ? 'https' : 'http';
-
         let wsHost = host;
-        if (host.includes(":3000")) {
-            wsHost = host.replace(":3000", ":8080");
-        }
-
-        return {
-            apiBaseUrl: `${httpProtocol}://${host}`,
-            wsUrl: `${wsProtocol}://${wsHost}`
-        };
+        if (host.includes(":3000")) wsHost = host.replace(":3000", ":8080");
+        return { apiBaseUrl: `${httpProtocol}://${host}`, wsUrl: `${wsProtocol}://${wsHost}` };
     }, []);
 
-    // 사용자 정보: LMSContext displayName과 동일하게 (방별 닉네임 우선)
+    // 사용자 정보
     const myInfo = useMemo(() => {
         try {
             const storedUserId = localStorage.getItem("userId") || sessionStorage.getItem("userId");
@@ -225,28 +232,23 @@ const ChatModal = ({ roomId, roomName }) => {
         return answer;
     };
 
-    // 요약 노트 저장 시 AI 인사·마무리 문장 제거하고 본문만 저장
     const getAnswerForSummaryNote = (answer) => {
         if (!answer || typeof answer !== "string") return answer || "";
         let text = answer.trim();
-        // 0) "(아래는 실제...)" / "### 예시)" 다음 --- 부터 "※ 위 내용은" 전까지만 보이게 (위·아래 잘라내기)
         if (text.includes("(아래는 실제") || text.includes("### 예시)")) {
             const belowBlock = text.match(/\n---\s*\n\s*####\s/);
             if (belowBlock && belowBlock.index != null) {
                 text = text.slice(belowBlock.index).replace(/^\s*---\s*\n\s*/, "").trim();
             }
         }
-        // 1) 본문 시작: 첫 '## ' / '### ' / '---' 다음부터 (일반 케이스)
         if (!text.includes("#### ")) {
             const startRe = /\n\s*---\s*\n\s*|(?:^|\n)\s*(##\s+\d|##\s+[^\n]+|###\s+\d|###\s+[^\n]+)/;
             const idx = text.search(startRe);
             if (idx >= 0) text = text.slice(idx).replace(/^\s*---\s*\n\s*/, "").trim();
         }
-        // 2) 맨 끝 멘트 제거: '※ 위 내용은', '궁금한 점이나', '도움이 되었길' 등 이후 잘라내기
         const outroRe = /\n\s*(---\s*\n\s*)?(※\s*위\s*내용은|궁금한\s*점이나|도움이 되었길|더 궁금한|감사합니다|필요하면|언제든 질문해|궁금한 점이 있으시면)/i;
         const cutIdx = text.search(outroRe);
         if (cutIdx >= 0) text = text.slice(0, cutIdx).trim();
-        // 끝의 불필요한 '---' 제거
         text = text.replace(/\n\s*---\s*$/, "").trim();
         return text || answer;
     };
@@ -255,8 +257,7 @@ const ChatModal = ({ roomId, roomName }) => {
         if (!roomId) return;
         const label = noteType === "SUMMARY" ? "요약노트" : "문제 노트";
         if (!window.confirm(`이 내용을 ${label}에 저장하시겠습니까?`)) return;
-        const answerToSave =
-            noteType === "PROBLEM" ? getAnswerForProblemNote(answer) : noteType === "SUMMARY" ? getAnswerForSummaryNote(answer) : (answer || "");
+        const answerToSave = noteType === "PROBLEM" ? getAnswerForProblemNote(answer) : noteType === "SUMMARY" ? getAnswerForSummaryNote(answer) : (answer || "");
         try {
             await api.post("/answernote", {
                 subjectId: String(roomId),
@@ -272,20 +273,32 @@ const ChatModal = ({ roomId, roomName }) => {
         }
     };
 
-    // 🟢 [추가] 마지막 읽은 시간 업데이트 함수
-    const updateLastReadTime = () => {
+    // =================================================================
+    // 읽음 처리 로직 (5초 버퍼 적용)
+    // =================================================================
+    const updateLastReadTime = (targetDate) => {
         if (!roomId) return;
-        const now = new Date().toISOString();
-        localStorage.setItem(`lastRead_${roomId}`, now);
+        
+        let dateToSave;
+        if (targetDate) {
+            dateToSave = targetDate; // 메시지 시간이 있으면 그 시간으로
+        } else {
+            // 메시지 시간 없이 '현재 시점'으로 저장할 때 -> +5초 여유 (서버 시간 오차 보정)
+            const now = new Date();
+            now.setSeconds(now.getSeconds() + 5); 
+            dateToSave = now.toISOString();
+        }
+        
+        localStorage.setItem(`lastRead_${roomId}`, dateToSave);
     };
 
-    // 🟢 [수정] 방 변경 시 초기화
+    // 방 변경 시 초기화
     useEffect(() => {
         if (!roomId) return;
 
         setChatMessages([]);
-        setRoomNickname(null); // 닉네임 초기화 (재로딩 유도)
-        setUnreadCount(0); // 일단 0으로 시작 (fetchChatHistory에서 계산됨)
+        setRoomNickname(null); 
+        setUnreadCount(0); // 일단 0으로 (통합 로직이 다시 계산)
         
         if (ws.current) {
             ws.current.close();
@@ -293,13 +306,10 @@ const ChatModal = ({ roomId, roomName }) => {
         }
     }, [roomId]);
 
-    // 🟢 [수정] 채팅창 열 때 처리 (읽음 처리)
+    // unreadCount가 변할 때마다 localStorage에 저장 (새로고침 대비)
     useEffect(() => {
-        if (isOpen && roomId) {
-            setUnreadCount(0);
-            updateLastReadTime(); // 열었으니 현재 시간까지 다 읽은 것으로 처리
-        }
-    }, [isOpen, roomId]);
+        if (roomId) localStorage.setItem(`unread_${roomId}`, unreadCount);
+    }, [unreadCount, roomId]);
 
 
     // =================================================================
@@ -334,9 +344,9 @@ const ChatModal = ({ roomId, roomName }) => {
     }, [roomId, myInfo, apiBaseUrl]);
 
 
-    // 🟢 [핵심 수정] 채팅 내역 불러오기 + 안 읽은 개수 계산
+    // 채팅 내역 불러오기 (숫자 계산 로직 제거 -> 통합 로직으로 이관)
     useEffect(() => {
-        // isOpen 체크 제거! (방에 들어오면 무조건 데이터를 받아와서 계산해야 함)
+        // isOpen 체크 제거! (방에 들어오면 무조건 데이터를 받아와야 함)
         if (!roomId || !myInfo) return;
 
         const fetchChatHistory = async () => {
@@ -360,24 +370,6 @@ const ChatModal = ({ roomId, roomName }) => {
 
                     setChatMessages(dbMessages);
                     
-                    // 🚀 [여기서 안 읽은 개수 계산]
-                    if (!isOpen && !isAiMode) {
-                        const lastReadTimeStr = localStorage.getItem(`lastRead_${roomId}`);
-                        
-                        if (lastReadTimeStr) {
-                            const lastReadTime = new Date(lastReadTimeStr).getTime();
-                            // 마지막 읽은 시간보다 뒤에 온 메시지 개수 카운트
-                            const unread = dbMessages.filter(msg => 
-                                new Date(msg.createdAt).getTime() > lastReadTime
-                            ).length;
-                            setUnreadCount(unread);
-                        } else {
-                            // 한 번도 읽은 적 없으면 0으로 두거나, 전체를 안 읽음으로 할 수 있음.
-                            // 여기서는 깔끔하게 0으로 시작 (사용자가 클릭하면 그때부터 카운트 시작)
-                            setUnreadCount(0);
-                        }
-                    }
-
                     // 열려있을 때만 스크롤 이동
                     if (isOpen) {
                         setTimeout(() => {
@@ -390,6 +382,37 @@ const ChatModal = ({ roomId, roomName }) => {
 
         fetchChatHistory();
     }, [roomId, myInfo, apiBaseUrl]); // isOpen 제거 (항상 로드)
+
+
+    // 통합 카운터: 메시지 목록이나 상태가 변하면 안 읽은 개수 자동 계산
+    useEffect(() => {
+        if (!roomId || !myInfo) return;
+
+        if (isOpen) {
+            // 창이 열려있으면 무조건 0 & 읽음 시간 갱신
+            setUnreadCount(0);
+            if (chatMessages.length > 0) {
+                const lastMsg = chatMessages[chatMessages.length - 1];
+                updateLastReadTime(lastMsg.createdAt);
+            } else {
+                updateLastReadTime();
+            }
+        } else {
+            // 창이 닫혀있으면: (전체 메시지) 중 (내 것이 아니고) && (마지막 읽은 시간보다 최신인 것) 카운트
+            const lastReadTimeStr = localStorage.getItem(`lastRead_${roomId}`);
+            if (lastReadTimeStr) {
+                const lastReadTime = new Date(lastReadTimeStr).getTime();
+                const unread = chatMessages.filter(msg => 
+                    msg.userId !== myInfo.userId && 
+                    new Date(msg.createdAt).getTime() > lastReadTime
+                ).length;
+                setUnreadCount(unread);
+            } else {
+                // 기록이 없으면 0으로 둠 (원하면 chatMessages.length로 해서 전체 안 읽음 처리 가능)
+                setUnreadCount(0);
+            }
+        }
+    }, [isOpen, chatMessages, roomId, myInfo]); // 메시지가 추가될 때마다 재계산
 
 
     // =================================================================
@@ -697,14 +720,6 @@ const ChatModal = ({ roomId, roomName }) => {
                     }];
                 });
 
-                // 🟢 창이 닫혀있으면 안 읽은 숫자 증가
-                if (!isOpen && !isAiMode) {
-                    setUnreadCount(prev => prev + 1);
-                } else {
-                    // 창이 열려있으면 마지막 읽은 시간 갱신 (실시간 읽음 처리)
-                    updateLastReadTime();
-                }
-
             } else if (data.type === "USERS_UPDATE") {
                 const uniqueUsers = data.users.filter((v, i, a) => a.findIndex(t => (t.userId === v.userId)) === i);
                 setUserList(uniqueUsers);
@@ -716,9 +731,9 @@ const ChatModal = ({ roomId, roomName }) => {
         return () => {
             if (socket.readyState === WebSocket.OPEN) socket.close();
         };
-    }, [isOpen, roomId, myInfo, wsUrl]);
+    }, [isOpen, roomId, myInfo, wsUrl, roomNickname]); 
 
-    // 과제 요약/예상문제 로딩 시 단계별 문구: 1 → 2초 후 → 2
+    // AI 로딩 및 스크롤 처리
     useEffect(() => {
         if (loadingPhaseForSubmission !== 1) return;
         const t = setTimeout(() => setLoadingPhaseForSubmission(2), 2000);
@@ -743,88 +758,41 @@ const ChatModal = ({ roomId, roomName }) => {
 
 
     // =================================================================
-    // 5. 이벤트 핸들러
+    // 5. 이벤트 핸들러 (드래그/리사이즈)
     // =================================================================
-    
-    const handleMouseDown = (e) => {
-        isDragging.current = false;
-        accumulatedMove.current = 0;
-        dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    };
 
-    const handleResizeMouseDown = (e, direction) => {
-        e.preventDefault(); e.stopPropagation();
-        resizeRef.current = {
-            active: true, dir: direction, startX: e.clientX, startY: e.clientY,
-            startW: modalRef.current.offsetWidth, startH: modalRef.current.offsetHeight,
-            startLeft: position.x, startTop: position.y
-        };
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    };
+    // 드래그/리사이즈 핸들러
+    const handleMouseDown = (e) => { isDragging.current = false; accumulatedMove.current = 0; dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y }; document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', handleMouseUp); };
+    const handleResizeMouseDown = (e, direction) => { e.preventDefault(); e.stopPropagation(); resizeRef.current = { active: true, dir: direction, startX: e.clientX, startY: e.clientY, startW: modalRef.current.offsetWidth, startH: modalRef.current.offsetHeight, startLeft: position.x, startTop: position.y }; document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', handleMouseUp); };
+    const handleMouseMove = (e) => { if (resizeRef.current && resizeRef.current.active) { const { dir, startX, startY, startW, startH, startLeft, startTop } = resizeRef.current; const dx = e.clientX - startX; const dy = e.clientY - startY; let newW = startW, newH = startH, newX = startLeft, newY = startTop; if (dir.includes('e')) newW = startW + dx; if (dir.includes('s')) newH = startH + dy; if (dir.includes('w')) { newW = startW - dx; newX = startLeft + dx; } if (dir.includes('n')) { newH = startH - dy; newY = startTop + dy; } if (newW < 360) { newW = 360; if (dir.includes('w')) newX = startLeft + (startW - 360); } if (newH < 600) { newH = 600; if (dir.includes('n')) newY = startTop + (startH - 600); } if (newX < 0) { newW += newX; newX = 0; } if (newY < 0) { newH += newY; newY = 0; } if (newX + newW > window.innerWidth) newW = window.innerWidth - newX; if (newY + newH > window.innerHeight) newH = window.innerHeight - newY; if (modalRef.current) { modalRef.current.style.width = `${newW}px`; modalRef.current.style.height = `${newH}px`; } lastWindowSize.current = { w: newW, h: newH }; setPosition({ x: newX, y: newY }); lastButtonPos.current = null; return; } accumulatedMove.current += Math.abs(e.movementX) + Math.abs(e.movementY); if (accumulatedMove.current > 5) isDragging.current = true; let currentWidth = BUTTON_SIZE, currentHeight = BUTTON_SIZE; if (isOpen && modalRef.current) { currentWidth = modalRef.current.offsetWidth; currentHeight = modalRef.current.offsetHeight; } const maxX = window.innerWidth - currentWidth; const maxY = window.innerHeight - currentHeight; let nextX = Math.min(Math.max(0, e.clientX - dragStart.current.x), maxX); let nextY = Math.min(Math.max(0, e.clientY - dragStart.current.y), maxY); if (isOpen && isDragging.current) lastButtonPos.current = null; setPosition({ x: nextX, y: nextY }); };
+    const handleMouseUp = () => { setTimeout(() => { isDragging.current = false; }, 50); if (resizeRef.current) resizeRef.current.active = false; document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', handleMouseUp); };
 
-    const handleMouseMove = (e) => {
-        if (resizeRef.current && resizeRef.current.active) {
-            const { dir, startX, startY, startW, startH, startLeft, startTop } = resizeRef.current;
-            const dx = e.clientX - startX; const dy = e.clientY - startY;
-            let newW = startW, newH = startH, newX = startLeft, newY = startTop;
-
-            if (dir.includes('e')) newW = startW + dx;
-            if (dir.includes('s')) newH = startH + dy;
-            if (dir.includes('w')) { newW = startW - dx; newX = startLeft + dx; }
-            if (dir.includes('n')) { newH = startH - dy; newY = startTop + dy; }
-
-            if (newW < 360) { newW = 360; if (dir.includes('w')) newX = startLeft + (startW - 360); }
-            if (newH < 600) { newH = 600; if (dir.includes('n')) newY = startTop + (startH - 600); }
-
-            if (newX < 0) { newW += newX; newX = 0; }
-            if (newY < 0) { newH += newY; newY = 0; }
-            if (newX + newW > window.innerWidth) newW = window.innerWidth - newX;
-            if (newY + newH > window.innerHeight) newH = window.innerHeight - newY;
-
-            if (modalRef.current) {
-                modalRef.current.style.width = `${newW}px`;
-                modalRef.current.style.height = `${newH}px`;
-            }
-            lastWindowSize.current = { w: newW, h: newH };
-            setPosition({ x: newX, y: newY });
-            lastButtonPos.current = null;
-            return;
-        }
-
-        accumulatedMove.current += Math.abs(e.movementX) + Math.abs(e.movementY);
-        if (accumulatedMove.current > 5) isDragging.current = true;
-
-        let currentWidth = BUTTON_SIZE, currentHeight = BUTTON_SIZE;
-        if (isOpen && modalRef.current) {
-            currentWidth = modalRef.current.offsetWidth;
-            currentHeight = modalRef.current.offsetHeight;
-        }
-
-        const maxX = window.innerWidth - currentWidth;
-        const maxY = window.innerHeight - currentHeight;
-        let nextX = Math.min(Math.max(0, e.clientX - dragStart.current.x), maxX);
-        let nextY = Math.min(Math.max(0, e.clientY - dragStart.current.y), maxY);
-
-        if (isOpen && isDragging.current) lastButtonPos.current = null;
-        setPosition({ x: nextX, y: nextY });
-    };
-
-    const handleMouseUp = () => {
-        setTimeout(() => { isDragging.current = false; }, 50);
-        if (resizeRef.current) resizeRef.current.active = false;
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    // 토글 (열 때만 읽음 처리)
+    // 토글 시 처리 (반응 속도 개선 & 읽음 처리)
     const toggleChat = () => {
         if (isDragging.current || accumulatedMove.current > 5) return;
 
-        if (isOpen) {
+        // 최신 메시지 목록 가져오기 (Ref 사용)
+        const currentMsgs = latestMessagesRef.current;
+        const lastMsgTime = currentMsgs.length > 0 ? currentMsgs[currentMsgs.length - 1].createdAt : null;
+
+        if (!isOpen) {
+            // 열 때
+            setUnreadCount(0); // 즉시 0으로 만듦
+            
+            // 위치 복원
+            lastButtonPos.current = { x: position.x, y: position.y };
+            const targetW = lastWindowSize.current.w; const targetH = lastWindowSize.current.h;
+            let newX = Math.max(0, position.x - (targetW - BUTTON_SIZE));
+            let newY = Math.max(0, position.y - (targetH - BUTTON_SIZE));
+            if (newX + targetW > window.innerWidth) newX = window.innerWidth - targetW;
+            if (newY + targetH > window.innerHeight) newY = window.innerHeight - targetH;
+            setPosition({ x: newX, y: newY });
+
+            // 읽음 처리
+            updateLastReadTime(lastMsgTime);
+        } else {
             // 닫을 때
+            // 위치 저장
             if (modalRef.current) lastWindowSize.current = { w: modalRef.current.offsetWidth, h: modalRef.current.offsetHeight };
             if (lastButtonPos.current) { setPosition(lastButtonPos.current); lastButtonPos.current = null; }
             else if (modalRef.current) {
@@ -833,20 +801,9 @@ const ChatModal = ({ roomId, roomName }) => {
                 let newY = Math.min(Math.max(0, position.y + (currentH - BUTTON_SIZE)), window.innerHeight - BUTTON_SIZE);
                 setPosition({ x: newX, y: newY });
             }
-            // 🟢 닫을 때는 숫자를 0으로 초기화하지 않음 (열 때 이미 0 처리됨)
-        } else {
-            // 열 때
-            lastButtonPos.current = { x: position.x, y: position.y };
-            const targetW = lastWindowSize.current.w; const targetH = lastWindowSize.current.h;
-            let newX = Math.max(0, position.x - (targetW - BUTTON_SIZE));
-            let newY = Math.max(0, position.y - (targetH - BUTTON_SIZE));
-            if (newX + targetW > window.innerWidth) newX = window.innerWidth - targetW;
-            if (newY + targetH > window.innerHeight) newY = window.innerHeight - targetH;
-            setPosition({ x: newX, y: newY });
             
-            // 🟢 열자마자 읽음 처리
-            setUnreadCount(0);
-            updateLastReadTime();
+            // 닫는 순간 읽음 처리
+            updateLastReadTime(lastMsgTime);
         }
         setIsOpen(!isOpen);
     };
@@ -877,7 +834,6 @@ const ChatModal = ({ roomId, roomName }) => {
     const handleSend = async (text = inputValue) => {
         if (!text.trim()) return;
         if (!myInfo) return;
-
         setInputValue("");
         setShowStickerMenu(false);
 
@@ -907,67 +863,25 @@ const ChatModal = ({ roomId, roomName }) => {
                 return;
             }
 
-            // '안녕' 등 인사 → 자격증 AI 호출 대신, 과제 목록 보기로 유도
+            // 인사 등 단순 답변 처리
             const trimmedLower = text.trim().toLowerCase();
             const isGreeting = /^안녕(하세요)?\.?$/.test(trimmedLower) || trimmedLower === "안녕" || trimmedLower === "하이" || trimmedLower === "hello";
-            if (isGreeting) {
-                setAiMessages((prev) => [
-                    ...prev,
-                    {
-                        userId: "AI_BOT",
-                        userName: "AI 튜터",
-                        message: "안녕하세요! 과제 제출 현황이나 목록이 궁금하시다면 '과제 목록을 보여줘' 또는 '과제'라고 입력해보세요. 과제 목록을 확인한 뒤, 원하는 과제의 제출한 사람을 선택하면 요약이나 예상문제를 요청할 수 있어요.",
-                        createdAt: new Date().toISOString(),
-                        isAiResponse: true
-                    }
-                ]);
-                return;
-            }
+            if (isGreeting) { setAiMessages((prev) => [ ...prev, { userId: "AI_BOT", userName: "AI 튜터", message: "안녕하세요! 과제 제출 현황이나 목록이 궁금하시다면 '과제 목록을 보여줘' 또는 '과제'라고 입력해보세요.", createdAt: new Date().toISOString(), isAiResponse: true } ]); return; }
 
-            // "이름이 바뀌었나요?" / "이름이바뀌었나요" 등 → 자격증 AI 응답 대신, 비슷한 사람(또는 마지막에 말한 사람) 제출현황만 표시
+            // "이름이 바뀌었나요?" 처리
             if (isNameChangeQuestion(text)) {
                 let info = null;
-                if (lastAskedSubmission) {
-                    info = getAssignmentInfoForSubmission(lastAskedSubmission.submissionId, submissionListAfterMessage);
-                }
-                if (!info) {
-                    const matchedSubmission = findSubmissionNameFromMessage(text, submissionListAfterMessage);
-                    if (matchedSubmission) {
-                        info = getAssignmentInfoForSubmission(matchedSubmission.submissionId, submissionListAfterMessage) || { assignmentTitle: "과제", submission: matchedSubmission };
-                    }
-                }
-                let reply;
-                if (info?.submission) {
-                    const name = info.submission.name;
-                    const hasFile = info.submission.fileUrl != null && String(info.submission.fileUrl).trim() !== "";
-                    const statusText = hasFile ? "제출완료" : "미제출";
-                    reply = `${name}님의 제출 현황: [${info.assignmentTitle}] - ${statusText}`;
-                } else if (lastAskedSubmission?.name) {
-                    reply = `${lastAskedSubmission.name}님의 제출 현황을 보려면, 먼저 '과제 목록'에서 해당 과제를 선택한 뒤 다시 말씀해 주세요.`;
-                } else {
-                    reply = "어느 분의 제출 현황을 알려드릴까요? 과제 목록에서 과제를 선택한 뒤, 이름을 말씀해 주세요.";
-                }
-                setAiMessages((prev) => [
-                    ...prev,
-                    {
-                        userId: "AI_BOT",
-                        userName: "AI 튜터",
-                        message: reply,
-                        createdAt: new Date().toISOString(),
-                        isAiResponse: true
-                    }
-                ]);
-                return;
+                if (lastAskedSubmission) { info = getAssignmentInfoForSubmission(lastAskedSubmission.submissionId, submissionListAfterMessage); }
+                if (!info) { const matchedSubmission = findSubmissionNameFromMessage(text, submissionListAfterMessage); if (matchedSubmission) { info = getAssignmentInfoForSubmission(matchedSubmission.submissionId, submissionListAfterMessage) || { assignmentTitle: "과제", submission: matchedSubmission }; } }
+                let reply = info?.submission ? `${info.submission.name}님의 제출 현황: [${info.assignmentTitle}] - ${info.submission.fileUrl ? "제출완료" : "미제출"}` : (lastAskedSubmission?.name ? `${lastAskedSubmission.name}님의 제출 현황을 보려면...` : "어느 분의 제출 현황을 알려드릴까요?");
+                setAiMessages((prev) => [ ...prev, { userId: "AI_BOT", userName: "AI 튜터", message: reply, createdAt: new Date().toISOString(), isAiResponse: true } ]); return;
             }
 
-            // 프롬프트에 과제 이름/번호가 있으면 해당 메시지 뒤에 제출한 사람 리스트만 표시하고, AI 답변은 요청하지 않음
+            // 과제 이름/번호 매칭
             const matched = findAssignmentFromMessage(text, assignmentList);
-            if (matched) {
-                loadSubmissionsForMessageIndex(matched.id, matched.title, userMessageIndex);
-                return; // 리스트가 뜨면 AI 답변은 보내지 않음
-            }
+            if (matched) { loadSubmissionsForMessageIndex(matched.id, matched.title, userMessageIndex); return; }
 
-            // 요약/예상문제 키워드 (닉네임+키워드 한 번에 요청 시 바로 진행용)
+            // 제출물 기반 AI 질문 처리 (요약/예상문제)
             const hasSummaryKeyword = text.includes("과제 요약") || text.includes("요약해") || text.includes("요약");
             const hasProblemKeyword =
                 text.includes("예상문제") ||
@@ -1000,61 +914,20 @@ const ChatModal = ({ roomId, roomName }) => {
 
             // 프롬프트에 제출한 사람 닉네임이 있으면: 미제출이면 안내, 제출+요약/문제 키워드 있으면 바로 진행, 없으면 "요약할까요? 예상문제?"만 표시
             const matchedSubmission = findSubmissionNameFromMessage(text, submissionListAfterMessage);
+            
             if (matchedSubmission) {
-                const hasFile = matchedSubmission.fileUrl != null && String(matchedSubmission.fileUrl).trim() !== "";
-                if (!hasFile) {
-                    setAiMessages((prev) => [
-                        ...prev,
-                        {
-                            userId: "AI_BOT",
-                            userName: "AI 튜터",
-                            message: `${matchedSubmission.name}님의 과제가 아직 제출되지 않았습니다.`,
-                            createdAt: new Date().toISOString(),
-                            isAiResponse: true
-                        }
-                    ]);
-                    return;
-                }
+                if (!matchedSubmission.fileUrl) { setAiMessages(prev => [...prev, { userId: "AI_BOT", userName: "AI 튜터", message: `${matchedSubmission.name}님의 과제가 아직 제출되지 않았습니다.`, createdAt: new Date().toISOString(), isAiResponse: true }]); return; }
                 setLastAskedSubmission({ submissionId: matchedSubmission.submissionId, name: matchedSubmission.name });
-                if (hasSummaryKeyword || hasProblemKeyword) {
-                    // 닉네임 + 요약/예상문제 키워드가 함께 있으면 중간 확인 없이 바로 제출물 기반 요청 진행
-                } else {
-                    setAiMessages((prev) => [
-                        ...prev,
-                        {
-                            userId: "AI_BOT",
-                            userName: "AI 튜터",
-                            message: `${matchedSubmission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`,
-                            createdAt: new Date().toISOString(),
-                            isAiResponse: true
-                        }
-                    ]);
-                    return;
-                }
+                if (!hasSummaryKeyword && !hasProblemKeyword) { setAiMessages(prev => [...prev, { userId: "AI_BOT", userName: "AI 튜터", message: `${matchedSubmission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`, createdAt: new Date().toISOString(), isAiResponse: true }]); return; }
             }
 
-            // 제출물 기반 요청 (lastAskedSubmission 있음 = 방금 닉네임 매칭했거나 이전에 선택함) + 요약/예상문제 키워드 → 바로 API 호출
             if (lastAskedSubmission && (hasSummaryKeyword || hasProblemKeyword)) {
                 // 사용자 메시지(예: "2과목 요약해줘", "1과목 예상문제 내줘")를 그대로 전달해 AI가 해당 부분만 처리
                 const loadingType = hasProblemKeyword ? "problem" : "summary";
                 setLoadingPhaseForSubmission(1);
-                setAiMessages((prev) => [
-                    ...prev,
-                    {
-                        userId: "AI_BOT",
-                        userName: "AI 튜터",
-                        message: "DB에서 파일 가져오는중...",
-                        createdAt: new Date().toISOString(),
-                        isAiResponse: true,
-                        isLoading: true,
-                        loadingSubmissionType: loadingType
-                    }
-                ]);
+                setAiMessages(prev => [...prev, { userId: "AI_BOT", userName: "AI 튜터", message: "DB에서 파일 가져오는중...", createdAt: new Date().toISOString(), isAiResponse: true, isLoading: true, loadingSubmissionType: loadingType }]);
                 try {
-                    const res = await api.post("/ai/chat/with-submission", {
-                        message: text.trim(),
-                        submissionId: String(lastAskedSubmission.submissionId)
-                    });
+                    const res = await api.post("/ai/chat/with-submission", { message: text.trim(), submissionId: String(lastAskedSubmission.submissionId) });
                     const replyText = res.data != null ? String(res.data) : "";
                     setLoadingPhaseForSubmission(null);
                     startStreamingAiMessage(
@@ -1126,17 +999,14 @@ const ChatModal = ({ roomId, roomName }) => {
                 setAiMessages(prev => prev.map(msg => msg.isLoading ? { ...msg, message: "AI 오류", isLoading: false } : msg));
             }
         } else {
+            // 일반 채팅 전송
             if (ws.current?.readyState === WebSocket.OPEN) {
                 ws.current.send(JSON.stringify({
-                    type: "TALK",
-                    roomId,
-                    userId: myInfo.userId,
-                    userName: roomNickname || myInfo.userName, 
-                    message: text
+                    type: "TALK", roomId, userId: myInfo.userId, userName: roomNickname || myInfo.userName, message: text
                 }));
             }
-            // 내가 보낸 건 바로 읽은 걸로 처리
-            updateLastReadTime();
+            // 내가 보낸 건 바로 읽음 처리 (5초 버퍼)
+            updateLastReadTime(new Date().toISOString());
         }
     };
 
@@ -1189,7 +1059,6 @@ const ChatModal = ({ roomId, roomName }) => {
                 <div className={`tc-body ${isAiMode ? 'ai-mode' : ''}`} ref={scrollRef} onClick={() => { setIsMenuOpen(false); setShowStickerMenu(false); }}>
                     {isAiMode ? (
                         <>
-                            {/* 1) 첫 메시지: 안녕하세요! ... */}
                             {currentMessages.length > 0 && (() => {
                                 const msg = currentMessages[0];
                                 const isMe = !msg.isAiResponse;
@@ -1258,7 +1127,6 @@ const ChatModal = ({ roomId, roomName }) => {
                                                         {formatTime(msg.createdAt)}
                                                     </span>
                                                 </div>
-                                                {/* 과제 요약/예상문제 응답 시 맨 아래 저장 버튼 */}
                                                 {!isMe && msg.saveButtons && (
                                                     <div className="chat-ai-save-buttons">
                                                         {msg.saveButtons.type === "summary" && (
@@ -1275,7 +1143,6 @@ const ChatModal = ({ roomId, roomName }) => {
                                                 )}
                                             </div>
                                         </div>
-                                        {/* '과제 목록 보여줘' / '과제' 입력 시 해당 사용자 메시지 아래에 과제 목록 표시 */}
                                         {isMe && showAssignmentListAfterIndex === idx && (
                                             <div className="chat-ai-assignment-panel">
                                                 <div className="chat-ai-panel-title">📋 과제 목록</div>
@@ -1286,11 +1153,7 @@ const ChatModal = ({ roomId, roomName }) => {
                                                 ) : (
                                                     <ul className="chat-ai-assignment-list">
                                                         {assignmentList.map((a) => (
-                                                            <li
-                                                                key={a.id}
-                                                                className="chat-ai-assignment-item"
-                                                                onClick={(e) => { e.stopPropagation(); handleClickAssignmentInList(a); }}
-                                                            >
+                                                            <li key={a.id} className="chat-ai-assignment-item" onClick={(e) => { e.stopPropagation(); handleClickAssignmentInList(a); }}>
                                                                 <span className="chat-ai-assignment-title">{a.title}</span>
                                                                 <span className="chat-ai-assignment-due">마감 {a.dueDate}</span>
                                                             </li>
@@ -1396,11 +1259,7 @@ const ChatModal = ({ roomId, roomName }) => {
                                                 ) : submissionData?.submissions?.length ? (
                                                     <ul className="chat-ai-submission-list">
                                                         {submissionData.submissions.map((s) => (
-                                                            <li
-                                                                key={s.submissionId}
-                                                                className="chat-ai-submission-item clickable"
-                                                                onClick={(e) => { e.stopPropagation(); handleClickSubmission(s); }}
-                                                            >
+                                                            <li key={s.submissionId} className="chat-ai-submission-item clickable" onClick={(e) => { e.stopPropagation(); handleClickSubmission(s); }}>
                                                                 <span className="chat-ai-submission-name">{s.name}</span>
                                                                 <span className="chat-ai-submission-date">{s.submittedAt}</span>
                                                             </li>
@@ -1446,7 +1305,13 @@ const ChatModal = ({ roomId, roomName }) => {
 
                 <div className="tc-input-area">
                     {!isAiMode && <button className="tc-sticker-toggle-btn" onClick={() => setShowStickerMenu(!showStickerMenu)}>😊</button>}
-                    <input className="tc-input" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} placeholder="메시지 입력" />
+                    <input
+                        className="tc-input"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                        placeholder="메시지 입력"
+                    />
                     <button className={`tc-send-btn ${isAiMode ? 'ai-mode' : ''}`} onClick={() => handleSend()}>전송</button>
                 </div>
             </div>

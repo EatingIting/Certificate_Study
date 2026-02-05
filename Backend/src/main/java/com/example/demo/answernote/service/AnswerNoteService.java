@@ -32,7 +32,7 @@ public class AnswerNoteService {
     private final RoomRepository roomRepository;
     private final RoomParticipantMapper roomParticipantMapper;
 
-    // 1. 저장 (이메일 조회 방식 유지)
+    // 1. 저장 (이메일 조회 방식)
     public void saveNote(String userEmail, AnswerNoteRequestDTO dto) {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. (Email: " + userEmail + ")"));
@@ -109,7 +109,7 @@ public class AnswerNoteService {
         }
         for (RoomParticipantVO v : approved) {
             if (v.getEmail() != null && v.getNickname() != null) {
-                // 같은 이메일이면 host(방장) 정보가 우선이므로 putIfAbsent
+                // 같은 이메일이면 host(방장) 정보가 우선
                 nickByEmail.putIfAbsent(v.getEmail(), v.getNickname());
             }
         }
