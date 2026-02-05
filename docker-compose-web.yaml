@@ -1,6 +1,6 @@
 services:
   backend:
-    image: certificate-study/backend:latest
+    image: eatingiting/backend
     container_name: backend
     restart: unless-stopped
     env_file:
@@ -9,7 +9,7 @@ services:
       - "8080:8080"
 
   frontend:
-    image: certificate-study/frontend:latest
+    image: eatingiting/frontend
     container_name: frontend
     restart: unless-stopped
     ports:
