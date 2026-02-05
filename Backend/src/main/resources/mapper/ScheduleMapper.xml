@@ -77,7 +77,7 @@
         AND deleted_at IS NULL
     </update>
 
-    <!-- type=EXAM: 오늘 이후 시험 우선, 없으면 오늘 시험 (오늘만 있으면 D-0로 표시) -->
+    <!-- type=EXAM: 미래 시험 우선(이틀 남으면 D-2), 미래 없으면 오늘 시험(D-day) -->
     <select id="selectNextExam" resultMap="ScheduleMap">
         SELECT
         schedule_id, room_id, user_id, title, description,
