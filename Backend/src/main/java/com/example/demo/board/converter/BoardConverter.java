@@ -98,6 +98,7 @@ public final class BoardConverter {
                 .isPinned(vo.getIsPinned())
                 .viewCount(vo.getViewCount())
                 .commentCount(vo.getCommentCount())
+                .attachmentCount(vo.getAttachmentCount())
                 .createdAt(vo.getCreatedAt())
                 .updatedAt(vo.getUpdatedAt())
                 .build();

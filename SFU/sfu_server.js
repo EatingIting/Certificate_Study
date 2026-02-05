@@ -1,16 +1,20 @@
-import fs from "fs";
-import https from "https";
+/**
+ * SFU 시그널링: HTTP/WS 전용 (인증서·.pem 파일 사용 안 함)
+ * Spring ↔ SFU는 VPC 내부 ws:// 로만 연결
+ */
+import http from "http";
 import express from "express";
 import cors from "cors";
 import WebSocket, { WebSocketServer } from "ws";
 import mediasoup from "mediasoup";
 import os from "os";
+import config from "./config.js";
 
 const SFU_PORT = 4000;
+const GRACE_MS = 15000; // 재접속 유예 (PiP/잠깐 끊김)
+const HEARTBEAT_INTERVAL_MS = 25000; // Nginx 등 프록시 유휴 끊김 방지 (60s 미만 권장)
 
-// ✅ 인증서 경로 (예: mkcert로 만든 파일)
-const TLS_KEY_PATH = "C:/certs/server-key.pem";
-const TLS_CERT_PATH = "C:/certs/server.pem";
+// Spring ↔ SFU 시그널링은 VPC 내부만 사용 → HTTP/WS (TLS 불필요)
 
 // mediasoup codec
 const mediaCodecs = [
@@ -18,8 +22,9 @@ const mediaCodecs = [
   { kind: "video", mimeType: "video/VP8", clockRate: 90000, parameters: {} },
 ];
 
-let worker;
+let workers = [];
 const rooms = new Map();
+let shuttingDown = false;
 
 function safeSend(ws, obj) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -28,7 +33,7 @@ function safeSend(ws, obj) {
 
 function broadcast(room, exceptPeerId, obj) {
   const msg = JSON.stringify(obj);
-  for (const [pid, peer] of room.peers.entries()) {
+  for (const [pid, peer] of [...room.peers.entries()]) {
     if (pid === exceptPeerId) continue;
     if (peer.ws && peer.ws.readyState === WebSocket.OPEN) peer.ws.send(msg);
   }
@@ -38,29 +43,37 @@ function randomId(prefix = "") {
   return prefix + Math.random().toString(36).slice(2, 10);
 }
 
-function getLocalIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      // IPv4이고, 내부(127.0.0.1)가 아닌 주소를 찾음
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+const MY_IP = config.webRtcTransport.listenIps[0].announcedIp;
+console.log(`📡 Announced IP (WebRTC): ${MY_IP}`);
+
+async function startWorkers() {
+  const numWorkers = Math.max(1, os.cpus().length);
+  for (let i = 0; i < numWorkers; i++) {
+    const worker = await mediasoup.createWorker(config.worker);
+    worker.on("died", () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+
+      console.error("❌ mediasoup worker died");
+      try {
+        for (const room of [...rooms.values()]) {
+          for (const peerId of [...room.peers.keys()]) {
+            cleanupPeer(room, peerId);
+          }
+          try { room.router.close(); } catch { }
+        }
+      } finally {
+        process.exit(1);
       }
-    }
+    });
+    workers.push(worker);
   }
-  return "127.0.0.1"; // 못 찾으면 기본값
+  console.log(`✅ mediasoup workers created: ${workers.length}`);
 }
 
-const MY_IP = getLocalIp(); // 서버 켜질 때 자동으로 IP 감지!
-console.log(`📡 Detected Server IP: ${MY_IP}`);
-
-async function startWorker() {
-  worker = await mediasoup.createWorker({ rtcMinPort: 40000, rtcMaxPort: 49999 });
-  worker.on("died", () => {
-    console.error("❌ mediasoup worker died");
-    process.exit(1);
-  });
-  console.log("✅ mediasoup worker created");
+// 추후: worker별 roomCount 맵으로 최소 룸 수 워커에 배치 가능
+function getNextWorker() {
+  return workers[Math.floor(Math.random() * workers.length)];
 }
 
 async function getOrCreateRoom(roomId) {
@@ -71,7 +84,11 @@ async function getOrCreateRoom(roomId) {
   }
 
   console.log("🆕 [SFU] room CREATED:", roomId);
+  const worker = getNextWorker();
   const router = await worker.createRouter({ mediaCodecs });
+  router.on("close", () => {
+    console.log("🧹 router closed", roomId);
+  });
 
   room = { roomId, router, peers: new Map() };
   rooms.set(roomId, room);
@@ -88,6 +105,11 @@ function getPeer(room, peerId) {
 function cleanupPeer(room, peerId) {
   const peer = room.peers.get(peerId);
   if (!peer) return;
+
+  if (peer.pendingCloseTimer) {
+    clearTimeout(peer.pendingCloseTimer);
+    peer.pendingCloseTimer = null;
+  }
 
   for (const consumer of peer.consumers.values()) { try { consumer.close(); } catch { } }
   peer.consumers.clear();
@@ -107,9 +129,42 @@ function cleanupPeer(room, peerId) {
   }
 }
 
+/** ws 끊김 시 유예 후 퇴장 (재접속 시 새 ws에도 close 핸들러 등록) */
+function handlePeerDisconnect(room, peerId) {
+  const peer = room.peers.get(peerId);
+  if (!peer) return;
+
+  // 이미 다른 ws로 재연결된 상태면 무시
+  if (peer.ws && peer.ws.readyState === WebSocket.OPEN) return;
+
+  peer.ws = null;
+  peer.disconnectedAt = Date.now();
+
+  if (peer.pendingCloseTimer) return;
+
+  peer.pendingCloseTimer = setTimeout(() => {
+    peer.pendingCloseTimer = null;
+    // 유예 동안 재연결되면 취소
+    if (peer.ws && peer.ws.readyState === WebSocket.OPEN) return;
+
+    broadcast(room, peerId, {
+      action: "peerLeft",
+      data: { roomId: room.roomId, peerId },
+    });
+    cleanupPeer(room, peerId);
+    if (rooms.has(room.roomId)) {
+      const currentRoom = rooms.get(room.roomId);
+      broadcast(currentRoom, null, {
+        action: "peerCount",
+        data: { count: currentRoom.peers.size },
+      });
+    }
+  }, GRACE_MS);
+}
+
 function listOtherProducers(room, exceptPeerId) {
   const result = [];
-  for (const [pid, peer] of room.peers.entries()) {
+  for (const [pid, peer] of [...room.peers.entries()]) {
     if (pid === exceptPeerId) continue;
     for (const producerId of peer.producers.keys()) {
       const producer = peer.producers.get(producerId);
@@ -131,24 +186,55 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.get("/health", (_, res) => res.json({ ok: true }));
+app.get("/ready", (_, res) => {
+  res.json({
+    ok: workers.length > 0,
+    workers: workers.length,
+    rooms: rooms.size,
+  });
+});
+app.get("/metrics", (_, res) => {
+  let peers = 0, producers = 0, consumers = 0;
+  for (const room of rooms.values()) {
+    for (const peer of room.peers.values()) {
+      peers++;
+      producers += peer.producers.size;
+      consumers += peer.consumers.size;
+    }
+  }
+  res.json({
+    rooms: rooms.size,
+    peers,
+    producers,
+    consumers,
+    workers: workers.length,
+  });
+});
 
-// ✅ HTTPS 서버로 생성
-const httpsServer = https.createServer({
-  key: fs.readFileSync(TLS_KEY_PATH),
-  cert: fs.readFileSync(TLS_CERT_PATH),
-}, app);
+// Spring만 접근 (보안그룹에서 TCP 4000은 Spring EC2만 허용 권장)
+const httpServer = http.createServer(app);
+const wss = new WebSocketServer({ server: httpServer });
 
-// ✅ WSS 서버
-const wss = new WebSocketServer({ server: httpsServer });
+// Ping/Pong keepalive: 프록시(Nginx 등) 유휴 타임아웃으로 WS 끊김 → 검은화면 방지
+const heartbeatInterval = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) {
+      console.log("💀 [SFU] heartbeat timeout, terminating WS");
+      ws.terminate();
+      continue;
+    }
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, HEARTBEAT_INTERVAL_MS);
 
-// ✅ 서버 시작
-httpsServer.listen(SFU_PORT, async () => {
-  await startWorker();
-  console.log(`🚀 SFU HTTPS/WSS listening on https://${MY_IP}:${SFU_PORT}`);
+httpServer.listen(SFU_PORT, async () => {
+  await startWorkers();
+  console.log(`🚀 SFU HTTP/WS listening on http://${MY_IP}:${SFU_PORT} (heartbeat ${HEARTBEAT_INTERVAL_MS}ms)`);
 });
 
 function findProducerInfo(room, producerId) {
-  for (const [pid, p] of room.peers.entries()) {
+  for (const [pid, p] of [...room.peers.entries()]) {
     const producer = p.producers.get(producerId);
     if (producer) return { producer, peerId: pid };
   }
@@ -159,7 +245,13 @@ function findProducerInfo(room, producerId) {
 // WebSocket Signaling (mediasoup control)
 // -------------------------------
 wss.on("connection", (ws) => {
-  console.log("🔌 [SFU] WSS connected");
+  console.log("🔌 [SFU] WS connected");
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
+
+  ws.on("error", (err) => {
+    console.error("❌ [SFU] WS error:", err?.message || err);
+  });
 
   let joinedRoomId = null;
   let joinedPeerId = null;
@@ -183,10 +275,35 @@ wss.on("connection", (ws) => {
         const room = await getOrCreateRoom(roomId);
         const newPeerId = peerId || randomId("p_");
 
-        // ✅ 같은 peerId가 이미 있으면 기존 peer 정리 후 재연결 허용 (PIP 복귀 지원)
+        // ✅ 같은 peerId가 이미 있으면 유예 중 재접속 → ws만 교체 (PiP 복귀/잠깐 끊김 대응)
         if (room.peers.has(newPeerId)) {
-          console.log(`🔄 [SFU] Peer ${newPeerId} already exists, cleaning up old connection...`);
-          cleanupPeer(room, newPeerId);
+          const oldPeer = room.peers.get(newPeerId);
+          if (oldPeer?.pendingCloseTimer) {
+            clearTimeout(oldPeer.pendingCloseTimer);
+            oldPeer.pendingCloseTimer = null;
+          }
+          // 기존 ws의 close 핸들러 제거 (중복 핸들러 방지)
+          if (oldPeer.closeHandler && oldPeer.ws) {
+            try { oldPeer.ws.off("close", oldPeer.closeHandler); } catch { }
+          }
+          oldPeer.ws = ws;
+          oldPeer.disconnectedAt = null;
+          const onClose = () => handlePeerDisconnect(room, newPeerId);
+          oldPeer.closeHandler = onClose;
+          ws.on("close", onClose);
+
+          joinedRoomId = roomId;
+          joinedPeerId = newPeerId;
+          const existingProducers = listOtherProducers(room, newPeerId);
+          console.log("🔄 [SFU] peer rejoined (same peerId)", { roomId, peerId: newPeerId });
+          reply({
+            roomId,
+            peerId: newPeerId,
+            rtpCapabilities: room.router.rtpCapabilities,
+            existingProducers,
+            rejoined: true,
+          });
+          return;
         }
 
         const peer = {
@@ -195,6 +312,9 @@ wss.on("connection", (ws) => {
           transports: new Map(),
           producers: new Map(),
           consumers: new Map(),
+          pendingCloseTimer: null,
+          disconnectedAt: null,
+          closeHandler: null,
         };
 
         room.peers.set(newPeerId, peer);
@@ -230,7 +350,7 @@ wss.on("connection", (ws) => {
         const peersState = [];
         const existingProducers = listOtherProducers(room, joinedPeerId);
 
-        for (const [pid, p] of room.peers.entries()) {
+        for (const [pid, p] of [...room.peers.entries()]) {
           peersState.push({
             peerId: pid,
             micOn: [...p.producers.values()].some(prod => prod.kind === "audio"),
@@ -253,32 +373,46 @@ wss.on("connection", (ws) => {
         if (direction !== "send" && direction !== "recv") throw new Error("direction must be 'send' or 'recv'");
 
         const transport = await room.router.createWebRtcTransport({
-          listenIps: [
-            {
-              ip: "0.0.0.0",
-              announcedIp: MY_IP,
-            }
-          ],
-          enableUdp: true,
-          enableTcp: true,
-          preferUdp: true,
-
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
-          ]
+          ...config.webRtcTransport,
+          initialAvailableOutgoingBitrate: 1_000_000, // 1 Mbps 시작점
+          // maxIncomingBitrate: 3_000_000, // 필요 시 제한
         });
 
         peer.transports.set(transport.id, { transport, direction });
 
+        transport.on("icestatechange", (state) => {
+          console.log(`[transport] ICE state: ${state} (${direction}, peerId: ${peer.peerId}, transportId: ${transport.id})`);
+          if (state === "failed" || state === "disconnected") {
+            console.error(`[transport] ICE ${state} - 연결 실패 가능성`, {
+              peerId: peer.peerId,
+              direction,
+              transportId: transport.id,
+              announcedIp: config.webRtcTransport.listenIps[0].announcedIp,
+            });
+          }
+        });
         transport.on("dtlsstatechange", (state) => {
+          console.log(`[transport] DTLS state: ${state} (${direction}, peerId: ${peer.peerId}, transportId: ${transport.id})`);
+          if (state === "failed" || state === "closed") {
+            console.error(`[transport] DTLS ${state}`, {
+              peerId: peer.peerId,
+              direction,
+              transportId: transport.id,
+            });
+          }
           if (state === "closed") {
             try { transport.close(); } catch { }
             peer.transports.delete(transport.id);
           }
         });
-
         transport.on("close", () => peer.transports.delete(transport.id));
+
+        console.log(`[transport] Created ${direction} transport`, {
+          transportId: transport.id,
+          peerId: peer.peerId,
+          iceCandidatesCount: transport.iceCandidates?.length || 0,
+          announcedIp: config.webRtcTransport.listenIps[0].announcedIp,
+        });
 
         reply({
           transportId: transport.id,
@@ -286,7 +420,6 @@ wss.on("connection", (ws) => {
           iceParameters: transport.iceParameters,
           iceCandidates: transport.iceCandidates,
           dtlsParameters: transport.dtlsParameters,
-
         });
         return;
       }
@@ -311,8 +444,23 @@ wss.on("connection", (ws) => {
         if (!t) throw new Error("TRANSPORT_NOT_FOUND");
         if (t.direction !== "send") throw new Error("NOT_A_SEND_TRANSPORT");
 
+        // 동일 kind/appData 기존 producer 정리 (카메라/마이크 토글 시 중복 방지)
+        const appDataStr = JSON.stringify(appData || {});
+        for (const p of [...peer.producers.values()]) {
+          if (p.kind === kind && JSON.stringify(p.appData || {}) === appDataStr) {
+            try { p.close(); } catch { }
+            peer.producers.delete(p.id);
+          }
+        }
+
         const producer = await t.transport.produce({ kind, rtpParameters, appData });
         peer.producers.set(producer.id, producer);
+        console.log(`[producer] Created ${kind} producer`, {
+          producerId: producer.id,
+          peerId: peer.peerId,
+          roomId: room.roomId,
+          appData: appData || {},
+        });
 
         const notifyClose = () => {
           peer.producers.delete(producer.id);
@@ -329,6 +477,9 @@ wss.on("connection", (ws) => {
 
         producer.on("transportclose", notifyClose);
         producer.on("close", notifyClose);
+        producer.on("score", (score) => {
+          console.log("[producer] score", producer.id, score);
+        });
 
         broadcast(room, peer.peerId, {
           action: "newProducer",
@@ -351,8 +502,16 @@ wss.on("connection", (ws) => {
         const appData = info?.producer?.appData || {};
         const producerPeerId = info?.peerId || null;
 
+        // paused: true 유지. 향후 Simulcast/SVC 시 preferedLayers / maxSpatialLayer 등 고려
         const consumer = await t.transport.consume({ producerId, rtpCapabilities, paused: true });
         peer.consumers.set(consumer.id, consumer);
+        console.log(`[consumer] Created ${consumer.kind} consumer`, {
+          consumerId: consumer.id,
+          producerId,
+          consumerPeerId: peer.peerId,
+          producerPeerId,
+          roomId: room.roomId,
+        });
 
         // 비디오 consumer 생성 직후 키프레임 요청 → 상대방 화면 초반 화질 개선 (mediasoup Consumer API)
         if (consumer.kind === "video") {
@@ -428,19 +587,6 @@ wss.on("connection", (ws) => {
     if (!joinedRoomId || !joinedPeerId) return;
     const room = rooms.get(joinedRoomId);
     if (!room) return;
-
-    broadcast(room, joinedPeerId, {
-      action: "peerLeft",
-      data: { roomId: joinedRoomId, peerId: joinedPeerId },
-    });
-
-    cleanupPeer(room, joinedPeerId);
-    if (rooms.has(joinedRoomId)) { // 방이 아직 살아있다면
-      const currentRoom = rooms.get(joinedRoomId);
-      broadcast(currentRoom, null, {
-        action: "peerCount",
-        data: { count: currentRoom.peers.size }
-      });
-    }
+    handlePeerDisconnect(room, joinedPeerId);
   });
 });

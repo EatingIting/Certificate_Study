@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 import "./LMSMain.css";
-import { toBackendUrl } from "../utils/backendUrl";
+import { toBackendUrl, getBackendOrigin } from "../utils/backendUrl";
+import sampleImg from "../mainpage/sample.jpg";
 
 const ClassCard = ({ data, loginUserEmail }) => {
     const navigate = useNavigate();
@@ -81,9 +82,9 @@ const ClassCard = ({ data, loginUserEmail }) => {
     return (
         <div className="class-card">
             <img
-                src={data.roomImg || "/sample.jpg"}
+                src={data.roomImg ? (data.roomImg.startsWith("http") ? data.roomImg : `${getBackendOrigin()}${data.roomImg}`) : sampleImg}
                 alt={data.title}
-                onError={(e) => (e.target.src = "/sample.jpg")}
+                onError={(e) => (e.target.src = sampleImg)}
             />
 
             <div className="card-body">
