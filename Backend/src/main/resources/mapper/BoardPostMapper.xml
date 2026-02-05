@@ -173,4 +173,10 @@
           AND deleted_at IS NULL
     </update>
 
+    <delete id="hardDeleteOlderThanDays">
+        DELETE FROM board_posts
+        WHERE deleted_at IS NOT NULL
+          AND deleted_at <![CDATA[<]]> DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </delete>
+
 </mapper>

@@ -5,27 +5,22 @@ import com.example.demo.board.vo.BoardPostVO;
 import com.example.demo.roomparticipant.RoomParticipantMapper;
 import com.example.demo.로그인.service.AuthService;
 import com.example.demo.로그인.vo.AuthVO;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class BoardPostServiceImpl implements BoardPostService {
 
     private final BoardPostMapper boardPostMapper;
     private final AuthService authService;
     private final RoomParticipantMapper roomParticipantMapper;
-
-    public BoardPostServiceImpl(BoardPostMapper boardPostMapper,
-                                AuthService authService,
-                                RoomParticipantMapper roomParticipantMapper) {
-        this.boardPostMapper = boardPostMapper;
-        this.authService = authService;
-        this.roomParticipantMapper = roomParticipantMapper;
-    }
 
     private String getUserIdByEmail(String email) {
         AuthVO user = authService.findByEmail(email);
@@ -175,6 +170,7 @@ public class BoardPostServiceImpl implements BoardPostService {
         boardPostMapper.incrementViewCount(postId);
     }
 
+    @Override
     public void requireCanEdit(long postId, String email) {
         BoardPostVO saved = boardPostMapper.selectPostById(postId);
         if (saved == null) throw new IllegalStateException("게시글이 존재하지 않습니다.");
@@ -218,5 +214,12 @@ public class BoardPostServiceImpl implements BoardPostService {
         boolean canDelete = notice ? host : (owner || host);
 
         return Map.of("canEdit", canEdit, "canDelete", canDelete);
+    }
+
+    @Override
+    @Transactional
+    public int purgeDeletedPosts(int days) {
+        if (days <= 0) throw new IllegalArgumentException("days must be positive");
+        return boardPostMapper.hardDeleteOlderThanDays(days);
     }
 }
