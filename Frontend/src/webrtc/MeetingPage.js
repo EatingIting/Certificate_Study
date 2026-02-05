@@ -825,6 +825,8 @@ function MeetingPage({ portalRoomId }) {
     });
 
     const [roomReconnecting, setRoomReconnecting] = useState(true);
+    /** SFU WS 끊김 시 재연결 트리거 (검은화면 방지) */
+    const [sfuReconnectKey, setSfuReconnectKey] = useState(0);
 
     const [participantCount, setParticipantCount] = useState(1);
     const [chatDraft, setChatDraft] = useState("");
@@ -6160,6 +6162,15 @@ function MeetingPage({ portalRoomId }) {
             console.log("[MeetingPage] 재접속 시작 알림 전송");
         }
 
+        // 재연결 시 이전 transport/device 정리 (끊김 후 재연결)
+        if (sfuWsRef.current != null) {
+            try { sendTransportRef.current?.close(); } catch { }
+            try { recvTransportRef.current?.close(); } catch { }
+            try { sfuDeviceRef.current?.close?.(); } catch { }
+            sendTransportRef.current = null;
+            recvTransportRef.current = null;
+            sfuDeviceRef.current = null;
+        }
         const sfuWsUrl = getSfuWsUrl();
         if (process.env.NODE_ENV !== "test") {
             console.log("[SFU] Connecting to", sfuWsUrl, "(no :4000 – nginx proxy)");
@@ -6477,6 +6488,11 @@ function MeetingPage({ portalRoomId }) {
                 try { a.srcObject = null; } catch { }
             });
             audioElsRef.current.clear();
+            // 통화 중 끊김(프록시/네트워크) 시 재연결 시도 → 검은화면 복구
+            if (!isLeavingRef.current) {
+                setRoomReconnecting(true);
+                setSfuReconnectKey((prev) => prev + 1);
+            }
         };
 
         return () => {
@@ -6505,7 +6521,7 @@ function MeetingPage({ portalRoomId }) {
             try { sfuWsRef.current?.close(); } catch { }
             sfuWsRef.current = null;
         };
-    }, [roomId, userId]); // isPipMode를 의존성에서 제거하여 재연결 방지
+    }, [roomId, userId, sfuReconnectKey]); // sfuReconnectKey: SFU 끊김 시 재연결
 
     useEffect(() => {
         // 로컬스토리지에 저장 (재접속/새로고침 시 복원)
