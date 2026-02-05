@@ -23,7 +23,7 @@ const ChatModal = ({ roomId, roomName }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false); // 햄버거 메뉴 열림 여부
     const [showStickerMenu, setShowStickerMenu] = useState(false); // 이모티콘 메뉴
     
-    // 🟢 [수정] 안 읽은 개수 (초기값: 로컬 스토리지에서 복구)
+    // 안 읽은 개수 (초기값: 로컬 스토리지에서 복구)
     const [unreadCount, setUnreadCount] = useState(() => {
         if (!roomId) return 0;
         const saved = localStorage.getItem(`unread_${roomId}`);
@@ -46,7 +46,7 @@ const ChatModal = ({ roomId, roomName }) => {
         isAiResponse: true
     }]);
 
-    // AI 모드 관련 상태들 (기존 유지)
+    // AI 모드 관련 상태들
     const [assignmentList, setAssignmentList] = useState([]);
     const [submissionListAfterMessage, setSubmissionListAfterMessage] = useState({});
     const [loadingAssignments, setLoadingAssignments] = useState(false);
@@ -72,10 +72,10 @@ const ChatModal = ({ roomId, roomName }) => {
     const scrollRef = useRef(null); // 스크롤 자동 이동용
     const modalRef = useRef(null);  // 모달 DOM
 
-    // 🟢 [추가] 최신 메시지 목록을 실시간으로 추적하는 Ref (타이밍 이슈 해결용)
+    // 최신 메시지 목록을 실시간으로 추적하는 Ref (타이밍 이슈 해결용)
     const latestMessagesRef = useRef(chatMessages);
 
-    // 🟢 [추가] chatMessages가 변할 때마다 Ref도 업데이트
+    // chatMessages가 변할 때마다 Ref도 업데이트
     useEffect(() => {
         latestMessagesRef.current = chatMessages;
     }, [chatMessages]);
@@ -171,7 +171,7 @@ const ChatModal = ({ roomId, roomName }) => {
     };
 
     // =================================================================
-    // 🟢 [핵심] 읽음 처리 로직 (5초 버퍼 적용)
+    // 읽음 처리 로직 (5초 버퍼 적용)
     // =================================================================
     const updateLastReadTime = (targetDate) => {
         if (!roomId) return;
@@ -189,7 +189,7 @@ const ChatModal = ({ roomId, roomName }) => {
         localStorage.setItem(`lastRead_${roomId}`, dateToSave);
     };
 
-    // 🟢 [수정] 방 변경 시 초기화
+    // 방 변경 시 초기화
     useEffect(() => {
         if (!roomId) return;
 
@@ -203,7 +203,7 @@ const ChatModal = ({ roomId, roomName }) => {
         }
     }, [roomId]);
 
-    // 🟢 [추가] unreadCount가 변할 때마다 localStorage에 저장 (새로고침 대비)
+    // unreadCount가 변할 때마다 localStorage에 저장 (새로고침 대비)
     useEffect(() => {
         if (roomId) localStorage.setItem(`unread_${roomId}`, unreadCount);
     }, [unreadCount, roomId]);
@@ -241,7 +241,7 @@ const ChatModal = ({ roomId, roomName }) => {
     }, [roomId, myInfo, apiBaseUrl]);
 
 
-    // 🟢 [핵심 수정] 채팅 내역 불러오기 (숫자 계산 로직 제거 -> 통합 로직으로 이관)
+    // 채팅 내역 불러오기 (숫자 계산 로직 제거 -> 통합 로직으로 이관)
     useEffect(() => {
         // isOpen 체크 제거! (방에 들어오면 무조건 데이터를 받아와야 함)
         if (!roomId || !myInfo) return;
@@ -267,8 +267,6 @@ const ChatModal = ({ roomId, roomName }) => {
 
                     setChatMessages(dbMessages);
                     
-                    // 🟢 [수정] 여기서 setUnreadCount 하던 로직 제거 (아래 통합 로직이 처리)
-
                     // 열려있을 때만 스크롤 이동
                     if (isOpen) {
                         setTimeout(() => {
@@ -283,7 +281,7 @@ const ChatModal = ({ roomId, roomName }) => {
     }, [roomId, myInfo, apiBaseUrl]); // isOpen 제거 (항상 로드)
 
 
-    // 🟢 [신규 추가] 통합 카운터: 메시지 목록이나 상태가 변하면 안 읽은 개수 자동 계산
+    // 통합 카운터: 메시지 목록이나 상태가 변하면 안 읽은 개수 자동 계산
     useEffect(() => {
         if (!roomId || !myInfo) return;
 
@@ -315,7 +313,7 @@ const ChatModal = ({ roomId, roomName }) => {
 
 
     // =================================================================
-    // 3-1. [API] AI 모드에서 과제 목록 불러오기 (기존 유지)
+    // 3-1. [API] AI 모드에서 과제 목록 불러오기
     // =================================================================
     useEffect(() => {
         if (!isOpen || !isAiMode || !roomId) return;
@@ -378,8 +376,6 @@ const ChatModal = ({ roomId, roomName }) => {
                     }];
                 });
 
-                // 🟢 [수정] 여기서 직접 setUnreadCount 하지 않음 (위의 통합 카운터가 처리)
-
             } else if (data.type === "USERS_UPDATE") {
                 const uniqueUsers = data.users.filter((v, i, a) => a.findIndex(t => (t.userId === v.userId)) === i);
                 setUserList(uniqueUsers);
@@ -393,7 +389,7 @@ const ChatModal = ({ roomId, roomName }) => {
         };
     }, [isOpen, roomId, myInfo, wsUrl, roomNickname]); 
 
-    // AI 로딩 및 스크롤 처리 (기존 유지)
+    // AI 로딩 및 스크롤 처리
     useEffect(() => {
         if (loadingPhaseForSubmission !== 1) return;
         const t = setTimeout(() => setLoadingPhaseForSubmission(2), 2000);
@@ -408,7 +404,7 @@ const ChatModal = ({ roomId, roomName }) => {
 
 
     // =================================================================
-    // 5. 이벤트 핸들러 (기존 유지)
+    // 5. 이벤트 핸들러
     // =================================================================
     const loadSubmissionsForMessageIndex = async (assignmentId, assignmentTitle, messageIndex) => { setLoadingSubmissionForIndex(messageIndex); try { const res = await api.get(`/assignments/${assignmentId}/submissions`); const submissions = (res.data || []).map((x) => ({ submissionId: x.submissionId, name: x.memberName, submittedAt: x.submittedAt ? String(x.submittedAt).replace("T", " ").slice(0, 16) : "-", status: x.status, fileUrl: x.fileUrl })); setSubmissionListAfterMessage((prev) => ({ ...prev, [messageIndex]: { assignmentId, title: assignmentTitle, submissions } })); } catch (e) { setSubmissionListAfterMessage((prev) => ({ ...prev, [messageIndex]: { assignmentId, title: assignmentTitle, submissions: [] } })); } finally { setLoadingSubmissionForIndex(null); } };
     const handleClickSubmission = (submission) => { const hasFile = submission.fileUrl != null && String(submission.fileUrl).trim() !== ""; if (!hasFile) { setAiMessages((prev) => [ ...prev, { userId: "AI_BOT", userName: "AI 튜터", message: `${submission.name}님의 과제가 아직 제출되지 않았습니다.`, createdAt: new Date().toISOString(), isAiResponse: true } ]); return; } setLastAskedSubmission({ submissionId: submission.submissionId, name: submission.name }); setAiMessages((prev) => [ ...prev, { userId: "AI_BOT", userName: "AI 튜터", message: `${submission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`, createdAt: new Date().toISOString(), isAiResponse: true } ]); };
@@ -425,7 +421,7 @@ const ChatModal = ({ roomId, roomName }) => {
     const handleMouseMove = (e) => { if (resizeRef.current && resizeRef.current.active) { const { dir, startX, startY, startW, startH, startLeft, startTop } = resizeRef.current; const dx = e.clientX - startX; const dy = e.clientY - startY; let newW = startW, newH = startH, newX = startLeft, newY = startTop; if (dir.includes('e')) newW = startW + dx; if (dir.includes('s')) newH = startH + dy; if (dir.includes('w')) { newW = startW - dx; newX = startLeft + dx; } if (dir.includes('n')) { newH = startH - dy; newY = startTop + dy; } if (newW < 360) { newW = 360; if (dir.includes('w')) newX = startLeft + (startW - 360); } if (newH < 600) { newH = 600; if (dir.includes('n')) newY = startTop + (startH - 600); } if (newX < 0) { newW += newX; newX = 0; } if (newY < 0) { newH += newY; newY = 0; } if (newX + newW > window.innerWidth) newW = window.innerWidth - newX; if (newY + newH > window.innerHeight) newH = window.innerHeight - newY; if (modalRef.current) { modalRef.current.style.width = `${newW}px`; modalRef.current.style.height = `${newH}px`; } lastWindowSize.current = { w: newW, h: newH }; setPosition({ x: newX, y: newY }); lastButtonPos.current = null; return; } accumulatedMove.current += Math.abs(e.movementX) + Math.abs(e.movementY); if (accumulatedMove.current > 5) isDragging.current = true; let currentWidth = BUTTON_SIZE, currentHeight = BUTTON_SIZE; if (isOpen && modalRef.current) { currentWidth = modalRef.current.offsetWidth; currentHeight = modalRef.current.offsetHeight; } const maxX = window.innerWidth - currentWidth; const maxY = window.innerHeight - currentHeight; let nextX = Math.min(Math.max(0, e.clientX - dragStart.current.x), maxX); let nextY = Math.min(Math.max(0, e.clientY - dragStart.current.y), maxY); if (isOpen && isDragging.current) lastButtonPos.current = null; setPosition({ x: nextX, y: nextY }); };
     const handleMouseUp = () => { setTimeout(() => { isDragging.current = false; }, 50); if (resizeRef.current) resizeRef.current.active = false; document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', handleMouseUp); };
 
-    // 🟢 [수정] 토글 시 처리 (반응 속도 개선 & 읽음 처리)
+    // 토글 시 처리 (반응 속도 개선 & 읽음 처리)
     const toggleChat = () => {
         if (isDragging.current || accumulatedMove.current > 5) return;
 
@@ -437,7 +433,7 @@ const ChatModal = ({ roomId, roomName }) => {
             // 열 때
             setUnreadCount(0); // 즉시 0으로 만듦
             
-            // 위치 복원 (기존 코드 유지)
+            // 위치 복원
             lastButtonPos.current = { x: position.x, y: position.y };
             const targetW = lastWindowSize.current.w; const targetH = lastWindowSize.current.h;
             let newX = Math.max(0, position.x - (targetW - BUTTON_SIZE));
@@ -450,7 +446,7 @@ const ChatModal = ({ roomId, roomName }) => {
             updateLastReadTime(lastMsgTime);
         } else {
             // 닫을 때
-            // 위치 저장 (기존 코드 유지)
+            // 위치 저장
             if (modalRef.current) lastWindowSize.current = { w: modalRef.current.offsetWidth, h: modalRef.current.offsetHeight };
             if (lastButtonPos.current) { setPosition(lastButtonPos.current); lastButtonPos.current = null; }
             else if (modalRef.current) {
@@ -460,7 +456,7 @@ const ChatModal = ({ roomId, roomName }) => {
                 setPosition({ x: newX, y: newY });
             }
             
-            // 🟢 닫는 순간 읽음 처리 (가장 중요!)
+            // 닫는 순간 읽음 처리
             updateLastReadTime(lastMsgTime);
         }
         setIsOpen(!isOpen);
@@ -540,7 +536,7 @@ const ChatModal = ({ roomId, roomName }) => {
                     type: "TALK", roomId, userId: myInfo.userId, userName: roomNickname || myInfo.userName, message: text
                 }));
             }
-            // 🟢 내가 보낸 건 바로 읽음 처리 (5초 버퍼)
+            // 내가 보낸 건 바로 읽음 처리 (5초 버퍼)
             updateLastReadTime(new Date().toISOString());
         }
     };
