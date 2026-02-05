@@ -36,12 +36,12 @@ const ICE_SERVERS = [
 ];
 
 // SFU 시그널링: nginx 프록시 사용. 포트(:4000) 붙이면 안 됨.
-// 경로는 nginx 설정과 일치해야 함 (301 리다이렉트 방지)
+// nginx 설정: location /sfu/ { proxy_pass http://172.31.57.169:4000/; }
 const SFU_WS_BASE = "onsil.study";
 function getSfuWsUrl() {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    // nginx location /sfu { ... } 또는 location /sfu/ { ... } 설정에 맞춰 조정
-    return `${protocol}://${SFU_WS_BASE}/sfu`;
+    // nginx location /sfu/ (슬래시 포함)에 맞춤
+    return `${protocol}://${SFU_WS_BASE}/sfu/`;
 }
 
 // --- Components ---
@@ -6123,7 +6123,7 @@ function MeetingPage({ portalRoomId }) {
         );
     }, []);
 
-    // 2️⃣ SFU WebSocket (nginx proxy → wss://onsil.study/sfu/ , 포트 없음)
+    // 2️⃣ SFU WebSocket (nginx proxy → wss://onsil.study/sfu , 포트 없음)
     useEffect(() => {
         effectAliveRef.current = true;
         if (!roomId) return;
@@ -6455,11 +6455,13 @@ function MeetingPage({ portalRoomId }) {
         };
 
         sfuWs.onerror = (error) => {
+            const urlUsed = getSfuWsUrl();
             console.error("❌ SFU WS ERROR", {
                 error,
-                url: sfuWsUrl,
+                url: urlUsed,
+                expected: "wss://onsil.study/sfu",
                 readyState: sfuWs.readyState,
-                hint: "nginx /sfu/ 프록시 설정 또는 SFU 서버 상태 확인 필요",
+                hint: "1) nginx location /sfu/ 프록시 확인 2) SFU 서버(4000) 실행 확인 3) 빌드 후 재배포 확인",
             });
             setRoomReconnecting(false);
         };
