@@ -27,6 +27,18 @@ public interface BoardPostMapper {
             @Param("postId") long postId
     );
 
+    String findWriterIdByPostId(
+            @Param("postId") long postId
+    );
+
+    String findPostTitleByPostId(
+            @Param("postId") long postId
+    );
+
+    String findRoomIdByPostId(
+            @Param("postId") long postId
+    );
+
     int incrementViewCount(@Param("postId") long postId);
 
     int insertPost(BoardPostVO post);

@@ -89,6 +89,27 @@
           AND p.deleted_at IS NULL
     </select>
 
+    <select id="findWriterIdByPostId" resultType="string">
+        SELECT user_id
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findPostTitleByPostId" resultType="string">
+        SELECT title
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findRoomIdByPostId" resultType="string">
+        SELECT room_id
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
     <update id="incrementViewCount">
         UPDATE board_posts
         SET view_count = view_count + 1
