@@ -5,6 +5,7 @@ import com.example.demo.jwt.JwtTokenProvider;
 import com.example.demo.oauth.OAuthHandler;
 import com.example.demo.oauth.OAuthFailHandler;
 import com.example.demo.oauth.OAuth2UserService;
+import com.example.demo.oauth.OAuth2BaseUrlRequestFilter;
 import com.example.demo.oauth.OAuthRedirectOriginFilter;
 import com.example.demo.oauth.HttpCookieOAuth2AuthorizationRequestRepository;
 import org.springframework.context.annotation.Bean;
@@ -33,6 +34,7 @@ public class SecurityConfig {
     private final OAuthHandler oAuthHandler;
     private final OAuthFailHandler oAuthFailHandler;
     private final OAuth2UserService oAuth2UserService;
+    private final OAuth2BaseUrlRequestFilter oauth2BaseUrlRequestFilter;
     private final OAuthRedirectOriginFilter oAuthRedirectOriginFilter;
     private final HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
 
@@ -40,12 +42,14 @@ public class SecurityConfig {
                           OAuthHandler oAuthHandler,
                           OAuthFailHandler oAuthFailHandler,
                           OAuth2UserService oAuth2UserService,
+                          OAuth2BaseUrlRequestFilter oauth2BaseUrlRequestFilter,
                           OAuthRedirectOriginFilter oAuthRedirectOriginFilter,
                           HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.oAuthHandler = oAuthHandler;
         this.oAuthFailHandler = oAuthFailHandler;
         this.oAuth2UserService = oAuth2UserService;
+        this.oauth2BaseUrlRequestFilter = oauth2BaseUrlRequestFilter;
         this.oAuthRedirectOriginFilter = oAuthRedirectOriginFilter;
         this.cookieAuthorizationRequestRepository = cookieAuthorizationRequestRepository;
     }
@@ -129,8 +133,14 @@ public class SecurityConfig {
                         .failureHandler(oAuthFailHandler)
                 )
 
+                // 기준은 Spring 내장 필터만 (OAuthRedirectOriginFilter는 registered order 없음)
+                // 실행 순서: oauth2BaseUrlRequestFilter → oAuthRedirectOriginFilter → …
                 .addFilterBefore(
                         oAuthRedirectOriginFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                )
+                .addFilterBefore(
+                        oauth2BaseUrlRequestFilter,
                         UsernamePasswordAuthenticationFilter.class
                 )
                 .addFilterBefore(

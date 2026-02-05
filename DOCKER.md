@@ -125,8 +125,47 @@ EC2에서 80/443을 받아 세 컨테이너로 나누려면 호스트에 Nginx�
 
 ---
 
-## 7. 트러블슈팅
+## 7. OAuth2 로그인 (onsil.study 등 도메인)
+
+OAuth2(카카오/구글/네이버)는 **리다이렉트 URL**이 개발자 콘솔에 등록한 값과 정확히 일치해야 합니다.
+
+### 백엔드에서 할 일 (둘 중 하나)
+
+**방법 A: 기준 URL 고정 (권장)**  
+Nginx에서 X-Forwarded 헤더를 안 보낼 때 사용합니다.
+
+- `.env` 또는 Backend 환경변수에 추가:
+  ```bash
+  APP_OAUTH2_BASE_URL=https://onsil.study
+  ```
+- `application.properties`에 추가해도 됩니다: `app.oauth2.base-url=https://onsil.study`
+- 그러면 Spring이 카카오/구글/네이버로 보내는 `redirect_uri`가 `https://onsil.study/login/oauth2/code/kakao` 등으로 고정됩니다.
+
+**방법 B: Nginx에서 X-Forwarded 헤더 전달**  
+Backend로 프록시하는 location에 다음을 넣습니다:
+
+```nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header Host $host;
+```
+
+- `server.forward-headers-strategy=framework`가 이미 있으므로, 위 헤더가 오면 Spring이 `redirect_uri`를 `https://onsil.study/...`로 만듭니다.
+- 이렇게 하면 `app.oauth2.base-url` 설정은 필요 없습니다.
+
+### 프론트엔드
+
+- 로그인 버튼/링크에서 OAuth 시작 시 **`redirect_origin`** 파라미터로 `https://onsil.study`를 넘기면, 로그인 성공 후 그 주소로 돌아갑니다.
+- 개발자 콘솔(카카오/구글/네이버)에는 **리다이렉트 URI**를 다음처럼 등록해야 합니다:
+  - `https://onsil.study/login/oauth2/code/kakao`
+  - `https://onsil.study/login/oauth2/code/google`
+  - `https://onsil.study/login/oauth2/code/naver`
+
+---
+
+## 8. 트러블슈팅
 
 - **Backend DB 연결 실패**: `RDS_HOSTNAME` 등이 .env에 맞는지, EC2 보안 그룹에서 RDS 접근 허용 여부 확인.
 - **SFU 검은 화면**: `ANNOUNCED_IP`가 클라이언트가 접속하는 주소(공인 IP 또는 도메인)와 일치하는지 확인.
 - **Frontend에서 API/SFU 404**: Nginx에서 `/api`, `/sfu/` 등이 올바른 컨테이너로 프록시되는지 확인.
+- **OAuth2 로그인 실패**: 개발자 콘솔 리다이렉트 URI가 `https://onsil.study/login/oauth2/code/{kakao|google|naver}` 인지 확인. 백엔드에 `APP_OAUTH2_BASE_URL=https://onsil.study` 설정 또는 Nginx에서 X-Forwarded-Proto/Host 전달 여부 확인.
