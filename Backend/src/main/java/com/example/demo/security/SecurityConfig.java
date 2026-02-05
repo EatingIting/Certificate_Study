@@ -22,6 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
@@ -181,5 +182,18 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Cloudflare / Nginx 등의 리버스 프록시 뒤에서
+     * X-Forwarded-Proto / X-Forwarded-Host 헤더를 읽어
+     * redirect_uri 등 URL을 올바르게 계산하도록 해주는 필터.
+     *
+     * server.forward-headers-strategy=framework 와 함께 동작하면서
+     * OAuth2 redirect_uri 를 https://onsil.study/... 로 맞춰 준다.
+     */
+    @Bean
+    public ForwardedHeaderFilter forwardedHeaderFilter() {
+        return new ForwardedHeaderFilter();
     }
 }
