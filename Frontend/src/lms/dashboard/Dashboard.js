@@ -480,7 +480,7 @@ function Dashboard({ setActiveMenu }) {
                   <hr />
                   <p>
                     {(dashExam.item.start || "").replaceAll("-", ".")} <br />
-                    D-{examDday}
+                    {examDday === 0 ? "D-day" : `D-${examDday}`}
                   </p>
 
                   <div className="progress-bar">
