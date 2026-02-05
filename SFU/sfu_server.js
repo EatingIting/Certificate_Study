@@ -12,6 +12,7 @@ import config from "./config.js";
 
 const SFU_PORT = 4000;
 const GRACE_MS = 15000; // 재접속 유예 (PiP/잠깐 끊김)
+const HEARTBEAT_INTERVAL_MS = 25000; // Nginx 등 프록시 유휴 끊김 방지 (60s 미만 권장)
 
 // Spring ↔ SFU 시그널링은 VPC 내부만 사용 → HTTP/WS (TLS 불필요)
 
@@ -214,9 +215,22 @@ app.get("/metrics", (_, res) => {
 const httpServer = http.createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
 
+// Ping/Pong keepalive: 프록시(Nginx 등) 유휴 타임아웃으로 WS 끊김 → 검은화면 방지
+const heartbeatInterval = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) {
+      console.log("💀 [SFU] heartbeat timeout, terminating WS");
+      ws.terminate();
+      continue;
+    }
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, HEARTBEAT_INTERVAL_MS);
+
 httpServer.listen(SFU_PORT, async () => {
   await startWorkers();
-  console.log(`🚀 SFU HTTP/WS listening on http://${MY_IP}:${SFU_PORT}`);
+  console.log(`🚀 SFU HTTP/WS listening on http://${MY_IP}:${SFU_PORT} (heartbeat ${HEARTBEAT_INTERVAL_MS}ms)`);
 });
 
 function findProducerInfo(room, producerId) {
@@ -232,6 +246,8 @@ function findProducerInfo(room, producerId) {
 // -------------------------------
 wss.on("connection", (ws) => {
   console.log("🔌 [SFU] WS connected");
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
 
   ws.on("error", (err) => {
     console.error("❌ [SFU] WS error:", err?.message || err);
