@@ -1,0 +1,11 @@
+services:
+  sfu:
+    image: certificate-study/sfu:latest
+    container_name: sfu
+    restart: unless-stopped
+    environment:
+      - ANNOUNCED_IP=15.165.181.93
+    ports:
+      - "4000:4000"
+      - "40000-40200:40000-40200/udp"
+      - "40000-40200:40000-40200/tcp"
