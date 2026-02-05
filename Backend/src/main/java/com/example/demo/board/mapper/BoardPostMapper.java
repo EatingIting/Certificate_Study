@@ -23,7 +23,9 @@ public interface BoardPostMapper {
             @Param("keyword") String keyword
     );
 
-    BoardPostVO selectPostById(@Param("postId") long postId);
+    BoardPostVO selectPostById(
+            @Param("postId") long postId
+    );
 
     int incrementViewCount(@Param("postId") long postId);
 
@@ -46,16 +48,7 @@ public interface BoardPostMapper {
 
     int softDeletePostByHost(@Param("postId") long postId);
 
-    int updatePinnedByHost(
-            @Param("postId") long postId,
-            @Param("isPinned") boolean isPinned
-    );
+    int updatePinnedByHost(@Param("postId") long postId, @Param("isPinned") boolean isPinned);
 
-    // ✅ 댓글 알림용
-    String findWriterIdByPostId(@Param("postId") long postId);
-
-    String findPostTitleByPostId(@Param("postId") long postId);
-
-    String findRoomIdByPostId(@Param("postId") long postId);
-
+    int hardDeleteOlderThanDays(@Param("days") int days);
 }

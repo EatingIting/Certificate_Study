@@ -149,6 +149,7 @@ export default function RoomMyPage() {
     let [recentComments, setRecentComments] = useState([]);
 
     let [categoryName, setCategoryName] = useState("");
+    let [categoryLoading, setCategoryLoading] = useState(false);
 
     let selectedRoom = useMemo(() => {
         let found = rooms.find((r) => r.roomId === selectedRoomId);
@@ -212,28 +213,33 @@ export default function RoomMyPage() {
         (async () => {
             try {
                 setLoading(true);
+                setCategoryLoading(true);
                 setErrorMsg("");
                 setSuccessMsg("");
 
-                let data = await fetchRoomMyPage(selectedRoomId);
+                let [myPage, info] = await Promise.all([
+                    fetchRoomMyPage(selectedRoomId),
+                    fetchRoomInfo(selectedRoomId),
+                ]);
+                
                 if (!mounted) return;
 
-                setNickname(data.nickname || "");
-                setProfileImageUrl(data.profileImageUrl || "");
-                setPostCount(data.postCount || 0);
-                setCommentCount(data.commentCount || 0);
-                setRecentPosts(data.recentPosts || []);
-                setRecentComments(data.recentComments || []);
+                setNickname(myPage.nickname || "");
+                setProfileImageUrl(myPage.profileImageUrl || "");
+                setPostCount(myPage.postCount || 0);
+                setCommentCount(myPage.commentCount || 0);
+                setRecentPosts(myPage.recentPosts || []);
+                setRecentComments(myPage.recentComments || []);
                 setIsNicknameEditing(false);
-                setNicknameDraft(data.nickname || "");
-                let info = await fetchRoomInfo(selectedRoomId);
-                if (!mounted) return;
+                setNicknameDraft(myPage.nickname || "");
                 setCategoryName(info.categoryName || "");
             } catch (e) {
                 if (!mounted) return;
                 setErrorMsg(e && e.message ? e.message : "프로필 정보를 불러오지 못했습니다.");
+                setCategoryName("");
             } finally {
                 if (!mounted) return;
+                setCategoryLoading(false);
                 setLoading(false);
             }
         })();
