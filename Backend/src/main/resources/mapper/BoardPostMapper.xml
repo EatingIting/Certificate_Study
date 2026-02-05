@@ -24,38 +24,30 @@
 
     <select id="selectPostList" resultMap="PostMap">
         SELECT
-            p.post_id,
-            p.room_id,
-            p.user_id,
-            /* ✅ 스터디별 닉네임 규칙 적용 */
-            COALESCE(rjr.request_user_nickname, r.hostUserNickname, NULLIF(u.nickname, ''), u.name) AS nickname,
-            p.category,
-            p.title,
-            p.content,
-            p.is_pinned,
-            p.view_count,
-            p.created_at,
-            p.updated_at,
-            p.deleted_at,
-            (SELECT COUNT(*)
-             FROM board_comments c
-             WHERE c.post_id = p.post_id
-               AND c.deleted_at IS NULL) AS comment_count,
-            (SELECT COUNT(*)
-             FROM board_post_attachments a
-             WHERE a.post_id = p.post_id) AS attachment_count
+        p.post_id,
+        p.room_id,
+        p.user_id,
+        COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+        p.category,
+        p.title,
+        p.content,
+        p.is_pinned,
+        p.view_count,
+        p.created_at,
+        p.updated_at,
+        p.deleted_at,
+        (SELECT COUNT(*)
+        FROM board_comments c
+        WHERE c.post_id = p.post_id
+        AND c.deleted_at IS NULL) AS comment_count,
+        (SELECT COUNT(*)
+        FROM board_post_attachments a
+        WHERE a.post_id = p.post_id) AS attachment_count
 
         FROM board_posts p
-                 LEFT JOIN users u
-                           ON u.user_id = p.user_id
-                 LEFT JOIN room r
-                           ON r.room_id = p.room_id
-                 LEFT JOIN room_join_request rjr
-                           ON rjr.room_id = p.room_id
-                               AND rjr.request_user_email = u.email
-                               AND rjr.status = '승인'
+        LEFT JOIN users u ON u.user_id = p.user_id
         WHERE p.deleted_at IS NULL
-          AND p.room_id = #{roomId}
+        AND p.room_id = #{roomId}
         <if test="category != null and category != ''">
             AND p.category = #{category}
         </if>
@@ -87,28 +79,12 @@
 
     <select id="selectPostById" resultMap="PostMap">
         SELECT
-            p.post_id,
-            p.room_id,
-            p.user_id,
-            /* ✅ 스터디별 닉네임 규칙 적용 */
-            COALESCE(rjr.request_user_nickname, r.hostUserNickname, NULLIF(u.nickname, ''), u.name) AS nickname,
-            p.category,
-            p.title,
-            p.content,
-            p.is_pinned,
-            p.view_count,
-            p.created_at,
-            p.updated_at,
-            p.deleted_at
+            p.post_id, p.room_id, p.user_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            p.category, p.title, p.content,
+            p.is_pinned, p.view_count, p.created_at, p.updated_at, p.deleted_at
         FROM board_posts p
-                 LEFT JOIN users u
-                           ON u.user_id = p.user_id
-                 LEFT JOIN room r
-                           ON r.room_id = p.room_id
-                 LEFT JOIN room_join_request rjr
-                           ON rjr.room_id = p.room_id
-                               AND rjr.request_user_email = u.email
-                               AND rjr.status = '승인'
+                 LEFT JOIN users u ON u.user_id = p.user_id
         WHERE p.post_id = #{postId}
           AND p.deleted_at IS NULL
     </select>
@@ -124,17 +100,17 @@
             parameterType="com.example.demo.board.vo.BoardPostVO"
             useGeneratedKeys="true" keyProperty="postId" keyColumn="post_id">
         INSERT INTO board_posts (room_id,
-                                 user_id,
-                                 category,
-                                 title,
-                                 content,
-                                 is_pinned,
-                                 view_count
+        user_id,
+        category,
+        title,
+        content,
+        is_pinned,
+        view_count
         ) VALUES (#{roomId},
-                  #{userId},
-                  #{category},
-                  #{title},
-                  #{content},
+        #{userId},
+        #{category},
+        #{title},
+        #{content},
         <choose>
             <when test="isPinned != null">#{isPinned}</when>
             <otherwise>0</otherwise>
@@ -196,28 +172,6 @@
         WHERE post_id = #{postId}
           AND deleted_at IS NULL
     </update>
-    
-    <select id="findWriterIdByPostId" resultType="string">
-        SELECT user_id
-        FROM board_posts
-        WHERE post_id = #{postId}
-          AND deleted_at IS NULL
-    </select>
-
-    <select id="findPostTitleByPostId" resultType="string">
-        SELECT title
-        FROM board_posts
-        WHERE post_id = #{postId}
-          AND deleted_at IS NULL
-    </select>
-
-    <select id="findRoomIdByPostId" resultType="string">
-        SELECT room_id
-        FROM board_posts
-        WHERE post_id = #{postId}
-          AND deleted_at IS NULL
-    </select>
-
 
     <delete id="hardDeleteOlderThanDays">
         DELETE FROM board_posts
