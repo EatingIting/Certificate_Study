@@ -167,7 +167,12 @@ function BoardDetail() {
     let onEdit = () => navigate(`/lms/${subjectId}/board/${postId}/edit`);
 
     let onDelete = async () => {
-        if (!window.confirm("정말 삭제할까요?")) return;
+        let msg =
+            "삭제된 게시글은 30일간 보관되며, 이후 영구 삭제됩니다.\n" +
+            "복구가 필요한 경우 관리자에게 문의해 주세요.\n\n" +
+            "정말 삭제할까요?";
+
+        if (!window.confirm(msg)) return;
 
         try {
             await BoardApi.deletePost(postId);
