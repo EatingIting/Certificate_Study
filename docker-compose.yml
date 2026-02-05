@@ -37,10 +37,6 @@ services:
     build:
       context: ./Frontend
       dockerfile: Dockerfile
-      args:
-        # 같은 호스트에서 접속 시 빌드 시 지정 불필요 (window.location 사용)
-        # REACT_APP_BACKEND_ORIGIN: https://onsil.study
-        # REACT_APP_SFU_WS_HOST: onsil.study
     image: certificate-study/frontend:latest
     container_name: frontend
     restart: unless-stopped
@@ -63,9 +59,9 @@ services:
       - ANNOUNCED_IP=${ANNOUNCED_IP:-}
     ports:
       - "4000:4000"
-      # mediasoup WebRTC 포트 (UDP/TCP)
-      - "40000-49999:40000-49999/udp"
-      - "40000-49999:40000-49999/tcp"
+      # mediasoup WebRTC 포트 (UDP/TCP) - 좁은 범위(40000-40200)
+      - "40000-40200:40000-40200/udp"
+      - "40000-40200:40000-40200/tcp"
     networks:
       - app
 
