@@ -29,7 +29,7 @@ import RoomMyPage from "./room-my-page/RoomMyPage"
 import MeetingPage from "../webrtc/MeetingPage";
 import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
 import FloatingPip from "../webrtc/FloatingPip";
-import { LMSProvider } from "./LMSContext";
+import { LMSProvider, useLMS } from "./LMSContext";
 import ProtectedRoute from "./ProtectedRoute";
 
 import "./LMSSubject.css";
@@ -66,6 +66,16 @@ function LMSSubjectInner() {
     let location = useLocation();
     let navigate = useNavigate();
     let { subjectId } = useParams();
+    const { roomLoading, accessDenied, roomTitle } = useLMS();
+
+    // 스터디원이 아닌 사용자가 방 주소로 직접 접근한 경우 리다이렉트
+    useEffect(() => {
+        if (!subjectId || roomLoading) return;
+        if (accessDenied) {
+            alert("스터디원만 접근할 수 있습니다.");
+            navigate("/", { replace: true });
+        }
+    }, [subjectId, roomLoading, accessDenied, navigate]);
 
     // 🔥 URL pathname에서 MeetingRoom roomId 추출 (createPortal로 렌더링된 MeetingPage에 전달용)
     const meetingRoomIdFromPath = useMemo(() => {
@@ -202,6 +212,10 @@ function LMSSubjectInner() {
         return () => window.removeEventListener("ui:toast", handler);
     }, []);
 
+    // 접근 거부 시 훅 호출 후에만 early return (Rules of Hooks 준수)
+    if (accessDenied && subjectId) {
+        return <div className="lms-subject-layout" style={{ padding: 20 }}>접근 권한이 없습니다. 메인으로 이동합니다...</div>;
+    }
 
     return (
         <>
@@ -300,7 +314,7 @@ function LMSSubjectInner() {
 
             {/* 현재 경로가 'MeetingRoom/' 을 포함하지 않을 때만 렌더링 */}
             {!location.pathname.includes("/MeetingRoom/") && (
-                <ChatModal roomId={subjectId} />
+                <ChatModal roomId={subjectId} roomName={roomTitle} />
             )}
         </>
     );

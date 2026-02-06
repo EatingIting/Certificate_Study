@@ -92,7 +92,9 @@ public class AiController {
                 "- PROBLEM: 문제/퀴즈/오답노트용 질문 중심\n\n" +
                 "질문:\n" + (question == null ? "" : question) + "\n\n" +
                 "AI답변:\n" + (answer == null ? "" : answer) + "\n\n" +
-                "반드시 SUMMARY 또는 PROBLEM 중 하나만 출력해.";
+                "반드시 SUMMARY 또는 PROBLEM 중 하나만 출력해." + "\n\n" +
+                "반드시 한국어로 대답하고 존댓말로 대답해." + "\n\n" +
+                "한국어로 대답해드릴게요. 라는 말은 하지마";
 
         String raw = openAiService.getContents(prompt);
 

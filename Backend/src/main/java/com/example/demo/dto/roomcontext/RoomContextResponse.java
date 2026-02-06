@@ -8,5 +8,6 @@ import lombok.Getter;
 public class RoomContextResponse {
     private String roomId;
     private String title;
+    private String hostUserEmail;
     private String myRole; // "OWNER" | "MEMBER" | "NONE"
 }

@@ -30,4 +30,13 @@
           AND status = '승인'
     </select>
 
+    <!-- host_user_email이 비어 있을 때 대체 방장 1명 결정 (승인 멤버 중 최소 이메일 1명) -->
+    <select id="selectFallbackHostEmail" resultType="string">
+        SELECT MIN(request_user_email)
+        FROM room_join_request
+        WHERE room_id = #{roomId}
+          AND status = '승인'
+        LIMIT 1
+    </select>
+
 </mapper>

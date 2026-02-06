@@ -41,8 +41,6 @@ const OAuthSuccess = () => {
                     localStorage.setItem("nickname", user.nickname); // ✅ 자동로그인용
                 }
 
-                alert("로그인 성공!");
-
                 // 추가정보 없으면 마이페이지로
                 if (!user.birthDate || !user.gender) {
                     alert("원활한 스터디 가입을 위해 회원 정보를 마이페이지에서 수정해주세요.");
@@ -55,7 +53,6 @@ const OAuthSuccess = () => {
                 console.error("[OAuthSuccess] 사용자 정보 조회 실패:", error);
 
                 // API 실패해도 로그인은 성공 처리
-                alert("로그인 성공!");
                 window.location.href = "/";
             });
     }, []);
