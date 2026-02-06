@@ -8,3 +8,5 @@ node_modules/
 Backend/src/main/resources/application.properties
 
 .env
+
+.env.example
