@@ -390,25 +390,12 @@
     display: none !important;
 }
 
-/* 팝오버 안 일정 글씨 확실히 보이게 (스터디·일반 일정 모두) */
-.calPage .fc-popover-body .fc-daygrid-event,
-.calPage .fc .fc-popover-body .fc-daygrid-event,
-.calPage .fc-popover-body .fc-daygrid-event .fc-event-main,
-.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-main,
-.calPage .fc-popover-body .fc-daygrid-event .fc-event-main-frame,
-.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title-container,
 .calPage .fc-popover-body .fc-daygrid-event .fc-event-title,
+.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title,
+.calPage .fc-popover-body .fc-daygrid-event .fc-event-title *,
 .calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title * {
-    color: var(--fc-event-text-color) !important;
-    font-size: 13px !important;
-    font-weight: 800;
-}
-
-/* HSK 시험 등 일반 일정도 팝업에서 글씨 보이게 (이벤트별 흰색 덮어씀) */
-.calPage .fc-popover-body .fc-daygrid-event *,
-.calPage .fc .fc-popover-body .fc-daygrid-event * {
-    background-color: var(--fc-event-bg-color) !important;
-    border-color: var(--fc-event-border-color) !important;
+  font-size: 13px !important;
+  font-weight: 800;
 }
 
 .calPage .fc-popover-body .fc-daygrid-event:last-child,
@@ -1175,4 +1162,55 @@
 .calCalendarCard .fc .fc-daygrid-event-harness,
 .calCalendarCard .fc .fc-daygrid-event {
   margin: 0 !important;
+}
+
+/* 리스트 필터 줄 */
+.calListFilterRow {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid #dfe9df; /* 기존보다 살짝 회색 기 */
+}
+
+.calListFilter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 기본 버튼 */
+.calFilterBtn {
+  font-size: 12px;
+  font-weight: 700;
+
+  color: #3f5f4c;              /* ⬅ 더 부드러운 그린 */
+  background: #f2f7f3;         /* ⬅ 거의 화이트에 가까운 세이지 */
+  border: 1px solid #d5e4da;   /* ⬅ 연한 경계 */
+
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+/* Active (선택됨) */
+.calFilterBtn.isActive {
+  background: #6fa98c;         /* ⬅ 진한 초록 ❌ → muted green */
+  border-color: #6fa98c;
+  color: #ffffff;
+}
+
+/* Active + Hover */
+.calFilterBtn.isActive:hover {
+  background: #639d81;
+  border-color: #639d81;
+}
+
+.calListFilterRow {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px 12px;
+    border-bottom: 1px solid var(--primary-light);
+}
+
+/* 🔥 이게 핵심 */
+.calListShowAllWrap {
+    margin-left: auto;
 }
