@@ -1100,6 +1100,8 @@ function Calendar() {
                                 ev.extendedProps?.textColor ||
                                 "";
 
+                            let itemText = badgeText || "#1f2937";
+
                             // 비어있으면(혹시 서버 누락) 기존 톤으로 안전 fallback
                             if (!badgeBg) badgeBg = "#97c793";
                             if (!badgeText) badgeText = "#ffffff";
@@ -1124,7 +1126,7 @@ function Calendar() {
                                     className="calItem"
                                     style={{
                                         backgroundColor: ev.backgroundColor || "#f6faf3",
-                                        color: "#1f2937",
+                                        color: itemText,
                                     }}
                                 >
                                     <div className="calItemTop">
