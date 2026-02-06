@@ -239,6 +239,9 @@ const RoomPage = () => {
                             onClick={() => {
                                 setKeyword("");
                                 setPage(1);
+                                navigate("/room", {
+                                    replace: true
+                                });
                             }}
                         >
                             ✕
