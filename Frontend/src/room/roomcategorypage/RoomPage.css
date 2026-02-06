@@ -209,6 +209,7 @@
     grid-template-columns: 60px 140px 1fr 120px 120px;
     align-items: center;
     text-align: center;
+    gap: 12px;
 }
 
 .thead {
@@ -242,6 +243,7 @@
     gap: 10px;
     min-width: 260px;
     justify-content: flex-start;
+    align-items: center;
 }
 
 .row-title {

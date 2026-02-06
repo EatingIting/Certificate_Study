@@ -28,10 +28,9 @@ public class ScheduleController {
     public void update(
             @PathVariable Long scheduleId,
             @RequestParam String roomId,
-            @RequestParam String userId,
             @Valid @RequestBody ScheduleUpdateRequest req
     ) {
-        scheduleService.update(scheduleId, roomId, userId, req);
+        scheduleService.update(scheduleId, roomId, req);
     }
 
     // DELETE /api/schedules/{scheduleId}?roomId=...&userId=...
@@ -39,10 +38,9 @@ public class ScheduleController {
     @DeleteMapping("/{scheduleId}")
     public void delete(
             @PathVariable Long scheduleId,
-            @RequestParam String roomId,
-            @RequestParam String userId
+            @RequestParam String roomId
     ) {
-        scheduleService.softDelete(scheduleId, roomId, userId);
+        scheduleService.softDelete(scheduleId, roomId);
     }
 
     @GetMapping

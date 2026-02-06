@@ -1105,6 +1105,8 @@ function Calendar() {
                                 ev.extendedProps?.textColor ||
                                 "";
 
+                            let itemText = badgeText || "#1f2937";
+
                             // 비어있으면(혹시 서버 누락) 기존 톤으로 안전 fallback
                             if (!badgeBg) badgeBg = "#97c793";
                             if (!badgeText) badgeText = "#ffffff";
@@ -1129,7 +1131,7 @@ function Calendar() {
                                     className="calItem"
                                     style={{
                                         backgroundColor: ev.backgroundColor || "#f6faf3",
-                                        color: badgeText || "#1f2937",
+                                        color: itemText,
                                     }}
                                 >
                                     <div className="calItemTop">
@@ -1296,10 +1298,28 @@ function Calendar() {
                                         />
                                     </label>
                                 </div>
+                            </div>
+
+                            <div className="calRow2">
+                                <label className="calField">
+                                    <span className="calFieldLabel">유형</span>
+                                    <select
+                                        className="calSelect"
+                                        value={form.type}
+                                        onChange={(e) => onChangeForm("type", e.target.value)}
+                                    >
+                                        <option value="REGISTRATION">접수</option>
+                                        <option value="EXAM">시험</option>
+                                        <option value="RESULT">발표</option>
+                                        <option value="OTHER">기타</option>
+                                    </select>
+                                </label>
 
                                 {/* 일정 종류가 OTHER일 때 사용할 커스텀 라벨 입력 */}
                                 <label className="calField">
-                                    <span className="calFieldLabel">직접 라벨(선택)</span>
+                                    <span className="calFieldLabel">유형 직접 입력
+                                        <span className="calFieldHint">(기타 선택 시 입력 가능 · 미입력 시 ‘기타’)</span>
+                                    </span>
                                     <input
                                         className="calInput"
                                         value={form.customLabel}
