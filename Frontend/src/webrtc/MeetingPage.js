@@ -829,6 +829,12 @@ function MeetingPage({ portalRoomId }) {
     /** 방장이 강제로 카메라를 끈 경우 — 스스로 카메라 켤 수 없음 */
     const [cameraOffByHostMe, setCameraOffByHostMe] = useState(false);
 
+    // 👑 원래 방장(스터디장)의 userId 추적 (hostUserEmail 기반)
+    const primaryHostUserIdRef = useRef(null);
+    // 👑 HOST_CHANGED 지연 적용용 ref
+    const pendingHostChangeRef = useRef(null);
+    const hostChangeTimerRef = useRef(null);
+
     const [micPermission, setMicPermission] = useState("prompt");
     const [camPermission, setCamPermission] = useState("prompt");
 
@@ -6118,10 +6124,22 @@ function MeetingPage({ portalRoomId }) {
                             const myScreenStream = isMe ? (screenStreamRef.current || null) : finalScreenStream;
                             const myIsScreenSharing = isMe ? !!screenStreamRef.current : finalIsScreenSharing;
 
+                            // 👑 원래 방장(스터디장) userId 추론 (hostUserEmail + userEmail 매칭)
+                            try {
+                                const hostEmailLower = (hostUserEmail || "").trim().toLowerCase();
+                                if (hostEmailLower) {
+                                    const userEmailFromServer = (u.userEmail || u.email || "").trim().toLowerCase();
+                                    if (userEmailFromServer && userEmailFromServer === hostEmailLower && u.userId != null) {
+                                        primaryHostUserIdRef.current = String(u.userId);
+                                    }
+                                }
+                            } catch { }
+
                             const baseUser = {
                                 id: participantId,
                                 userId: peerId,
                                 name: u.userName,
+                                email: u.userEmail || u.email || "",
                                 joinAt: u.joinAt,
                                 isMe,
                                 // 👑 방장 여부 (서버에서 받은 값 사용)
@@ -6391,17 +6409,68 @@ function MeetingPage({ portalRoomId }) {
                     const { newHostUserId, newHostUserName } = data;
                     console.log(`👑 [HOST_CHANGED] 새 방장: ${newHostUserName} (${newHostUserId})`);
 
-                    // 참여자 목록에서 방장 플래그 업데이트
-                    setParticipants(prev =>
-                        prev.map(p => ({
-                            ...p,
-                            isHost: String(p.id) === String(newHostUserId)
-                        }))
-                    );
+                    const primaryHostId = primaryHostUserIdRef.current ? String(primaryHostUserIdRef.current) : null;
+                    const targetId = String(newHostUserId);
 
-                    // 토스트 메시지 표시
-                    setToastMessage(`${newHostUserName}님이 방장이 되었습니다.`);
-                    setShowToast(true);
+                    // ✅ 1) 원래 방장(스터디장)에게 권한이 돌아가는 경우 → 즉시 반영
+                    if (primaryHostId && targetId === primaryHostId) {
+                        if (hostChangeTimerRef.current) {
+                            clearTimeout(hostChangeTimerRef.current);
+                            hostChangeTimerRef.current = null;
+                        }
+                        pendingHostChangeRef.current = null;
+
+                        setParticipants(prev =>
+                            prev.map(p => ({
+                                ...p,
+                                isHost: String(p.id) === targetId
+                            }))
+                        );
+                        setToastMessage(`${newHostUserName}님이 방장이 되었습니다.`);
+                        setShowToast(true);
+                        return;
+                    }
+
+                    // ✅ 2) 원래 방장이 아닌 사람에게 임시 방장을 넘기는 경우
+                    //    → "원래 방장이 정말 나간 것인지" 5초 동안 지켜본 뒤에만 적용
+                    pendingHostChangeRef.current = { newHostUserId: targetId, newHostUserName };
+
+                    if (hostChangeTimerRef.current) {
+                        clearTimeout(hostChangeTimerRef.current);
+                        hostChangeTimerRef.current = null;
+                    }
+
+                    hostChangeTimerRef.current = setTimeout(() => {
+                        hostChangeTimerRef.current = null;
+
+                        const primaryId = primaryHostUserIdRef.current ? String(primaryHostUserIdRef.current) : null;
+                        const pending = pendingHostChangeRef.current;
+                        if (!pending) return;
+
+                        // 🔍 아직도 원래 방장이 참가자 목록에 없는 경우에만 임시 방장 적용
+                        const hostStillAbsent = !primaryId || !participantsRef.current.some(
+                            (p) => String(p.userId ?? p.id) === primaryId
+                        );
+
+                        if (!hostStillAbsent) {
+                            // 원래 방장이 돌아왔으면 임시 방장 적용 취소
+                            pendingHostChangeRef.current = null;
+                            return;
+                        }
+
+                        const { newHostUserId: finalHostId, newHostUserName: finalHostName } = pending;
+                        pendingHostChangeRef.current = null;
+
+                        setParticipants(prev =>
+                            prev.map(p => ({
+                                ...p,
+                                isHost: String(p.id) === String(finalHostId)
+                            }))
+                        );
+                        setToastMessage(`${finalHostName}님이 방장이 되었습니다.`);
+                        setShowToast(true);
+                    }, 5000);
+
                     return;
                 }
 
