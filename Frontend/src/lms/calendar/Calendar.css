@@ -485,14 +485,13 @@
     margin-top: 10px;
 }
 
-/* 오른쪽 일정목록: 글자색은 검정 고정, 배경색만 사용자 지정 */
 .calItem .calBadge,
 .calItem .calDate,
 .calItem .calDateLine,
 .calItem .calDateTime,
 .calItem .calItemTitle,
 .calItem .calItemDesc {
-    color: #1f2937 !important;
+    color: inherit;
 }
 
 .calItemTop {
