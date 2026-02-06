@@ -56,8 +56,13 @@ const MainHeader = () => {
     const handleLogout = () => {
         sessionStorage.clear();
         localStorage.clear();
-        alert("로그아웃 되었습니다.");
-        navigate("/auth");
+        // 같은 경로(/)에 있을 때 navigate("/")는 화면 변화가 없어 보일 수 있어
+        // 상태를 즉시 갱신하고, 메인으로 이동을 확실히 보장한다.
+        setIsOpen(false);
+        setNickname(null);
+        setHasNotification(false);
+        setLatestJoinId(null);
+        window.location.replace("/");
     };
 
     return (
