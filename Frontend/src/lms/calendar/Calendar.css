@@ -263,7 +263,7 @@
     margin-top: 0 !important;
 }
 .calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
-    top: 8px !important;
+    top: var(--cal-events-pad-top, 8px) !important;
 }
 
 /* =========================
@@ -1171,59 +1171,58 @@
   background: transparent !important;
 }
 
+/* =========================
+   달력 이벤트 배치(단일/연속 일정 동일 높이)
+   - 아래(bottom) 기준 배치로 인해 단일/연속이 어긋나던 문제를 제거하고
+     단일(일반) + 연속(멀티데이) 모두 같은 기준값을 공유하도록 통일
+========================= */
 .calCalendarCard .fc {
-  --cal-more-h: 15px;   /* +n개 실제 높이 */
-  --cal-more-bottom: -5px; /* 셀 바닥에서 +n개 위치 */
-  --cal-bar-gap: 6px;   /* +n개와 바 사이 간격 */
+  --cal-events-top: 60px;        /* 셀 상단(날짜/회차) 아래에서 이벤트 영역 시작 */
+  --cal-more-top: -24px;         /* +n 개를 이벤트 영역 위로 올리는 값 */
+  --cal-events-pad-top: 8px;     /* 이벤트 바 시작 오프셋(단일/연속 공통) */
+  --cal-bar-gap: 2px;            /* 바 간격 */
 }
 
-.calCalendarCard .fc .fc-daygrid-day,
-.calCalendarCard .fc .fc-daygrid-day-frame {
-  height: 100px !important;
-  min-height: 100px !important;
-  position: relative;
-}
-
-.calCalendarCard .fc .fc-daygrid-day-bottom {
-  position: absolute !important;
-  left: 0;
-  right: 0;
-
-  bottom: var(--cal-more-bottom) !important; /* 🔥 핵심 */
-  top: auto !important;
-
-  height: var(--cal-more-h);
-  margin: 0 !important;
-
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-
-  z-index: 3;
-}
-
+/* 이벤트 영역(바 컨테이너) */
 .calCalendarCard .fc .fc-daygrid-day-events {
   position: absolute !important;
-  left: 0;
-  right: 0;
-
-  bottom: calc(
-    var(--cal-more-bottom)
-    + var(--cal-more-h)
-    + var(--cal-bar-gap)
-  ) !important;
-
-  top: auto !important;
+  top: var(--cal-events-top) !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
   margin: 0 !important;
-  padding: 0 2px !important;
-
-  z-index: 10; /* ✅ 바가 +n개보다 위 */
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  padding: var(--cal-events-pad-top) 2px 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  overflow: visible !important;
+  z-index: 10;
 }
 
-.calCalendarCard .fc .fc-daygrid-event-harness,
-.calCalendarCard .fc .fc-daygrid-event {
+/* +n 개(더보기 링크)는 바 위에 고정 */
+.calCalendarCard .fc .fc-daygrid-day-bottom {
+  position: absolute !important;
+  top: var(--cal-more-top) !important; /* 이벤트 영역 기준 위로 */
+  left: 0 !important;
+  right: 0 !important;
   margin: 0 !important;
+  height: 20px;
+  z-index: 20 !important;
+  pointer-events: auto !important;
+}
+
+/* 단일 이벤트: 동일 간격 */
+.calCalendarCard .fc .fc-daygrid-event-harness {
+  margin: 0 !important;
+}
+.calCalendarCard .fc .fc-daygrid-event {
+  margin-top: var(--cal-bar-gap) !important;
+}
+
+/* 연속(멀티데이) 이벤트: harness-abs top을 단일과 동일 오프셋으로 고정 */
+.calCalendarCard .fc .fc-daygrid-event-harness-abs {
+  top: var(--cal-events-pad-top) !important;
+}
+.calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
+  top: var(--cal-events-pad-top) !important;
 }
