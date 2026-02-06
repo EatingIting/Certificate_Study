@@ -434,25 +434,12 @@
     display: none !important;
 }
 
-/* 팝오버 안 일정 글씨 확실히 보이게 (스터디·일반 일정 모두) */
-.calPage .fc-popover-body .fc-daygrid-event,
-.calPage .fc .fc-popover-body .fc-daygrid-event,
-.calPage .fc-popover-body .fc-daygrid-event .fc-event-main,
-.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-main,
-.calPage .fc-popover-body .fc-daygrid-event .fc-event-main-frame,
-.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title-container,
 .calPage .fc-popover-body .fc-daygrid-event .fc-event-title,
+.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title,
+.calPage .fc-popover-body .fc-daygrid-event .fc-event-title *,
 .calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title * {
-    color: var(--fc-event-text-color) !important;
-    font-size: 13px !important;
-    font-weight: 800;
-}
-
-/* HSK 시험 등 일반 일정도 팝업에서 글씨 보이게 (이벤트별 흰색 덮어씀) */
-.calPage .fc-popover-body .fc-daygrid-event *,
-.calPage .fc .fc-popover-body .fc-daygrid-event * {
-    background-color: var(--fc-event-bg-color) !important;
-    border-color: var(--fc-event-border-color) !important;
+  font-size: 13px !important;
+  font-weight: 800;
 }
 
 .calPage .fc-popover-body .fc-daygrid-event:last-child,
@@ -1202,27 +1189,95 @@
 /* +n 개(더보기 링크)는 바 위에 고정 */
 .calCalendarCard .fc .fc-daygrid-day-bottom {
   position: absolute !important;
-  top: var(--cal-more-top) !important; /* 이벤트 영역 기준 위로 */
-  left: 0 !important;
-  right: 0 !important;
+  left: 0;
+  right: 0;
+
+  bottom: var(--cal-more-bottom) !important; /* 🔥 핵심 */
+  top: auto !important;
+
+  height: var(--cal-more-h);
   margin: 0 !important;
-  height: 20px;
-  z-index: 20 !important;
-  pointer-events: auto !important;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  z-index: 3;
 }
 
-/* 단일 이벤트: 동일 간격 */
-.calCalendarCard .fc .fc-daygrid-event-harness {
+.calCalendarCard .fc .fc-daygrid-day-events {
+  position: absolute !important;
+  left: 0;
+  right: 0;
+
+  bottom: calc(
+    var(--cal-more-bottom)
+    + var(--cal-more-h)
+    + var(--cal-bar-gap)
+  ) !important;
+
+  top: auto !important;
   margin: 0 !important;
+  padding: 0 2px !important;
+
+  z-index: 10; /* ✅ 바가 +n개보다 위 */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
+
+.calCalendarCard .fc .fc-daygrid-event-harness,
 .calCalendarCard .fc .fc-daygrid-event {
-  margin-top: var(--cal-bar-gap) !important;
+  margin: 0 !important;
 }
 
-/* 연속(멀티데이) 이벤트: harness-abs top을 단일과 동일 오프셋으로 고정 */
-.calCalendarCard .fc .fc-daygrid-event-harness-abs {
-  top: var(--cal-events-pad-top) !important;
+/* 리스트 필터 줄 */
+.calListFilterRow {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid #dfe9df; /* 기존보다 살짝 회색 기 */
 }
-.calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
-  top: var(--cal-events-pad-top) !important;
+
+.calListFilter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 기본 버튼 */
+.calFilterBtn {
+  font-size: 12px;
+  font-weight: 700;
+
+  color: #3f5f4c;              /* ⬅ 더 부드러운 그린 */
+  background: #f2f7f3;         /* ⬅ 거의 화이트에 가까운 세이지 */
+  border: 1px solid #d5e4da;   /* ⬅ 연한 경계 */
+
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+/* Active (선택됨) */
+.calFilterBtn.isActive {
+  background: #6fa98c;         /* ⬅ 진한 초록 ❌ → muted green */
+  border-color: #6fa98c;
+  color: #ffffff;
+}
+
+/* Active + Hover */
+.calFilterBtn.isActive:hover {
+  background: #639d81;
+  border-color: #639d81;
+}
+
+.calListFilterRow {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px 12px;
+    border-bottom: 1px solid var(--primary-light);
+}
+
+/* 🔥 이게 핵심 */
+.calListShowAllWrap {
+    margin-left: auto;
 }
