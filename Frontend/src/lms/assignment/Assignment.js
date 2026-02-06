@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Link, useSearchParams, useParams } from "react-router-dom";
+import { Link, useSearchParams, useParams, useNavigate } from "react-router-dom";
 import api from "../../api/api";
 import "./Assignment.css";
 
@@ -8,6 +8,7 @@ const Assignment = () => {
   const [matrix, setMatrix] = useState({ assignments: [], members: [] });
 
   const { subjectId } = useParams();
+  const navigate = useNavigate();
   const roomId = subjectId;
 
   // ===== 제출 모달 =====
@@ -49,7 +50,13 @@ const openSubmitModal = (assignment) => {
     setCreateDue("");
     setIsCreateOpen(true);
   };
-  const closeCreateModal = () => setIsCreateOpen(false);
+  const closeCreateModal = () => {
+    setIsCreateOpen(false);
+    // 모달을 닫을 때 URL에서 modal=create 제거 → 사이드바 활성 메뉴가 '과제 목록'으로 맞춰짐
+    if (sp.get("modal") === "create") {
+      navigate(`/lms/${subjectId}/assignment`, { replace: true });
+    }
+  };
 
   // ✅ 과제 목록 불러오기
   const fetchAssignments = async () => {
@@ -259,6 +266,13 @@ const openSubmitModal = (assignment) => {
               </thead>
 
               <tbody>
+                {assignments.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="as-empty">
+                      등록된 과제가 없습니다.
+                    </td>
+                  </tr>
+                )}
                 {assignments.map((a) => (
                   <tr key={`${a.id}-${a.dueDate}`}>
                     <td className="as-td-title">

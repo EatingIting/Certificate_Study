@@ -883,10 +883,13 @@ function Calendar() {
     };
 
     /* =========================
-       URL modal=add 대응
+       URL modal=add 대응 (방장만 일정 추가 모달 열기, 팀원은 URL만 정리)
     ========================= */
     useEffect(() => {
-        if (sp.get("modal") === "add") openAddModal();
+        if (sp.get("modal") === "add") {
+            if (isHost) openAddModal();
+            else goListView();
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sp]);
 
@@ -922,6 +925,8 @@ function Calendar() {
                         fixedWeekCount={true}
                         showNonCurrentDates={true}
                         dayMaxEvents={1}
+                        dayMaxEventRows={2}
+                        moreLinkContent={(arg) => `+${arg.num} 개`}
                         eventDisplay="block"
                         eventOrder="displayOrder,allDay,-duration,start"
                         eventOrderStrict={true}
@@ -1124,7 +1129,7 @@ function Calendar() {
                                     className="calItem"
                                     style={{
                                         backgroundColor: ev.backgroundColor || "#f6faf3",
-                                        color: "#1f2937",
+                                        color: badgeText || "#1f2937",
                                     }}
                                 >
                                     <div className="calItemTop">

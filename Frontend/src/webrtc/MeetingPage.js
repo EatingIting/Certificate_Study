@@ -35,13 +35,15 @@ const ICE_SERVERS = [
     },
 ];
 
-// SFU 시그널링: nginx 프록시 사용. 포트(:4000) 붙이면 안 됨.
-// REACT_APP_SFU_WS_HOST 빌드 시 설정 시 해당 호스트 사용, 미설정 시 현재 도메인(same-origin)
+// SFU 시그널링: nginx/프록시 사용. 포트(:4000) 붙이면 안 됨.
+// REACT_APP_SFU_WS_HOST 설정 시 해당 호스트 사용, 미설정 시 현재 도메인(same-origin)
 const SFU_WS_BASE = process.env.REACT_APP_SFU_WS_HOST || "";
 function getSfuWsUrl() {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const host = SFU_WS_BASE || window.location.hostname;
-    return `${protocol}://${host}/sfu/`;
+    // 같은 출처일 때 포트 포함 → 예: http://15.165.181.93:3000 이면 ws://15.165.181.93:3000/sfu/ 로 연결되어 프록시 동작
+    const port = SFU_WS_BASE ? "" : (window.location.port ? `:${window.location.port}` : "");
+    return `${protocol}://${host}${port}/sfu/`;
 }
 
 // --- Components ---
@@ -701,6 +703,22 @@ function MeetingPage({ portalRoomId }) {
         console.log("[MeetingPage] startMeeting", { roomId, subjectId });
         startMeeting(roomId, subjectId);
     }, [roomId, subjectId, startMeeting]);
+
+    // 🔥 roomId가 달라지면 micOn/camOn 저장값 초기화 → 새 방에서는 마이크·카메라 켠 상태로 시작
+    const prevRoomIdRef = useRef(null);
+    useEffect(() => {
+        if (!roomId) return;
+        const prev = prevRoomIdRef.current;
+        prevRoomIdRef.current = roomId;
+        if (prev != null && prev !== roomId) {
+            try {
+                localStorage.removeItem("micOn");
+                localStorage.removeItem("camOn");
+            } catch { }
+            setMicOn(true);
+            setCamOn(true);
+        }
+    }, [roomId]);
 
     // DB 입장 로그용: subjectId·scheduleId를 sessionStorage에 유지 (WebSocket URL에 항상 포함되도록)
     useEffect(() => {
@@ -2276,6 +2294,15 @@ function MeetingPage({ portalRoomId }) {
                     changes: { cameraOff: true, muted: true },
                 }));
             }
+        } catch { }
+
+        // ✅ 0-1) 프로듀서 즉시 끊기 → 상대 화면에서 내 타일/스트림 즉시 제거
+        try {
+            producersRef.current.forEach((p) => {
+                try { p.close(); } catch { }
+                if (p.appData?.type) safeSfuSend({ action: "closeProducer", data: { producerId: p.id } });
+            });
+            producersRef.current.clear();
         } catch { }
 
         // ✅ 1) LEAVE 전송 (2회 전송으로 확실히 유도)
@@ -4511,7 +4538,7 @@ function MeetingPage({ portalRoomId }) {
                 bumpStreamVersion();
 
                 /* -------------------------------------------------
-                오디오 처리
+                오디오 처리 (resume 후 트랙에 데이터가 들어오므로 재생 재시도)
                 ------------------------------------------------- */
                 if (kind === "audio") {
                     const audio = new Audio();
@@ -4523,13 +4550,22 @@ function MeetingPage({ portalRoomId }) {
                 }
 
                 /* -------------------------------------------------
-                consumer resume
+                consumer resume (SFU가 paused 상태로 생성하므로 반드시 resume 필요)
                 ------------------------------------------------- */
                 safeSfuSend({
                     action: "resumeConsumer",
                     requestId: safeUUID(),
                     data: { consumerId },
                 });
+
+                // resume 후 트랙에 데이터가 들어오면 오디오 재생 재시도 (브라우저 정책/타이밍 대응)
+                if (kind === "audio") {
+                    const audio = audioElsRef.current.get(producerId);
+                    if (audio) {
+                        setTimeout(() => audio.play().catch(() => { }), 150);
+                        setTimeout(() => audio.play().catch(() => { }), 500);
+                    }
+                }
 
                 /* -------------------------------------------------
                 종료 처리(가장 중요)
@@ -4809,6 +4845,30 @@ function MeetingPage({ portalRoomId }) {
                 return;
             }
 
+            // 🔥 모집페이지 등으로 나갈 때 유예 없이 즉시 퇴장 — producer 먼저 끊어 상대 타일 즉시 제거
+            isLeavingRef.current = true;
+            try {
+                producersRef.current.forEach((p) => {
+                    try { p.close(); } catch { }
+                    if (p.appData?.type) safeSfuSend({ action: "closeProducer", data: { producerId: p.id } });
+                });
+                producersRef.current.clear();
+            } catch { }
+            try {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: "LEAVE" }));
+                }
+            } catch { }
+            try {
+                safeSfuSend({
+                    action: "leave",
+                    requestId: safeUUID(),
+                    data: { roomId, peerId: userId },
+                });
+            } catch { }
+            try { wsRef.current?.close(); } catch { }
+            try { sfuWsRef.current?.close(); } catch { }
+
             // 🔥 언마운트 시 얼굴 필터 정리 (PIP가 아닐 때만)
             stopFaceEmojiFilter().catch(() => { });
             stopAvatarFilter().catch(() => { });
@@ -4816,7 +4876,7 @@ function MeetingPage({ portalRoomId }) {
             // ❗ 통화 종료 시에만 회의 상태 종료
             endMeeting();
         };
-    }, [endMeeting, stopFaceEmojiFilter, stopAvatarFilter]);
+    }, [endMeeting, stopFaceEmojiFilter, stopAvatarFilter, roomId, userId]);
 
     useEffect(() => {
         const handler = () => {
@@ -5097,32 +5157,82 @@ function MeetingPage({ portalRoomId }) {
     }, []);
 
     useEffect(() => {
-        const handleBeforeUnload = () => {
-            // ✅ LMS/사이트를 완전히 떠날 때는 항상 즉시 회의 종료
-            // (재접속 유예 시간 없이 바로 LEAVE + 소켓 정리)
+        // ✅ 탭 닫기/브라우저 종료 시 유예 없이 즉시 퇴장 — producer 먼저 끊어 상대 타일 즉시 제거
+        const sendLeaveAndClose = () => {
             isLeavingRef.current = true;
-
+            try {
+                producersRef.current.forEach((p) => {
+                    try { p.close(); } catch { }
+                    if (p.appData?.type) safeSfuSend({ action: "closeProducer", data: { producerId: p.id } });
+                });
+                producersRef.current.clear();
+            } catch { }
             try {
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
                     wsRef.current.send(JSON.stringify({ type: "LEAVE" }));
                 }
             } catch { }
-
             try {
-                wsRef.current?.close();
+                safeSfuSend({
+                    action: "leave",
+                    requestId: safeUUID(),
+                    data: { roomId, peerId: userId },
+                });
             } catch { }
-
-            try {
-                sfuWsRef.current?.close();
-            } catch { }
+            try { wsRef.current?.close(); } catch { }
+            try { sfuWsRef.current?.close(); } catch { }
         };
 
-        window.addEventListener("beforeunload", handleBeforeUnload);
+        window.addEventListener("beforeunload", sendLeaveAndClose);
+        window.addEventListener("pagehide", sendLeaveAndClose);
 
         return () => {
-            window.removeEventListener("beforeunload", handleBeforeUnload);
+            window.removeEventListener("beforeunload", sendLeaveAndClose);
+            window.removeEventListener("pagehide", sendLeaveAndClose);
         };
-    }, []);
+    }, [roomId, userId]);
+
+    // 🔥 헤더 등에서 "모임 목록" 등 클릭 시: 퇴장(WS/SFU 즉시 끊기) 후 해당 경로로 이동 → 상대방 화면에서 내 타일 즉시 제거
+    useEffect(() => {
+        const handleLeaveAndNavigate = (e) => {
+            const path = (e?.detail?.path || "/room").trim() || "/room";
+            isLeavingRef.current = true;
+
+            try {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: "USER_STATE_CHANGE", userId, changes: { cameraOff: true, muted: true } }));
+                    wsRef.current.send(JSON.stringify({ type: "LEAVE" }));
+                }
+            } catch { }
+            try {
+                producersRef.current.forEach((p) => {
+                    try { p.close(); } catch { }
+                    if (p.appData?.type) safeSfuSend({ action: "closeProducer", data: { producerId: p.id } });
+                });
+                producersRef.current.clear();
+            } catch { }
+            try {
+                safeSfuSend({ action: "leave", requestId: safeUUID(), data: { roomId, peerId: userId } });
+            } catch { }
+            try { wsRef.current?.close(); } catch { }
+            try { sfuWsRef.current?.close(); } catch { }
+            wsRef.current = null;
+            sfuWsRef.current = null;
+
+            if (localStreamRef.current) {
+                localStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch { } });
+                localStreamRef.current = null;
+            }
+            setLocalStream(null);
+            setParticipants([]);
+            setMessages([]);
+            if (endMeeting) endMeeting();
+            navigate(path);
+        };
+
+        window.addEventListener("meeting:leave-and-navigate", handleLeaveAndNavigate);
+        return () => window.removeEventListener("meeting:leave-and-navigate", handleLeaveAndNavigate);
+    }, [roomId, userId, navigate, endMeeting]);
 
     // 🔥 커스텀 PIP에서 나가기 이벤트 처리
     useEffect(() => {
@@ -5353,11 +5463,19 @@ function MeetingPage({ portalRoomId }) {
 
     useEffect(() => {
         if (!localStream) return;
+        // send transport가 아직 준비되지 않았을 수 있으므로 즉시 + 지연 재시도
         ensureLocalProducers();
+        const t1 = setTimeout(() => ensureLocalProducers(), 200);
+        const t2 = setTimeout(() => ensureLocalProducers(), 600);
 
         // 오디오 트랙이 없으면 볼륨 분석을 건너뜀 (화면 공유 시 오디오 트랙이 없을 수 있음)
         const audioTrack = localStream.getAudioTracks()[0];
-        if (!audioTrack) return;
+        if (!audioTrack) {
+            return () => {
+                clearTimeout(t1);
+                clearTimeout(t2);
+            };
+        }
 
         // ✅ 공유 AudioContext 사용 (suspended 방지·리소스 절약), 브라우저 정책으로 인한 말하기 감지 실패 방지
         const ctx = getSharedAudioContext();
@@ -5388,6 +5506,8 @@ function MeetingPage({ portalRoomId }) {
         };
         checkVolume();
         return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
             try { source.disconnect(); analyser.disconnect(); } catch { }
         };
     }, [localStream]);
@@ -5409,6 +5529,16 @@ function MeetingPage({ portalRoomId }) {
             if (at.enabled !== micOn) at.enabled = micOn;
         }
     }, [camOn, micOn, localStream]);
+
+    // 🔥 localStream이 설정되면 participants의 '나' 타일에 반영 (내 카메라가 보이게)
+    useEffect(() => {
+        if (!localStream) return;
+        setParticipants((prev) =>
+            prev.map((p) =>
+                p.isMe ? { ...p, stream: localStream, isLoading: false, isJoining: false } : p
+            )
+        );
+    }, [localStream]);
 
     // 1️⃣ Signaling WebSocket (8080)
     useEffect(() => {
@@ -5627,7 +5757,7 @@ function MeetingPage({ portalRoomId }) {
                                         screenStream: old?.screenStream ?? null,
                                         isScreenSharing: old?.isScreenSharing ?? false,
                                         reaction: old?.reaction ?? null,
-                                        speaking: old?.speaking ?? false,
+                                        speaking: typeof u.speaking === "boolean" ? u.speaking : (old?.speaking ?? false),
                                         isReconnecting: false,
                                         isLoading: false,
                                         isJoining: false,
@@ -5678,6 +5808,11 @@ function MeetingPage({ portalRoomId }) {
                             const finalIsScreenSharing = hasLiveStream ? (old?.isScreenSharing ?? false) :
                                 ((shouldShowReconnecting && !shouldKeepStream) ? false : (old?.isScreenSharing ?? false));
 
+                            // 🔥 나(isMe)는 항상 로컬 스트림 사용 (USERS_UPDATE 시 ref가 아직 안 채워졌을 수 있으므로 old?.stream 유지)
+                            const myStream = isMe ? (localStreamRef.current ?? old?.stream ?? null) : finalStream;
+                            const myScreenStream = isMe ? (screenStreamRef.current || null) : finalScreenStream;
+                            const myIsScreenSharing = isMe ? !!screenStreamRef.current : finalIsScreenSharing;
+
                             const baseUser = {
                                 id: participantId,
                                 userId: peerId,
@@ -5700,12 +5835,14 @@ function MeetingPage({ portalRoomId }) {
                                 bgRemove: typeof u.bgRemove === "boolean" ? u.bgRemove : (old?.bgRemove ?? false),
 
                                 // 🔥 핵심: live stream이 있으면 절대 null로 설정하지 않음 (검은 화면 방지)
-                                stream: finalStream,
-                                screenStream: finalScreenStream,
-                                isScreenSharing: finalIsScreenSharing,
+                                // 🔥 isMe면 로컬 스트림으로 내 카메라가 보이게 함
+                                stream: myStream,
+                                screenStream: myScreenStream,
+                                isScreenSharing: myIsScreenSharing,
 
                                 reaction: old?.reaction ?? null,
-                                speaking: old?.speaking ?? false,
+                                // ✅ 서버 USERS_UPDATE의 speaking 사용 → 기존 유저(A)도 새 유저(B) 말할 때 파란 깜빡임 표시
+                                speaking: typeof u.speaking === "boolean" ? u.speaking : (old?.speaking ?? false),
 
                                 isJoining: false,
                                 isReconnecting: shouldShowReconnecting,
@@ -5970,9 +6107,10 @@ function MeetingPage({ portalRoomId }) {
                     const { targetUserId, hostName } = data;
                     console.log(`🔇 [FORCE_MUTE] ${hostName}님이 ${targetUserId}의 마이크를 껐습니다.`);
 
-                    // 내가 대상이면 마이크 끄기 + 스스로 켤 수 없음
+                    // 내가 대상이면 마이크 끄기 + 스스로 켤 수 없음 (로컬 저장으로 재접속 시에도 유지)
                     if (String(targetUserId) === String(userId)) {
                         setMicOn(false);
+                        try { localStorage.setItem("micOn", "false"); } catch { }
                         setMutedByHostMe(true);
                         setToastMessage(`${hostName}님이 마이크를 껐습니다.`);
                         setShowToast(true);
@@ -6331,9 +6469,11 @@ function MeetingPage({ portalRoomId }) {
                     } */
 
                     sendTransportRef.current = sendTransport;
-                    setTimeout(() => {
-                        ensureLocalProducers();
-                    }, 0);
+                    // 로컬 스트림이 아직 없을 수 있으므로 즉시 + 지연 재시도 (상대방에게 카메라/오디오 전달 보장)
+                    ensureLocalProducers();
+                    setTimeout(() => ensureLocalProducers(), 100);
+                    setTimeout(() => ensureLocalProducers(), 500);
+                    setTimeout(() => ensureLocalProducers(), 1200);
                 }
 
                 if (direction === "recv") {
@@ -8026,6 +8166,7 @@ function MeetingPage({ portalRoomId }) {
                                     const { hostName } = forceUnmuteRequest;
                                     setForceUnmuteRequest(null);
                                     setMicOn(true);
+                                    try { localStorage.setItem("micOn", "true"); } catch { }
                                     setToastMessage(`${hostName}님이 마이크를 켜 주었습니다.`);
                                     setShowToast(true);
                                     const audioProducer = producersRef.current?.get?.("audio");
@@ -8078,6 +8219,7 @@ function MeetingPage({ portalRoomId }) {
                                     const { hostName } = forceCameraOnRequest;
                                     setForceCameraOnRequest(null);
                                     setCamOn(true);
+                                    try { localStorage.setItem("camOn", "true"); } catch { }
                                     setToastMessage(`${hostName}님이 카메라를 켜 주었습니다.`);
                                     setShowToast(true);
                                     turnOnCamera().catch((e) => console.warn("[FORCE_CAMERA_ON] turnOnCamera failed:", e));

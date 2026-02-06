@@ -70,13 +70,7 @@ const ChatModal = ({ roomId, roomName }) => {
     const [roomNickname, setRoomNickname] = useState(null);
 
     const [chatMessages, setChatMessages] = useState([]); // 일반 채팅 메시지 목록
-    const [aiMessages, setAiMessages] = useState([{       // AI 채팅 메시지 목록 (초기값)
-        userId: 'AI_BOT',
-        userName: 'AI 튜터',
-        message: `안녕하세요! LMS에서 궁금한 점을 물어보세요!`,
-        createdAt: new Date().toISOString(),
-        isAiResponse: true
-    }]);
+    const [aiMessages, setAiMessages] = useState([]); // AI 채팅 메시지 목록 (초기값은 빈 배열, useEffect에서 스트리밍으로 추가)
 
     // AI 모드 관련 상태들
     const [assignmentList, setAssignmentList] = useState([]);
@@ -87,6 +81,8 @@ const ChatModal = ({ roomId, roomName }) => {
     const [lastAskedSubmission, setLastAskedSubmission] = useState(null); // { submissionId, name } | null
     // 과제 요약/예상문제 로딩 단계: 1 = DB에서 파일 가져오는중, 2 = 요약/예상문제 만드는 중
     const [loadingPhaseForSubmission, setLoadingPhaseForSubmission] = useState(null); // 1 | 2 | null
+    // 로딩 문구 말줄임표 애니메이션 (1~3개 순환)
+    const [loadingDotsPhase, setLoadingDotsPhase] = useState(0); // 0,1,2 → ., .., ...
     // '과제 목록 보여줘' / '과제' 키워드 입력 시 그 메시지 아래에만 과제 목록 표시 (null이면 목록 미표시)
     const [showAssignmentListAfterIndex, setShowAssignmentListAfterIndex] = useState(null); // 메시지 인덱스 또는 null
     // 출석: '출석' 키워드 입력 시 해당 메시지 아래에 전체 출석 리스트 표시
@@ -129,6 +125,16 @@ const ChatModal = ({ roomId, roomName }) => {
     useEffect(() => {
         latestMessagesRef.current = chatMessages;
     }, [chatMessages]);
+
+    // 로딩 메시지가 있을 때 말줄임표(.) 1→2→3개 순환 애니메이션
+    useEffect(() => {
+        const hasLoading = aiMessages.some((m) => m.isLoading);
+        if (!hasLoading) return;
+        const t = setInterval(() => {
+            setLoadingDotsPhase((p) => (p + 1) % 3);
+        }, 400);
+        return () => clearInterval(t);
+    }, [aiMessages]);
 
     // =================================================================
     // 2. 유틸리티 및 초기 설정
@@ -476,29 +482,11 @@ const ChatModal = ({ roomId, roomName }) => {
     const handleClickSubmission = (submission) => {
         const hasFile = submission.fileUrl != null && String(submission.fileUrl).trim() !== "";
         if (!hasFile) {
-            setAiMessages((prev) => [
-                ...prev,
-                {
-                    userId: "AI_BOT",
-                    userName: "AI 튜터",
-                    message: `${submission.name}님의 과제가 아직 제출되지 않았습니다.`,
-                    createdAt: new Date().toISOString(),
-                    isAiResponse: true
-                }
-            ]);
+            startStreamingAiMessage(`${submission.name}님의 과제가 아직 제출되지 않았습니다.`, { createdAt: new Date().toISOString() });
             return;
         }
         setLastAskedSubmission({ submissionId: submission.submissionId, name: submission.name });
-        setAiMessages((prev) => [
-            ...prev,
-            {
-                userId: "AI_BOT",
-                userName: "AI 튜터",
-                message: `${submission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`,
-                createdAt: new Date().toISOString(),
-                isAiResponse: true
-            }
-        ]);
+        startStreamingAiMessage(`${submission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`, { createdAt: new Date().toISOString() });
     };
 
     // 전체 출석 리스트 로드 (채팅 패널용)
@@ -758,6 +746,13 @@ const ChatModal = ({ roomId, roomName }) => {
         };
     }, []);
 
+    // AI 모드 초기 메시지 스트리밍 표시
+    useEffect(() => {
+        if (isAiMode && aiMessages.length === 0) {
+            startStreamingAiMessage("안녕하세요! LMS에서 궁금한 점을 물어보세요!", { createdAt: new Date().toISOString() });
+        }
+    }, [isAiMode]);
+
 
     // 메시지 추가 시 스크롤 자동 이동 (열려있을 때만)
     useEffect(() => {
@@ -876,15 +871,32 @@ const ChatModal = ({ roomId, roomName }) => {
             // 인사 등 단순 답변 처리
             const trimmedLower = text.trim().toLowerCase();
             const isGreeting = /^안녕(하세요)?\.?$/.test(trimmedLower) || trimmedLower === "안녕" || trimmedLower === "하이" || trimmedLower === "hello";
-            if (isGreeting) { setAiMessages((prev) => [ ...prev, { userId: "AI_BOT", userName: "AI 튜터", message: "안녕하세요! 과제 제출 현황이나 목록이 궁금하시다면 '과제 목록을 보여줘' 또는 '과제'라고 입력해보세요.", createdAt: new Date().toISOString(), isAiResponse: true } ]); return; }
+            if (isGreeting) {
+                startStreamingAiMessage("안녕하세요! 과제 제출 현황이나 목록이 궁금하시다면 '과제 목록을 보여줘' 또는 '과제'라고 입력해보세요.", { createdAt: new Date().toISOString() });
+                return;
+            }
 
             // "이름이 바뀌었나요?" 처리
             if (isNameChangeQuestion(text)) {
                 let info = null;
                 if (lastAskedSubmission) { info = getAssignmentInfoForSubmission(lastAskedSubmission.submissionId, submissionListAfterMessage); }
                 if (!info) { const matchedSubmission = findSubmissionNameFromMessage(text, submissionListAfterMessage); if (matchedSubmission) { info = getAssignmentInfoForSubmission(matchedSubmission.submissionId, submissionListAfterMessage) || { assignmentTitle: "과제", submission: matchedSubmission }; } }
-                let reply = info?.submission ? `${info.submission.name}님의 제출 현황: [${info.assignmentTitle}] - ${info.submission.fileUrl ? "제출완료" : "미제출"}` : (lastAskedSubmission?.name ? `${lastAskedSubmission.name}님의 제출 현황을 보려면...` : "어느 분의 제출 현황을 알려드릴까요?");
-                setAiMessages((prev) => [ ...prev, { userId: "AI_BOT", userName: "AI 튜터", message: reply, createdAt: new Date().toISOString(), isAiResponse: true } ]); return;
+                if (info?.submission) {
+                    const submission = info.submission;
+                    if (submission.fileUrl) {
+                        // 제출 완료: 제출 현황 + 요약/예상문제 유도 (스트리밍)
+                        setLastAskedSubmission({ submissionId: submission.submissionId, name: submission.name });
+                        startStreamingAiMessage(`${submission.name}님의 제출 현황: [${info.assignmentTitle}] - 제출완료\n${submission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`, { createdAt: new Date().toISOString() });
+                    } else {
+                        // 미제출: 미제출 안내 (스트리밍)
+                        startStreamingAiMessage(`${submission.name}님의 과제가 아직 제출되지 않았습니다.`, { createdAt: new Date().toISOString() });
+                    }
+                } else {
+                    // 정보 없음: 안내 (스트리밍)
+                    const reply = lastAskedSubmission?.name ? `${lastAskedSubmission.name}님의 제출 현황을 보려면...` : "어느 분의 제출 현황을 알려드릴까요?";
+                    startStreamingAiMessage(reply, { createdAt: new Date().toISOString() });
+                }
+                return;
             }
 
             // 과제 이름/번호 매칭
@@ -926,9 +938,15 @@ const ChatModal = ({ roomId, roomName }) => {
             const matchedSubmission = findSubmissionNameFromMessage(text, submissionListAfterMessage);
             
             if (matchedSubmission) {
-                if (!matchedSubmission.fileUrl) { setAiMessages(prev => [...prev, { userId: "AI_BOT", userName: "AI 튜터", message: `${matchedSubmission.name}님의 과제가 아직 제출되지 않았습니다.`, createdAt: new Date().toISOString(), isAiResponse: true }]); return; }
+                if (!matchedSubmission.fileUrl) {
+                    startStreamingAiMessage(`${matchedSubmission.name}님의 과제가 아직 제출되지 않았습니다.`, { createdAt: new Date().toISOString() });
+                    return;
+                }
                 setLastAskedSubmission({ submissionId: matchedSubmission.submissionId, name: matchedSubmission.name });
-                if (!hasSummaryKeyword && !hasProblemKeyword) { setAiMessages(prev => [...prev, { userId: "AI_BOT", userName: "AI 튜터", message: `${matchedSubmission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`, createdAt: new Date().toISOString(), isAiResponse: true }]); return; }
+                if (!hasSummaryKeyword && !hasProblemKeyword) {
+                    startStreamingAiMessage(`${matchedSubmission.name}님의 과제를 요약할까요? 예상문제를 낼까요?`, { createdAt: new Date().toISOString() });
+                    return;
+                }
             }
 
             if (lastAskedSubmission && (hasSummaryKeyword || hasProblemKeyword)) {
@@ -1051,7 +1069,7 @@ const ChatModal = ({ roomId, roomName }) => {
                 )}
 
                 <div className={`tc-header ${isAiMode ? 'ai-mode' : ''}`} onMouseDown={handleMouseDown} style={{ cursor: 'move' }}>
-                    <span className="tc-title">{isAiMode ? "🤖 AI 튜터" : "💬 " + (roomNickname || "로딩중...")}</span>
+                    <span className="tc-title">{isAiMode ? "🤖 AI 튜터" : "💬 " + (roomName +" 소통방" || "소통방")}</span>
                     <div className="tc-icons">
                         {!isAiMode && <span className="icon-btn" onClick={(e) => { e.stopPropagation(); setIsMenuOpen(!isMenuOpen); }}>☰</span>}
                         <button className="ai-toggle-btn" onClick={(e) => { e.stopPropagation(); toggleAiMode(); }}>{isAiMode ? "채팅방" : "AI"}</button>
@@ -1123,12 +1141,20 @@ const ChatModal = ({ roomId, roomName }) => {
                                                     <div className={`tc-bubble ${isMe ? 'me' : 'other'} ${msg.isSticker ? 'sticker-bubble' : ''}`}>
                                                         {msg.isSticker ? (
                                                             <div className="sticker-text">{msg.message}</div>
-                                                        ) : msg.isLoading && msg.loadingSubmissionType ? (
-                                                            loadingPhaseForSubmission === 1
-                                                                ? "DB에서 파일 가져오는중..."
-                                                                : msg.loadingSubmissionType === "summary"
-                                                                    ? "요약하는 중..."
-                                                                    : "예상문제 만드는 중..."
+                                                        ) : msg.isLoading ? (
+                                                            (() => {
+                                                                const dots = ".".repeat(loadingDotsPhase + 1);
+                                                                if (msg.loadingSubmissionType) {
+                                                                    const base =
+                                                                        loadingPhaseForSubmission === 1
+                                                                            ? "DB에서 파일 가져오는 중"
+                                                                            : msg.loadingSubmissionType === "summary"
+                                                                                ? "요약하는 중"
+                                                                                : "예상문제 만드는 중";
+                                                                    return base + dots;
+                                                                }
+                                                                return "질문에 알맞은 답변을 생각 중입니다" + dots;
+                                                            })()
                                                         ) : (
                                                             msg.message
                                                         )}

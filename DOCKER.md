@@ -165,6 +165,12 @@ proxy_set_header Host $host;
 
 ## 8. 트러블슈팅
 
+- **`docker compose -f docker-compose-web.yaml up -d` 시 ".env not found"**: 프로젝트 루트에 `.env`가 없어서 발생합니다. `.env.example`을 복사한 뒤 실제 값으로 채우세요.
+  ```bash
+  cp .env.example .env
+  # .env 편집 후 다시: docker compose -f docker-compose-web.yaml up -d
+  ```
+- **SFU 서버에 peer 접속이 안 됨**: ① **Web 서비스가 떠 있어야 합니다.** docker-compose-web가 .env 없이 실패하면 프론트/백엔드가 안 떠 있어서 브라우저가 SFU에 연결할 수 없습니다. `.env` 생성 후 `docker compose -f docker-compose-web.yaml up -d`로 프론트·백엔드를 먼저 기동하세요. ② 프론트엔드 nginx가 `/sfu/`를 SFU 주소(기본 `15.165.181.93:4000`)로 프록시합니다. 프론트와 SFU가 **같은 호스트**에서 돌 때 프록시가 실패하면, nginx의 `proxy_pass`를 `http://host.docker.internal:4000`으로 바꾸고, docker-compose-web의 frontend 서비스에 `extra_hosts: ["host.docker.internal:host-gateway"]`를 추가한 뒤 이미지를 다시 빌드해 보세요. ③ SFU 포트(4000, 40000–40200 UDP/TCP)가 방화벽·보안 그룹에서 열려 있는지 확인하세요.
 - **Backend DB 연결 실패**: `RDS_HOSTNAME` 등이 .env에 맞는지, EC2 보안 그룹에서 RDS 접근 허용 여부 확인.
 - **SFU 검은 화면**: `ANNOUNCED_IP`가 클라이언트가 접속하는 주소(공인 IP 또는 도메인)와 일치하는지 확인.
 - **Frontend에서 API/SFU 404**: Nginx에서 `/api`, `/sfu/` 등이 올바른 컨테이너로 프록시되는지 확인.

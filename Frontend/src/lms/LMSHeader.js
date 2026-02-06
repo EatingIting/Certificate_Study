@@ -2,11 +2,13 @@ import "./LMSHeader.css";
 import { Bell, MessageCircle, User, Users, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useLMS } from "./LMSContext";
+import { useMeeting } from "../webrtc/MeetingContext";
 import { useEffect, useState, useRef } from "react";
 import { toWsBackendUrl } from "../utils/backendUrl";
 
 export default function Header() {
     const { displayName, loading, roomTitle, roomLoading, user, room } = useLMS();
+    const { isInMeeting } = useMeeting();
     const navigate = useNavigate();
 
     const isHost =
@@ -117,7 +119,14 @@ export default function Header() {
                 <Users
                     size={18}
                     className="icon-button"
-                    onClick={() => navigate("/room")}
+                    onClick={() => {
+                        // 회의 중이면 먼저 퇴장(WS/SFU 끊기) 후 이동 → 상대방 화면에서 내 타일 즉시 제거
+                        if (isInMeeting) {
+                            window.dispatchEvent(new CustomEvent("meeting:leave-and-navigate", { detail: { path: "/room" } }));
+                        } else {
+                            navigate("/room");
+                        }
+                    }}
                 />
 
                 <MessageCircle size={18} />

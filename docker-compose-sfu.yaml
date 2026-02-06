@@ -1,6 +1,6 @@
 services:
   sfu:
-    image: certificate-study/sfu:latest
+    image: eatingiting/sfu
     container_name: sfu
     restart: unless-stopped
     environment:
