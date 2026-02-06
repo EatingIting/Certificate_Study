@@ -3,6 +3,8 @@ package com.example.demo.schedule.service;
 
 import com.example.demo.dto.schedule.StudyScheduleCreateRequest;
 import com.example.demo.dto.schedule.StudyScheduleUpdateRequest;
+import com.example.demo.roomcontext.CurrentUserUtil;
+import com.example.demo.roomparticipant.RoomParticipantMapper;
 import com.example.demo.schedule.mapper.StudyScheduleMapper;
 import com.example.demo.schedule.vo.StudyScheduleVO;
 import com.example.demo.화상채팅.Domain.MeetingRoom;
@@ -12,6 +14,7 @@ import com.example.demo.화상채팅.Repository.MeetingRoomRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,17 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
     private final MeetingRoomParticipantRepository participantRepository;
     private final MeetingRoomKickedUserRepository kickedUserRepository;
     private final EntityManager entityManager;
+    private final RoomParticipantMapper roomParticipantMapper;
+    private final CurrentUserUtil currentUserUtil;
+
+    private void requireHost(String roomId) {
+        String email = currentUserUtil.getCurrentUserEmail();
+        String hostEmail = roomParticipantMapper.selectHostEmail(roomId);
+
+        if (hostEmail == null || email == null || !hostEmail.trim().equalsIgnoreCase(email.trim())) {
+            throw new AccessDeniedException("방장만 접근 가능합니다.");
+        }
+    }
 
     @Override
     public List<StudyScheduleVO> selectByRange(String roomId, Date start, Date endExclusive) {
@@ -56,6 +70,7 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
     @Transactional
     public Long insert(StudyScheduleCreateRequest req) {
         String subjectId = req.getRoomId();
+        requireHost(subjectId);
         String startTime = normalizeTime(req.getStartTime());
         String endTime = normalizeTime(req.getEndTime());
         if (startTime == null) startTime = "09:00:00";
@@ -82,7 +97,11 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
 
     @Override
     @Transactional
-    public void update(Long studyScheduleId, String roomId, StudyScheduleUpdateRequest req) {
+    public void update(
+            Long studyScheduleId,
+            String roomId,
+            StudyScheduleUpdateRequest req) {
+        requireHost(roomId);
         String startTime = normalizeTime(req.getStartTime());
         String endTime = normalizeTime(req.getEndTime());
 
@@ -105,6 +124,7 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
     @Override
     @Transactional
     public void delete(Long studyScheduleId, String roomId) {
+        requireHost(roomId);
         // roomId = subject_id. FK 제약(study_schedule <- meeting_room) 때문에 먼저 연관 데이터 삭제
         List<MeetingRoom> rooms = meetingRoomRepository.findBySubjectIdAndScheduleId(roomId, studyScheduleId);
         participantRepository.deleteBySubjectIdAndScheduleId(roomId, studyScheduleId);
