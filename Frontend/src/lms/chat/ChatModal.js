@@ -199,7 +199,6 @@ const ChatModal = ({ roomId, roomName }) => {
         });
 
         // 타자 속도 튜닝: 느리게 보이도록 한 번에 추가되는 글자 수를 줄임
-        // (너무 긴 답변도 무한히 오래 걸리지 않게, 길이에 따라 최소 chunk를 조금씩 올림)
         const chunk = Math.max(1, Math.round(text.length / 180));
         const timer = setInterval(() => {
             setAiMessages((prev) =>
@@ -227,8 +226,7 @@ const ChatModal = ({ roomId, roomName }) => {
         streamingTimers.current.set(streamId, { timer, progress: 0 });
     };
 
-    // 🟢 [API] 요약노트/문제노트 저장 (type: 'SUMMARY' | 'PROBLEM')
-    // 문제 노트 저장 시 AI 인사/안내 문장(첫 문장~첫 문제 전까지) 제외하고 실제 문제 부분만 저장
+    // 요약노트/문제노트 저장 (type: 'SUMMARY' | 'PROBLEM')
     const getAnswerForProblemNote = (answer) => {
         if (!answer || typeof answer !== "string") return answer || "";
         const match = answer.match(/\n?\s*###\s*1[.)]\s/);

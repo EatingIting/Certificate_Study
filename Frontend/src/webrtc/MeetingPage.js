@@ -50,7 +50,9 @@ function getSfuWsUrl() {
 
 // ✅ 공유 AudioContext (타일마다 새로 만들면 렉/리소스 증가)
 let _sharedAudioCtx = null;
+let _audioCtxLocked = false; // 통화 종료 후 재생성 방지 잠금
 function getSharedAudioContext() {
+    if (_audioCtxLocked) return null; // 잠금 상태면 재생성하지 않음
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return null;
 
@@ -61,6 +63,17 @@ function getSharedAudioContext() {
         _sharedAudioCtx.resume().catch(() => { });
     }
     return _sharedAudioCtx;
+}
+// ✅ 통화 종료 시 AudioContext를 close하여 브라우저 빨간원(녹음중) 표시 제거
+function closeSharedAudioContext() {
+    _audioCtxLocked = true; // 잠금 활성화: 비동기 코드가 다시 생성하지 못하게
+    if (_sharedAudioCtx && _sharedAudioCtx.state !== "closed") {
+        try { _sharedAudioCtx.close(); } catch { }
+    }
+    _sharedAudioCtx = null;
+}
+function unlockSharedAudioContext() {
+    _audioCtxLocked = false;
 }
 
 const ButtonControl = ({ active, danger, disabled, icon: Icon, onClick, label }) => (
@@ -700,6 +713,9 @@ function MeetingPage({ portalRoomId }) {
     useEffect(() => {
         if (!roomId || !subjectId) return;
 
+        // ✅ 새 회의 입장 시 AudioContext 잠금 해제 (이전 통화 종료에서 잠겼을 수 있음)
+        unlockSharedAudioContext();
+
         console.log("[MeetingPage] startMeeting", { roomId, subjectId });
         startMeeting(roomId, subjectId);
     }, [roomId, subjectId, startMeeting]);
@@ -1335,23 +1351,36 @@ function MeetingPage({ portalRoomId }) {
     }, []);
 
     if (!userIdRef.current) {
-        // localStorage에서 userId와 userName 가져오기
-        const savedId = localStorage.getItem("userId");
-        const savedName = localStorage.getItem("userName");
+        // ✅ 유령 유저(User-xxxx) 방지:
+        // - 미팅/SFU의 peerId는 "로그인 userId"와 반드시 동일해야 함
+        // - 임의 UUID + User-xxxx를 생성/저장하면 서버의 userId와 불일치하여
+        //   USERS_UPDATE/consume 로직에서 '다른 참가자'로 인식되는 타일이 생길 수 있음
+        const sessionId = (sessionStorage.getItem("userId") || "").trim();
+        const sessionName =
+            (sessionStorage.getItem("nickname") || "").trim() ||
+            (sessionStorage.getItem("userName") || "").trim();
 
-        const id = savedId || safeUUID();
-        const name = savedName || `User-${id.slice(0, 4)}`;
+        const storedId = (localStorage.getItem("userId") || "").trim();
+        const storedName = (localStorage.getItem("userName") || "").trim();
 
-        // localStorage에 저장 (없으면 생성)
-        if (!savedId) {
+        const id = sessionId || storedId;
+        const name = sessionName || storedName || "";
+
+        if (id) {
+            userIdRef.current = id;
+            // 저장소 동기화(있을 때만)
+            sessionStorage.setItem("userId", id);
             localStorage.setItem("userId", id);
+        } else {
+            // 정말로 userId가 없는 비정상 케이스에만 임시 id를 사용하되, 저장/표시명 생성은 하지 않음
+            userIdRef.current = safeUUID();
         }
-        if (!savedName) {
+
+        if (name) {
+            userNameRef.current = name;
+            sessionStorage.setItem("userName", name);
             localStorage.setItem("userName", name);
         }
-
-        userIdRef.current = id;
-        userNameRef.current = name;
     }
 
     /* 브라우저 pip 관련 로직 */
@@ -1673,6 +1702,13 @@ function MeetingPage({ portalRoomId }) {
                 try { t.stop(); } catch { }
             });
         } catch { }
+
+        // ✅ 통화 종료 중이면 새 스트림 생성/상태 업데이트를 건너뜀
+        // (handleHangup이 이후에 전체 정리하므로, 여기서 setLocalStream하면 race condition 발생)
+        if (isLeavingRef.current) {
+            console.log("[turnOffCamera] isLeaving=true, skipping setLocalStream");
+            return;
+        }
 
         const audioOnly = new MediaStream([...prevAudio]);
         localStreamRef.current = audioOnly;
@@ -2284,6 +2320,9 @@ function MeetingPage({ portalRoomId }) {
     const handleHangup = () => {
         // ✅ 통화종료 확인 모달에서 확인 시에만 호출됨
         isLeavingRef.current = true;
+        // ✅ 통화 종료는 PiP 유지가 목적이 아니므로, pip 세션 키 제거 (cleanup 스킵 방지)
+        try { sessionStorage.removeItem("pip.roomId"); } catch { }
+        try { sessionStorage.removeItem("pip.subjectId"); } catch { }
 
         // ✅ 0) 상태 전파 (카메라/마이크 끄기)
         try {
@@ -2331,6 +2370,10 @@ function MeetingPage({ portalRoomId }) {
         // (alert 이전에 정리 루프를 시작하지만, UI 블로킹 방지를 위해 setTimeout 사용)
         setTimeout(() => {
             try {
+                // ✅ 카메라/필터 파이프라인 포함 전체 카메라 정리 (hidden video + rawTrack stop 포함)
+                // turnOffCamera 내부에서 canvasPipelineVideoElRef / kickTimer / rawTrack 까지 정리함
+                try { turnOffCamera(); } catch { }
+
                 // 얼굴 필터 정리
                 stopFaceEmojiFilter().catch(() => { });
                 stopAvatarFilter().catch(() => { });
@@ -2348,7 +2391,68 @@ function MeetingPage({ portalRoomId }) {
                     localStreamRef.current.getTracks().forEach((t) => t.stop());
                     localStreamRef.current = null;
                 }
+                // 화면공유 스트림 정리(남아있으면 브라우저가 계속 캡처/사용중으로 표시될 수 있음)
+                if (screenStreamRef.current) {
+                    try {
+                        screenStreamRef.current.getTracks().forEach((t) => {
+                            try { t.stop(); } catch { }
+                        });
+                    } catch { }
+                    screenStreamRef.current = null;
+                }
+
+                // ✅ 추가 안전장치: 필터/파이프라인 전환 중 localStream에 안 들어간 "원본 카메라 트랙"까지 stop
+                // - face/emoji 필터는 rawTrack을 localStream에서 분리한 채(outTrack만) 유지할 수 있음
+                // - 이 rawTrack이 남아있으면 브라우저가 카메라 사용중(빨간원)으로 표시됨
+                try {
+                    const extraTracks = [
+                        lastCameraTrackRef?.current,
+                        faceFilterRawTrackRef?.current,
+                        faceFilterOutTrackRef?.current,
+                        avatarRawTrackRef?.current,
+                        avatarOutTrackRef?.current,
+                        canvasPipelineRawTrackRef?.current,
+                        canvasPipelineOutTrackRef?.current,
+                    ].filter(Boolean);
+                    extraTracks.forEach((t) => {
+                        try {
+                            if (t.readyState === "live") t.stop();
+                        } catch { }
+                    });
+                } catch { }
+                try { lastCameraTrackRef.current = null; } catch { }
+                try { faceFilterRawTrackRef.current = null; } catch { }
+                try { faceFilterOutTrackRef.current = null; } catch { }
+                try { avatarRawTrackRef.current = null; } catch { }
+                try { avatarOutTrackRef.current = null; } catch { }
+                try { canvasPipelineOutTrackRef.current = null; } catch { }
+
+                // ✅ 남아있는 video/audio 엘리먼트의 srcObject 해제 (hidden element가 stream을 잡고 있는 경우 방지)
+                try {
+                    document.querySelectorAll("video").forEach((v) => {
+                        try {
+                            if (v?.srcObject) v.srcObject = null;
+                        } catch { }
+                    });
+                    document.querySelectorAll("audio").forEach((a) => {
+                        try {
+                            if (a?.srcObject) a.srcObject = null;
+                        } catch { }
+                    });
+                } catch { }
                 setLocalStream(null);
+
+                // ✅ audioElsRef 정리 (new Audio()로 생성된 요소는 DOM에 없어 querySelectorAll로 못 잡음)
+                try {
+                    audioElsRef.current.forEach((a) => {
+                        try { a.pause(); } catch { }
+                        try { a.srcObject = null; } catch { }
+                    });
+                    audioElsRef.current.clear();
+                } catch { }
+
+                // ✅ 공유 AudioContext 닫기 + 잠금 (비동기 코드가 재생성 못하게)
+                closeSharedAudioContext();
 
                 // WebSocket 정리 (충분한 시간 경과 후)
                 try { wsRef.current?.close(); } catch { }
@@ -2361,6 +2465,34 @@ function MeetingPage({ portalRoomId }) {
                 setParticipants([]);
                 setMessages([]);
                 if (endMeeting) endMeeting();
+
+                // ✅ 최종 안전장치: 혹시 남아있는 모든 live 트랙 강제 종료
+                // (비동기 race condition으로 놓친 트랙까지 커버)
+                try {
+                    const allRefs = [
+                        localStreamRef, screenStreamRef,
+                        lastCameraTrackRef, faceFilterRawTrackRef, faceFilterOutTrackRef,
+                        avatarRawTrackRef, avatarOutTrackRef,
+                        canvasPipelineRawTrackRef, canvasPipelineOutTrackRef,
+                    ];
+                    allRefs.forEach((ref) => {
+                        try {
+                            const val = ref?.current;
+                            if (!val) return;
+                            // MediaStream인 경우 (getTracks 있음)
+                            if (typeof val.getTracks === "function") {
+                                val.getTracks().forEach((t) => { try { if (t.readyState === "live") t.stop(); } catch { } });
+                            }
+                            // MediaStreamTrack인 경우 (stop 있음, getTracks 없음)
+                            else if (typeof val.stop === "function" && val.readyState === "live") {
+                                val.stop();
+                            }
+                        } catch { }
+                    });
+                } catch { }
+
+                // ✅ AudioContext 한번 더 확인 (endMeeting 이후 혹시 재생성된 경우)
+                closeSharedAudioContext();
 
                 // 페이지 이동
                 if (subjectId) {
@@ -2574,7 +2706,8 @@ function MeetingPage({ portalRoomId }) {
         }
 
         // 로컬 스트림 원복(오디오 + rawTrack)
-        if (rawTrack && rawTrack.readyState === "live") {
+        // ✅ 통화 종료 중이면 스킵 (race condition으로 AudioContext 재생성 방지)
+        if (!isLeavingRef.current && rawTrack && rawTrack.readyState === "live") {
             const prevAudio = localStreamRef.current
                 ?.getAudioTracks()
                 .filter((t) => t.readyState === "live") ?? [];
@@ -2640,7 +2773,8 @@ function MeetingPage({ portalRoomId }) {
         }
 
         // 로컬 스트림 원복(오디오 + rawTrack)
-        if (rawTrack && rawTrack.readyState === "live") {
+        // ✅ 통화 종료 중이면 스킵 (race condition으로 AudioContext 재생성 방지)
+        if (!isLeavingRef.current && rawTrack && rawTrack.readyState === "live") {
             const prevAudio = localStreamRef.current
                 ?.getAudioTracks()
                 .filter((t) => t.readyState === "live") ?? [];
@@ -4873,6 +5007,67 @@ function MeetingPage({ portalRoomId }) {
             stopFaceEmojiFilter().catch(() => { });
             stopAvatarFilter().catch(() => { });
 
+            // ✅ 언마운트 시 로컬 미디어도 정리 (통화 종료/페이지 이동 시 빨간 점(카메라 사용중) 방지)
+            try { turnOffCamera(); } catch { } // hidden video + rawTrack stop 포함
+            try {
+                if (localStreamRef.current) {
+                    localStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch { } });
+                    localStreamRef.current = null;
+                }
+            } catch { }
+            try {
+                if (screenStreamRef.current) {
+                    screenStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch { } });
+                    screenStreamRef.current = null;
+                }
+            } catch { }
+
+            // ✅ 추가 안전장치: localStreamRef에 포함되지 않은 원본/출력 트랙 모두 stop (빨간원 방지)
+            try {
+                const extraTracks = [
+                    lastCameraTrackRef?.current,
+                    faceFilterRawTrackRef?.current,
+                    faceFilterOutTrackRef?.current,
+                    avatarRawTrackRef?.current,
+                    avatarOutTrackRef?.current,
+                    canvasPipelineRawTrackRef?.current,
+                    canvasPipelineOutTrackRef?.current,
+                ].filter(Boolean);
+                extraTracks.forEach((t) => {
+                    try {
+                        if (t.readyState === "live") t.stop();
+                    } catch { }
+                });
+            } catch { }
+            try { lastCameraTrackRef.current = null; } catch { }
+            try { faceFilterRawTrackRef.current = null; } catch { }
+            try { faceFilterOutTrackRef.current = null; } catch { }
+            try { avatarRawTrackRef.current = null; } catch { }
+            try { avatarOutTrackRef.current = null; } catch { }
+            try { canvasPipelineOutTrackRef.current = null; } catch { }
+
+            // ✅ 숨겨진 video/audio 엘리먼트가 stream을 잡고 있지 않도록 srcObject 해제
+            try {
+                document.querySelectorAll("video").forEach((v) => {
+                    try { if (v?.srcObject) v.srcObject = null; } catch { }
+                });
+                document.querySelectorAll("audio").forEach((a) => {
+                    try { if (a?.srcObject) a.srcObject = null; } catch { }
+                });
+            } catch { }
+
+            // ✅ audioElsRef 정리 (new Audio()는 DOM에 없어서 querySelectorAll로 잡히지 않음)
+            try {
+                audioElsRef.current.forEach((a) => {
+                    try { a.pause(); } catch { }
+                    try { a.srcObject = null; } catch { }
+                });
+                audioElsRef.current.clear();
+            } catch { }
+
+            // ✅ 공유 AudioContext 닫기 + 잠금 (브라우저 빨간원 제거)
+            closeSharedAudioContext();
+
             // ❗ 통화 종료 시에만 회의 상태 종료
             endMeeting();
         };
@@ -5219,10 +5414,62 @@ function MeetingPage({ portalRoomId }) {
             wsRef.current = null;
             sfuWsRef.current = null;
 
+            // ✅ pip 세션 키 제거 (언마운트 cleanup 스킵 방지)
+            try { sessionStorage.removeItem("pip.roomId"); } catch { }
+            try { sessionStorage.removeItem("pip.subjectId"); } catch { }
+
+            // ✅ 카메라/필터 파이프라인 정리 (canvas pipeline + hidden video)
+            try { turnOffCamera(); } catch { }
+
+            // ✅ 로컬 미디어 트랙 정리
             if (localStreamRef.current) {
                 localStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch { } });
                 localStreamRef.current = null;
             }
+            // ✅ 화면공유 스트림 정리
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch { } });
+                screenStreamRef.current = null;
+            }
+            // ✅ 필터/파이프라인에서 분리된 원본/출력 트랙 stop (빨간원 방지)
+            try {
+                [
+                    lastCameraTrackRef?.current,
+                    faceFilterRawTrackRef?.current,
+                    faceFilterOutTrackRef?.current,
+                    avatarRawTrackRef?.current,
+                    avatarOutTrackRef?.current,
+                    canvasPipelineRawTrackRef?.current,
+                    canvasPipelineOutTrackRef?.current,
+                ].filter(Boolean).forEach((t) => {
+                    try { if (t.readyState === "live") t.stop(); } catch { }
+                });
+            } catch { }
+            try { lastCameraTrackRef.current = null; } catch { }
+            try { faceFilterRawTrackRef.current = null; } catch { }
+            try { faceFilterOutTrackRef.current = null; } catch { }
+            try { avatarRawTrackRef.current = null; } catch { }
+            try { avatarOutTrackRef.current = null; } catch { }
+            try { canvasPipelineOutTrackRef.current = null; } catch { }
+            // ✅ 남아있는 video/audio 엘리먼트의 srcObject 해제
+            try {
+                document.querySelectorAll("video").forEach((v) => {
+                    try { if (v?.srcObject) v.srcObject = null; } catch { }
+                });
+                document.querySelectorAll("audio").forEach((a) => {
+                    try { if (a?.srcObject) a.srcObject = null; } catch { }
+                });
+            } catch { }
+            // ✅ audioElsRef 정리 (DOM 밖 Audio 요소)
+            try {
+                audioElsRef.current.forEach((a) => {
+                    try { a.pause(); } catch { }
+                    try { a.srcObject = null; } catch { }
+                });
+                audioElsRef.current.clear();
+            } catch { }
+            // ✅ 공유 AudioContext 닫기 + 잠금 (브라우저 빨간원 제거)
+            closeSharedAudioContext();
             setLocalStream(null);
             setParticipants([]);
             setMessages([]);
@@ -5284,7 +5531,35 @@ function MeetingPage({ portalRoomId }) {
                 });
             } catch { }
 
-            // ✅ 4) 충분히 기다린 뒤 소켓 close 및 미디어 중지 (send 버퍼 flush 시간 확보)
+            // ✅ pip 세션 키 제거
+            try { sessionStorage.removeItem("pip.roomId"); } catch { }
+            try { sessionStorage.removeItem("pip.subjectId"); } catch { }
+
+            // ✅ 4) 카메라/필터 파이프라인 즉시 정리 (빨간원 방지 - setTimeout 밖에서 즉시 실행)
+            try { turnOffCamera(); } catch { }
+
+            // ✅ 4-1) 필터/파이프라인에서 분리된 원본/출력 트랙 즉시 stop
+            try {
+                [
+                    lastCameraTrackRef?.current,
+                    faceFilterRawTrackRef?.current,
+                    faceFilterOutTrackRef?.current,
+                    avatarRawTrackRef?.current,
+                    avatarOutTrackRef?.current,
+                    canvasPipelineRawTrackRef?.current,
+                    canvasPipelineOutTrackRef?.current,
+                ].filter(Boolean).forEach((t) => {
+                    try { if (t.readyState === "live") t.stop(); } catch { }
+                });
+            } catch { }
+            try { lastCameraTrackRef.current = null; } catch { }
+            try { faceFilterRawTrackRef.current = null; } catch { }
+            try { faceFilterOutTrackRef.current = null; } catch { }
+            try { avatarRawTrackRef.current = null; } catch { }
+            try { avatarOutTrackRef.current = null; } catch { }
+            try { canvasPipelineOutTrackRef.current = null; } catch { }
+
+            // ✅ 5) 충분히 기다린 뒤 소켓 close 및 미디어 중지 (send 버퍼 flush 시간 확보)
             setTimeout(() => {
                 try {
                     // 미디어 트랙 중지
@@ -5294,7 +5569,35 @@ function MeetingPage({ portalRoomId }) {
                         });
                         localStreamRef.current = null;
                     }
+                    // 화면공유 스트림 정리
+                    if (screenStreamRef.current) {
+                        screenStreamRef.current.getTracks().forEach((t) => {
+                            try { t.stop(); } catch { }
+                        });
+                        screenStreamRef.current = null;
+                    }
                     setLocalStream(null);
+
+                    // 남아있는 video/audio 엘리먼트의 srcObject 해제
+                    try {
+                        document.querySelectorAll("video").forEach((v) => {
+                            try { if (v?.srcObject) v.srcObject = null; } catch { }
+                        });
+                        document.querySelectorAll("audio").forEach((a) => {
+                            try { if (a?.srcObject) a.srcObject = null; } catch { }
+                        });
+                    } catch { }
+                    // ✅ audioElsRef 정리 (DOM 밖 Audio 요소)
+                    try {
+                        audioElsRef.current.forEach((a) => {
+                            try { a.pause(); } catch { }
+                            try { a.srcObject = null; } catch { }
+                        });
+                        audioElsRef.current.clear();
+                    } catch { }
+
+                    // ✅ 공유 AudioContext 닫기 + 잠금 (브라우저 빨간원 제거)
+                    closeSharedAudioContext();
 
                     // 소켓 및 트랜스포트 정리
                     try { wsRef.current?.close(); } catch { }
@@ -5316,7 +5619,7 @@ function MeetingPage({ portalRoomId }) {
                 } catch (e) {
                     console.warn("[MeetingPage] PIP 나가기 정리 중 오류:", e);
                 }
-            }, 300); // 200ms -> 300ms로 약간 증가
+            }, 300);
         };
 
         window.addEventListener("meeting:leave-from-pip", handleLeaveFromPip);
@@ -5487,6 +5790,7 @@ function MeetingPage({ portalRoomId }) {
         const data = new Uint8Array(analyser.frequencyBinCount);
 
         let speaking = false;
+        let rafId = null;
         const checkVolume = () => {
             if (ctx.state === "suspended") ctx.resume().catch(() => { });
             analyser.getByteFrequencyData(data);
@@ -5502,12 +5806,13 @@ function MeetingPage({ portalRoomId }) {
                     setIsSpeaking(false);
                 }
             }
-            requestAnimationFrame(checkVolume);
+            rafId = requestAnimationFrame(checkVolume);
         };
         checkVolume();
         return () => {
             clearTimeout(t1);
             clearTimeout(t2);
+            if (rafId != null) cancelAnimationFrame(rafId);
             try { source.disconnect(); analyser.disconnect(); } catch { }
         };
     }, [localStream]);

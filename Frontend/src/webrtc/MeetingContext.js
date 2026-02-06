@@ -159,6 +159,52 @@ export const MeetingProvider = ({ children }) => {
     }, [emitToast]);
 
     const endMeeting = useCallback(() => {
+        // ✅ 회의 "완전 종료" 시에만 호출됨 (PiP 모드에서는 MeetingPage가 endMeeting을 호출하지 않음)
+        // 브라우저가 "카메라/마이크 사용중(녹화중)" 표시를 계속 띄우는 원인은
+        // 숨겨진 PiP video의 srcObject + stable stream clone 트랙이 남아있는 경우가 많음.
+        // 여기서 안정적으로 정리한다.
+        try {
+            // 브라우저 PiP가 열려있으면 닫기
+            if (document.pictureInPictureElement) {
+                document.exitPictureInPicture().catch(() => { });
+            }
+        } catch { }
+
+        try {
+            // 숨겨진 PiP video 해제
+            if (pipVideoRef.current) {
+                pipVideoRef.current.srcObject = null;
+            }
+        } catch { }
+
+        try {
+            // stable stream 내부 트랙 제거 + clone 트랙 stop
+            const stable = pipStableStreamRef.current;
+            if (stable) {
+                stable.getTracks().forEach((t) => {
+                    try {
+                        stable.removeTrack(t);
+                    } catch { }
+                    try {
+                        if (t.readyState === "live") t.stop();
+                    } catch { }
+                });
+            }
+            pipStableStreamRef.current = null;
+
+            const clones = clonedTracksRef.current || [];
+            clones.forEach((t) => {
+                try {
+                    if (t && t.readyState === "live") t.stop();
+                } catch { }
+            });
+            clonedTracksRef.current = [];
+        } catch { }
+
+        // ✅ pip 세션 키도 완전 종료 시 제거 (남아있으면 MeetingPage cleanup이 PiP로 오인)
+        try { sessionStorage.removeItem("pip.roomId"); } catch { }
+        try { sessionStorage.removeItem("pip.subjectId"); } catch { }
+
         setRoomId(null);
         setIsInMeeting(false);
         setIsPipMode(false);
