@@ -16,17 +16,30 @@ public class ScheduleEventConverter {
     public static ScheduleEventResponse fromSchedule(ScheduleVO vo) {
         if (vo == null) return null;
 
-        String start = toIso(vo.getStartAt());
+        String startTime = normalizeTimeForIso(vo.getStartTime());
+        String endTime = normalizeTimeForIso(vo.getEndTime());
+        String start = (startTime != null && vo.getStartAt() != null)
+                ? vo.getStartAt().toLocalDate().toString() + "T" + startTime
+                : toIso(vo.getStartAt());
         String end = toExclusiveEndOrNull(vo.getStartAt(), vo.getEndAt());
+        if (endTime != null && vo.getEndAt() != null) {
+            end = vo.getEndAt().toLocalDate().toString() + "T" + endTime;
+        }
 
         Map<String, Object> extendedProps = new HashMap<>();
         extendedProps.put("type", vo.getType());
         extendedProps.put("description", vo.getDescription());
         extendedProps.put("customLabel", vo.getCustomTypeLabel());
+        if (startTime != null) extendedProps.put("startTime", toHHmm(startTime));
+        if (endTime != null) extendedProps.put("endTime", toHHmm(endTime));
 
         String textColor = (vo.getTextColor() == null || vo.getTextColor().isBlank())
                 ? "#ffffff"
                 : vo.getTextColor().trim();
+
+        String colorHex = (vo.getColorHex() == null || vo.getColorHex().isBlank())
+                ? "#97c793"
+                : vo.getColorHex().trim();
 
         return ScheduleEventResponse.builder()
                 .id(String.valueOf(vo.getScheduleId()))
@@ -34,8 +47,8 @@ public class ScheduleEventConverter {
                 .start(start)
                 .end(end)
                 .extendedProps(extendedProps)
-                .backgroundColor(vo.getColorHex())
-                .borderColor(vo.getColorHex())
+                .backgroundColor(colorHex)
+                .borderColor(colorHex)
                 .textColor(textColor)
                 .build();
     }

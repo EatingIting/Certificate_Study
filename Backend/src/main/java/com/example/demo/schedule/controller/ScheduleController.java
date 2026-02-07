@@ -1,11 +1,14 @@
 package com.example.demo.schedule.controller;
 
 import com.example.demo.dto.schedule.ScheduleCreateRequest;
+import com.example.demo.dto.schedule.ScheduleEventResponse;
 import com.example.demo.dto.schedule.ScheduleUpdateRequest;
 import com.example.demo.schedule.service.ScheduleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -25,10 +28,9 @@ public class ScheduleController {
     public void update(
             @PathVariable Long scheduleId,
             @RequestParam String roomId,
-            @RequestParam String userId,
             @Valid @RequestBody ScheduleUpdateRequest req
     ) {
-        scheduleService.update(scheduleId, roomId, userId, req);
+        scheduleService.update(scheduleId, roomId, req);
     }
 
     // DELETE /api/schedules/{scheduleId}?roomId=...&userId=...
@@ -36,9 +38,17 @@ public class ScheduleController {
     @DeleteMapping("/{scheduleId}")
     public void delete(
             @PathVariable Long scheduleId,
-            @RequestParam String roomId,
-            @RequestParam String userId
+            @RequestParam String roomId
     ) {
-        scheduleService.softDelete(scheduleId, roomId, userId);
+        scheduleService.softDelete(scheduleId, roomId);
+    }
+
+    @GetMapping
+    public List<ScheduleEventResponse> list(
+            @RequestParam String roomId,
+            @RequestParam String start,
+            @RequestParam String end
+    ) {
+        return scheduleService.getEvents(roomId, start, end);
     }
 }

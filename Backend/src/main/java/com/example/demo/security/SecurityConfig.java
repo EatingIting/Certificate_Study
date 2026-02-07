@@ -5,6 +5,7 @@ import com.example.demo.jwt.JwtTokenProvider;
 import com.example.demo.oauth.OAuthHandler;
 import com.example.demo.oauth.OAuthFailHandler;
 import com.example.demo.oauth.OAuth2UserService;
+import com.example.demo.oauth.OAuth2BaseUrlRequestFilter;
 import com.example.demo.oauth.OAuthRedirectOriginFilter;
 import com.example.demo.oauth.HttpCookieOAuth2AuthorizationRequestRepository;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
@@ -33,6 +35,7 @@ public class SecurityConfig {
     private final OAuthHandler oAuthHandler;
     private final OAuthFailHandler oAuthFailHandler;
     private final OAuth2UserService oAuth2UserService;
+    private final OAuth2BaseUrlRequestFilter oauth2BaseUrlRequestFilter;
     private final OAuthRedirectOriginFilter oAuthRedirectOriginFilter;
     private final HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository;
 
@@ -40,12 +43,14 @@ public class SecurityConfig {
                           OAuthHandler oAuthHandler,
                           OAuthFailHandler oAuthFailHandler,
                           OAuth2UserService oAuth2UserService,
+                          OAuth2BaseUrlRequestFilter oauth2BaseUrlRequestFilter,
                           OAuthRedirectOriginFilter oAuthRedirectOriginFilter,
                           HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.oAuthHandler = oAuthHandler;
         this.oAuthFailHandler = oAuthFailHandler;
         this.oAuth2UserService = oAuth2UserService;
+        this.oauth2BaseUrlRequestFilter = oauth2BaseUrlRequestFilter;
         this.oAuthRedirectOriginFilter = oAuthRedirectOriginFilter;
         this.cookieAuthorizationRequestRepository = cookieAuthorizationRequestRepository;
     }
@@ -129,8 +134,14 @@ public class SecurityConfig {
                         .failureHandler(oAuthFailHandler)
                 )
 
+                // 기준은 Spring 내장 필터만 (OAuthRedirectOriginFilter는 registered order 없음)
+                // 실행 순서: oauth2BaseUrlRequestFilter → oAuthRedirectOriginFilter → …
                 .addFilterBefore(
                         oAuthRedirectOriginFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                )
+                .addFilterBefore(
+                        oauth2BaseUrlRequestFilter,
                         UsernamePasswordAuthenticationFilter.class
                 )
                 .addFilterBefore(
@@ -145,15 +156,24 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
+        // WebRTC + OAuth + nginx 뒤 구조를 고려한 전역 CORS 설정
+        // - 개발: http://localhost:3000, http://127.0.0.1:3000
+        // - 운영: http(s)://3.35.119.96, 도메인 추가 시에도 대응 가능하도록 패턴 사용
         config.setAllowedOriginPatterns(List.of("*"));
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        config.setAllowedHeaders(List.of("*"));
+
+        // 인증(JWT) 포함 모든 헤더 허용
+        config.setAllowedHeaders(List.of("*", "Authorization"));
+
+        // 클라이언트에서 Authorization, Content-Type 확인 가능
         config.setExposedHeaders(List.of("Authorization", "Content-Type"));
-        config.setAllowCredentials(false);
+
+        // JWT를 헤더로 주고 받으므로 credential 허용
+        config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return source;
@@ -162,5 +182,18 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Cloudflare / Nginx 등의 리버스 프록시 뒤에서
+     * X-Forwarded-Proto / X-Forwarded-Host 헤더를 읽어
+     * redirect_uri 등 URL을 올바르게 계산하도록 해주는 필터.
+     *
+     * server.forward-headers-strategy=framework 와 함께 동작하면서
+     * OAuth2 redirect_uri 를 https://onsil.study/... 로 맞춰 준다.
+     */
+    @Bean
+    public ForwardedHeaderFilter forwardedHeaderFilter() {
+        return new ForwardedHeaderFilter();
     }
 }

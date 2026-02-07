@@ -97,6 +97,8 @@ public final class BoardConverter {
                 .content(vo.getContent())
                 .isPinned(vo.getIsPinned())
                 .viewCount(vo.getViewCount())
+                .commentCount(vo.getCommentCount())
+                .attachmentCount(vo.getAttachmentCount())
                 .createdAt(vo.getCreatedAt())
                 .updatedAt(vo.getUpdatedAt())
                 .build();
@@ -177,6 +179,7 @@ public final class BoardConverter {
                 .postId(postId)
                 .userId(userId)
                 .content(dto.getContent())
+                .parentId(dto.getParentId())
                 .build();
     }
 
@@ -188,9 +191,11 @@ public final class BoardConverter {
                 .postId(vo.getPostId())
                 .userId(vo.getUserId())
                 .nickname(vo.getNickname())
+                .parentId(vo.getParentId())
                 .content(vo.getContent())
                 .createdAt(vo.getCreatedAt())
                 .updatedAt(vo.getUpdatedAt())
+                .deletedAt(vo.getDeletedAt())
                 .build();
     }
 

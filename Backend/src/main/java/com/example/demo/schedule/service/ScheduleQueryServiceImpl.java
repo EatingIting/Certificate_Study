@@ -15,7 +15,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class ScheduleQueryServiceImpl implements ScheduleQueryService {
+public class ScheduleQueryServiceImpl implements ScheduleQueryService { // 달력이랑 리스트에 데이터 뿌려주는 조회 전용 클래스
 
     private final ScheduleService scheduleService;
     private final StudyScheduleService studyScheduleService;
@@ -39,5 +39,11 @@ public class ScheduleQueryServiceImpl implements ScheduleQueryService {
         }
 
         return ScheduleListResponse.builder().items(items).build();
+    }
+
+    @Override
+    public ScheduleEventResponse getNextExam(String roomId) {
+        ScheduleVO vo = scheduleService.selectNextExam(roomId);
+        return vo == null ? null : ScheduleEventConverter.fromSchedule(vo);
     }
 }

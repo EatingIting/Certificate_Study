@@ -13,6 +13,8 @@
         <result property="description"       column="description"/>
         <result property="startAt"           column="start_at"/>
         <result property="endAt"             column="end_at"/>
+        <result property="startTime"         column="start_time"/>
+        <result property="endTime"           column="end_time"/>
         <result property="type"              column="type"/>
         <result property="colorHex"          column="color_hex"/>
         <result property="textColor"         column="text_color"/>
@@ -30,7 +32,7 @@
     <select id="selectByRange" resultMap="ScheduleMap">
         SELECT
         schedule_id, room_id, user_id, title, description,
-        start_at, end_at, type, color_hex, text_color, custom_type_label,
+        start_at, end_at, start_time, end_time, type, color_hex, text_color, custom_type_label,
         created_at, updated_at, deleted_at
         FROM schedules
         WHERE room_id = #{roomId}
@@ -44,13 +46,14 @@
             useGeneratedKeys="true" keyProperty="scheduleId">
         INSERT INTO schedules (
         room_id, user_id, title, description,
-        start_at, end_at, type, color_hex, text_color, custom_type_label
+        start_at, end_at, start_time, end_time, type, color_hex, text_color, custom_type_label
         ) VALUES (
         #{roomId}, #{userId}, #{title}, #{description},
-        #{startAt}, #{endAt}, #{type}, #{colorHex}, #{textColor}, #{customTypeLabel}
+        #{startAt}, #{endAt}, #{startTime}, #{endTime}, #{type}, #{colorHex}, #{textColor}, #{customTypeLabel}
         )
     </insert>
 
+    <!-- room 소속 일정은 room_id만 일치하면 수정 가능 (생성자 user_id 불일치 시에도 호스트/멤버 수정 허용) -->
     <update id="update" parameterType="com.example.demo.schedule.vo.ScheduleVO">
         UPDATE schedules
         SET
@@ -58,13 +61,14 @@
         description = #{description},
         start_at = #{startAt},
         end_at = #{endAt},
+        start_time = #{startTime},
+        end_time = #{endTime},
         type = #{type},
         color_hex = #{colorHex},
         text_color = #{textColor},
         custom_type_label = #{customTypeLabel}
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
-        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
 
@@ -73,8 +77,22 @@
         SET deleted_at = CURRENT_TIMESTAMP
         WHERE schedule_id = #{scheduleId}
         AND room_id = #{roomId}
-        AND user_id = #{userId}
         AND deleted_at IS NULL
     </update>
+
+    <!-- type=EXAM: 미래 시험 우선(이틀 남으면 D-2), 미래 없으면 오늘 시험(D-day) -->
+    <select id="selectNextExam" resultMap="ScheduleMap">
+        SELECT
+        schedule_id, room_id, user_id, title, description,
+        start_at, end_at, start_time, end_time, type, color_hex, text_color, custom_type_label,
+        created_at, updated_at, deleted_at
+        FROM schedules
+        WHERE room_id = #{roomId}
+        AND deleted_at IS NULL
+        AND type = 'EXAM'
+        AND start_at <![CDATA[>=]]> CURDATE()
+        ORDER BY (start_at <![CDATA[>]]> CURDATE()) DESC, start_at ASC
+        LIMIT 1
+    </select>
 
 </mapper>

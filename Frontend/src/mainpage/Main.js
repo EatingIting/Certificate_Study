@@ -2,7 +2,9 @@ import "./Main.css";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
+import { toBackendUrl } from "../utils/backendUrl";
 import heroImg from "./메인메인.png";
+import sampleImg from "./sample.jpg";
 
 function Main() {
     const navigate = useNavigate();
@@ -74,11 +76,28 @@ function Main() {
     };
 
     const getImageUrl = (img) => {
-        if (!img) return "/sample.jpg";
+        if (!img) return sampleImg;
 
-        if (img.startsWith("http")) return img;
+        // 이미 절대 URL인 경우 (http/https)
+        if (img.startsWith("http")) {
+            try {
+                const url = new URL(img);
 
-        return `http://localhost:8080${img}`;
+                // 백엔드에서 "http://EC2-IP:8080/..." 처럼 내려오는 경우
+                // 프론트 도메인(onsil.study) 기준으로 프로토콜/호스트만 교체해서
+                // 혼합 콘텐츠(https + http) 문제를 피한다.
+                if (url.hostname === window.location.hostname) {
+                    return `${window.location.protocol}//${window.location.host}${url.pathname}`;
+                }
+
+                return img;
+            } catch {
+                return img;
+            }
+        }
+
+        // "/upload/xxx.png" 처럼 path만 오는 경우: 현재 도메인의 백엔드로 변환
+        return toBackendUrl(img);
     };
 
     return (
@@ -133,8 +152,7 @@ function Main() {
                                             alt="스터디 썸네일"
                                             className="thumb-img"
                                             onError={(e) => {
-                                                e.currentTarget.src =
-                                                    "/sample.jpg";
+                                                e.currentTarget.src = sampleImg;
                                             }}
                                         />
                                     </div>
@@ -176,7 +194,7 @@ function Main() {
                                     alt="스터디 썸네일"
                                     className="thumb-img"
                                     onError={(e) => {
-                                        e.currentTarget.src = "/sample.jpg";
+                                        e.currentTarget.src = sampleImg;
                                     }}
                                 />
                             </div>

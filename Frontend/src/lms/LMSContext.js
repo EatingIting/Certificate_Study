@@ -12,8 +12,9 @@ const LMSContext = createContext(null);
 export const LMSProvider = ({ children, roomId }) => {
     const [user, setUser] = useState(null);
     const [room, setRoom] = useState(null);
-    const [loading, setLoading] = useState(true);
     const [roomLoading, setRoomLoading] = useState(false);
+    const [accessDenied, setAccessDenied] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [roomNickname, setRoomNickname] = useState("");
     const [roomProfileImg, setRoomProfileImg] = useState("");
@@ -81,23 +82,43 @@ export const LMSProvider = ({ children, roomId }) => {
         []
     );
 
-    // Room 정보 가져오기
+    // Room 정보 가져오기 (context: 스터디원 여부 포함, 비스터디원이면 접근 거부)
     const fetchRoomInfo = useCallback(async (id) => {
         if (!id) {
             setRoom(null);
+            setAccessDenied(false);
             return;
         }
         try {
             setRoomLoading(true);
-            const res = await api.get(`/rooms/${id}`);
-            setRoom(res.data);
+            setAccessDenied(false);
+            const res = await api.get(`/rooms/${id}/context`);
+            const data = res.data || {};
+            // snake_case/camelCase 둘 다 허용
+            const hostEmail = data.hostUserEmail ?? data.host_user_email ?? "";
+            if (data.myRole === "NONE") {
+                setRoom(null);
+                setAccessDenied(true);
+            } else {
+                // OWNER인데 hostUserEmail이 비어 있으면 현재 사용자 이메일로 채움 (스터디장 권한 유지)
+                const userEmail = user?.email ?? "";
+                const resolvedHostEmail = hostEmail || (data.myRole === "OWNER" ? userEmail : "");
+                setRoom({
+                    roomId: data.roomId,
+                    title: data.title,
+                    hostUserEmail: resolvedHostEmail,
+                });
+                setAccessDenied(false);
+            }
         } catch (err) {
             console.error("방 정보 가져오기 실패", err);
             setRoom(null);
+            // 403(권한 없음)일 때만 접근 거부, 그 외(네트워크/500 등)는 거부 플래그 안 함
+            setAccessDenied(err.response?.status === 403);
         } finally {
             setRoomLoading(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         fetchUserInfo();
@@ -161,13 +182,12 @@ export const LMSProvider = ({ children, roomId }) => {
         };
     }, [roomId, refreshUser, fetchRoomMyPage]);
 
-    // 표시용 이름 (nickname(name) 형식)
+    // 표시용 이름 (헤더용: nickname(name) 형식)
     const displayName = user
         ? (() => {
               const roomNick = (roomNickname && roomNickname.trim()) || "";
               const nickname = (user.nickname && user.nickname.trim()) || "";
               const name = (user.name && user.name.trim()) || "";
-              
               // ✅ 방별 닉네임이 있으면 최우선
               if (roomNick.length > 0 && name.length > 0) {
                   return `${roomNick}(${name})`;
@@ -200,6 +220,7 @@ export const LMSProvider = ({ children, roomId }) => {
         room,
         loading,
         roomLoading,
+        accessDenied,
         error,
         refreshUser,
         refreshRoom,

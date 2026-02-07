@@ -1,7 +1,8 @@
 package com.example.demo.chat.handler;
 
 import com.example.demo.chat.dto.ChatMessageDTO;
-import com.example.demo.chat.service.ChatService; // 🟢 [1] 서비스 임포트
+import com.example.demo.chat.service.ChatDisplayNameService;
+import com.example.demo.chat.service.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,20 +23,33 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
-    // private final ChatMessageRepository chatMessageRepository; // ❌ 기존 레포지토리 제거
-    private final ChatService chatService; // 🟢 [2] 서비스 주입으로 변경
+    private final ChatService chatService;
+    private final ChatDisplayNameService chatDisplayNameService;
 
     // 메모리 내에 접속자 관리 (Key: RoomId, Value: Session Set)
     private final Map<String, Set<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
+
+    /** 세션에 저장하는 접속자 표시명 키 (출석부/헤더와 동일 로직) */
+    private static final String SESSION_DISPLAY_NAME = "displayName";
 
     // 1. 소켓 연결 시 (입장)
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         String roomId = getRoomId(session);
+        Map<String, String> params = parseQuery(session.getUri() != null ? session.getUri().getQuery() : null);
+        String userId = params.getOrDefault("userId", "");
+
+        // 출석부와 동일한 표시명 조회 (방별 닉네임 우선, Host+Member 동일 적용)
+        String displayName = chatDisplayNameService.getDisplayName(roomId, userId);
+        if (displayName != null && !displayName.isEmpty()) {
+            session.getAttributes().put(SESSION_DISPLAY_NAME, displayName);
+        } else {
+            session.getAttributes().put(SESSION_DISPLAY_NAME, params.getOrDefault("userName", "알수없음"));
+        }
 
         // 해당 방에 세션 추가
         roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
-        log.info("✅ 입장: RoomId={}, SessionId={}", roomId, session.getId());
+        log.info("✅ 입장: RoomId={}, SessionId={}, displayName={}", roomId, session.getId(), session.getAttributes().get(SESSION_DISPLAY_NAME));
 
         // 입장 시 최신 접속자 명단 전송
         broadcastUserList(roomId);
@@ -57,7 +71,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        // 🟢 [3] ChatService를 통해 DB 저장 (이름, 타입 포함)
+        // 출석부/헤더와 동일한 표시명 사용 (세션에 저장된 값)
+        String displayName = (String) session.getAttributes().get(SESSION_DISPLAY_NAME);
+        if (displayName != null && !displayName.isEmpty()) {
+            chatMessageDTO.setUserName(displayName);
+        }
+
         try {
             // 메시지 타입이 없으면 기본값 TALK
             String msgType = (chatMessageDTO.getType() != null) ? chatMessageDTO.getType() : "TALK";
@@ -65,7 +84,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             chatService.saveMessage(
                     roomId,
                     userId,
-                    chatMessageDTO.getUserName(), // DTO에서 유저 이름 가져오기
+                    chatMessageDTO.getUserName(), // 출석부와 동일한 표시명
                     chatMessageDTO.getMessage(),  // 메시지 내용
                     msgType                       // 메시지 타입 (TALK or AI)
             );
@@ -96,8 +115,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         broadcastUserList(roomId);
     }
 
-    // ---  유틸리티 메서드 (기존 동일) ---
-
     // 방 전체 메시지 전송
     private void broadcastToRoom(String roomId, ChatMessageDTO messageDTO) {
         Set<WebSocketSession> sessions = roomSessions.get(roomId);
@@ -121,10 +138,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         List<Map<String, String>> userList = new ArrayList<>();
         for (WebSocketSession s : sessions) {
-            Map<String, String> params = parseQuery(s.getUri().getQuery());
+            Map<String, String> params = parseQuery(s.getUri() != null ? s.getUri().getQuery() : null);
+            // 출석부/헤더와 동일한 표시명 사용 (접속 시 백엔드에서 조회해 세션에 저장한 값)
+            String displayName = (String) s.getAttributes().get(SESSION_DISPLAY_NAME);
+            if (displayName == null || displayName.isEmpty()) {
+                displayName = params.getOrDefault("userName", "알수없음");
+            }
             Map<String, String> userInfo = new HashMap<>();
             userInfo.put("userId", params.getOrDefault("userId", "unknown"));
-            userInfo.put("userName", params.getOrDefault("userName", "알수없음"));
+            userInfo.put("userName", displayName);
             userList.add(userInfo);
         }
 

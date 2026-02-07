@@ -6,6 +6,8 @@ import com.example.demo.dto.board.detail.BoardPostDetailCreateRequest;
 import com.example.demo.dto.board.detail.BoardPostDetailResponse;
 import com.example.demo.dto.board.detail.BoardPostDetailUpdateRequest;
 import com.example.demo.board.service.BoardDetailService;
+import com.example.demo.로그인.service.AuthService;
+import com.example.demo.로그인.vo.AuthVO;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -18,22 +20,36 @@ import java.util.Map;
 public class BoardDetailController {
 
     private final BoardDetailService boardDetailService;
+    private final AuthService authService;
 
-    public BoardDetailController(BoardDetailService boardDetailService) {
+    public BoardDetailController(BoardDetailService boardDetailService, AuthService authService) {
         this.boardDetailService = boardDetailService;
+        this.authService = authService;
+    }
+
+    private String resolveUserIdByEmail(String email) {
+        AuthVO user = authService.findByEmail(email);
+        if (user == null) {
+            throw new IllegalArgumentException("유저를 찾을 수 없습니다. (email=" + email + ")");
+        }
+        return user.getUserId();
     }
 
     // 상세(조합): /api/board/detail/posts/{postId}?incView=true
     @GetMapping("/posts/{postId}")
     public ResponseEntity<?> detail(@PathVariable long postId,
                                     @RequestParam(defaultValue = "true") boolean incView,
-                                    Authentication authentication
-    ) {
+                                    Authentication authentication) {
         String email = authentication.getName();
+
         BoardPostDetailVO vo = boardDetailService.getDetail(postId, incView, email);
         if (vo == null) return ResponseEntity.notFound().build();
 
         BoardPostDetailResponse body = BoardConverter.toPostDetailResponse(vo);
+
+        body.setCanEdit(vo.isCanEdit());
+        body.setCanDelete(vo.isCanDelete());
+
         return ResponseEntity.ok(body);
     }
 

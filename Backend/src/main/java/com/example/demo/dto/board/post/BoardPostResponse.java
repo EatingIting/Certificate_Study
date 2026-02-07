@@ -24,4 +24,7 @@ public class BoardPostResponse {
 
     private Timestamp createdAt;
     private Timestamp updatedAt;
+
+    private Integer commentCount;
+    private Integer attachmentCount;
 }

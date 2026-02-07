@@ -23,6 +23,9 @@ function Calendar() {
 
     let [openMenuId, setOpenMenuId] = useState(null);
 
+    // ✅ 리스트 필터 (전체 / 일반 / 스터디)
+    let [listFilter, setListFilter] = useState("ALL"); // "ALL" | "NORMAL" | "STUDY"
+
     // ✅ roomId 전달 방식은 프로젝트마다 달라서 흔한 키들을 순서대로 본다.
     let roomId =
         subjectId ||
@@ -54,6 +57,8 @@ function Calendar() {
         description: "",
         start: "",
         end: "",
+        startTime: "09:00",
+        endTime: "",
         type: "OTHER",
         customLabel: "",
         colorHex: "#97c793",
@@ -132,13 +137,19 @@ function Calendar() {
     let overlaps = (event, range) => {
         if (!range) return true;
 
-        let startStr = event.start instanceof Date ? toYmd(event.start) : (event.startStr?.slice(0, 10) || ymdOnly(event.start) || "");
+        let startStr =
+            event.start instanceof Date
+                ? toYmd(event.start)
+                : event.startStr?.slice(0, 10) || ymdOnly(event.start) || "";
         let s = startStr ? toDate(startStr) : null;
         if (!s) return false;
 
         let e;
         if (event.end) {
-            let endStr = event.end instanceof Date ? toYmd(event.end) : (event.endStr?.slice(0, 10) || ymdOnly(event.end) || "");
+            let endStr =
+                event.end instanceof Date
+                    ? toYmd(event.end)
+                    : event.endStr?.slice(0, 10) || ymdOnly(event.end) || "";
             e = endStr ? toDate(endStr) : null;
             if (!e) e = new Date(s.getTime());
         } else {
@@ -156,13 +167,15 @@ function Calendar() {
         return [...events, ...studyEvents];
     }, [events, studyEvents]);
 
-    /* 달력 그리드·+N개 팝업에는 일반 일정만 (스터디는 날짜칸 회차로만 표시) */
+    /* 달력 그리드·+N개 팝업에는 일반 일정만. 연속 일정(displayOrder 0)을 앞에 두어 첫 행에 배치 */
     let calendarEvents = useMemo(() => {
-        return events.filter((ev) => {
-            if (ev.extendedProps?.type === "STUDY") return false;
-            if (typeof ev.id === "string" && ev.id.startsWith("S")) return false;
-            return true;
-        });
+        return events
+            .filter((ev) => {
+                if (ev.extendedProps?.type === "STUDY") return false;
+                if (typeof ev.id === "string" && ev.id.startsWith("S")) return false;
+                return true;
+            })
+            .sort((a, b) => (a.displayOrder ?? 1) - (b.displayOrder ?? 1));
     }, [events]);
 
     /* =========================
@@ -174,8 +187,7 @@ function Calendar() {
         for (let i = 0; i < studyEvents.length; i++) {
             let ev = studyEvents[i];
 
-            let rawStart =
-                typeof ev.start === "string" ? ev.start : ev.startStr || "";
+            let rawStart = typeof ev.start === "string" ? ev.start : ev.startStr || "";
             let ymd = rawStart.slice(0, 10);
 
             if (ymd.length !== 10) continue;
@@ -196,10 +208,7 @@ function Calendar() {
             let arr = map[key];
             map[key] = arr
                 .sort((a, b) => a.round - b.round)
-                .filter(
-                    (item, idx, self) =>
-                        self.findIndex((x) => x.round === item.round) === idx
-                );
+                .filter((item, idx, self) => self.findIndex((x) => x.round === item.round) === idx);
         }
 
         return map;
@@ -234,37 +243,49 @@ function Calendar() {
     }, [applyWeekHasStudyClass, visibleRange]);
 
     /* =========================
-       오른쪽 리스트 (선택한 날짜가 있으면 해당 날짜만, 없으면 월간)
+       오른쪽 리스트 (선택한 날짜가 있으면 해당 날짜 일정만, 없으면 월간)
     ========================= */
     let monthlyEvents = useMemo(() => {
         let list = allEvents;
+
         if (visibleRange && !selectedDate) {
             list = allEvents.filter((ev) => overlaps(ev, visibleRange));
         }
+
         if (selectedDate) {
             list = allEvents.filter((ev) => {
                 let startYmd = ymdOf(typeof ev.start === "string" ? ev.start : ev.startStr);
                 if (!startYmd) return false;
+
                 if (startYmd === selectedDate) return true;
+
                 if (ev.end) {
                     let endInclusive = endInclusiveYmdOf(typeof ev.end === "string" ? ev.end : ev.endStr);
-                    if (endInclusive && selectedDate >= startYmd && selectedDate <= endInclusive)
-                        return true;
+                    if (endInclusive && selectedDate >= startYmd && selectedDate <= endInclusive) return true;
                 }
+
                 return false;
             });
         }
 
+        // ✅ 여기서 리스트 필터 적용 (전체/일반/스터디)
+        if (listFilter === "NORMAL") {
+            list = list.filter((ev) => ev.extendedProps?.type !== "STUDY");
+        } else if (listFilter === "STUDY") {
+            list = list.filter((ev) => ev.extendedProps?.type === "STUDY");
+        }
+
         list.sort((a, b) => {
-            let aYmd = a.start instanceof Date ? toYmd(a.start) : (a.startStr?.slice(0, 10) || ymdOnly(a.start));
-            let bYmd = b.start instanceof Date ? toYmd(b.start) : (b.startStr?.slice(0, 10) || ymdOnly(b.start));
+            let aYmd = a.start instanceof Date ? toYmd(a.start) : a.startStr?.slice(0, 10) || ymdOnly(a.start);
+            let bYmd = b.start instanceof Date ? toYmd(b.start) : b.startStr?.slice(0, 10) || ymdOnly(b.start);
             let aS = aYmd ? toDate(aYmd) : new Date(0);
             let bS = bYmd ? toDate(bYmd) : new Date(0);
             return aS - bS;
         });
-        // ✅ 오른쪽 일정 목록에는 스터디 일정도 포함
+
+        // ✅ 오른쪽 일정 목록에는 스터디 일정도 포함(필터로 제어)
         return list;
-    }, [allEvents, visibleRange, selectedDate]);
+    }, [allEvents, visibleRange, selectedDate, listFilter]);
 
     /* =========================
        라벨/스타일
@@ -318,6 +339,8 @@ function Calendar() {
             description: "",
             start: "",
             end: "",
+            startTime: "09:00",
+            endTime: "",
             type: "OTHER",
             customLabel: "",
             colorHex: "#97c793",
@@ -332,18 +355,30 @@ function Calendar() {
         setEditingEventId(eventLike.id);
         setOpenMenuId(null);
 
-        let startStr =
-            typeof eventLike.start === "string"
-                ? eventLike.start
-                : eventLike.startStr?.slice(0, 10) || "";
-
+        // API는 start/end를 YYYY-MM-DD만 허용 → 항상 날짜 부분만 사용
+        let startStr = ymdOf(typeof eventLike.start === "string" ? eventLike.start : eventLike.startStr);
+        let endRaw = typeof eventLike.end === "string" ? eventLike.end : eventLike.endStr || "";
         let endInclusive = "";
-        if (eventLike.end) {
-            let endStr =
-                typeof eventLike.end === "string"
-                    ? eventLike.end
-                    : eventLike.endStr?.slice(0, 10) || "";
+        if (endRaw) {
+            let endStr = ymdOf(endRaw);
             endInclusive = endStr ? toInclusiveEnd(endStr) : "";
+        }
+
+        // 시작/종료 시간: "YYYY-MM-DDTHH:mm" 형식이면 T 뒤 추출, 없으면 extendedProps
+        let startRaw = typeof eventLike.start === "string" ? eventLike.start : eventLike.startStr || "";
+        let startTime = "";
+        let endTime = "";
+        if (startRaw.length > 10 && startRaw.charAt(10) === "T") {
+            startTime = startRaw.slice(11, 16) || "";
+        }
+        if (!startTime && eventLike.extendedProps?.startTime) {
+            startTime = /^\d{2}:\d{2}$/.test(eventLike.extendedProps.startTime) ? eventLike.extendedProps.startTime : "";
+        }
+        if (endRaw.length > 10 && endRaw.charAt(10) === "T") {
+            endTime = endRaw.slice(11, 16) || "";
+        }
+        if (!endTime && eventLike.extendedProps?.endTime) {
+            endTime = /^\d{2}:\d{2}$/.test(eventLike.extendedProps.endTime) ? eventLike.extendedProps.endTime : "";
         }
 
         setForm({
@@ -351,6 +386,8 @@ function Calendar() {
             description: eventLike.extendedProps?.description || "",
             start: startStr,
             end: endInclusive,
+            startTime: startTime || "",
+            endTime: endTime || "",
             type: eventLike.extendedProps?.type || "OTHER",
             customLabel: eventLike.extendedProps?.customLabel || "",
             colorHex: eventLike.backgroundColor || "#97c793",
@@ -399,9 +436,9 @@ function Calendar() {
         async (startYmd, endYmdExclusive) => {
             if (!roomId) return;
 
-            let url = `/api/rooms/${roomId}/schedule?start=${encodeURIComponent(
-                startYmd
-            )}&end=${encodeURIComponent(endYmdExclusive)}`;
+            let url = `/api/rooms/${roomId}/schedule?start=${encodeURIComponent(startYmd)}&end=${encodeURIComponent(
+                endYmdExclusive
+            )}`;
 
             let res = await authFetch(url, {
                 method: "GET",
@@ -413,7 +450,6 @@ function Calendar() {
                 throw new Error(msg || `일정 조회 실패 (${res.status})`);
             }
 
-            // { items: [ScheduleEventResponse...] } :contentReference[oaicite:4]{index=4}
             let data = await res.json();
             let items = Array.isArray(data?.items) ? data.items : [];
 
@@ -434,30 +470,43 @@ function Calendar() {
                     it?.extendedProps?.colorHex ||
                     "";
 
-                let tc =
-                    it?.textColor ||
-                    it?.extendedProps?.textColor ||
-                    "";
+                let tc = it?.textColor || it?.extendedProps?.textColor || "";
 
+                // 색상 없으면 FullCalendar 기본(파란색)으로 나오므로, 항상 기본 녹색 적용
+                let defaultBg = "#97c793";
                 let ev = {
                     id: idStr,
                     title: it?.title || "",
                     start: it?.start,
                     ...(it?.end ? { end: it.end } : {}),
-                    extendedProps: it?.extendedProps || {},
+                    extendedProps: {
+                        ...(it?.extendedProps || {}),
+                    },
+                    backgroundColor: bg || defaultBg,
+                    borderColor: bg || defaultBg,
                 };
-                
-                // 조건부 spread 대신 if로 넣어서 “조용히 빠지는” 문제 방지
-                if (bg) {
-                    ev.backgroundColor = bg;
-                    ev.borderColor = bg;
-                }
                 if (tc) {
                     ev.textColor = tc;
                 }
 
                 // type이 STUDY이거나 id가 S로 시작하면 스터디 일정
                 let isStudy = t === "STUDY" || idStr.startsWith("S");
+                let startYmd2 = ymdOf(ev.start);
+                let endYmd2 = ev.end ? ymdOf(ev.end) : "";
+                let isMultiDay = !isStudy && Boolean(endYmd2) && endYmd2 !== startYmd2;
+
+                if (!isStudy && isMultiDay) {
+                    ev.allDay = true;
+                    if (typeof ev.start === "string") ev.start = startYmd2;
+                    let rawEnd = typeof ev.end === "string" ? ev.end : "";
+                    if (rawEnd.length > 10) ev.end = toExclusiveEnd(endYmd2);
+                    else if (typeof ev.end === "string") ev.end = endYmd2;
+                    ev.displayOrder = 0;
+                    ev.extendedProps.isMultiDay = true;
+                } else if (!isStudy) {
+                    ev.displayOrder = 1;
+                }
+
                 if (isStudy) study.push(ev);
                 else normal.push(ev);
             }
@@ -483,7 +532,6 @@ function Calendar() {
             }
         })();
     }, [visibleRange, roomId, fetchRangeEvents]);
-
 
     /* =========================
        서버 호출(일반 일정 저장/수정/삭제)
@@ -521,11 +569,26 @@ function Calendar() {
             return;
         }
 
+        let startTime = (form.startTime || "").trim();
+        let endTime = (form.endTime || "").trim();
+        if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) startTime = "";
+        if (endTime && !/^\d{2}:\d{2}$/.test(endTime)) endTime = "";
+        if (startTime && endTime && endTime <= startTime) {
+            setFormError("종료 시간은 시작 시간보다 이후여야 합니다.");
+            return;
+        }
+
+        // 백엔드는 start/end를 YYYY-MM-DD 형식만 허용
+        let startYmd = (form.start || "").slice(0, 10);
+        let endYmd = hasEnd ? (form.end || "").slice(0, 10) : "";
+
         let payload = {
             title,
             description: form.description.trim(),
-            start: form.start,
-            end: hasEnd ? form.end : "",
+            start: startYmd,
+            end: endYmd,
+            startTime: startTime || "",
+            endTime: endTime || "",
             type: form.type,
             colorHex: form.colorHex,
             customLabel: form.type === "OTHER" ? form.customLabel.trim() : "",
@@ -551,8 +614,8 @@ function Calendar() {
 
                 await res.json().catch(() => null);
             } else {
-                let scheduleId = Number(editingEventId);
-                if (!scheduleId) throw new Error("수정할 scheduleId가 숫자가 아닙니다.");
+                let scheduleId = editingEventId == null || String(editingEventId).trim() === "" ? null : String(editingEventId);
+                if (!scheduleId) throw new Error("수정할 일정 ID가 없습니다.");
 
                 let res = await authFetch(
                     `/api/schedules/${scheduleId}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(
@@ -572,9 +635,9 @@ function Calendar() {
             }
 
             if (visibleRange) {
-                let startYmd = toYmd(visibleRange.start);
-                let endYmd = toYmd(visibleRange.end);
-                await fetchRangeEvents(startYmd, endYmd);
+                let startYmd2 = toYmd(visibleRange.start);
+                let endYmd2 = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd2, endYmd2);
             }
 
             closeAddModal();
@@ -594,9 +657,8 @@ function Calendar() {
                 return;
             }
 
-
-            let scheduleId = Number(id);
-            if (!scheduleId) throw new Error("삭제할 scheduleId가 숫자가 아닙니다.");
+            let scheduleId = id == null || String(id).trim() === "" ? null : String(id);
+            if (!scheduleId) throw new Error("삭제할 일정 ID가 없습니다.");
 
             let res = await authFetch(
                 `/api/schedules/${scheduleId}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(
@@ -613,9 +675,9 @@ function Calendar() {
             setOpenMenuId(null);
 
             if (visibleRange) {
-                let startYmd = toYmd(visibleRange.start);
-                let endYmd = toYmd(visibleRange.end);
-                await fetchRangeEvents(startYmd, endYmd);
+                let startYmd2 = toYmd(visibleRange.start);
+                let endYmd2 = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd2, endYmd2);
             }
 
             if (editingEventId === id) {
@@ -654,9 +716,7 @@ function Calendar() {
         // 이미 등록된 회차와 겹치지 않도록 다음 회차 번호 제안
         if (roomId) {
             try {
-                let res = await authFetch(
-                    `/api/study-schedules/next-round?roomId=${encodeURIComponent(roomId)}`
-                );
+                let res = await authFetch(`/api/study-schedules/next-round?roomId=${encodeURIComponent(roomId)}`);
                 if (res.ok) {
                     let nextRound = await res.json();
                     if (typeof nextRound === "number" && nextRound >= 1) {
@@ -673,10 +733,7 @@ function Calendar() {
         setEditingStudyId(studyEvent.id);
         setOpenMenuId(null);
 
-        let dateStr =
-            typeof studyEvent.start === "string"
-                ? studyEvent.start
-                : studyEvent.startStr?.slice(0, 10) || "";
+        let dateStr = typeof studyEvent.start === "string" ? studyEvent.start : studyEvent.startStr?.slice(0, 10) || "";
         if (dateStr.length > 10) dateStr = dateStr.slice(0, 10);
 
         let startTime = studyEvent.extendedProps?.startTime || "09:00";
@@ -758,20 +815,17 @@ function Calendar() {
                 let studyScheduleId = raw.startsWith("S") ? Number(raw.slice(1)) : Number(raw);
                 if (!studyScheduleId) throw new Error("수정할 studyScheduleId 파싱 실패");
 
-                let res = await authFetch(
-                    `/api/study-schedules/${studyScheduleId}?roomId=${encodeURIComponent(roomId)}`,
-                    {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            round: roundNum,
-                            date: studyForm.date,
-                            startTime: studyForm.startTime?.trim() || "09:00",
-                            endTime: studyForm.endTime?.trim() || "11:00",
-                            description: studyForm.description.trim(),
-                        }),
-                    }
-                );
+                let res = await authFetch(`/api/study-schedules/${studyScheduleId}?roomId=${encodeURIComponent(roomId)}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        round: roundNum,
+                        date: studyForm.date,
+                        startTime: studyForm.startTime?.trim() || "09:00",
+                        endTime: studyForm.endTime?.trim() || "11:00",
+                        description: studyForm.description.trim(),
+                    }),
+                });
 
                 if (!res.ok) {
                     let msg = await res.text().catch(() => "");
@@ -780,9 +834,9 @@ function Calendar() {
             }
 
             if (visibleRange) {
-                let startYmd = toYmd(visibleRange.start);
-                let endYmd = toYmd(visibleRange.end);
-                await fetchRangeEvents(startYmd, endYmd);
+                let startYmd2 = toYmd(visibleRange.start);
+                let endYmd2 = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd2, endYmd2);
             }
 
             closeStudyModal();
@@ -800,10 +854,9 @@ function Calendar() {
             let studyScheduleId = raw.startsWith("S") ? Number(raw.slice(1)) : Number(raw);
             if (!studyScheduleId) throw new Error("삭제할 studyScheduleId 파싱 실패");
 
-            let res = await authFetch(
-                `/api/study-schedules/${studyScheduleId}?roomId=${encodeURIComponent(roomId)}`,
-                { method: "DELETE" }
-            );
+            let res = await authFetch(`/api/study-schedules/${studyScheduleId}?roomId=${encodeURIComponent(roomId)}`, {
+                method: "DELETE",
+            });
 
             if (!res.ok) {
                 let msg = await res.text().catch(() => "");
@@ -813,9 +866,9 @@ function Calendar() {
             setOpenMenuId(null);
 
             if (visibleRange) {
-                let startYmd = toYmd(visibleRange.start);
-                let endYmd = toYmd(visibleRange.end);
-                await fetchRangeEvents(startYmd, endYmd);
+                let startYmd2 = toYmd(visibleRange.start);
+                let endYmd2 = toYmd(visibleRange.end);
+                await fetchRangeEvents(startYmd2, endYmd2);
             }
 
             if (editingStudyId === id) {
@@ -828,10 +881,13 @@ function Calendar() {
     };
 
     /* =========================
-       URL modal=add 대응
+       URL modal=add 대응 (방장만 일정 추가 모달 열기, 팀원은 URL만 정리)
     ========================= */
     useEffect(() => {
-        if (sp.get("modal") === "add") openAddModal();
+        if (sp.get("modal") === "add") {
+            if (isHost) openAddModal();
+            else goListView();
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sp]);
 
@@ -866,7 +922,12 @@ function Calendar() {
                         expandRows={true}
                         fixedWeekCount={true}
                         showNonCurrentDates={true}
-                        dayMaxEventRows={1}
+                        dayMaxEvents={1}
+                        dayMaxEventRows={2}
+                        moreLinkContent={(arg) => `+${arg.num} 개`}
+                        eventDisplay="block"
+                        eventOrder="displayOrder,allDay,-duration,start"
+                        eventOrderStrict={true}
                         events={calendarEvents}
                         dateClick={(info) => {
                             let ymd = toYmd(info.date);
@@ -954,13 +1015,14 @@ function Calendar() {
                             <div className="cardTitle calListTitle">
                                 {selectedDate
                                     ? (() => {
-                                        let [y, m, d] = selectedDate.split("-").map(Number);
-                                        return `${y}년 ${m}월 ${d}일 일정`;
-                                    })()
+                                          let [y, m, d] = selectedDate.split("-").map(Number);
+                                          return `${y}년 ${m}월 ${d}일 일정`;
+                                      })()
                                     : visibleTitle
-                                        ? `${visibleTitle} 일정`
-                                        : "이번 달 일정"}
+                                    ? `${visibleTitle} 일정`
+                                    : "이번 달 일정"}
                             </div>
+
                             <div className="calListActions">
                                 {isHost && (
                                     <>
@@ -989,20 +1051,63 @@ function Calendar() {
                                 )}
                             </div>
                         </div>
-                        {selectedDate && (
-                            <div className="calListShowAllRow">
+
+                        {/* ✅ 리스트 필터 버튼 (전체 / 일반 / 스터디 + n월 전체 보기) */}
+                        <div className="calListFilterRow">
+                            {/* 왼쪽: 필터 */}
+                            <div className="calListFilter">
                                 <button
                                     type="button"
-                                    className="calShowAllBtn"
+                                    className={`calFilterBtn ${listFilter === "ALL" ? "isActive" : ""}`}
                                     onMouseDown={(e) => {
                                         e.stopPropagation();
-                                        setSelectedDate(null);
+                                        setListFilter("ALL");
                                     }}
                                 >
-                                    전체 보기
+                                    전체
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`calFilterBtn ${listFilter === "NORMAL" ? "isActive" : ""}`}
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        setListFilter("NORMAL");
+                                    }}
+                                >
+                                    일반 일정
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`calFilterBtn ${listFilter === "STUDY" ? "isActive" : ""}`}
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        setListFilter("STUDY");
+                                    }}
+                                >
+                                    스터디 일정
                                 </button>
                             </div>
-                        )}
+
+                            {/* 오른쪽: n월 전체 보기 */}
+                            {selectedDate && (
+                                <div style={{ marginLeft: "auto" }}>
+                                    <button
+                                        type="button"
+                                        className="calShowAllBtn"
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedDate(null);
+                                            setListFilter("ALL"); 
+                                        }}
+                                    >
+                                        {(() => {
+                                            let [, m] = selectedDate.split("-");
+                                            return `${Number(m)}월 전체 보기`;
+                                        })()}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div
@@ -1037,10 +1142,9 @@ function Calendar() {
                                 ev.extendedProps?.colorHex ||
                                 "";
 
-                            let badgeText =
-                                ev.textColor ||
-                                ev.extendedProps?.textColor ||
-                                "";
+                            let badgeText = ev.textColor || ev.extendedProps?.textColor || "";
+
+                            let itemText = badgeText || "#1f2937";
 
                             // 비어있으면(혹시 서버 누락) 기존 톤으로 안전 fallback
                             if (!badgeBg) badgeBg = "#97c793";
@@ -1055,10 +1159,8 @@ function Calendar() {
                             let round = ev.extendedProps?.round;
                             let sTime = ev.extendedProps?.startTime;
                             let eTime = ev.extendedProps?.endTime;
-                            let timePart = sTime && eTime ? `${sTime} ~ ${eTime}` : "";
-                            let displayTitle = isStudy
-                                ? `${round ? `${round}회차` : "스터디"}${timePart ? ` (${timePart})` : ""}`
-                                : ev.title;
+                            let timePart = sTime || eTime ? [sTime, eTime].filter(Boolean).join(" ~ ") : "";
+                            let displayTitle = isStudy ? `${round ? `${round}회차 스터디` : "스터디"}` : ev.title;
 
                             return (
                                 <div
@@ -1066,23 +1168,21 @@ function Calendar() {
                                     className="calItem"
                                     style={{
                                         backgroundColor: ev.backgroundColor || "#f6faf3",
-                                        color: "#1f2937",
+                                        color: itemText,
                                     }}
                                 >
                                     <div className="calItemTop">
-                                        {/* ✅ 여기 style 추가 */}
-                                        <span
-                                            className={`calBadge ${ev.extendedProps?.type || "OTHER"}`}
-                                            style={badgeStyle}
-                                        >
+                                        <span className={`calBadge ${ev.extendedProps?.type || "OTHER"}`} style={badgeStyle}>
                                             {typeLabel(ev)}
                                         </span>
 
                                         <div className="calItemRight">
                                             <span className="calDate">
-                                                {startYmd ? fmtDate(startYmd) : ""}
-                                                {endStr && endStr !== startYmd ? ` ~ ${fmtDate(endStr)}` : ""}
-                                                {isStudy && timePart ? ` (${timePart})` : ""}
+                                                <span className="calDateLine">
+                                                    {startYmd ? fmtDate(startYmd) : ""}
+                                                    {endStr && endStr !== startYmd ? ` ~ ${fmtDate(endStr)}` : ""}
+                                                </span>
+                                                {timePart ? <span className="calDateLine calDateTime">{timePart}</span> : null}
                                             </span>
 
                                             {isHost && (
@@ -1100,31 +1200,31 @@ function Calendar() {
                                                     </button>
 
                                                     {openMenuId === ev.id && (
-                                                <div className="calKebabMenu" onMouseDown={(e) => e.stopPropagation()}>
-                                                    <button
-                                                        type="button"
-                                                        className="calKebabItem"
-                                                        onMouseDown={(e) => {
-                                                            e.stopPropagation();
-                                                            if (isStudy) openStudyEditModal(ev);
-                                                            else openEditModal(ev);
-                                                        }}
-                                                    >
-                                                        수정하기
-                                                    </button>
+                                                        <div className="calKebabMenu" onMouseDown={(e) => e.stopPropagation()}>
+                                                            <button
+                                                                type="button"
+                                                                className="calKebabItem"
+                                                                onMouseDown={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (isStudy) openStudyEditModal(ev);
+                                                                    else openEditModal(ev);
+                                                                }}
+                                                            >
+                                                                수정하기
+                                                            </button>
 
-                                                    <button
-                                                        type="button"
-                                                        className="calKebabItem calKebabDanger"
-                                                        onMouseDown={(e) => {
-                                                            e.stopPropagation();
-                                                            if (isStudy) deleteStudyById(ev.id);
-                                                            else deleteEventById(ev.id);
-                                                        }}
-                                                    >
-                                                        삭제하기
-                                                    </button>
-                                                </div>
+                                                            <button
+                                                                type="button"
+                                                                className="calKebabItem calKebabDanger"
+                                                                onMouseDown={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (isStudy) deleteStudyById(ev.id);
+                                                                    else deleteEventById(ev.id);
+                                                                }}
+                                                            >
+                                                                삭제하기
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </>
                                             )}
@@ -1135,9 +1235,7 @@ function Calendar() {
                                         {displayTitle}
                                     </div>
 
-                                    {ev.extendedProps?.description && (
-                                        <div className="calItemDesc">{ev.extendedProps.description}</div>
-                                    )}
+                                    {ev.extendedProps?.description && <div className="calItemDesc">{ev.extendedProps.description}</div>}
                                 </div>
                             );
                         })}
@@ -1208,6 +1306,29 @@ function Calendar() {
                                 </label>
                             </div>
 
+                            <div className="calTimeSection">
+                                <div className="calRow2">
+                                    <label className="calField">
+                                        <span className="calFieldLabel">시작시간</span>
+                                        <input
+                                            type="time"
+                                            className="calInput"
+                                            value={form.startTime}
+                                            onChange={(e) => onChangeForm("startTime", e.target.value)}
+                                        />
+                                    </label>
+                                    <label className="calField">
+                                        <span className="calFieldLabel">종료시간(선택)</span>
+                                        <input
+                                            type="time"
+                                            className="calInput"
+                                            value={form.endTime}
+                                            onChange={(e) => onChangeForm("endTime", e.target.value)}
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+
                             <div className="calRow2">
                                 <label className="calField">
                                     <span className="calFieldLabel">유형</span>
@@ -1223,8 +1344,12 @@ function Calendar() {
                                     </select>
                                 </label>
 
+                                {/* 일정 종류가 OTHER일 때 사용할 커스텀 라벨 입력 */}
                                 <label className="calField">
-                                    <span className="calFieldLabel">기타 라벨(선택)</span>
+                                    <span className="calFieldLabel">
+                                        유형 직접 입력
+                                        <span className="calFieldHint">(기타 선택 시 입력 가능 · 미입력 시 ‘기타’)</span>
+                                    </span>
                                     <input
                                         className="calInput"
                                         value={form.customLabel}
@@ -1292,13 +1417,7 @@ function Calendar() {
                             </div>
 
                             <div className="calColorPreview">
-                                <span
-                                    className="calPreviewPill"
-                                    style={{
-                                        backgroundColor: form.colorHex,
-                                        color: form.textColor,
-                                    }}
-                                >
+                                <span className="calPreviewPill" style={{ backgroundColor: form.colorHex, color: form.textColor }}>
                                     미리보기
                                 </span>
                             </div>
@@ -1308,11 +1427,7 @@ function Calendar() {
 
                         <div className="calModalFoot">
                             {editingEventId && (
-                                <button
-                                    type="button"
-                                    className="calBtn calBtnGhost"
-                                    onMouseDown={() => deleteEventById(editingEventId)}
-                                >
+                                <button type="button" className="calBtn calBtnGhost" onMouseDown={() => deleteEventById(editingEventId)}>
                                     삭제하기
                                 </button>
                             )}
@@ -1411,11 +1526,7 @@ function Calendar() {
 
                         <div className="calModalFoot">
                             {editingStudyId && (
-                                <button
-                                    type="button"
-                                    className="calBtn calBtnGhost"
-                                    onMouseDown={() => deleteStudyById(editingStudyId)}
-                                >
+                                <button type="button" className="calBtn calBtnGhost" onMouseDown={() => deleteStudyById(editingStudyId)}>
                                     삭제하기
                                 </button>
                             )}

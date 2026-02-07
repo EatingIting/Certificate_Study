@@ -97,6 +97,9 @@
 .study-info h3 { margin: 0 0 4px; font-size: 18px; font-weight: 900; }
 .study-info p { margin: 0; font-size: 13px; opacity: 0.95; }
 
+.study-info-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.study-empty-msg { font-size: 14px; opacity: 0.9; margin-top: 8px; }
+
 .progress-bar {
     width: 220px;
     height: 9px;
@@ -132,6 +135,9 @@
 
 .trow.plain { background: #fff; border: 1px solid #f0f0f0; }
 .trow.tinted { background: #f1faf3; }
+
+.dashBoard-item { cursor: pointer; }
+.dashBoard-item:hover { background: #f8faf8; border-color: #e0e8e0; }
 
 .tleft{
     flex: 1 1 0;         /* ✅ 남는 폭 계산 확실하게 */
@@ -332,6 +338,26 @@
 }
 
 .table-list.dashCalListTight { margin-top: 8px; }
+
+/* 월별 일정: 날짜 구간과 제목 시작점을 한 줄로 고정 정렬 */
+.dashCalListTight .trow {
+    padding: 10px 8px;
+}
+
+.dashCalListTight .tleft {
+    display: grid !important;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+}
+
+.dashCalListTight .month-range {
+    width: 96px;
+    min-width: 0;
+    display: block;
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+}
 
 .dashEmpty {
     padding: 10px;

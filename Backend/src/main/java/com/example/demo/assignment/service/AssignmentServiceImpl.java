@@ -6,7 +6,10 @@ import com.example.demo.assignment.mapper.AssignmentMapper;
 import com.example.demo.assignment.vo.AssignmentSubmissionVO;
 import com.example.demo.assignment.vo.AssignmentVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse;
 
@@ -16,6 +19,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import com.example.demo.s3.S3Uploader;
+import com.example.demo.assignment.dto.*;
+import java.util.*;
+import java.util.stream.Collectors;
+import com.example.demo.assignment.dto.AssignmentMatrixResponse;
+
 
 
 @Service
@@ -73,4 +81,50 @@ public class AssignmentServiceImpl implements AssignmentService {
     public List<AssignmentSubmissionDetailResponse> getSubmissionDetails(Long assignmentId) {
         return assignmentMapper.selectSubmissionDetails(assignmentId);
     }
+
+    @Override
+    public AssignmentMatrixResponse getSubmissionMatrix(String roomId) {
+        List<AssignmentMatrixAssignment> assignments = assignmentMapper.selectMatrixAssignments(roomId);
+        List<AssignmentMatrixRow> flat = assignmentMapper.selectMatrixRows(roomId);
+
+        // userId 기준으로 그룹화
+        Map<String, List<AssignmentMatrixRow>> byUser = flat.stream()
+                .collect(Collectors.groupingBy(AssignmentMatrixRow::getUserId, LinkedHashMap::new, Collectors.toList()));
+
+        List<AssignmentMatrixMember> members = new ArrayList<>();
+
+        for (Map.Entry<String, List<AssignmentMatrixRow>> entry : byUser.entrySet()) {
+            String userId = entry.getKey();
+            List<AssignmentMatrixRow> rows = entry.getValue();
+
+            String name = rows.get(0).getMemberName();
+
+            // assignmentId -> row (제출정보)
+            Map<Long, AssignmentMatrixRow> byAid = new HashMap<>();
+            for (AssignmentMatrixRow r : rows) {
+                byAid.put(r.getAssignmentId(), r);
+            }
+
+            List<AssignmentMatrixCell> submissions = new ArrayList<>();
+            for (AssignmentMatrixAssignment a : assignments) {
+                AssignmentMatrixRow r = byAid.get(a.getAssignmentId());
+                boolean submitted = (r != null && r.getSubmissionId() != null);
+
+                submissions.add(new AssignmentMatrixCell(
+                        a.getAssignmentId(),
+                        submitted,
+                        r != null ? r.getSubmittedAt() : null,
+                        r != null ? r.getFileUrl() : null
+                ));
+            }
+
+            members.add(new AssignmentMatrixMember(userId, name, submissions));
+        }
+
+        return new AssignmentMatrixResponse(assignments, members);
+    }
+
+
+
+
 }

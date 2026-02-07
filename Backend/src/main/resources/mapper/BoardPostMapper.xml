@@ -6,21 +6,20 @@
 <mapper namespace="com.example.demo.board.mapper.BoardPostMapper">
 
     <resultMap id="PostMap" type="com.example.demo.board.vo.BoardPostVO">
-        <id     property="postId"    column="post_id"/>
-        <result property="roomId"    column="room_id"/>
-        <result property="userId"    column="user_id"/>
-
-        <!-- ✅ 추가 -->
-        <result property="nickname"  column="nickname"/>
-
-        <result property="category"  column="category"/>
-        <result property="title"     column="title"/>
-        <result property="content"   column="content"/>
-        <result property="isPinned"  column="is_pinned"/>
-        <result property="viewCount" column="view_count"/>
-        <result property="createdAt" column="created_at"/>
-        <result property="updatedAt" column="updated_at"/>
-        <result property="deletedAt" column="deleted_at"/>
+        <id     property="postId"          column="post_id"/>
+        <result property="roomId"          column="room_id"/>
+        <result property="userId"          column="user_id"/>
+        <result property="nickname"        column="nickname"/>
+        <result property="category"        column="category"/>
+        <result property="title"           column="title"/>
+        <result property="content"         column="content"/>
+        <result property="isPinned"        column="is_pinned"/>
+        <result property="viewCount"       column="view_count"/>
+        <result property="createdAt"       column="created_at"/>
+        <result property="updatedAt"       column="updated_at"/>
+        <result property="deletedAt"       column="deleted_at"/>
+        <result property="commentCount"    column="comment_count"/>
+        <result property="attachmentCount" column="attachment_count"/>
     </resultMap>
 
     <select id="selectPostList" resultMap="PostMap">
@@ -28,8 +27,7 @@
         p.post_id,
         p.room_id,
         p.user_id,
-        /* ✅ 방별 닉네임이 있으면 우선 사용, 없으면 글로벌 닉네임 → 이름 */
-        COALESCE(rjr.request_user_nickname, u.nickname, u.name) AS nickname,
+        COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
         p.category,
         p.title,
         p.content,
@@ -37,22 +35,26 @@
         p.view_count,
         p.created_at,
         p.updated_at,
-        p.deleted_at
+        p.deleted_at,
+        (SELECT COUNT(*)
+        FROM board_comments c
+        WHERE c.post_id = p.post_id
+        AND c.deleted_at IS NULL) AS comment_count,
+        (SELECT COUNT(*)
+        FROM board_post_attachments a
+        WHERE a.post_id = p.post_id) AS attachment_count
+
         FROM board_posts p
-                 LEFT JOIN users u ON u.user_id = p.user_id
-                 LEFT JOIN room_join_request rjr
-                           ON rjr.room_id = p.room_id
-                           AND rjr.request_user_email = u.email
-                           AND rjr.status = '승인'
+        LEFT JOIN users u ON u.user_id = p.user_id
         WHERE p.deleted_at IS NULL
-          AND p.room_id = #{roomId}
+        AND p.room_id = #{roomId}
         <if test="category != null and category != ''">
             AND p.category = #{category}
         </if>
         <if test="keyword != null and keyword != ''">
             AND (
-                p.title LIKE CONCAT('%', #{keyword}, '%')
-                OR p.content LIKE CONCAT('%', #{keyword}, '%')
+            p.title LIKE CONCAT('%', #{keyword}, '%')
+            OR p.content LIKE CONCAT('%', #{keyword}, '%')
             )
         </if>
         ORDER BY p.is_pinned DESC, p.post_id DESC
@@ -77,27 +79,35 @@
 
     <select id="selectPostById" resultMap="PostMap">
         SELECT
-            p.post_id,
-            p.room_id,
-            p.user_id,
-            /* ✅ 단일 게시글 조회도 동일 규칙 적용 */
-            COALESCE(rjr.request_user_nickname, u.nickname, u.name) AS nickname,
-            p.category,
-            p.title,
-            p.content,
-            p.is_pinned,
-            p.view_count,
-            p.created_at,
-            p.updated_at,
-            p.deleted_at
+            p.post_id, p.room_id, p.user_id,
+            COALESCE(NULLIF(u.nickname, ''), u.name) AS nickname,
+            p.category, p.title, p.content,
+            p.is_pinned, p.view_count, p.created_at, p.updated_at, p.deleted_at
         FROM board_posts p
                  LEFT JOIN users u ON u.user_id = p.user_id
-                 LEFT JOIN room_join_request rjr
-                           ON rjr.room_id = p.room_id
-                           AND rjr.request_user_email = u.email
-                           AND rjr.status = '승인'
         WHERE p.post_id = #{postId}
           AND p.deleted_at IS NULL
+    </select>
+
+    <select id="findWriterIdByPostId" resultType="string">
+        SELECT user_id
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findPostTitleByPostId" resultType="string">
+        SELECT title
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findRoomIdByPostId" resultType="string">
+        SELECT room_id
+        FROM board_posts
+        WHERE post_id = #{postId}
+          AND deleted_at IS NULL
     </select>
 
     <update id="incrementViewCount">
@@ -110,10 +120,18 @@
     <insert id="insertPost"
             parameterType="com.example.demo.board.vo.BoardPostVO"
             useGeneratedKeys="true" keyProperty="postId" keyColumn="post_id">
-        INSERT INTO board_posts (
-        room_id, user_id, category, title, content, is_pinned, view_count
-        ) VALUES (
-        #{roomId}, #{userId}, #{category}, #{title}, #{content},
+        INSERT INTO board_posts (room_id,
+        user_id,
+        category,
+        title,
+        content,
+        is_pinned,
+        view_count
+        ) VALUES (#{roomId},
+        #{userId},
+        #{category},
+        #{title},
+        #{content},
         <choose>
             <when test="isPinned != null">#{isPinned}</when>
             <otherwise>0</otherwise>
@@ -124,8 +142,7 @@
 
     <update id="updatePost" parameterType="com.example.demo.board.vo.BoardPostVO">
         UPDATE board_posts
-        SET
-            category = #{category},
+        SET category = #{category},
             title    = #{title},
             content  = #{content},
             is_pinned = #{isPinned}
@@ -176,5 +193,11 @@
         WHERE post_id = #{postId}
           AND deleted_at IS NULL
     </update>
+
+    <delete id="hardDeleteOlderThanDays">
+        DELETE FROM board_posts
+        WHERE deleted_at IS NOT NULL
+          AND deleted_at <![CDATA[<]]> DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </delete>
 
 </mapper>

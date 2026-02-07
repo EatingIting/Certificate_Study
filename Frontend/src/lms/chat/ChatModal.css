@@ -3,7 +3,6 @@
    ================================================================= */
 .chat-floating-btn {
     position: fixed;
-    /* top, left는 JS에서 드래그로 제어하므로 CSS에서는 제거 */
     width: 70px;
     height: 70px;
     background-color: #97c793; /* 기본 테마: 초록 */
@@ -62,8 +61,6 @@
    ================================================================= */
 .tc-wrapper {
     position: fixed;
-    /* top, left는 JS에서 드래그로 제어 */
-    
     background-color: #f5f7fb;
     border-radius: 20px;
     box-shadow: 0 5px 25px rgba(0,0,0,0.15);
@@ -74,8 +71,6 @@
     border: 1px solid rgba(0,0,0,0.05);
     overflow: hidden; /* 내부 컨텐츠가 둥근 모서리를 넘지 않게 */
 
-    /* [수정] 8방향 리사이즈를 위해 resize: both 제거됨 */
-    /* JS에서 스타일을 제어하지만, 초기 로딩 시 깜빡임 방지를 위해 기본값 유지 */
     width: 360px;
     height: 600px;
     
@@ -93,7 +88,7 @@
 
 
 /* =================================================================
-   [NEW] 8방향 리사이즈 핸들 (투명 영역)
+   8방향 리사이즈 핸들 (투명 영역)
    - 마우스를 가장자리에 대면 커서가 바뀝니다.
    ================================================================= */
 .resizer {
@@ -239,14 +234,317 @@
 .tc-body::-webkit-scrollbar { width: 6px; }
 .tc-body::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 3px; }
 
+/* AI 모드: 첫 인사 아래 빠른 실행 버튼 (과제/출석/일정) */
+.chat-ai-quick-actions {
+    margin: 8px 0 16px;
+    padding: 12px;
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+.chat-ai-quick-actions-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0369a1;
+    margin-bottom: 10px;
+}
+.chat-ai-quick-btn {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #0c4a6e;
+    background: white;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.chat-ai-quick-btn:last-child {
+    margin-bottom: 0;
+}
+.chat-ai-quick-btn:hover {
+    background: #f0f9ff;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+}
+
+/* AI 모드: 과제 목록 / 제출자 목록 패널 */
+.chat-ai-assignment-panel {
+    margin-bottom: 12px;
+    padding: 12px;
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8eeff 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(108, 92, 231, 0.15);
+}
+.chat-ai-panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #4a5568;
+    margin-bottom: 8px;
+}
+.chat-ai-panel-title-sub {
+    margin-top: 14px;
+    margin-bottom: 6px;
+}
+.chat-ai-panel-loading,
+.chat-ai-panel-empty {
+    font-size: 12px;
+    color: #718096;
+    padding: 6px 0;
+}
+.chat-ai-assignment-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 140px;
+    overflow-y: auto;
+}
+.chat-ai-assignment-list::-webkit-scrollbar { width: 4px; }
+.chat-ai-assignment-list::-webkit-scrollbar-thumb { background: rgba(108, 92, 231, 0.3); border-radius: 2px; }
+.chat-ai-assignment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    border: 1px solid transparent;
+}
+.chat-ai-assignment-item:hover {
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(108, 92, 231, 0.12);
+}
+.chat-ai-assignment-item.selected {
+    background: rgba(108, 92, 231, 0.12);
+    border-color: rgba(108, 92, 231, 0.35);
+}
+.chat-ai-assignment-title {
+    font-size: 13px;
+    color: #2d3748;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    margin-right: 8px;
+}
+.chat-ai-assignment-due {
+    font-size: 11px;
+    color: #718096;
+    flex-shrink: 0;
+}
+.chat-ai-submission-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 120px;
+    overflow-y: auto;
+}
+.chat-ai-submission-list::-webkit-scrollbar { width: 4px; }
+.chat-ai-submission-list::-webkit-scrollbar-thumb { background: rgba(108, 92, 231, 0.3); border-radius: 2px; }
+.chat-ai-submission-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 2px;
+    background: white;
+    border-radius: 6px;
+    font-size: 12px;
+    border: 1px solid rgba(0,0,0,0.04);
+}
+.chat-ai-submission-item.clickable {
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.chat-ai-submission-item.clickable:hover {
+    background: #f0f4ff;
+    box-shadow: 0 1px 4px rgba(108, 92, 231, 0.12);
+}
+.chat-ai-submission-name {
+    color: #2d3748;
+    font-weight: 500;
+}
+.chat-ai-submission-date {
+    color: #718096;
+    font-size: 11px;
+}
+
+/* AI 모드: 출석 현황 패널 (글씨 적당히, 가로 스크롤 허용) */
+.chat-ai-attendance-panel .chat-ai-panel-title {
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+.chat-ai-attendance-table-wrap {
+    max-height: 220px;
+    overflow-x: auto;
+    overflow-y: auto;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.06);
+    background: white;
+    -webkit-overflow-scrolling: touch;
+}
+.chat-ai-attendance-table-wrap::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+.chat-ai-attendance-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(108, 92, 231, 0.35);
+    border-radius: 4px;
+}
+.chat-ai-attendance-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: rgba(108, 92, 231, 0.5);
+}
+.chat-ai-attendance-table-wrap::-webkit-scrollbar-corner {
+    background: #f7fafc;
+}
+.chat-ai-attendance-table {
+    width: 100%;
+    min-width: max-content;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.chat-ai-attendance-table th,
+.chat-ai-attendance-table td {
+    padding: 8px 12px;
+    text-align: center;
+    border-bottom: 1px solid #eee;
+}
+.chat-ai-attendance-table th {
+    background: #f7fafc;
+    color: #4a5568;
+    font-weight: 600;
+    font-size: 13px;
+}
+.chat-ai-at-name {
+    text-align: left !important;
+    min-width: 78px;
+    font-size: 13px;
+}
+.chat-ai-at-ratio {
+    min-width: 88px;
+    position: relative;
+}
+.chat-ai-at-ratio-bar {
+    display: block;
+    height: 5px;
+    background: #97c793;
+    border-radius: 3px;
+    min-width: 2px;
+}
+.chat-ai-at-ratio-text {
+    display: block;
+    font-size: 12px;
+    color: #718096;
+    margin-top: 3px;
+}
+.chat-ai-at-session {
+    min-width: 28px;
+    font-size: 13px;
+}
+.chat-ai-at-mark {
+    min-width: 28px;
+    font-size: 14px;
+}
+.chat-ai-at-ok { color: #38a169; font-weight: 600; }
+.chat-ai-at-absent { color: #e53e3e; font-weight: 600; }
+
+/* AI 모드: 일정 목록 패널 */
+.chat-ai-schedule-panel .chat-ai-panel-title { margin-bottom: 8px; }
+.chat-ai-schedule-list {
+    max-height: 180px;
+    overflow-y: auto;
+}
+.chat-ai-schedule-item {
+    cursor: default;
+}
+.chat-ai-schedule-title {
+    font-size: 13px;
+    color: #2d3748;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    margin-right: 8px;
+}
+.chat-ai-schedule-date {
+    font-size: 11px;
+    color: #718096;
+    flex-shrink: 0;
+}
+
+/* AI 모드: 게시글 조회 패널 (최근 5개) */
+.chat-ai-board-panel .chat-ai-panel-title { margin-bottom: 8px; }
+.chat-ai-board-list {
+    max-height: 180px;
+    overflow-y: auto;
+}
+.chat-ai-board-item {
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+.chat-ai-board-item:hover {
+    background: #f0f4ff;
+    box-shadow: 0 1px 4px rgba(108, 92, 231, 0.12);
+}
+.chat-ai-board-title {
+    font-size: 13px;
+    color: #2d3748;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+.chat-ai-board-meta {
+    font-size: 10px;
+    color: #718096;
+}
+
+/* 과제 요약/예상문제 응답 아래 저장 버튼 */
+.chat-ai-save-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.chat-ai-save-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s, transform 0.1s;
+}
+.chat-ai-save-btn.summary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+.chat-ai-save-btn.problem {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+.chat-ai-save-btn:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+}
+
 /* 메시지 한 줄 (프로필 + 말풍선) */
 .tc-msg-row {
     display: flex;
     align-items: flex-end;
     gap: 10px;
-    
-    /* [수정] 말풍선이 화면의 90%까지 찰 수 있게 확장 */
-    max-width: 90%; 
+    width: 100%;
 }
 
 .tc-msg-row.me {
@@ -288,13 +586,12 @@
     border-radius: 18px;
     font-size: 14px;
     
-    /* [수정] 가독성을 위해 줄 간격 1.6으로 설정 */
     line-height: 1.6;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     position: relative;
-
-    /* [필수] 긴 단어 줄바꿈 */
-    word-break: break-word; 
+    max-width: 80%;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .tc-bubble.other {
@@ -307,12 +604,7 @@
     background-color: #97c793;
     color: white;
     border-bottom-right-radius: 4px;
-    
-    /* ✅ 내가 보낸 말풍선은 항상 가로 방향 + 자동 줄바꿈 */
-    white-space: normal;
-    writing-mode: horizontal-tb;
-    text-orientation: mixed;
-    display: inline-block;
+    text-align: left;
 }
 
 /* AI 답변 말풍선 스타일 */

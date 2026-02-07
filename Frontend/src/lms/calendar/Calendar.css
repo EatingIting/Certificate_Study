@@ -17,13 +17,17 @@
     grid-template-columns: 1.4fr 0.6fr;
     gap: 16px;
     align-items: stretch;
+    height: 720px;
     min-height: 720px;
+    max-height: 720px;
 }
 
 @media (max-width: 980px) {
     .calGrid {
         grid-template-columns: 1fr;
+        height: auto;
         min-height: unset;
+        max-height: none;
     }
 }
 
@@ -36,15 +40,24 @@
 .calCard {
     height: 100%;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
-/* 오른쪽 리스트는 내부만 스크롤 */
+/* 오른쪽 리스트: 헤더 고정, 목록만 스크롤 */
+.calListCard {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
 .calListCard .calListBody {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
     padding: 12px 14px;
 }
 
@@ -235,15 +248,10 @@
 }
 
 /* =========================
-   이벤트 영역: 위랑 너무 붙어서 살짝 아래로
+   이벤트 영역: 모든 날짜 셀에서 일정 바 같은 높이(같은 top)로 정렬
 ========================= */
-.calCalendarCard .fc .fc-daygrid-day-events {
-    margin-top: 6px;
-}
-
-/* ✅ FullCalendar 기본 margin-top 1px → 25px로 늘려 스터디 pill과 겹침 방지 */
-.calCalendarCard .fc .fc-daygrid-event {
-    margin-top: 25px;
+.calCalendarCard .fc .fc-daygrid-day-frame {
+    position: relative !important;
 }
 
 /* ✅ 스터디 회차 pill이 있는 주(week) 줄은 "이벤트 바(harness)"만 아래로 내려 겹침 방지
@@ -252,7 +260,10 @@
 */
 .calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness,
 .calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
-    margin-top: 22px;
+    margin-top: 0 !important;
+}
+.calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
+    top: var(--cal-events-pad-top, 8px) !important;
 }
 
 /* =========================
@@ -265,6 +276,27 @@
     padding: 2px 6px !important;
     font-size: 12px !important;
     font-weight: 900 !important;
+}
+
+/* 왼쪽 달력: 모든 일정 바(단일/연속) 동일 높이 */
+.calCalendarCard .fc .fc-daygrid-event {
+    min-height: 26px !important;
+    height: 26px !important;
+    display: flex !important;
+    align-items: center !important;
+    overflow: hidden !important;
+}
+.calCalendarCard .fc .fc-daygrid-event .fc-event-main,
+.calCalendarCard .fc .fc-daygrid-event .fc-event-main-frame,
+.calCalendarCard .fc .fc-daygrid-event .fc-event-title-container {
+    overflow: hidden !important;
+    min-height: 0 !important;
+}
+.calCalendarCard .fc .fc-daygrid-event .fc-event-title {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    line-height: 1.2 !important;
 }
 
 /* 스터디 이벤트 클래스는 남아있지만, 달력에서는 숨김 처리 */
@@ -288,13 +320,22 @@
     color: #2563eb;
 }
 
-/* 클릭해서 선택한 날짜 셀 강조 */
+/* 클릭해서 선택한 날짜 셀 강조 - 크기 변하지 않도록 outline/border 대신 배경만 */
 .calPage .fc-daygrid-day.calDaySelected {
     background: rgba(151, 199, 147, 0.15);
 }
-
 .calPage .fc-daygrid-day.calDaySelected .fc-daygrid-day-frame {
     border-radius: 8px;
+}
+/* 날짜 클릭 시 포커스 아웃라인 제거(그리드 크기 유지) */
+.calCalendarCard .fc .fc-daygrid-day:focus,
+.calCalendarCard .fc .fc-daygrid-day:focus-visible {
+    outline: none !important;
+}
+/* 셀/프레임 box-sizing으로 선택 시에도 크기 동일 유지 */
+.calCalendarCard .fc .fc-daygrid-day,
+.calCalendarCard .fc .fc-daygrid-day-frame {
+    box-sizing: border-box !important;
 }
 
 /* =========================
@@ -393,25 +434,12 @@
     display: none !important;
 }
 
-/* 팝오버 안 일정 글씨 확실히 보이게 (스터디·일반 일정 모두) */
-.calPage .fc-popover-body .fc-daygrid-event,
-.calPage .fc .fc-popover-body .fc-daygrid-event,
-.calPage .fc-popover-body .fc-daygrid-event .fc-event-main,
-.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-main,
-.calPage .fc-popover-body .fc-daygrid-event .fc-event-main-frame,
-.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title-container,
 .calPage .fc-popover-body .fc-daygrid-event .fc-event-title,
+.calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title,
+.calPage .fc-popover-body .fc-daygrid-event .fc-event-title *,
 .calPage .fc .fc-popover-body .fc-daygrid-event .fc-event-title * {
-    color: var(--fc-event-text-color) !important;
-    font-size: 13px !important;
-    font-weight: 800;
-}
-
-/* HSK 시험 등 일반 일정도 팝업에서 글씨 보이게 (이벤트별 흰색 덮어씀) */
-.calPage .fc-popover-body .fc-daygrid-event *,
-.calPage .fc .fc-popover-body .fc-daygrid-event * {
-    background-color: var(--fc-event-bg-color) !important;
-    border-color: var(--fc-event-border-color) !important;
+  font-size: 13px !important;
+  font-weight: 800;
 }
 
 .calPage .fc-popover-body .fc-daygrid-event:last-child,
@@ -425,15 +453,20 @@
     display: none !important;
 }
 
-/* +N more 링크 자체 스타일 */
+/* +N more 링크: 긴 일정 바 위에 표시되며 항상 보이도록 */
 .calPage .fc-daygrid-more-link,
-.calPage .fc .fc-daygrid-more-link {
+.calPage .fc .fc-daygrid-more-link,
+.calCalendarCard .fc .fc-daygrid-more-link {
     font-size: 11px;
     font-weight: 800;
     color: var(--primary);
     padding: 2px 8px;
     border-radius: 8px;
     background: var(--primary-light);
+    display: inline-block !important;
+    min-height: 20px;
+    line-height: 18px;
+    visibility: visible !important;
 }
 
 .calPage .fc-daygrid-more-link:hover,
@@ -458,18 +491,21 @@
     border-radius: 12px;
     background: #f6faf3;
     border: 1px solid var(--border);
+    /* 제목·설명이 잘리지 않도록 높이 고정 제거, 최소 높이만 유지 */
+    min-height: 72px;
 }
 
 .calItem+.calItem {
     margin-top: 10px;
 }
 
-/* 오른쪽 일정목록: 글자색은 검정 고정, 배경색만 사용자 지정 */
 .calItem .calBadge,
 .calItem .calDate,
+.calItem .calDateLine,
+.calItem .calDateTime,
 .calItem .calItemTitle,
 .calItem .calItemDesc {
-    color: #1f2937 !important;
+    color: inherit;
 }
 
 .calItemTop {
@@ -489,8 +525,19 @@
 }
 
 .calDate {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--muted);
+    font-weight: 700;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+.calDateLine {
+    display: block;
+}
+.calDateTime {
+    font-size: 14px;
     font-weight: 700;
 }
 
@@ -774,11 +821,26 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    align-items: stretch;
 }
 
 .calFieldLabel {
     font-size: 12px;
     font-weight: 900;
+    color: var(--muted);
+    display: block;
+    line-height: 1.2;
+}
+
+.calSelect {
+    margin-top: 18px;
+}
+
+.calFieldHint {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
     color: var(--muted);
 }
 
@@ -819,6 +881,13 @@
     -webkit-appearance: none;
 }
 
+.calInput:disabled {
+    background: #f3f4f6;      /* 연한 회색 배경 */
+    color: #9ca3af;           /* 글자 회색 */
+    border-color: #e5e7eb;    /* 테두리 연하게 */
+    cursor: not-allowed;
+}
+
 .calRow2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -829,6 +898,14 @@
     .calRow2 {
         grid-template-columns: 1fr;
     }
+}
+
+.calTimeSection {
+    margin-top: 4px;
+}
+.calTimeSectionLabel {
+    display: block;
+    margin-bottom: 6px;
 }
 
 .calTextarea {
@@ -1015,9 +1092,20 @@
     flex-direction: row;
 }
 
-/* 날짜 row만 100px (헤더 제외) */
+/* 날짜 row 고정 높이 - 클릭해도 그리드 크기 변하지 않음 */
 .calCalendarCard .fc .fc-daygrid-body [role="row"] {
     height: 100px !important;
+}
+
+/* 날짜 셀 자체(테이블 td 역할) */
+.calCalendarCard .fc .fc-daygrid-day {
+  height: 100px !important;
+}
+
+/* 셀 내부 프레임까지 같이 100px로 */
+.calCalendarCard .fc .fc-daygrid-day-frame {
+  height: 100px !important;
+  min-height: 100px !important;
 }
 
 /* ✅ FullCalendar 내부 스크롤바 제거 (월뷰에서) */
@@ -1068,4 +1156,109 @@
 .calCalendarCard .fc .fc-daygrid-event .fc-event-main,
 .calCalendarCard .fc .fc-daygrid-event .fc-event-main-frame {
   background: transparent !important;
+}
+
+/* =========================
+   달력 이벤트 배치(단일/연속 일정 동일 높이)
+   - 아래(bottom) 기준 배치로 인해 단일/연속이 어긋나던 문제를 제거하고
+     단일(일반) + 연속(멀티데이) 모두 같은 기준값을 공유하도록 통일
+========================= */
+.calCalendarCard .fc {
+  --cal-events-top: 60px;        /* 셀 상단(날짜/회차) 아래에서 이벤트 영역 시작 */
+  --cal-more-top: -24px;         /* +n 개를 이벤트 영역 위로 올리는 값 */
+  --cal-events-pad-top: 8px;     /* 이벤트 바 시작 오프셋(단일/연속 공통) */
+  --cal-bar-gap: 2px;            /* 바 간격 */
+}
+
+/* 이벤트 영역(바 컨테이너) */
+.calCalendarCard .fc .fc-daygrid-day-events {
+  position: absolute !important;
+  top: var(--cal-events-top) !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: var(--cal-events-pad-top) 2px 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  overflow: visible !important;
+  z-index: 10;
+}
+
+/* +n 개(더보기 링크)는 바 위에 고정 */
+.calCalendarCard .fc .fc-daygrid-day-bottom {
+  position: absolute !important;
+  top: var(--cal-more-top) !important; /* ✅ 이벤트 영역 기준 위로 */
+  left: 0 !important;
+  right: 0 !important;
+  bottom: auto !important;
+  height: 20px;
+  margin: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 20;
+}
+
+/* ✅ 단일/연속(멀티데이) 일정 바 위치 통일 */
+.calCalendarCard .fc .fc-daygrid-event-harness {
+  margin: 0 !important;
+}
+.calCalendarCard .fc .fc-daygrid-event {
+  margin-top: var(--cal-bar-gap) !important;
+}
+.calCalendarCard .fc .fc-daygrid-event-harness-abs {
+  top: var(--cal-events-pad-top) !important;
+}
+
+/* 리스트 필터 줄 */
+.calListFilterRow {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid #dfe9df; /* 기존보다 살짝 회색 기 */
+}
+
+.calListFilter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 기본 버튼 */
+.calFilterBtn {
+  font-size: 12px;
+  font-weight: 700;
+
+  color: #3f5f4c;              /* ⬅ 더 부드러운 그린 */
+  background: #f2f7f3;         /* ⬅ 거의 화이트에 가까운 세이지 */
+  border: 1px solid #d5e4da;   /* ⬅ 연한 경계 */
+
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+/* Active (선택됨) */
+.calFilterBtn.isActive {
+  background: #6fa98c;         /* ⬅ 진한 초록 ❌ → muted green */
+  border-color: #6fa98c;
+  color: #ffffff;
+}
+
+/* Active + Hover */
+.calFilterBtn.isActive:hover {
+  background: #639d81;
+  border-color: #639d81;
+}
+
+.calListFilterRow {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px 12px;
+    border-bottom: 1px solid var(--primary-light);
+}
+
+/* 🔥 이게 핵심 */
+.calListShowAllWrap {
+    margin-left: auto;
 }

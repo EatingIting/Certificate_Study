@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
-import "./Board.css";
+import "./BoardCommon.css";
+import "./BoardList.css"
 import { BoardApi, formatKst } from "./BoardApi";
+import { ReactComponent as ClipIcon } from "./clip.svg";
 
 function Board() {
     let navigate = useNavigate();
@@ -10,7 +12,7 @@ function Board() {
 
     let roomId = subjectId;
 
-    // ✅ URL: /lms/:subjectId/board?category=공지
+    // URL: /lms/:subjectId/board?category=공지
     let queryCategory = sp.get("category"); // "공지" | "일반" | "질문" | "자료" | null
 
     // ===== 카테고리 코드/라벨 매핑 (백엔드는 NOTICE/GENERAL/QNA/RESOURCE) =====
@@ -32,8 +34,7 @@ function Board() {
         return v; // 이미 라벨이면 그대로
     };
 
-    let queryCategoryCode = categoryToCode(queryCategory);
-
+    let [keywordInput, setKeywordInput] = useState("");
     let [keyword, setKeyword] = useState("");
 
     let [page, setPage] = useState(1);
@@ -48,13 +49,20 @@ function Board() {
     let [listPosts, setListPosts] = useState([]);
     let [totalPages, setTotalPages] = useState(1);
 
+    // 검색 실행(버튼/엔터로만 호출)
+    let runSearch = () => {
+        setKeyword(keywordInput);
+        setPage(1);
+    }
+
+    // 카테고리 바뀌면 1페이지로
     useEffect(() => {
         setPage(1);
-    }, [keyword, queryCategory]);
+    }, [queryCategory]);
 
     let normalizedKeyword = keyword.trim();
 
-    // ✅ 고정글: category 무시 + 검색만 적용
+    // 고정글: category 무시 + 검색만 적용
     useEffect(() => {
         if (!roomId) return;
 
@@ -62,13 +70,12 @@ function Board() {
 
         (async () => {
             try {
-                // pinned는 목록과 독립이라 로딩 표시를 따로 두지 않고, 실패해도 리스트는 살린다.
                 let data = await BoardApi.listPosts({
                     roomId,
-                    category: "", // ✅ 카테고리 무시
+                    category: "", // 카테고리 무시
                     keyword: normalizedKeyword,
                     page: 1,
-                    size: 50, // pinned 몇 개 없으니 넉넉하게
+                    size: 50,
                 });
 
                 if (!alive) return;
@@ -95,7 +102,7 @@ function Board() {
         };
     }, [roomId, normalizedKeyword]);
 
-    // ✅ 일반 목록: category + keyword + paging
+    // 일반 목록: category + keyword + paging
     useEffect(() => {
         if (!roomId) {
             setError("roomId(subjectId)가 없습니다. 라우트를 확인해주세요.");
@@ -120,19 +127,33 @@ function Board() {
 
                 if (!alive) return;
 
-                let items = (data.items || []).map((p) => ({
-                    ...p,
-                    pinned: !!p.isPinned,
-                    authorName: p.nickname,
-                    createdAtText: formatKst(p.createdAt),
-                }));
+                let items = (data.items || [])
+                    .slice()
+                    .sort((a, b) => {
+                        // createdAt이 있으면 createdAt 기준(내림차순: 최신 먼저)
+                        let ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        let tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        if (tb !== ta) return tb - ta;
+
+                        // createdAt이 같거나 없으면 postId 기준(내림차순)
+                        return (b.postId || 0) - (a.postId || 0);
+                    })
+                    .map((p) => ({
+                        ...p,
+                        pinned: !!p.isPinned,
+                        authorName: p.nickname,
+                        createdAtText: formatKst(p.createdAt),
+                    }));
 
                 setListPosts(items);
                 setTotalPages(Math.max(1, Number(data.totalPages || 1)));
             } catch (e) {
                 if (!alive) return;
-                setForbidden(e?.status === 403);
-                setError(e?.message || "목록 조회 중 오류");
+                let status = e?.status ?? e?.response?.status;
+                let msg = e?.message ?? e?.response?.data?.message;
+
+                setForbidden(status === 403);
+                setError(msg || "목록 조회 중 오류");
                 setListPosts([]);
                 setTotalPages(1);
             } finally {
@@ -146,7 +167,7 @@ function Board() {
         };
     }, [roomId, queryCategory, normalizedKeyword, page]);
 
-    // ✅ navigate: 상대경로
+    // navigate: 상대경로
     let goWrite = () => navigate("write");
     let goDetail = (postId) => navigate(String(postId));
 
@@ -197,7 +218,7 @@ function Board() {
 
     if (forbidden) {
         return (
-            <div className="bd">
+            <div className="bd bd-board">
                 <div className="bd-card">
                     <div className="bd-sub" style={{ fontWeight: 700, marginBottom: 6 }}>
                         접근할 수 없습니다
@@ -219,7 +240,7 @@ function Board() {
     }
 
     return (
-        <div className="bd">
+        <div className="bd bd-board">
             <div className="bd-head">
                 <div>
                     <h2 className="bd-title">게시판{titleSuffix}</h2>
@@ -239,11 +260,21 @@ function Board() {
 
                 {!loading && !error && (
                     <div className="bd-list">
+                        {/* 테이블 헤더 */}
+                        <div className="bd-row bd-row-head" role="row">
+                            <div className="bd-col category">카테고리</div>
+                            <div className="bd-col title">제목</div>
+                            <div className="bd-col author">작성자</div>
+                            <div className="bd-col views">조회수</div>
+                            <div className="bd-col date">작성일</div>
+                        </div>
+
+                        {/* 고정글 */}
                         {pinnedPosts.length > 0 &&
                             pinnedPosts.map((p) => (
                                 <div
                                     key={`pin-${p.postId}`}
-                                    className="bd-item pinned-top"
+                                    className="bd-row bd-row-item pinned-top"
                                     onClick={() => goDetail(p.postId)}
                                     role="button"
                                     tabIndex={0}
@@ -251,39 +282,66 @@ function Board() {
                                         if (e.key === "Enter") goDetail(p.postId);
                                     }}
                                 >
-                                <span className={chipClass(p.category)}>
-                                    {categoryToLabel(p.category)}
-                                </span>
-                                <div className="bd-item-title">📌 {p.title}</div>
-                                    <div className="bd-item-meta">
-                                        {p.authorName} · {p.createdAtText}
+                                    <div className="bd-col category">
+                                        <span className={chipClass(p.category)}>{categoryToLabel(p.category)}</span>
                                     </div>
+
+                                    <div className="bd-col title">
+                                        <span className="bd-pin">📌</span> {p.title}
+
+                                        {(p.attachmentCount ?? 0) > 0 && (
+                                            <span className="bd-attach-icon" aria-label="첨부파일 있음" title="첨부파일 있음">
+                                                <ClipIcon />
+                                            </span>
+                                        )}
+
+                                        {(p.commentCount ?? 0) > 0 && (
+                                            <span className="bd-comment-count">[{p.commentCount}]</span>
+                                        )}
+                                    </div>
+
+                                    <div className="bd-col author">{p.authorName}</div>
+                                    <div className="bd-col views">{p.viewCount ?? 0}</div>
+                                    <div className="bd-col date">{p.createdAtText}</div>
                                 </div>
                             ))}
 
+                        {/* 일반글 */}
                         {listPosts.length === 0 ? (
                             <div className="bd-sub">게시글이 없습니다.</div>
                         ) : (
-                        listPosts.map((p) => (
-                            <div
-                                key={p.postId}
-                                className="bd-item"
-                                onClick={() => goDetail(p.postId)}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") goDetail(p.postId);
-                                }}
-                            >
-                            <span className={chipClass(p.category)}>
-                                {categoryToLabel(p.category)}
-                            </span>
-                            <div className="bd-item-title">{p.title}</div>
-                                <div className="bd-item-meta">
-                                    {p.authorName} · {p.createdAtText}
+                            listPosts.map((p) => (
+                                <div
+                                    key={p.postId}
+                                    className="bd-row bd-row-item"
+                                    onClick={() => goDetail(p.postId)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") goDetail(p.postId);
+                                    }}
+                                >
+                                    <div className="bd-col category">
+                                        <span className={chipClass(p.category)}>{categoryToLabel(p.category)}</span>
+                                    </div>
+
+                                    <div className="bd-col title">
+                                        {p.title}
+                                        {(p.attachmentCount ?? 0) > 0 && (
+                                            <span className="bd-attach-icon" aria-label="첨부파일 있음" title="첨부파일 없음">
+                                                <ClipIcon />
+                                            </span>
+                                        )}
+                                        {(p.commentCount ?? 0) > 0 && (
+                                            <span className="bd-comment-count">[{p.commentCount}]</span>
+                                        )}
+                                    </div>
+
+                                    <div className="bd-col author">{p.authorName}</div>
+                                    <div className="bd-col views">{p.viewCount ?? 0}</div>
+                                    <div className="bd-col date">{p.createdAtText}</div>
                                 </div>
-                            </div>
-                        ))
+                            ))
                         )}
                     </div>
                 )}
@@ -293,11 +351,32 @@ function Board() {
                 <div className="bd-toolbar">
                     <input
                         className="bd-search"
-                        value={keyword}
-                        onChange={(e) => setKeyword(e.target.value)}
+                        value={keywordInput}
+                        onChange={(e) => setKeywordInput(e.target.value)}
                         placeholder="검색 (제목/내용)"
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                runSearch();
+                            }
+                        }}
                     />
-                    <button className="bd-btn-ghost" onClick={() => setKeyword("")} disabled={!keyword.trim()}>
+
+                    {/* 검색 버튼 */}
+                    <button className="bd-btn" type="button" onClick={runSearch}>
+                        검색
+                    </button>
+
+                    <button 
+                        className="bd-btn-ghost" 
+                        type="button"
+                        onClick={() => {
+                            setKeywordInput("");
+                            setKeyword("");
+                            setPage(1);
+                        }} 
+                        disabled={!keywordInput.trim() && !keyword.trim()}
+                    >
                         초기화
                     </button>
                 </div>

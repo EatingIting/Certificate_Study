@@ -5,6 +5,7 @@ module.exports = function (app) {
     app.use(
         "/api",
         createProxyMiddleware({
+            // 개발 환경: React dev server(3000) → Spring(8080)으로 프록시
             target: "http://localhost:8080",
             changeOrigin: true,
             secure: false,

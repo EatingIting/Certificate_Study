@@ -27,6 +27,18 @@ public interface BoardPostMapper {
             @Param("postId") long postId
     );
 
+    String findWriterIdByPostId(
+            @Param("postId") long postId
+    );
+
+    String findPostTitleByPostId(
+            @Param("postId") long postId
+    );
+
+    String findRoomIdByPostId(
+            @Param("postId") long postId
+    );
+
     int incrementViewCount(@Param("postId") long postId);
 
     int insertPost(BoardPostVO post);
@@ -49,4 +61,6 @@ public interface BoardPostMapper {
     int softDeletePostByHost(@Param("postId") long postId);
 
     int updatePinnedByHost(@Param("postId") long postId, @Param("isPinned") boolean isPinned);
+
+    int hardDeleteOlderThanDays(@Param("days") int days);
 }
