@@ -67,6 +67,8 @@ function sendSfuLeaveBeacon(roomId, peerId) {
 
 const PARTICIPANTS_SNAPSHOT_KEY_PREFIX = "meeting.participants.snapshot.";
 const PARTICIPANTS_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const PARTICIPANT_MEDIA_STATE_KEY_PREFIX = "meeting.participants.media-state.";
+const PARTICIPANT_MEDIA_STATE_TTL_MS = 30 * 60 * 1000;
 
 function getParticipantsSnapshotKey(roomId) {
     return `${PARTICIPANTS_SNAPSHOT_KEY_PREFIX}${roomId || ""}`;
@@ -114,6 +116,73 @@ function loadParticipantsSnapshot(roomId) {
     } catch {
         return [];
     }
+}
+
+function getParticipantMediaStateKey(roomId) {
+    return `${PARTICIPANT_MEDIA_STATE_KEY_PREFIX}${roomId || ""}`;
+}
+
+function loadParticipantMediaStateCache(roomId) {
+    if (!roomId) return {};
+    try {
+        const raw = sessionStorage.getItem(getParticipantMediaStateKey(roomId));
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        const savedAt = Number(parsed?.savedAt || 0);
+        if (!savedAt || Date.now() - savedAt > PARTICIPANT_MEDIA_STATE_TTL_MS) {
+            sessionStorage.removeItem(getParticipantMediaStateKey(roomId));
+            return {};
+        }
+
+        const rawState = parsed?.state && typeof parsed.state === "object" ? parsed.state : {};
+        const normalized = {};
+        for (const [peerId, value] of Object.entries(rawState)) {
+            if (!peerId || !value || typeof value !== "object") continue;
+            const entry = {};
+            if (typeof value.muted === "boolean") entry.muted = value.muted;
+            if (typeof value.cameraOff === "boolean") entry.cameraOff = value.cameraOff;
+            if (!Object.prototype.hasOwnProperty.call(entry, "muted") &&
+                !Object.prototype.hasOwnProperty.call(entry, "cameraOff")) {
+                continue;
+            }
+            entry.updatedAt = Number(value.updatedAt || savedAt || Date.now());
+            normalized[String(peerId)] = entry;
+        }
+        return normalized;
+    } catch {
+        return {};
+    }
+}
+
+function persistParticipantMediaStateCache(roomId, stateMap) {
+    if (!roomId) return;
+    try {
+        sessionStorage.setItem(
+            getParticipantMediaStateKey(roomId),
+            JSON.stringify({
+                savedAt: Date.now(),
+                state: stateMap || {},
+            })
+        );
+    } catch { }
+}
+
+function getParticipantMediaEmailKey(email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    return normalized ? `email:${normalized}` : "";
+}
+
+function resolveRemoteMutedState(incomingMuted, prevMuted, rememberedMuted) {
+    if (incomingMuted === true) return true;
+    if (incomingMuted === false) {
+        // 새로고침 직후 USERS_UPDATE가 false로 흔들려도
+        // 기존에 OFF(true)였던 상태는 보존하고, 실제 오디오 consumer/명시 이벤트에서만 false로 전환
+        if (prevMuted === true || rememberedMuted === true) return true;
+        return false;
+    }
+    if (typeof prevMuted === "boolean") return prevMuted;
+    if (typeof rememberedMuted === "boolean") return rememberedMuted;
+    return false;
 }
 
 // --- Components ---
@@ -706,12 +775,10 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                 )}
             </div>
 
-            {!isReconnecting && (
-                <div className="video-overlay">
-                    {safeUser.muted && <MicOff size={16} className="icon-red" />}
-                    {showVideoOffIcon && <VideoOff size={16} className="icon-red" />}
-                </div>
-            )}
+            <div className="video-overlay">
+                {safeUser.muted === true && <MicOff size={16} className="icon-red" />}
+                {showVideoOffIcon && <VideoOff size={16} className="icon-red" />}
+            </div>
 
             {reaction && <div className="reaction-overlay">{reaction}</div>}
         </div>
@@ -909,6 +976,67 @@ function MeetingPage({ portalRoomId }) {
 
     const [participants, setParticipants] = useState(() => loadParticipantsSnapshot(roomId));
     const [activeSpeakerId, setActiveSpeakerId] = useState(null);
+    const participantMediaStateRef = useRef(loadParticipantMediaStateCache(roomId));
+
+    useEffect(() => {
+        participantMediaStateRef.current = loadParticipantMediaStateCache(roomId);
+    }, [roomId]);
+
+    const rememberParticipantMediaStateByKeys = useCallback((keys, nextState) => {
+        if (!Array.isArray(keys) || !nextState) return;
+        const normalizedKeys = [...new Set(
+            keys
+                .map((k) => (k == null ? "" : String(k).trim()))
+                .filter(Boolean)
+        )];
+        if (normalizedKeys.length === 0) return;
+
+        const current = participantMediaStateRef.current || {};
+        const nextMap = { ...current };
+        const now = Date.now();
+        let changed = false;
+
+        for (const key of normalizedKeys) {
+            const prev = nextMap[key] || {};
+            const updated = { ...prev };
+            let keyChanged = false;
+
+            if (typeof nextState.muted === "boolean" && updated.muted !== nextState.muted) {
+                updated.muted = nextState.muted;
+                keyChanged = true;
+            }
+            if (typeof nextState.cameraOff === "boolean" && updated.cameraOff !== nextState.cameraOff) {
+                updated.cameraOff = nextState.cameraOff;
+                keyChanged = true;
+            }
+
+            if (keyChanged) {
+                updated.updatedAt = now;
+                nextMap[key] = updated;
+                changed = true;
+            }
+        }
+
+        if (!changed) return;
+        participantMediaStateRef.current = nextMap;
+        persistParticipantMediaStateCache(roomId, nextMap);
+    }, [roomId]);
+
+    const rememberParticipantMediaState = useCallback((peerId, nextState) => {
+        rememberParticipantMediaStateByKeys([peerId], nextState);
+    }, [rememberParticipantMediaStateByKeys]);
+
+    const getRememberedParticipantMediaState = useCallback((...candidateKeys) => {
+        if (!candidateKeys || candidateKeys.length === 0) return null;
+        const state = participantMediaStateRef.current || {};
+        for (const key of candidateKeys) {
+            if (key == null) continue;
+            const normalized = String(key).trim();
+            if (!normalized) continue;
+            if (state[normalized]) return state[normalized];
+        }
+        return null;
+    }, []);
 
     const [streamVersion, setStreamVersion] = useState(0);
 
@@ -4195,7 +4323,7 @@ function MeetingPage({ portalRoomId }) {
         }
     }, []);
 
-    // ✅ [수정] 참가자 생성 시 muted 초기값을 false로 변경 (마이크 꺼짐 아이콘 문제 해결)
+    // 참가자 엔트리 생성 헬퍼 (기존 상태가 있으면 절대 덮어쓰지 않음)
     const ensureParticipant = (peerId) => {
         setParticipants((prev) => {
             const existingUser = prev.find((p) => p.id === peerId);
@@ -4693,6 +4821,7 @@ function MeetingPage({ portalRoomId }) {
 
                 // 🔥 비디오 consumer가 들어왔으면 카메라가 켜져있다는 의미
                 const isVideoConsumer = kind === "video" && !isScreen;
+                const rememberedMediaState = getRememberedParticipantMediaState(peerId);
 
                 setParticipants((prev) => {
                     const idx = prev.findIndex((p) => String(p.id) === String(peerId) || String(p.userId) === String(peerId));
@@ -4714,8 +4843,14 @@ function MeetingPage({ portalRoomId }) {
 
                                 // 🔥 비디오 consumer가 들어왔으면 cameraOff: false
                                 // 오디오만 들어온 경우는 cameraOff: true 유지
-                                muted: true,
-                                cameraOff: isVideoConsumer ? false : true,
+                                muted: typeof rememberedMediaState?.muted === "boolean"
+                                    ? rememberedMediaState.muted
+                                    : false,
+                                cameraOff: isVideoConsumer
+                                    ? false
+                                    : (typeof rememberedMediaState?.cameraOff === "boolean"
+                                        ? rememberedMediaState.cameraOff
+                                        : true),
                                 speaking: false,
 
                                 stream: isScreen ? null : mergedCameraStream,
@@ -4763,6 +4898,10 @@ function MeetingPage({ portalRoomId }) {
 
                     return next;
                 });
+
+                if (isVideoConsumer) {
+                    rememberParticipantMediaState(peerId, { cameraOff: false });
+                }
 
                 bumpStreamVersion();
 
@@ -5269,12 +5408,32 @@ function MeetingPage({ portalRoomId }) {
                             ? !peer.cameraOn
                             : (hasCameraOff ? peer.cameraOff : undefined);
 
+                        const remembered = getRememberedParticipantMediaState(peer.peerId);
+                        const mergedMutedFromPeer = typeof mutedFromPeer === "boolean"
+                            ? resolveRemoteMutedState(mutedFromPeer, undefined, remembered?.muted)
+                            : undefined;
+
+                        if (typeof mergedMutedFromPeer === "boolean" || typeof cameraOffFromPeer === "boolean") {
+                            rememberParticipantMediaState(peer.peerId, {
+                                ...(typeof mergedMutedFromPeer === "boolean" ? { muted: mergedMutedFromPeer } : {}),
+                                ...(typeof cameraOffFromPeer === "boolean" ? { cameraOff: cameraOffFromPeer } : {}),
+                            });
+                        }
+
                         setParticipants(prev =>
                             prev.map(p =>
                                 String(p.id) === String(peer.peerId)
                                     ? {
                                         ...p,
-                                        ...(typeof mutedFromPeer === "boolean" ? { muted: mutedFromPeer } : {}),
+                                        ...(typeof mergedMutedFromPeer === "boolean"
+                                            ? {
+                                                muted: resolveRemoteMutedState(
+                                                    mergedMutedFromPeer,
+                                                    p.muted,
+                                                    remembered?.muted
+                                                ),
+                                            }
+                                            : {}),
                                         ...(typeof cameraOffFromPeer === "boolean" ? { cameraOff: cameraOffFromPeer } : {}),
                                         isReconnecting: false,
                                         isLoading: false,
@@ -5374,7 +5533,7 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             clearTimeout(timeoutId);
         };
-    }, [roomReconnecting, recvTransportReady]);
+    }, [roomReconnecting, recvTransportReady, rememberParticipantMediaState]);
 
     // 이전에 화면공유 중이었던 사람 추적 (화면공유 종료 감지용)
     const prevScreenSharersRef = useRef(new Set());
@@ -6081,6 +6240,19 @@ function MeetingPage({ portalRoomId }) {
                         const name = u.userName || "";
                         peerIdToNameRef.current.set(String(u.userId), name);
                         if (u.connectionId != null) peerIdToNameRef.current.set(String(u.connectionId), name);
+                        const mediaEmailKey = getParticipantMediaEmailKey(u.userEmail || u.email || "");
+                        // USERS_UPDATE는 초기 접속 구간에서 muted=false가 흔들릴 수 있어,
+                        // muted=true(OFF)만 강하게 저장하고 false는 명시 이벤트/오디오 consumer에서 확정한다.
+                        if (u.muted === true || typeof u.cameraOff === "boolean") {
+                            const knownState = {
+                                ...(u.muted === true ? { muted: true } : {}),
+                                ...(typeof u.cameraOff === "boolean" ? { cameraOff: u.cameraOff } : {}),
+                            };
+                            rememberParticipantMediaStateByKeys(
+                                [String(u.userId), u.connectionId != null ? String(u.connectionId) : "", mediaEmailKey],
+                                knownState
+                            );
+                        }
                     });
                     if (data.roomStartedAt != null) setRoomStartedAt(Number(data.roomStartedAt));
                     if (data.roomElapsedMs != null) {
@@ -6102,7 +6274,11 @@ function MeetingPage({ portalRoomId }) {
                         const updatedUsers = data.users.map((u) => {
                             const participantId = u.connectionId != null ? String(u.connectionId) : String(u.userId);
                             const peerId = String(u.userId);
+                            const mediaEmailKey = getParticipantMediaEmailKey(u.userEmail || u.email || "");
                             const old = prevMap.get(participantId) || prevMap.get(peerId);
+                            const rememberedMediaState = getRememberedParticipantMediaState(peerId)
+                                || (u.connectionId != null ? getRememberedParticipantMediaState(String(u.connectionId)) : null)
+                                || getRememberedParticipantMediaState(mediaEmailKey);
 
                             // 🔥 서버에 다시 나타났으면 missing 기록 제거
                             missingSinceRef.current.delete(peerId);
@@ -6129,6 +6305,14 @@ function MeetingPage({ portalRoomId }) {
                             if (!isMe && currentStream && !isOfflineFromServer) {
                                 const hasLiveStream = currentStream.getVideoTracks().some(t => t.readyState === "live");
                                 if (hasLiveStream) {
+                                    const resolvedMuted = typeof u.muted === "boolean"
+                                        ? resolveRemoteMutedState(u.muted, old?.muted, rememberedMediaState?.muted)
+                                        : resolveRemoteMutedState(undefined, old?.muted, rememberedMediaState?.muted);
+                                    const resolvedCameraOff = typeof u.cameraOff === "boolean"
+                                        ? u.cameraOff
+                                        : (typeof old?.cameraOff === "boolean"
+                                            ? old.cameraOff
+                                            : (typeof rememberedMediaState?.cameraOff === "boolean" ? rememberedMediaState.cameraOff : true));
                                     // live stream이 있으면 재접속 상태로 표시하지 않고 스트림 유지
                                     // 🔥 핵심 수정: peerStreamsRef의 최신 스트림(currentStream) 직접 사용
                                     // 오디오 트랙이 포함된 스트림이 반영되도록 함
@@ -6139,8 +6323,8 @@ function MeetingPage({ portalRoomId }) {
                                         name: u.userName,
                                         joinAt: u.joinAt,
                                         isMe: false,
-                                        muted: typeof u.muted === "boolean" ? u.muted : (old?.muted ?? false),
-                                        cameraOff: typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true),
+                                        muted: resolvedMuted,
+                                        cameraOff: resolvedCameraOff,
                                         mutedByHost: !!u.mutedByHost || !!(old?.mutedByHost),
                                         cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
                                         faceEmoji: u.faceEmoji != null ? u.faceEmoji : (old?.faceEmoji ?? null),
@@ -6229,10 +6413,16 @@ function MeetingPage({ portalRoomId }) {
                                 // 값이 없으면 기존 값을 유지해야 아이콘 타일로 튀지 않음.
                                 muted: isMe
                                     ? selfState.muted
-                                    : (typeof u.muted === "boolean" ? u.muted : (old?.muted ?? false)),
+                                    : (typeof u.muted === "boolean"
+                                        ? resolveRemoteMutedState(u.muted, old?.muted, rememberedMediaState?.muted)
+                                        : resolveRemoteMutedState(undefined, old?.muted, rememberedMediaState?.muted)),
                                 cameraOff: isMe
                                     ? selfState.cameraOff
-                                    : (typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true)),
+                                    : (typeof u.cameraOff === "boolean"
+                                        ? u.cameraOff
+                                        : (typeof old?.cameraOff === "boolean"
+                                            ? old.cameraOff
+                                            : (typeof rememberedMediaState?.cameraOff === "boolean" ? rememberedMediaState.cameraOff : true))),
                                 mutedByHost: !!u.mutedByHost || !!(old?.mutedByHost),
                                 cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
                                 faceEmoji: u.faceEmoji != null ? u.faceEmoji : (old?.faceEmoji ?? null),
@@ -6429,6 +6619,25 @@ function MeetingPage({ portalRoomId }) {
                     const selfId = String(userIdRef.current ?? userId ?? "");
                     const isSelfStateChange = messageUserId === selfId;
                     const selfState = computeOutboundMediaState();
+                    if (data?.changes && (typeof data.changes.muted === "boolean" || typeof data.changes.cameraOff === "boolean")) {
+                        const matched = (participantsRef.current || []).find(
+                            (p) =>
+                                String(p.id) === messageUserId ||
+                                String(p.userId ?? "") === messageUserId
+                        );
+                        rememberParticipantMediaStateByKeys(
+                            [
+                                messageUserId,
+                                matched?.id != null ? String(matched.id) : "",
+                                matched?.userId != null ? String(matched.userId) : "",
+                                getParticipantMediaEmailKey(matched?.email || ""),
+                            ],
+                            {
+                            ...(typeof data.changes.muted === "boolean" ? { muted: data.changes.muted } : {}),
+                            ...(typeof data.changes.cameraOff === "boolean" ? { cameraOff: data.changes.cameraOff } : {}),
+                            }
+                        );
+                    }
 
                     // ✅ cameraOff=true가 명시되면, 상대방 UI는 반드시 "카메라 꺼짐(아바타 타일)"로 전환되어야 함.
                     // stream을 그대로 두면 마지막 프레임이 멈춘 채 남을 수 있으니 consumer/stream도 함께 정리한다.
@@ -6543,6 +6752,7 @@ function MeetingPage({ portalRoomId }) {
                 if (data.type === "FORCE_MUTE") {
                     const { targetUserId, hostName } = data;
                     console.log(`🔇 [FORCE_MUTE] ${hostName}님이 ${targetUserId}의 마이크를 껐습니다.`);
+                    rememberParticipantMediaState(targetUserId, { muted: true });
 
                     // 내가 대상이면 마이크 끄기 + 스스로 켤 수 없음 (로컬 저장으로 재접속 시에도 유지)
                     if (String(targetUserId) === String(userId)) {
@@ -6570,6 +6780,7 @@ function MeetingPage({ portalRoomId }) {
                 if (data.type === "FORCE_CAMERA_OFF") {
                     const { targetUserId, hostName } = data;
                     console.log(`📷 [FORCE_CAMERA_OFF] ${hostName}님이 ${targetUserId}의 카메라를 껐습니다.`);
+                    rememberParticipantMediaState(targetUserId, { cameraOff: true });
 
                     // 내가 대상이면 실제로 카메라 끄기(파이프라인/프로듀서 정리) + 스스로 켤 수 없음
                     // turnOffCamera()를 호출해야 나중에 사용자가 켤 때 첫 번째 시도에 정상 켜짐 (stale pipeline 방지)
@@ -6595,6 +6806,7 @@ function MeetingPage({ portalRoomId }) {
                 if (data.type === "FORCE_UNMUTE") {
                     const { targetUserId, hostName } = data;
                     console.log(`🔊 [FORCE_UNMUTE] ${hostName}님이 ${targetUserId}의 마이크를 켜 주었습니다.`);
+                    rememberParticipantMediaState(targetUserId, { muted: false });
 
                     setParticipants(prev =>
                         prev.map(p =>
@@ -6615,6 +6827,7 @@ function MeetingPage({ portalRoomId }) {
                 if (data.type === "FORCE_CAMERA_ON") {
                     const { targetUserId, hostName } = data;
                     console.log(`📷 [FORCE_CAMERA_ON] ${hostName}님이 ${targetUserId}의 카메라를 켜 주었습니다.`);
+                    rememberParticipantMediaState(targetUserId, { cameraOff: false });
 
                     // 참여자 목록은 먼저 갱신(방장이 켜기 허용 → cameraOffByHost 해제)
                     setParticipants(prev =>
@@ -6686,7 +6899,7 @@ function MeetingPage({ portalRoomId }) {
 
             wsRef.current = null;
         };
-    }, [roomId, subjectId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState]); // subjectId 포함 시 DB 저장용
+    }, [roomId, subjectId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState, rememberParticipantMediaState, rememberParticipantMediaStateByKeys, getRememberedParticipantMediaState]); // subjectId 포함 시 DB 저장용
 
     useEffect(() => {
         setParticipants((prev) =>
@@ -7327,6 +7540,26 @@ function MeetingPage({ portalRoomId }) {
     // participants 최신 상태를 ref로 추적 (interval 내부 접근용)
     const participantsRef = useRef(participants);
     useEffect(() => { participantsRef.current = participants; }, [participants]);
+
+    // 표시 중인 OFF 상태를 id/userId/email 키로 승격 저장 (새 connectionId에도 유지)
+    useEffect(() => {
+        for (const p of participants) {
+            if (!p || p.id == null) continue;
+            const promotedState = {};
+            if (p.muted === true) promotedState.muted = true;
+            if (p.cameraOff === true) promotedState.cameraOff = true;
+            if (!Object.keys(promotedState).length) continue;
+
+            rememberParticipantMediaStateByKeys(
+                [
+                    String(p.id),
+                    p.userId != null ? String(p.userId) : "",
+                    getParticipantMediaEmailKey(p.email || ""),
+                ],
+                promotedState
+            );
+        }
+    }, [participants, rememberParticipantMediaStateByKeys]);
 
     // 새로고침 직후 타일이 비지 않도록 참가자 스냅샷을 보존
     useEffect(() => {
