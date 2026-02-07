@@ -1,4 +1,4 @@
-import {
+﻿import {
     ChevronDown, ChevronUp, LayoutGrid, Loader2, Maximize, Minimize, MessageSquare, Mic, MicOff,
     Monitor, MoreHorizontal, PanelRightClose, PanelRightOpen, Phone, PictureInPicture2, Send, Share, Smile, Users, Video, VideoOff, X,
 } from "lucide-react";
@@ -1259,14 +1259,18 @@ function MeetingPage({ portalRoomId }) {
     useEffect(() => { camPermissionRef.current = camPermission; }, [camPermission]);
     useEffect(() => { isFilterPreparingRef.current = isFilterPreparing; }, [isFilterPreparing]);
 
-    // 권한 denied 시 서버에 상태 전송 → 다른 참가자에게도 마이크/카메라 off 아이콘 표시
+    const computeOutboundMediaState = useCallback(() => {
+        const muted = micPermissionRef.current !== "granted" || !micOnRef.current;
+        const cameraOff = camPermissionRef.current !== "granted" || !camOnRef.current;
+        return { muted, cameraOff };
+    }, []);
+
+    // 권한/장치 상태를 서버로 동기화해서 다른 참가자 off 아이콘을 유지
     useEffect(() => {
-        if (micPermission !== "denied" && camPermission !== "denied") return;
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
         const uid = userIdRef.current;
         if (!uid) return;
-        const muted = micPermission === "denied" || !micOnRef.current;
-        const cameraOff = camPermission === "denied" || !camOnRef.current;
+        const { muted, cameraOff } = computeOutboundMediaState();
         try {
             wsRef.current.send(JSON.stringify({
                 type: "USER_STATE_CHANGE",
@@ -1274,7 +1278,7 @@ function MeetingPage({ portalRoomId }) {
                 changes: { muted, cameraOff },
             }));
         } catch (_) { }
-    }, [micPermission, camPermission]);
+    }, [micPermission, camPermission, computeOutboundMediaState]);
 
     // 🔥 컴포넌트 마운트 시 저장된 필터 설정이 있으면 모델을 미리 로딩 (즉시 적용을 위해)
     useEffect(() => {
@@ -5879,12 +5883,13 @@ function MeetingPage({ portalRoomId }) {
             // ✅ 배경제거/이모지 상태도 서버에 전달 (입장 시 복원용)
             const initialFaceEmoji = faceEmojiRef.current || localStorage.getItem("faceEmoji") || "";
             const initialBgRemove = bgRemoveRef.current ?? (localStorage.getItem("faceBgRemove") === "true");
+            const { muted: initialMutedState, cameraOff: initialCameraOffState } = computeOutboundMediaState();
             const wsUrl = `${base}` +
                 `?userId=${encodeURIComponent(userId)}` +
                 `&userName=${encodeURIComponent(userName)}` +
                 `&userEmail=${encodeURIComponent(userEmail || "")}` +
-                `&muted=${!micOnRef.current}` +
-                `&cameraOff=${!camOnRef.current}` +
+                `&muted=${initialMutedState}` +
+                `&cameraOff=${initialCameraOffState}` +
                 `&isHost=${isHostLocal}` +
                 `&title=${encodeURIComponent(roomTitle || "")}` +
                 (subjectId ? `&subjectId=${encodeURIComponent(subjectId)}` : "") +
@@ -5906,8 +5911,7 @@ function MeetingPage({ portalRoomId }) {
                 const sendInitialState = () => {
                     if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
-                    const muted = !micOnRef.current || micPermissionRef.current === "denied";
-                    const cameraOff = !camOnRef.current || camPermissionRef.current === "denied";
+                    const { muted, cameraOff } = computeOutboundMediaState();
                     const faceEmojiState = faceEmojiRef.current || "";
                     const bgRemoveState = !!bgRemoveRef.current;
                     ws.send(JSON.stringify({
@@ -6623,7 +6627,7 @@ function MeetingPage({ portalRoomId }) {
 
             wsRef.current = null;
         };
-    }, [roomId, subjectId, userId, userName, userEmail, isHostLocal, roomTitle]); // subjectId 포함 시 DB 저장용
+    }, [roomId, subjectId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState]); // subjectId 포함 시 DB 저장용
 
     useEffect(() => {
         setParticipants((prev) =>

@@ -1,18 +1,3 @@
-// Frontend runtime backend URL helpers.
-// 목적:
-// - 개발(React dev server) / 운영(nginx 리버스 프록시) 환경을 분리해서 생각한다.
-// - 운영 환경에서는 nginx가 `/api`, `/ws`, `/sfu` 를 각각 Spring / SFU 로 프록시한다.
-// - 프론트에서는 IP/포트 하드코딩 없이 "현재 접속한 호스트"만 사용한다.
-//
-// ✅ 권장 구조
-// - 개발 환경: localhost:3000  → (setupProxy.js) →  localhost:8080(SPRING) / 4000(SFU)
-// - 운영 환경: 3.35.119.96:80 → (nginx)        →  localhost:8080(SPRING) / 4000(SFU)
-//
-// 따라서 프론트 기준 기본값은 다음과 같다.
-// - HTTP API:  /api/...
-// - WS       : ws(s)://{현재호스트}/ws/...
-// - SFU      : ws(s)://{현재호스트}/sfu/...
-
 export function getBackendOrigin() {
     const envOrigin = process.env.REACT_APP_BACKEND_ORIGIN;
     if (envOrigin && typeof envOrigin === "string") {
