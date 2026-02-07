@@ -2,7 +2,6 @@ FROM node:20
 
 WORKDIR /app
 
-# mediasoup 빌드 필수 패키지
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
