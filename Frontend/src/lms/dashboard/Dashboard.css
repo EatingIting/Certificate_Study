@@ -339,6 +339,26 @@
 
 .table-list.dashCalListTight { margin-top: 8px; }
 
+/* 월별 일정: 날짜 구간과 제목 시작점을 한 줄로 고정 정렬 */
+.dashCalListTight .trow {
+    padding: 10px 8px;
+}
+
+.dashCalListTight .tleft {
+    display: grid !important;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+}
+
+.dashCalListTight .month-range {
+    width: 96px;
+    min-width: 0;
+    display: block;
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+}
+
 .dashEmpty {
     padding: 10px;
     font-size: 13px;
