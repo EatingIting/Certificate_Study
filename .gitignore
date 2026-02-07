@@ -1,6 +1,11 @@
 .vscode/
 .idea/
 .env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
 .claude/
 node_modules/
 
