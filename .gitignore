@@ -10,3 +10,5 @@ Backend/src/main/resources/application.properties
 .env
 
 .env.example
+
+AGENTS.md
