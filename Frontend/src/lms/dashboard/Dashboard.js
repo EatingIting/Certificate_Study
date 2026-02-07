@@ -498,9 +498,7 @@ function Dashboard({ setActiveMenu }) {
         visibleEnd.setDate(visibleEnd.getDate() - 1);
 
         const fmt = (d) =>
-            `${String(d.getMonth() + 1).padStart(2, "0")}.${String(
-                d.getDate()
-            ).padStart(2, "0")}`;
+            `${d.getMonth() + 1}.${String(d.getDate()).padStart(2, "0")}`;
 
         if (fmt(visibleStart) === fmt(visibleEnd)) {
             return `[${fmt(visibleStart)}]`;
@@ -884,7 +882,7 @@ function Dashboard({ setActiveMenu }) {
                           {monthItems.map((it) => (
                               <li key={it.id} className="trow tinted">
                     <span className="tleft">
-                      <span className="round">
+                      <span className="round month-range">
                         {formatMonthRange(it)}
                       </span>
 
