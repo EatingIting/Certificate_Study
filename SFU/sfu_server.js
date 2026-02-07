@@ -11,8 +11,8 @@ import os from "os";
 import config from "./config.js";
 
 const SFU_PORT = 4000;
-const GRACE_MS = 15000; // 재접속 유예 (PiP/잠깐 끊김)
-const HEARTBEAT_INTERVAL_MS = 25000; // Nginx 등 프록시 유휴 끊김 방지 (60s 미만 권장)
+const GRACE_MS = 2500; // 재접속 유예 (PiP/잠깐 끊김)
+const HEARTBEAT_INTERVAL_MS = 8000; // Nginx 등 프록시 유휴 끊김 방지 (60s 미만 권장)
 
 // Spring ↔ SFU 시그널링은 VPC 내부만 사용 → HTTP/WS (TLS 불필요)
 
@@ -129,6 +129,30 @@ function cleanupPeer(room, peerId) {
   }
 }
 
+function broadcastPeerCount(room) {
+  if (!room) return;
+  broadcast(room, null, {
+    action: "peerCount",
+    data: { count: room.peers.size },
+  });
+}
+
+function finalizePeerLeft(room, peerId) {
+  if (!room?.peers?.has(peerId)) return false;
+
+  broadcast(room, peerId, {
+    action: "peerLeft",
+    data: { roomId: room.roomId, peerId },
+  });
+  cleanupPeer(room, peerId);
+
+  if (rooms.has(room.roomId)) {
+    const currentRoom = rooms.get(room.roomId);
+    broadcastPeerCount(currentRoom);
+  }
+  return true;
+}
+
 /** ws 끊김 시 유예 후 퇴장 (재접속 시 새 ws에도 close 핸들러 등록) */
 function handlePeerDisconnect(room, peerId) {
   const peer = room.peers.get(peerId);
@@ -147,18 +171,7 @@ function handlePeerDisconnect(room, peerId) {
     // 유예 동안 재연결되면 취소
     if (peer.ws && peer.ws.readyState === WebSocket.OPEN) return;
 
-    broadcast(room, peerId, {
-      action: "peerLeft",
-      data: { roomId: room.roomId, peerId },
-    });
-    cleanupPeer(room, peerId);
-    if (rooms.has(room.roomId)) {
-      const currentRoom = rooms.get(room.roomId);
-      broadcast(currentRoom, null, {
-        action: "peerCount",
-        data: { count: currentRoom.peers.size },
-      });
-    }
+    finalizePeerLeft(room, peerId);
   }, GRACE_MS);
 }
 
@@ -210,6 +223,30 @@ app.get("/metrics", (_, res) => {
     workers: workers.length,
   });
 });
+
+const handleLeaveRequest = (req, res) => {
+  const roomId = String(req.body?.roomId || req.query?.roomId || "").trim();
+  const peerId = String(req.body?.peerId || req.query?.peerId || "").trim();
+  if (!roomId || !peerId) {
+    return res.status(400).json({ ok: false, error: "roomId and peerId required" });
+  }
+
+  const room = rooms.get(roomId);
+  if (!room) return res.json({ ok: true, removed: false, reason: "room-not-found" });
+
+  const peer = room.peers.get(peerId);
+  if (!peer) return res.json({ ok: true, removed: false, reason: "peer-not-found" });
+
+  if (peer.pendingCloseTimer) {
+    clearTimeout(peer.pendingCloseTimer);
+    peer.pendingCloseTimer = null;
+  }
+
+  const removed = finalizePeerLeft(room, peerId);
+  return res.json({ ok: true, removed });
+};
+app.post("/leave", handleLeaveRequest);
+app.post("/sfu/leave", handleLeaveRequest);
 
 // Spring만 접근 (보안그룹에서 TCP 4000은 Spring EC2만 허용 권장)
 const httpServer = http.createServer(app);
@@ -318,11 +355,7 @@ wss.on("connection", (ws) => {
         };
 
         room.peers.set(newPeerId, peer);
-        const count = room.peers.size;
-        broadcast(room, null, {
-          action: "peerCount",
-          data: { count }
-        });
+        broadcastPeerCount(room);
 
         console.log("👤 [SFU] peer joined", { roomId, peerId: newPeerId, peerCount: room.peers.size });
 
@@ -433,6 +466,44 @@ wss.on("connection", (ws) => {
 
         await t.transport.connect({ dtlsParameters });
         reply({ connected: true });
+        return;
+      }
+
+      if (action === "leave") {
+        if (peer.pendingCloseTimer) {
+          clearTimeout(peer.pendingCloseTimer);
+          peer.pendingCloseTimer = null;
+        }
+
+        const leftPeerId = joinedPeerId;
+        const leftRoomId = joinedRoomId;
+        joinedPeerId = null;
+        joinedRoomId = null;
+
+        const left = finalizePeerLeft(room, leftPeerId);
+        console.log("[SFU] explicit leave", { roomId: leftRoomId, peerId: leftPeerId, left });
+        reply({ left });
+        return;
+      }
+
+      if (action === "restartIce") {
+        const { transportId } = data || {};
+        if (!transportId) throw new Error("transportId required");
+
+        const t = peer.transports.get(transportId);
+        if (!t) throw new Error("TRANSPORT_NOT_FOUND");
+
+        const iceParameters = await t.transport.restartIce();
+        console.log(`[transport] ICE restarted`, {
+          peerId: peer.peerId,
+          direction: t.direction,
+          transportId: t.transport.id,
+        });
+        reply({
+          transportId: t.transport.id,
+          direction: t.direction,
+          iceParameters,
+        });
         return;
       }
 

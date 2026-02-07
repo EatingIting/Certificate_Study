@@ -46,6 +46,76 @@ function getSfuWsUrl() {
     return `${protocol}://${host}${port}/sfu/`;
 }
 
+function getSfuLeaveBeaconUrl() {
+    const wsUrl = getSfuWsUrl();
+    const httpUrl = wsUrl.replace(/^ws/i, "http");
+    return `${httpUrl.replace(/\/$/, "")}/leave`;
+}
+
+function sendSfuLeaveBeacon(roomId, peerId) {
+    if (!roomId || !peerId) return false;
+    if (typeof navigator === "undefined" || typeof navigator.sendBeacon !== "function") return false;
+
+    try {
+        const body = JSON.stringify({ roomId, peerId });
+        const blob = new Blob([body], { type: "application/json" });
+        return navigator.sendBeacon(getSfuLeaveBeaconUrl(), blob);
+    } catch {
+        return false;
+    }
+}
+
+const PARTICIPANTS_SNAPSHOT_KEY_PREFIX = "meeting.participants.snapshot.";
+const PARTICIPANTS_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+
+function getParticipantsSnapshotKey(roomId) {
+    return `${PARTICIPANTS_SNAPSHOT_KEY_PREFIX}${roomId || ""}`;
+}
+
+function loadParticipantsSnapshot(roomId) {
+    if (!roomId) return [];
+    try {
+        const raw = sessionStorage.getItem(getParticipantsSnapshotKey(roomId));
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        const savedAt = Number(parsed?.savedAt || 0);
+        if (!savedAt || Date.now() - savedAt > PARTICIPANTS_SNAPSHOT_TTL_MS) {
+            sessionStorage.removeItem(getParticipantsSnapshotKey(roomId));
+            return [];
+        }
+        const list = Array.isArray(parsed?.participants) ? parsed.participants : [];
+        return list
+            .filter((p) => p && p.id != null)
+            .map((p) => ({
+                id: String(p.id),
+                userId: p.userId != null ? String(p.userId) : String(p.id),
+                name: p.name || "참여자",
+                email: p.email || "",
+                joinAt: Number(p.joinAt || Date.now()),
+                isMe: !!p.isMe,
+                isHost: !!p.isHost,
+                muted: !!p.muted,
+                cameraOff: !!p.cameraOff,
+                mutedByHost: !!p.mutedByHost,
+                cameraOffByHost: !!p.cameraOffByHost,
+                faceEmoji: p.faceEmoji ?? null,
+                bgRemove: !!p.bgRemove,
+                speaking: false,
+                reaction: null,
+                stream: null,
+                screenStream: null,
+                isScreenSharing: false,
+                isJoining: false,
+                isReconnecting: true,
+                isLoading: true,
+                reconnectStartedAt: Date.now(),
+                lastUpdate: Date.now(),
+            }));
+    } catch {
+        return [];
+    }
+}
+
 // --- Components ---
 
 // ✅ 공유 AudioContext (타일마다 새로 만들면 렉/리소스 증가)
@@ -562,10 +632,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
 
-    // 🔥 스트림이 실제로 live 상태인지 확인하여 재접속 스피너 표시 여부 결정
-    const hasLiveStream = stream && stream.getVideoTracks().some(t => t.readyState === "live");
-    // 스트림이 live 상태면 재접속 스피너를 표시하지 않음 (스트림이 정상 작동 중)
-    const shouldShowReconnecting = !safeUser.isMe && isReconnecting && !hasLiveStream;
+    // 서버/복원 스냅샷에서 재접속 상태면 자기 자신 포함 스피너 표시
+    const shouldShowReconnecting = isReconnecting;
 
     // pip 모드 여부 확인 (렌더링 시점)
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
@@ -831,10 +899,6 @@ function MeetingPage({ portalRoomId }) {
 
     // 👑 원래 방장(스터디장)의 userId 추적 (hostUserEmail 기반)
     const primaryHostUserIdRef = useRef(null);
-    // 👑 HOST_CHANGED 지연 적용용 ref
-    const pendingHostChangeRef = useRef(null);
-    const hostChangeTimerRef = useRef(null);
-
     const [micPermission, setMicPermission] = useState("prompt");
     const [camPermission, setCamPermission] = useState("prompt");
 
@@ -843,7 +907,7 @@ function MeetingPage({ portalRoomId }) {
 
     const [isSpeaking, setIsSpeaking] = useState(false);
 
-    const [participants, setParticipants] = useState([]);
+    const [participants, setParticipants] = useState(() => loadParticipantsSnapshot(roomId));
     const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
     const [streamVersion, setStreamVersion] = useState(0);
@@ -939,6 +1003,12 @@ function MeetingPage({ portalRoomId }) {
     const sfuDeviceRef = useRef(null);
     const sendTransportRef = useRef(null);
     const recvTransportRef = useRef(null);
+    const restartSendIceRef = useRef(async () => false);
+    const restartRecvIceRef = useRef(async () => false);
+    const transportIceRestartInFlightRef = useRef({ send: false, recv: false });
+    const transportIceRestartLastAtRef = useRef({ send: 0, recv: 0 });
+    const stalledVideoSinceRef = useRef(new Map());
+    const localSendStallSinceRef = useRef(0);
 
     const pendingProducersRef = useRef([]);
 
@@ -1241,6 +1311,7 @@ function MeetingPage({ portalRoomId }) {
     const [isScreenSharing, setIsScreenSharing] = useState(false);
 
     const isLeavingRef = useRef(false); // 통화종료 버튼으로 나가는 중인지 여부
+    const isPageUnloadRef = useRef(false); // 새로고침/탭 종료 등 하드 언로드 구분용
 
     // 전체화면 관련
     const mainStageRef = useRef(null);
@@ -1422,11 +1493,9 @@ function MeetingPage({ portalRoomId }) {
         userNickname ||
         userNameRef.current;
 
-    const hasAudioTrack = localStream?.getAudioTracks().length > 0;
-    // const hasVideoTrack = localStream?.getVideoTracks().length > 0;
-
-    const micMuted = !hasAudioTrack || !micOn;
-    const camMuted = !camOn;
+    const { muted: selfMutedState, cameraOff: selfCameraOffState } = computeOutboundMediaState();
+    const micMuted = selfMutedState;
+    const camMuted = selfCameraOffState;
 
     const micDisabled = micPermission !== "granted" || mutedByHostMe;
     const camDisabled = camPermission !== "granted" || cameraOffByHostMe;
@@ -1440,7 +1509,7 @@ function MeetingPage({ portalRoomId }) {
         id: userId,
         name: userName,
         muted: micMuted,
-        cameraOff: !camOn,
+        cameraOff: camMuted,
         speaking: isSpeaking,
         isMe: true,
         stream: localStream,
@@ -1462,12 +1531,13 @@ function MeetingPage({ portalRoomId }) {
     const userForTile = useCallback((u) => {
         if (!u) return u;
         if (!u.isMe) return u;
+        const { muted, cameraOff } = computeOutboundMediaState();
         return {
             ...u,
-            muted: u.muted || micPermission === "denied",
-            cameraOff: u.cameraOff || camPermission === "denied",
+            muted,
+            cameraOff,
         };
-    }, [micPermission, camPermission]);
+    }, [computeOutboundMediaState]);
 
     // ✅ mainStream 계산은 기존 로직(화면공유 포함)을 그대로 쓰시면 됩니다.
     // 여기서는 단순화해두었으니, 당신 원본의 mainStream 계산식으로 교체하세요.
@@ -2375,6 +2445,7 @@ function MeetingPage({ portalRoomId }) {
                 data: { roomId, peerId: userId },
             });
         } catch { }
+        try { sendSfuLeaveBeacon(roomId, userId); } catch { }
 
         // ✅ 3) 500ms 후 전체 정리 및 페이지 이동
         // (alert 이전에 정리 루프를 시작하지만, UI 블로킹 방지를 위해 setTimeout 사용)
@@ -2468,7 +2539,7 @@ function MeetingPage({ portalRoomId }) {
                 try { wsRef.current?.close(); } catch { }
                 wsRef.current = null;
 
-                try { sfuWsRef.current?.close(); } catch { }
+                closeSfuWsForLeave();
                 sfuWsRef.current = null;
 
                 // 상태 초기화
@@ -4110,6 +4181,20 @@ function MeetingPage({ portalRoomId }) {
         ws.send(JSON.stringify(obj));
     };
 
+    const closeSfuWsForLeave = useCallback(() => {
+        const ws = sfuWsRef.current;
+        if (!ws) return;
+        try {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.close(4001, "leave");
+            } else {
+                ws.close();
+            }
+        } catch {
+            try { ws.close(); } catch { }
+        }
+    }, []);
+
     // ✅ [수정] 참가자 생성 시 muted 초기값을 false로 변경 (마이크 꺼짐 아이콘 문제 해결)
     const ensureParticipant = (peerId) => {
         setParticipants((prev) => {
@@ -4989,6 +5074,12 @@ function MeetingPage({ portalRoomId }) {
                 return;
             }
 
+            // ✅ 새로고침/탭 종료 하드 언로드는 LEAVE를 보내지 않고 재접속 흐름으로 처리
+            if (isPageUnloadRef.current) {
+                console.log("[MeetingPage] page unload - skip explicit leave cleanup");
+                return;
+            }
+
             // 🔥 모집페이지 등으로 나갈 때 유예 없이 즉시 퇴장 — producer 먼저 끊어 상대 타일 즉시 제거
             isLeavingRef.current = true;
             try {
@@ -5010,8 +5101,9 @@ function MeetingPage({ portalRoomId }) {
                     data: { roomId, peerId: userId },
                 });
             } catch { }
+            try { sendSfuLeaveBeacon(roomId, userId); } catch { }
             try { wsRef.current?.close(); } catch { }
-            try { sfuWsRef.current?.close(); } catch { }
+            closeSfuWsForLeave();
 
             // 🔥 언마운트 시 얼굴 필터 정리 (PIP가 아닐 때만)
             stopFaceEmojiFilter().catch(() => { });
@@ -5081,7 +5173,7 @@ function MeetingPage({ portalRoomId }) {
             // ❗ 통화 종료 시에만 회의 상태 종료
             endMeeting();
         };
-    }, [endMeeting, stopFaceEmojiFilter, stopAvatarFilter, roomId, userId]);
+    }, [endMeeting, stopFaceEmojiFilter, stopAvatarFilter, roomId, userId, closeSfuWsForLeave]);
 
     useEffect(() => {
         const handler = () => {
@@ -5362,40 +5454,22 @@ function MeetingPage({ portalRoomId }) {
     }, []);
 
     useEffect(() => {
-        // ✅ 탭 닫기/브라우저 종료 시 유예 없이 즉시 퇴장 — producer 먼저 끊어 상대 타일 즉시 제거
-        const sendLeaveAndClose = () => {
-            isLeavingRef.current = true;
-            try {
-                producersRef.current.forEach((p) => {
-                    try { p.close(); } catch { }
-                    if (p.appData?.type) safeSfuSend({ action: "closeProducer", data: { producerId: p.id } });
-                });
-                producersRef.current.clear();
-            } catch { }
-            try {
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(JSON.stringify({ type: "LEAVE" }));
-                }
-            } catch { }
-            try {
-                safeSfuSend({
-                    action: "leave",
-                    requestId: safeUUID(),
-                    data: { roomId, peerId: userId },
-                });
-            } catch { }
+        // ✅ 새로고침/탭 종료는 "재접속 가능" 경로로 처리: 명시적 LEAVE 전송 금지
+        const markPageUnload = () => {
+            isPageUnloadRef.current = true;
+            isLeavingRef.current = false;
             try { wsRef.current?.close(); } catch { }
-            try { sfuWsRef.current?.close(); } catch { }
+            closeSfuWsForLeave();
         };
 
-        window.addEventListener("beforeunload", sendLeaveAndClose);
-        window.addEventListener("pagehide", sendLeaveAndClose);
+        window.addEventListener("beforeunload", markPageUnload);
+        window.addEventListener("pagehide", markPageUnload);
 
         return () => {
-            window.removeEventListener("beforeunload", sendLeaveAndClose);
-            window.removeEventListener("pagehide", sendLeaveAndClose);
+            window.removeEventListener("beforeunload", markPageUnload);
+            window.removeEventListener("pagehide", markPageUnload);
         };
-    }, [roomId, userId]);
+    }, [closeSfuWsForLeave]);
 
     // 🔥 헤더 등에서 "모임 목록" 등 클릭 시: 퇴장(WS/SFU 즉시 끊기) 후 해당 경로로 이동 → 상대방 화면에서 내 타일 즉시 제거
     useEffect(() => {
@@ -5419,8 +5493,9 @@ function MeetingPage({ portalRoomId }) {
             try {
                 safeSfuSend({ action: "leave", requestId: safeUUID(), data: { roomId, peerId: userId } });
             } catch { }
+            try { sendSfuLeaveBeacon(roomId, userId); } catch { }
             try { wsRef.current?.close(); } catch { }
-            try { sfuWsRef.current?.close(); } catch { }
+            closeSfuWsForLeave();
             wsRef.current = null;
             sfuWsRef.current = null;
 
@@ -5489,7 +5564,7 @@ function MeetingPage({ portalRoomId }) {
 
         window.addEventListener("meeting:leave-and-navigate", handleLeaveAndNavigate);
         return () => window.removeEventListener("meeting:leave-and-navigate", handleLeaveAndNavigate);
-    }, [roomId, userId, navigate, endMeeting]);
+    }, [roomId, userId, navigate, endMeeting, closeSfuWsForLeave]);
 
     // 🔥 커스텀 PIP에서 나가기 이벤트 처리
     useEffect(() => {
@@ -5540,6 +5615,7 @@ function MeetingPage({ portalRoomId }) {
                     data: { roomId, peerId: userId },
                 });
             } catch { }
+            try { sendSfuLeaveBeacon(roomId, userId); } catch { }
 
             // ✅ pip 세션 키 제거
             try { sessionStorage.removeItem("pip.roomId"); } catch { }
@@ -5613,7 +5689,7 @@ function MeetingPage({ portalRoomId }) {
                     try { wsRef.current?.close(); } catch { }
                     wsRef.current = null;
 
-                    try { sfuWsRef.current?.close(); } catch { }
+                    closeSfuWsForLeave();
                     sfuWsRef.current = null;
 
                     try { sendTransportRef.current?.close(); } catch { }
@@ -5637,7 +5713,7 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             window.removeEventListener("meeting:leave-from-pip", handleLeaveFromPip);
         };
-    }, [roomId, userId]);
+    }, [roomId, userId, closeSfuWsForLeave]);
 
     /* useEffect(() => {
         const video = mainVideoRef.current;
@@ -6015,6 +6091,7 @@ function MeetingPage({ portalRoomId }) {
                         setElapsedTimeDisplay([h, m, s].map((n) => String(n).padStart(2, "0")).join(":"));
                     }
                     setParticipants((prev) => {
+                        const selfState = computeOutboundMediaState();
                         const prevMap = new Map(prev.map((p) => [String(p.id), p]));
                         // connectionId 있으면 참가자 고유 id로 사용 (동일 userId가 둘 이상일 때 타일 구분)
                         const newServerIds = new Set(data.users.map((u) => {
@@ -6151,10 +6228,10 @@ function MeetingPage({ portalRoomId }) {
                                 // ✅ 서버가 muted/cameraOff를 "항상" 내려주지 않는 경우가 있어,
                                 // 값이 없으면 기존 값을 유지해야 아이콘 타일로 튀지 않음.
                                 muted: isMe
-                                    ? !micOnRef.current
+                                    ? selfState.muted
                                     : (typeof u.muted === "boolean" ? u.muted : (old?.muted ?? false)),
                                 cameraOff: isMe
-                                    ? !camOnRef.current
+                                    ? selfState.cameraOff
                                     : (typeof u.cameraOff === "boolean" ? u.cameraOff : (old?.cameraOff ?? true)),
                                 mutedByHost: !!u.mutedByHost || !!(old?.mutedByHost),
                                 cameraOffByHost: !!u.cameraOffByHost || !!(old?.cameraOffByHost),
@@ -6215,8 +6292,12 @@ function MeetingPage({ portalRoomId }) {
                             // 서버에 있으면 당연히 유지 (updatedUsers에서 처리됨)
                             if (newServerIds.has(peerId)) return false;
 
-                            // 나는 절대 제거 안 함
-                            if (p.isMe) return true;
+                            // 나는 절대 즉시 제거하지 않되, 서버 목록에 있는 "현재 나"만 유지
+                            if (p.isMe) {
+                                const pid = String(p.id);
+                                const uid = String(p.userId ?? p.id);
+                                return newServerIds.has(pid) || newServerIds.has(uid);
+                            }
 
                             // 🔥 최우선 보호 규칙: live stream이 있으면 무조건 유지 (PIP 모드 전환 시 깜빡임 방지)
                             const hasLiveStream = p.stream && p.stream.getVideoTracks().some(t => t.readyState === "live");
@@ -6343,17 +6424,23 @@ function MeetingPage({ portalRoomId }) {
 
                 if (data.type === "USER_STATE_CHANGE") {
                     // console.log(`[WS] USER_STATE_CHANGE received:`, data.userId, data.changes);
+                    const messageUserId = String(data.userId ?? "");
+                    if (!messageUserId) return;
+                    const selfId = String(userIdRef.current ?? userId ?? "");
+                    const isSelfStateChange = messageUserId === selfId;
+                    const selfState = computeOutboundMediaState();
+
                     // ✅ cameraOff=true가 명시되면, 상대방 UI는 반드시 "카메라 꺼짐(아바타 타일)"로 전환되어야 함.
                     // stream을 그대로 두면 마지막 프레임이 멈춘 채 남을 수 있으니 consumer/stream도 함께 정리한다.
                     try {
-                        if (data?.changes && data.changes.cameraOff === true) {
-                            removeVideoConsumer(String(data.userId));
+                        if (!isSelfStateChange && data?.changes && data.changes.cameraOff === true) {
+                            removeVideoConsumer(messageUserId);
 
                             // ✅ PiP에서 "카메라 OFF"를 정확히 감지하기 위해 전역 이벤트 발행
                             // (DOM/트랙 기반 판정은 초기 진입 시 레이스로 오판 가능)
                             try {
                                 window.dispatchEvent(new CustomEvent("meeting:peer-camera-off", {
-                                    detail: { peerId: String(data.userId) }
+                                    detail: { peerId: messageUserId }
                                 }));
                             } catch { }
                         }
@@ -6361,7 +6448,7 @@ function MeetingPage({ portalRoomId }) {
 
                     setParticipants((prev) =>
                         prev.map((p) => {
-                            if (String(p.id) === String(data.userId)) {
+                            if (String(p.id) === messageUserId || String(p.userId ?? "") === messageUserId) {
                                 // console.log(`[WS] Updating participant ${p.name} with changes:`, data.changes);
                                 // ✅ 스트림 관련 필드는 절대 덮어쓰지 않음 (서버가 모르는 정보)
                                 const safeChanges = { ...data.changes };
@@ -6369,6 +6456,14 @@ function MeetingPage({ portalRoomId }) {
                                 delete safeChanges.screenStream;
                                 delete safeChanges.isScreenSharing;
                                 delete safeChanges.reaction;
+                                if (p.isMe || isSelfStateChange) {
+                                    if (Object.prototype.hasOwnProperty.call(safeChanges, "muted")) {
+                                        safeChanges.muted = selfState.muted;
+                                    }
+                                    if (Object.prototype.hasOwnProperty.call(safeChanges, "cameraOff")) {
+                                        safeChanges.cameraOff = selfState.cameraOff;
+                                    }
+                                }
                                 return { ...p, ...safeChanges };
                             }
                             return p;
@@ -6413,68 +6508,32 @@ function MeetingPage({ portalRoomId }) {
                     const { newHostUserId, newHostUserName } = data;
                     console.log(`👑 [HOST_CHANGED] 새 방장: ${newHostUserName} (${newHostUserId})`);
 
-                    const primaryHostId = primaryHostUserIdRef.current ? String(primaryHostUserIdRef.current) : null;
                     const targetId = String(newHostUserId);
-
-                    // ✅ 1) 원래 방장(스터디장)에게 권한이 돌아가는 경우 → 즉시 반영
-                    if (primaryHostId && targetId === primaryHostId) {
-                        if (hostChangeTimerRef.current) {
-                            clearTimeout(hostChangeTimerRef.current);
-                            hostChangeTimerRef.current = null;
-                        }
-                        pendingHostChangeRef.current = null;
-
-                        setParticipants(prev =>
-                            prev.map(p => ({
-                                ...p,
-                                isHost: String(p.id) === targetId
-                            }))
+                    const primaryHostId = primaryHostUserIdRef.current ? String(primaryHostUserIdRef.current) : null;
+                    const primaryHostReconnecting =
+                        !!primaryHostId &&
+                        participantsRef.current.some(
+                            (p) =>
+                                (String(p.userId ?? p.id) === primaryHostId || String(p.id) === primaryHostId) &&
+                                !!p.isReconnecting
                         );
-                        setToastMessage(`${newHostUserName}님이 방장이 되었습니다.`);
+
+                    // HOST_CHANGED는 서버 확정 이벤트로 간주하고 즉시 반영
+                    setParticipants((prev) =>
+                        prev.map((p) => ({
+                            ...p,
+                            isHost:
+                                String(p.id) === targetId ||
+                                String(p.userId ?? "") === targetId,
+                        }))
+                    );
+                    // 원래 방장이 새로고침으로 재접속 중이면 위임 Toast를 띄우지 않는다.
+                    const suppressToastByPrimaryHostRefresh =
+                        !!primaryHostId && targetId !== primaryHostId && primaryHostReconnecting;
+                    if (!suppressToastByPrimaryHostRefresh) {
+                        setToastMessage(`${newHostUserName}님에게 방장 권한이 위임되었습니다.`);
                         setShowToast(true);
-                        return;
                     }
-
-                    // ✅ 2) 원래 방장이 아닌 사람에게 임시 방장을 넘기는 경우
-                    //    → "원래 방장이 정말 나간 것인지" 5초 동안 지켜본 뒤에만 적용
-                    pendingHostChangeRef.current = { newHostUserId: targetId, newHostUserName };
-
-                    if (hostChangeTimerRef.current) {
-                        clearTimeout(hostChangeTimerRef.current);
-                        hostChangeTimerRef.current = null;
-                    }
-
-                    hostChangeTimerRef.current = setTimeout(() => {
-                        hostChangeTimerRef.current = null;
-
-                        const primaryId = primaryHostUserIdRef.current ? String(primaryHostUserIdRef.current) : null;
-                        const pending = pendingHostChangeRef.current;
-                        if (!pending) return;
-
-                        // 🔍 아직도 원래 방장이 참가자 목록에 없는 경우에만 임시 방장 적용
-                        const hostStillAbsent = !primaryId || !participantsRef.current.some(
-                            (p) => String(p.userId ?? p.id) === primaryId
-                        );
-
-                        if (!hostStillAbsent) {
-                            // 원래 방장이 돌아왔으면 임시 방장 적용 취소
-                            pendingHostChangeRef.current = null;
-                            return;
-                        }
-
-                        const { newHostUserId: finalHostId, newHostUserName: finalHostName } = pending;
-                        pendingHostChangeRef.current = null;
-
-                        setParticipants(prev =>
-                            prev.map(p => ({
-                                ...p,
-                                isHost: String(p.id) === String(finalHostId)
-                            }))
-                        );
-                        setToastMessage(`${finalHostName}님이 방장이 되었습니다.`);
-                        setShowToast(true);
-                    }, 5000);
-
                     return;
                 }
 
@@ -6661,6 +6720,12 @@ function MeetingPage({ portalRoomId }) {
 
             sendTransportRef.current = null;
             recvTransportRef.current = null;
+            restartSendIceRef.current = async () => false;
+            restartRecvIceRef.current = async () => false;
+            transportIceRestartInFlightRef.current = { send: false, recv: false };
+            transportIceRestartLastAtRef.current = { send: 0, recv: 0 };
+            stalledVideoSinceRef.current.clear();
+            localSendStallSinceRef.current = 0;
             setRecvTransportReady(false);
             sfuDeviceRef.current = null;
         };
@@ -6708,6 +6773,110 @@ function MeetingPage({ portalRoomId }) {
             for (const p of uniq.values()) {
                 await consumeProducer(p.producerId, p.peerId, p.appData);
             }
+        };
+
+        const requestTransportIceRestart = async (transport, direction, reason = "unknown") => {
+            if (!transport || transport.closed) return false;
+            if (!sfuWsRef.current || sfuWsRef.current.readyState !== WebSocket.OPEN) return false;
+
+            const inFlight = transportIceRestartInFlightRef.current[direction];
+            if (inFlight) return false;
+
+            const now = Date.now();
+            const lastAt = transportIceRestartLastAtRef.current[direction] || 0;
+            if (now - lastAt < 5000) return false;
+
+            transportIceRestartInFlightRef.current[direction] = true;
+            const reqId = safeUUID();
+
+            return await new Promise((resolve) => {
+                let settled = false;
+                const cleanup = () => {
+                    if (settled) return;
+                    settled = true;
+                    transportIceRestartInFlightRef.current[direction] = false;
+                    try { sfuWs.removeEventListener("message", onMessage); } catch { }
+                    clearTimeout(timeoutId);
+                };
+
+                const finish = (ok) => {
+                    cleanup();
+                    if (ok) {
+                        transportIceRestartLastAtRef.current[direction] = Date.now();
+                    }
+                    resolve(ok);
+                };
+
+                const onMessage = async (e) => {
+                    let m = null;
+                    try { m = JSON.parse(e.data); } catch { return; }
+                    if (m.requestId !== reqId) return;
+
+                    if (m.action === "restartIce:response") {
+                        try {
+                            const iceParameters = m?.data?.iceParameters;
+                            if (!iceParameters) throw new Error("restartIce: missing iceParameters");
+                            await transport.restartIce({ iceParameters });
+                            console.log(`[transport:${direction}] ICE restart applied (${reason})`);
+                            finish(true);
+                            return;
+                        } catch (err) {
+                            console.error(`[transport:${direction}] ICE restart apply failed`, err);
+                            finish(false);
+                            return;
+                        }
+                    }
+
+                    if (m.action === "restartIce:error") {
+                        console.error(`[transport:${direction}] ICE restart request failed`, m.error);
+                        finish(false);
+                    }
+                };
+
+                const timeoutId = setTimeout(() => {
+                    console.warn(`[transport:${direction}] ICE restart timeout (${reason})`);
+                    finish(false);
+                }, 7000);
+
+                try { sfuWs.addEventListener("message", onMessage); } catch { }
+
+                safeSfuSend({
+                    action: "restartIce",
+                    requestId: reqId,
+                    data: { transportId: transport.id },
+                });
+            });
+        };
+
+        const bindTransportRecovery = (transport, direction) => {
+            if (!transport) return;
+
+            const runRestart = async (reason) => {
+                const ok = await requestTransportIceRestart(transport, direction, reason);
+                if (ok) return true;
+                if (isLeavingRef.current) return false;
+                // ICE restart도 실패하면 기존 재연결 경로로 폴백
+                try { sfuWsRef.current?.close(); } catch { }
+                return false;
+            };
+
+            if (direction === "send") {
+                restartSendIceRef.current = runRestart;
+            } else if (direction === "recv") {
+                restartRecvIceRef.current = runRestart;
+            }
+
+            transport.on("connectionstatechange", (state) => {
+                console.log(`[transport:${direction}] connectionstate=${state}`);
+                if (state === "connected") return;
+                if (state === "disconnected" || state === "failed") {
+                    runRestart(`connectionstate:${state}`).catch(() => { });
+                    return;
+                }
+                if (state === "closed" && !isLeavingRef.current) {
+                    try { sfuWsRef.current?.close(); } catch { }
+                }
+            });
         };
 
         sfuWs.onopen = () => {
@@ -6768,6 +6937,7 @@ function MeetingPage({ portalRoomId }) {
 
                 if (direction === "send") {
                     const sendTransport = device.createSendTransport(transportOptions);
+                    bindTransportRecovery(sendTransport, "send");
 
                     // ⭐ TURN 강제 주입 (mediasoup Transport 생성 후 PC config 고정이므로 setConfiguration 필요)
                     if (sendTransport?._handler?._pc) {
@@ -6856,6 +7026,7 @@ function MeetingPage({ portalRoomId }) {
 
                 if (direction === "recv") {
                     const recvTransport = device.createRecvTransport(transportOptions);
+                    bindTransportRecovery(recvTransport, "recv");
 
                     // ⭐ TURN 강제 주입 (mediasoup Transport 생성 후 PC config 고정이므로 setConfiguration 필요)
                     if (recvTransport?._handler?._pc) {
@@ -7008,6 +7179,10 @@ function MeetingPage({ portalRoomId }) {
                 try { a.srcObject = null; } catch { }
             });
             audioElsRef.current.clear();
+            restartSendIceRef.current = async () => false;
+            restartRecvIceRef.current = async () => false;
+            transportIceRestartInFlightRef.current = { send: false, recv: false };
+            localSendStallSinceRef.current = 0;
             // 통화 중 끊김(프록시/네트워크) 시 재연결 시도 → 검은화면 복구
             if (!isLeavingRef.current) {
                 setRoomReconnecting(true);
@@ -7031,6 +7206,7 @@ function MeetingPage({ portalRoomId }) {
                     data: { roomId, peerId: userId },
                 });
             } catch { }
+            try { sendSfuLeaveBeacon(roomId, userId); } catch { }
 
             producersRef.current.forEach((p) => safeClose(p));
             consumersRef.current.forEach((c) => safeClose(c));
@@ -7038,10 +7214,10 @@ function MeetingPage({ portalRoomId }) {
             producersRef.current.clear();
             consumersRef.current.clear();
 
-            try { sfuWsRef.current?.close(); } catch { }
+            closeSfuWsForLeave();
             sfuWsRef.current = null;
         };
-    }, [roomId, userId, sfuReconnectKey]); // sfuReconnectKey: SFU 끊김 시 재연결
+    }, [roomId, userId, sfuReconnectKey, closeSfuWsForLeave]); // sfuReconnectKey: SFU 끊김 시 재연결
 
     useEffect(() => {
         // 로컬스토리지에 저장 (재접속/새로고침 시 복원)
@@ -7151,6 +7327,132 @@ function MeetingPage({ portalRoomId }) {
     // participants 최신 상태를 ref로 추적 (interval 내부 접근용)
     const participantsRef = useRef(participants);
     useEffect(() => { participantsRef.current = participants; }, [participants]);
+
+    // 새로고침 직후 타일이 비지 않도록 참가자 스냅샷을 보존
+    useEffect(() => {
+        if (!roomId) return;
+        try {
+            const serializable = participants
+                .filter((p) => p && p.id != null)
+                .map((p) => ({
+                    id: String(p.id),
+                    userId: p.userId != null ? String(p.userId) : String(p.id),
+                    name: p.name || "참여자",
+                    email: p.email || "",
+                    joinAt: Number(p.joinAt || Date.now()),
+                    isMe: !!p.isMe,
+                    isHost: !!p.isHost,
+                    muted: !!p.muted,
+                    cameraOff: !!p.cameraOff,
+                    mutedByHost: !!p.mutedByHost,
+                    cameraOffByHost: !!p.cameraOffByHost,
+                    faceEmoji: p.faceEmoji ?? null,
+                    bgRemove: !!p.bgRemove,
+                }));
+            if (serializable.length === 0) return;
+            sessionStorage.setItem(
+                getParticipantsSnapshotKey(roomId),
+                JSON.stringify({
+                    savedAt: Date.now(),
+                    participants: serializable,
+                })
+            );
+        } catch { }
+    }, [participants, roomId]);
+
+    // 간헐적 장시간 끊김(검은 타일) 감지: 카메라 ON인데 영상 트랙이 오래 비어 있으면 recv ICE restart
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            if (isLeavingRef.current) return;
+            if (!sfuWsRef.current || sfuWsRef.current.readyState !== WebSocket.OPEN) return;
+
+            const now = Date.now();
+            const peers = participantsRef.current || [];
+            const activePeerKeys = new Set();
+            let stalledCount = 0;
+
+            for (const p of peers) {
+                if (!p || p.isMe) continue;
+                const key = String(p.userId ?? p.id);
+                activePeerKeys.add(key);
+
+                if (p.cameraOff || p.isReconnecting || p.isLoading) {
+                    stalledVideoSinceRef.current.delete(key);
+                    continue;
+                }
+
+                const hasLiveVideo = !!p.stream?.getVideoTracks?.().some((t) => t.readyState === "live");
+                if (hasLiveVideo) {
+                    stalledVideoSinceRef.current.delete(key);
+                    continue;
+                }
+
+                if (!stalledVideoSinceRef.current.has(key)) {
+                    stalledVideoSinceRef.current.set(key, now);
+                    continue;
+                }
+
+                const stalledFor = now - (stalledVideoSinceRef.current.get(key) || now);
+                if (stalledFor >= 10000) stalledCount += 1;
+            }
+
+            for (const key of [...stalledVideoSinceRef.current.keys()]) {
+                if (!activePeerKeys.has(key)) stalledVideoSinceRef.current.delete(key);
+            }
+
+            if (stalledCount > 0) {
+                restartRecvIceRef.current?.(`video-stall:${stalledCount}`).catch(() => { });
+            }
+        }, 3000);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
+    // 송신 측 헬스체크: 로컬 카메라/마이크 ON 상태인데 producer가 오래 비정상일 때 send ICE restart
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            if (isLeavingRef.current) return;
+            if (!sfuWsRef.current || sfuWsRef.current.readyState !== WebSocket.OPEN) return;
+            if (!sendTransportRef.current || sendTransportRef.current.closed) return;
+
+            const needAudio = micOnRef.current && micPermissionRef.current === "granted";
+            const needVideo = camOnRef.current && camPermissionRef.current === "granted";
+
+            const audioProducer = producersRef.current.get("audio");
+            const cameraProducer = producersRef.current.get("camera");
+
+            const audioHealthy = !needAudio || !!(
+                audioProducer &&
+                !audioProducer.closed &&
+                audioProducer.track &&
+                audioProducer.track.readyState === "live"
+            );
+            const videoHealthy = !needVideo || !!(
+                cameraProducer &&
+                !cameraProducer.closed &&
+                cameraProducer.track &&
+                cameraProducer.track.readyState === "live"
+            );
+
+            if (audioHealthy && videoHealthy) {
+                localSendStallSinceRef.current = 0;
+                return;
+            }
+
+            if (!localSendStallSinceRef.current) {
+                localSendStallSinceRef.current = Date.now();
+                return;
+            }
+
+            if (Date.now() - localSendStallSinceRef.current < 10000) return;
+            localSendStallSinceRef.current = Date.now();
+
+            ensureLocalProducers();
+            restartSendIceRef.current?.("local-producer-stall").catch(() => { });
+        }, 3000);
+
+        return () => clearInterval(intervalId);
+    }, []);
 
     // ✅ 중앙 집중식 오디오 모니터링 (VideoTile 개별 분석 대신 통합 관리)
     useEffect(() => {
