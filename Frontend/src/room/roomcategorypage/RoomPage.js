@@ -10,6 +10,7 @@ const RoomPage = () => {
     const navigate = useNavigate();
     const [rooms, setRooms] = useState([]);
     const [categories, setCategories] = useState([]);
+    const [joinedRoomIds, setJoinedRoomIds] = useState([]);
 
     const [keyword, setKeyword] = useState("");
     const [cat, setCat] = useState("전체");
@@ -23,6 +24,7 @@ const RoomPage = () => {
     useEffect(() => {
         fetchRooms();
         fetchCategories();
+        fetchJoinedStudies();
     }, []);
 
     useEffect(() => {
@@ -57,6 +59,27 @@ const RoomPage = () => {
     const fetchCategories = async () => {
         const res = await api.get("/category");
         setCategories(res.data);
+    };
+
+    const fetchJoinedStudies = async () => {
+        const token = sessionStorage.getItem("accessToken");
+        if (!token) {
+            setJoinedRoomIds([]);
+            return;
+        }
+
+        try {
+            const res = await api.get("/mypage/me/studies/joined", {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            const ids = [...new Set((res.data || []).map((s) => s.roomId).filter(Boolean))];
+            setJoinedRoomIds(ids);
+        } catch (e) {
+            setJoinedRoomIds([]);
+        }
     };
 
     const CATEGORY = useMemo(() => {
@@ -112,6 +135,11 @@ const RoomPage = () => {
     const filtered = useMemo(() => {
         let list = [...rooms];
 
+        if (joinedRoomIds.length > 0) {
+            const joinedSet = new Set(joinedRoomIds);
+            list = list.filter((r) => !joinedSet.has(r.roomId));
+        }
+
         if (keyword.trim()) {
             const k = keyword.toLowerCase();
             list = list.filter(
@@ -163,7 +191,7 @@ const RoomPage = () => {
         }
 
         return list;
-    }, [rooms, keyword, cat, mid, sub, categories]);
+    }, [rooms, keyword, cat, mid, sub, categories, joinedRoomIds]);
 
     const pageSize = 8;
     const totalPage = Math.max(1, Math.ceil(filtered.length / pageSize));
