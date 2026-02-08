@@ -191,6 +191,24 @@ function BoardDetail() {
         setComments(Array.isArray(list) ? list : []);
     };
 
+    useEffect(() => {
+        if (!postId) return;
+
+        let onCommentNotificationOpen = (event) => {
+            let targetPostId = String(event?.detail?.postId || "").trim();
+            if (!targetPostId) return;
+            if (targetPostId !== String(postId)) return;
+
+            setCommentsOpen(true);
+            reloadComments().catch(() => {});
+        };
+
+        window.addEventListener("lms:board-comment-notification", onCommentNotificationOpen);
+        return () => {
+            window.removeEventListener("lms:board-comment-notification", onCommentNotificationOpen);
+        };
+    }, [postId]);
+
     let onCreateComment = async () => {
         let text = newComment.trim();
         if (!text) return;

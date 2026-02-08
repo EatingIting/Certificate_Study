@@ -1,6 +1,6 @@
 import "./LMSHeader.css";
 import { Bell, MessageCircle, User, Users, Star } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useLMS } from "./LMSContext";
 import { useMeeting } from "../webrtc/MeetingContext";
 import { useEffect, useState, useRef } from "react";
@@ -210,6 +210,7 @@ export default function Header() {
     const { displayName, loading, roomTitle, roomLoading, user, room } = useLMS();
     const { isInMeeting } = useMeeting();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const isHost =
         !!(
@@ -310,6 +311,21 @@ export default function Header() {
         setOpenDropdown(false);
 
         const targetRoomId = notif.roomId || pickId(room?.roomId);
+        const commentPostId = pickId(notif.postId);
+
+        if (notif.type === "COMMENT" && targetRoomId && commentPostId) {
+            const targetPath = `/lms/${targetRoomId}/board/${commentPostId}`;
+            window.dispatchEvent(
+                new CustomEvent("lms:board-comment-notification", {
+                    detail: { roomId: String(targetRoomId), postId: String(commentPostId) },
+                })
+            );
+
+            if (location.pathname !== targetPath) {
+                navigate(targetPath);
+            }
+            return;
+        }
 
         if (notif.type === "ASSIGNMENT" && targetRoomId && notif.assignmentId) {
             navigate(`/lms/${targetRoomId}/assignment/${notif.assignmentId}`);
@@ -324,10 +340,6 @@ export default function Header() {
         if (!targetRoomId) return;
 
         if (notif.type === "COMMENT") {
-            if (notif.postId) {
-                navigate(`/lms/${targetRoomId}/board/${notif.postId}`);
-                return;
-            }
             navigate(`/lms/${targetRoomId}/board`);
             return;
         }
