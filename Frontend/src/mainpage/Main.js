@@ -1,9 +1,9 @@
-import "./Main.css";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { toBackendUrl } from "../utils/backendUrl";
-import heroImg from "./메인메인.png";
+import heroImg from "./Hero-Main.png";
+import "./Main.css";
 import sampleImg from "./sample.jpg";
 
 function Main() {

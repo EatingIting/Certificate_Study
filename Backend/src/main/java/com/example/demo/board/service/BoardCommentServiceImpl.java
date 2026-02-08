@@ -6,9 +6,12 @@ import com.example.demo.board.mapper.BoardPostMapper;
 import com.example.demo.board.vo.BoardCommentVO;
 import com.example.demo.로그인.service.AuthService;
 import com.example.demo.로그인.vo.AuthVO;
+import com.example.demo.모집.handler.NotificationWebSocketHandler;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class BoardCommentServiceImpl implements BoardCommentService {
@@ -17,17 +20,20 @@ public class BoardCommentServiceImpl implements BoardCommentService {
     private final BoardPostMapper boardPostMapper;
     private final AuthService authService;
     private final CommentNotificationWebSocketHandler commentHandler;
+    private final NotificationWebSocketHandler notificationHandler;
 
     public BoardCommentServiceImpl(
             BoardCommentMapper boardCommentMapper,
             BoardPostMapper boardPostMapper,
             AuthService authService,
-            CommentNotificationWebSocketHandler commentHandler
+            CommentNotificationWebSocketHandler commentHandler,
+            NotificationWebSocketHandler notificationHandler
     ) {
         this.boardCommentMapper = boardCommentMapper;
         this.boardPostMapper = boardPostMapper;
         this.authService = authService;
         this.commentHandler = commentHandler;
+        this.notificationHandler = notificationHandler;
     }
 
     private String resolveUserIdByEmail(String email) {
@@ -38,6 +44,10 @@ public class BoardCommentServiceImpl implements BoardCommentService {
         }
 
         return user.getUserId();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     @Override
@@ -73,19 +83,43 @@ public class BoardCommentServiceImpl implements BoardCommentService {
         System.out.println("게시글 roomId = " + roomId);
         System.out.println("게시글 제목 postTitle = " + postTitle);
 
-        if (writerId != null && !writerId.equals(commenterId)) {
+        Set<String> recipientIds = new LinkedHashSet<>();
+        if (hasText(writerId) && !writerId.equals(commenterId)) {
+            recipientIds.add(writerId);
+        }
 
-            System.out.println("댓글 알림 전송 시도 → writerId = " + writerId);
+        if (comment.getParentId() != null) {
+            BoardCommentVO parentComment = boardCommentMapper.selectByCommentId(comment.getParentId());
+            boolean samePostParent =
+                    parentComment != null
+                            && parentComment.getPostId() != null
+                            && parentComment.getPostId().equals(comment.getPostId());
+            if (samePostParent) {
+                String parentWriterId = parentComment.getUserId();
+                if (hasText(parentWriterId) && !parentWriterId.equals(commenterId)) {
+                    recipientIds.add(parentWriterId);
+                }
+            }
+        }
+
+        for (String recipientId : recipientIds) {
+            System.out.println("댓글 알림 전송 시도 → userId = " + recipientId);
 
             commentHandler.sendCommentNotification(
-                    writerId,
+                    recipientId,
                     roomId,
                     comment.getPostId(),
                     postTitle,
                     comment.getContent()
             );
 
-            System.out.println("sendCommentNotification 호출 완료");
+            notificationHandler.sendCommentNotification(
+                    recipientId,
+                    roomId,
+                    comment.getPostId(),
+                    postTitle,
+                    comment.getContent()
+            );
         }
 
         return comment.getCommentId();

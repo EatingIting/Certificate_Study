@@ -67,6 +67,24 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         sendPayload(ownerId, payload, "댓글");
     }
 
+    public void sendCommentNotification(
+            String userId,
+            String roomId,
+            Long postId,
+            String postTitle,
+            String commentPreview
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "NOTIFICATION");
+        payload.put("notificationType", "COMMENT");
+        payload.put("roomId", roomId);
+        payload.put("postId", postId);
+        payload.put("postTitle", postTitle);
+        payload.put("content", commentPreview);
+
+        sendPayload(userId, payload, "댓글");
+    }
+
     public void sendApplicationDecisionNotification(
             String userId,
             String status,

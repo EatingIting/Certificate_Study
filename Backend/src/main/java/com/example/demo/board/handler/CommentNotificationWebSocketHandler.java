@@ -36,7 +36,7 @@ public class CommentNotificationWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
 
         String userId = extractUserId(session);
-        sessions.remove(userId);
+        sessions.remove(userId, session);
 
         System.out.println("댓글 WebSocket 종료됨: " + userId);
     }
@@ -78,7 +78,13 @@ public class CommentNotificationWebSocketHandler extends TextWebSocketHandler {
 
             System.out.println("보내는 payload = " + payload);
 
-            session.sendMessage(new TextMessage(payload));
+            synchronized (session) {
+                if (!session.isOpen()) {
+                    System.out.println("세션 닫힘 상태(전송 시점)");
+                    return;
+                }
+                session.sendMessage(new TextMessage(payload));
+            }
 
             System.out.println("댓글 알림 전송 성공");
 
