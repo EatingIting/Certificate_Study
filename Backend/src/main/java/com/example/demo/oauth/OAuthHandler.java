@@ -1,6 +1,7 @@
 package com.example.demo.oauth;
 
 import com.example.demo.jwt.JwtTokenProvider;
+import com.example.demo.jwt.RefreshTokenCookieService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,12 +24,17 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
     private static final Logger log = LoggerFactory.getLogger(OAuthHandler.class);
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenCookieService refreshTokenCookieService;
 
     @Value("${app.frontend-url:}")
     private String configuredFrontendUrl;
 
-    public OAuthHandler(JwtTokenProvider jwtTokenProvider) {
+    public OAuthHandler(
+            JwtTokenProvider jwtTokenProvider,
+            RefreshTokenCookieService refreshTokenCookieService
+    ) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.refreshTokenCookieService = refreshTokenCookieService;
     }
 
     @Override
@@ -48,10 +54,16 @@ public class OAuthHandler extends SimpleUrlAuthenticationSuccessHandler {
 
         if (exists != null && exists) {
 
-            String token = jwtTokenProvider.createAccessToken(email);
+            String refreshToken = jwtTokenProvider.createRefreshToken(email, true);
+            refreshTokenCookieService.addRefreshTokenCookie(
+                    request,
+                    response,
+                    refreshToken,
+                    true
+            );
 
             response.sendRedirect(
-                    frontUrl + "/oauth-success?token=" + token
+                    frontUrl + "/oauth-success"
             );
         }
 

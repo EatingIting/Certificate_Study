@@ -148,9 +148,13 @@ function LMSSubjectInner() {
         console.log("[CustomPiP] 회의방 복귀");
         const savedRoomId = sessionStorage.getItem("pip.roomId");
         const savedSubjectId = sessionStorage.getItem("pip.subjectId");
+        const savedScheduleId = sessionStorage.getItem("pip.scheduleId");
 
         if (savedRoomId && savedSubjectId) {
-            navigate(`/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}`, { replace: true });
+            const targetPath = savedScheduleId
+                ? `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}?scheduleId=${encodeURIComponent(savedScheduleId)}`
+                : `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}`;
+            navigate(targetPath, { replace: true });
             // 🔥 먼저 이동 후 120ms 뒤 PiP 숨김 → 회의 컨테이너가 그려진 뒤 전환되어 검은화면 방지
             setTimeout(() => stopCustomPip(), 120);
         } else {
@@ -179,6 +183,7 @@ function LMSSubjectInner() {
             // 세션 정리
             sessionStorage.removeItem("pip.roomId");
             sessionStorage.removeItem("pip.subjectId");
+            sessionStorage.removeItem("pip.scheduleId");
 
             setPipClosing(false);
             pipLeaveTimerRef.current = null;

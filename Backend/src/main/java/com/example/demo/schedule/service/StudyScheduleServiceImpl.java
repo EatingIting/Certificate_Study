@@ -147,6 +147,21 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
         if (roomId == null || roomId.isBlank()) {
             throw new IllegalArgumentException("roomId는 필수입니다.");
         }
+        Long activeNow = findActiveScheduleIdByCurrentTime(roomId);
+        if (activeNow != null) {
+            return activeNow;
+        }
+
+        Long upcomingToday = findUpcomingTodayScheduleId(roomId);
+        if (upcomingToday != null) {
+            return upcomingToday;
+        }
+
+        Long anyToday = findAnyTodayScheduleId(roomId);
+        if (anyToday != null) {
+            return anyToday;
+        }
+
         LocalDate today = LocalDate.now();
         Date start = Date.valueOf(today);
         Date endExclusive = Date.valueOf(today.plusDays(1));
@@ -207,6 +222,16 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
         if (subjectId == null || subjectId.isBlank()) return null;
         try {
             return studyScheduleMapper.selectUpcomingTodayScheduleId(subjectId.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public Long findAnyTodayScheduleId(String subjectId) {
+        if (subjectId == null || subjectId.isBlank()) return null;
+        try {
+            return studyScheduleMapper.selectAnyTodayScheduleId(subjectId.trim());
         } catch (Exception e) {
             return null;
         }

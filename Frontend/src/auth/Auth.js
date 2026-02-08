@@ -28,9 +28,9 @@ const Auth = () => {
 
     const handleLogin = async () => {
         try {
-            const res = await login(form.email, form.password);
+            const res = await login(form.email, form.password, autoLogin);
 
-            let token = res.data.token;
+            let token = res.data.accessToken || res.data.token;
             if (token.startsWith("Bearer ")) {
                 token = token.replace("Bearer ", "");
             }
@@ -47,12 +47,13 @@ const Auth = () => {
             localStorage.setItem("userName", userName);
 
             if (autoLogin) {
+                localStorage.setItem("rememberMe", "true");
                 localStorage.setItem("userId", res.data.userId);
                 localStorage.setItem("nickname", res.data.nickname);
                 localStorage.setItem("accessToken", token);
-
-                const expiresAt = Date.now() + 1000 * 60 * 60 * 24 * 30;
-                localStorage.setItem("expiresAt", expiresAt);
+            } else {
+                localStorage.setItem("rememberMe", "false");
+                localStorage.removeItem("accessToken");
             }
 
             navigate("/");

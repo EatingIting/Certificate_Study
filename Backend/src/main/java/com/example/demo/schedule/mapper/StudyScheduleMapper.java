@@ -38,6 +38,9 @@ public interface StudyScheduleMapper {
     /** 오늘 일정 중 start_time >= 현재 시각인 가장 가까운 회차의 schedule_id. 없으면 null */
     Long selectUpcomingTodayScheduleId(@Param("subjectId") String subjectId);
 
+    /** 오늘(CURDATE) 일정이 하나라도 있으면 가장 빠른 회차의 schedule_id. 없으면 null */
+    Long selectAnyTodayScheduleId(@Param("subjectId") String subjectId);
+
     /** subject_id + schedule_id로 회차 1건 조회 (오늘 여부 무관) */
     StudyScheduleVO selectBySubjectIdAndScheduleId(
             @Param("subjectId") String subjectId,

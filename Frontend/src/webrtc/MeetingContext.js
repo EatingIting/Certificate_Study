@@ -204,6 +204,7 @@ export const MeetingProvider = ({ children }) => {
         // ✅ pip 세션 키도 완전 종료 시 제거 (남아있으면 MeetingPage cleanup이 PiP로 오인)
         try { sessionStorage.removeItem("pip.roomId"); } catch { }
         try { sessionStorage.removeItem("pip.subjectId"); } catch { }
+        try { sessionStorage.removeItem("pip.scheduleId"); } catch { }
 
         setRoomId(null);
         setIsInMeeting(false);

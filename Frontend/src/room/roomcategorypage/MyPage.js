@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import api from "../../api/api";
+import api, { logout } from "../../api/api";
 import "./MyPage.css";
-import { toBackendUrl } from "../../utils/backendUrl";
 import { useNavigate } from "react-router-dom";
 import { getBackendOrigin } from "../../utils/backendUrl";
 import defaultImg from "../../mainpage/default.jpg";
@@ -294,7 +293,7 @@ const MyPage = () => {
 
             alert("탈퇴 되었습니다");
 
-            localStorage.clear();
+            await logout();
             window.location.href = "/";
         } catch (err) {
             console.error("회원탈퇴 실패", err);

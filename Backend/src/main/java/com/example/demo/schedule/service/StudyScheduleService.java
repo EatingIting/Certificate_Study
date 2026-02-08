@@ -32,6 +32,9 @@ public interface StudyScheduleService {
     /** 오늘 일정 중 시작 시각이 현재 시각 이후인 "다음 회차" schedule_id. (2시 전 입장 → 2시 회차 배정용) */
     Long findUpcomingTodayScheduleId(String subjectId);
 
+    /** 오늘(CURDATE) 일정이 하나라도 있으면 가장 빠른 회차 schedule_id. 없으면 null */
+    Long findAnyTodayScheduleId(String subjectId);
+
     /** subject_id + schedule_id로 회차 1건 조회. 없으면 null */
     StudyScheduleVO getBySubjectIdAndScheduleId(String subjectId, Long scheduleId);
 

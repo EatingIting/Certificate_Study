@@ -679,8 +679,7 @@ const ChatModal = ({ roomId, roomName }) => {
         if (!roomId || !myInfo || !roomNickname) return;
         if (ws.current && ws.current.readyState === WebSocket.OPEN) return;
 
-        const token = sessionStorage.getItem("accessToken") || localStorage.getItem("accessToken");
-        const wsUrlStr = `${wsUrl}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(roomNickname)}&token=${encodeURIComponent(token)}`;
+        const wsUrlStr = `${wsUrl}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(roomNickname)}`;
         
         console.log("📡 웹소켓 연결 시도:", roomNickname);
         const socket = new WebSocket(wsUrlStr);

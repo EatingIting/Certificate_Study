@@ -4,6 +4,7 @@ import MainSideBar from "./MainSideBar";
 import { useEffect, useRef, useState } from "react";
 import { FaBell } from "react-icons/fa";
 import { toWsBackendUrl } from "../utils/backendUrl";
+import { logout } from "../api/api";
 
 const MainHeader = () => {
     const navigate = useNavigate();
@@ -53,11 +54,13 @@ const MainHeader = () => {
         return () => socket.close();
     }, [nickname]);
 
-    const handleLogout = () => {
-        sessionStorage.clear();
-        localStorage.clear();
-        // 같은 경로(/)에 있을 때 navigate("/")는 화면 변화가 없어 보일 수 있어
-        // 상태를 즉시 갱신하고, 메인으로 이동을 확실히 보장한다.
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } catch (e) {
+            // ignore client-side logout failure
+        }
+
         setIsOpen(false);
         setNickname(null);
         setHasNotification(false);

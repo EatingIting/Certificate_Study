@@ -74,6 +74,15 @@
         LIMIT 1
     </select>
 
+    <select id="selectAnyTodayScheduleId" resultType="java.lang.Long">
+        SELECT schedule_id
+        FROM study_schedule
+        WHERE subject_id = #{subjectId}
+          AND study_date = CURDATE()
+        ORDER BY round_num ASC
+        LIMIT 1
+    </select>
+
     <select id="selectBySubjectIdAndScheduleId" resultMap="StudyScheduleMap">
         SELECT schedule_id, subject_id, round_num, study_date, start_time, end_time, description
         FROM study_schedule

@@ -88,6 +88,8 @@ public class SecurityConfig {
                                 "/api/users/login",
                                 "/api/users/signup",
                                 "/api/users/check-email",
+                                "/api/users/refresh",
+                                "/api/users/logout",
                                 "/api/category/**",
                                 "/api/meeting-rooms/**"
                         ).permitAll()

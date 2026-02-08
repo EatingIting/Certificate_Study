@@ -6899,7 +6899,7 @@ function MeetingPage({ portalRoomId }) {
 
             wsRef.current = null;
         };
-    }, [roomId, subjectId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState, rememberParticipantMediaState, rememberParticipantMediaStateByKeys, getRememberedParticipantMediaState]); // subjectId 포함 시 DB 저장용
+    }, [roomId, subjectId, scheduleId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState, rememberParticipantMediaState, rememberParticipantMediaStateByKeys, getRememberedParticipantMediaState]); // subjectId/scheduleId 포함 시 DB 저장용
 
     useEffect(() => {
         setParticipants((prev) =>

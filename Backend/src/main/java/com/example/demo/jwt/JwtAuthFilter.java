@@ -30,6 +30,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return path.contains("/api/users/login")
                 || path.contains("/api/users/signup")
                 || path.contains("/api/users/check-email")
+                || path.contains("/api/users/refresh")
+                || path.contains("/api/users/logout")
                 || path.contains("/api/category")
                 || path.contains("/api/meeting-rooms")
                 || path.contains("/ws/");
@@ -53,7 +55,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             String token = authHeader.substring(7);
 
-            if (tokenProvider.validateToken(token)) {
+            if (tokenProvider.validateAccessToken(token)) {
                 Authentication authentication =
                         tokenProvider.getAuthentication(token);
 

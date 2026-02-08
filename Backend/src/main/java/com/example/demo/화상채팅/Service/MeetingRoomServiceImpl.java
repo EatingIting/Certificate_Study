@@ -111,21 +111,30 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         }
 
         // schedule_id: 스터디 일정 시간대 안에 들어왔을 때 해당 회차, 그 외에는 오늘 회차 조회/생성 (meeting_room.schedule_id NOT NULL 대응)
-        Long safeScheduleId = null;
-        if (!safeSubjectId.isEmpty()) {
+        Long safeScheduleId = (scheduleId != null && scheduleId > 0) ? scheduleId : null;
+        if (!safeSubjectId.isEmpty() && safeScheduleId != null) {
+            StudyScheduleVO selected = studyScheduleService.getBySubjectIdAndScheduleId(safeSubjectId, safeScheduleId);
+            if (selected != null) {
+                log.info("[MeetingRoomServiceImpl] 클라이언트 전달 scheduleId 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
+            } else {
+                log.warn("[MeetingRoomServiceImpl] 전달된 scheduleId가 subject와 일치하지 않아 fallback 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
+                safeScheduleId = null;
+            }
+        }
+
+        if (!safeSubjectId.isEmpty() && safeScheduleId == null) {
             safeScheduleId = studyScheduleService.findActiveScheduleIdByCurrentTime(safeSubjectId);
             if (safeScheduleId != null) {
                 log.info("[MeetingRoomServiceImpl] 현재 시간대 회차 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
             } else {
                 try {
                     safeScheduleId = studyScheduleService.getOrCreateTodayScheduleId(safeSubjectId);
-                    log.info("[MeetingRoomServiceImpl] 일정 시간대 아님 → 오늘 회차 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
+                    log.info("[MeetingRoomServiceImpl] 일정 시간대 아님 -> 오늘 회차 사용: subjectId={}, scheduleId={}", safeSubjectId, safeScheduleId);
                 } catch (Exception e) {
-                    log.warn("[MeetingRoomServiceImpl] 오늘 회차 조회/생성 실패 → schedule_id=null: {}", e.getMessage());
+                    log.warn("[MeetingRoomServiceImpl] 오늘 회차 조회/생성 실패 -> schedule_id=null: {}", e.getMessage());
                 }
             }
         }
-
         if (isHost) {
             if (safeSubjectId.isEmpty()) {
                 log.warn("[MeetingRoomServiceImpl] 호스트 입장 시 subjectId 없음 → meeting_room 저장 건너뜀");
@@ -160,7 +169,7 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             // 호스트도 입장 로그를 meetingroom_participant에 기록
             insertParticipantIfNeeded(safeSubjectId, safeScheduleId, roomId, userEmail);
         } else {
-            // 참여자: subject_id가 있으면 무조건 participant 저장 시도 (schedule_id 없어도 nullable이므로 저장)
+            // 참여자: subject_id가 있으면 participant 저장 시도 (schedule_id는 내부에서 반드시 보정)
             if (safeSubjectId.isEmpty()) {
                 log.warn("[MeetingRoomServiceImpl] 참여자 입장 시 subjectId 없음(room에서도 조회 불가) → participant 저장 불가");
                 return;
@@ -175,24 +184,27 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             return;
         }
         Long effectiveScheduleId = (scheduleId != null && scheduleId > 0) ? scheduleId : null;
+        if (effectiveScheduleId == null) {
+            try {
+                effectiveScheduleId = studyScheduleService.getOrCreateTodayScheduleId(subjectId.trim());
+                log.info("[MeetingRoomServiceImpl] participant 저장 전 scheduleId 보정: subjectId={}, scheduleId={}", subjectId, effectiveScheduleId);
+            } catch (Exception e) {
+                log.warn("[MeetingRoomServiceImpl] participant scheduleId 보정 실패: subjectId={}, error={}", subjectId, e.getMessage());
+            }
+        }
+        if (effectiveScheduleId == null) {
+            log.warn("[MeetingRoomServiceImpl] participant 저장 건너뜀: scheduleId 확보 실패 (subjectId={}, roomId={}, userEmail={})",
+                    subjectId, roomId, userEmail);
+            return;
+        }
 
         try {
-            if (effectiveScheduleId != null) {
-                Optional<MeetingRoomParticipant> existing = participantRepository
-                        .findByScheduleIdAndRoomIdAndUserEmail(effectiveScheduleId, roomId, userEmail);
-                if (existing.isPresent()) {
-                    // 재입장 시 새 행 만들지 않고 left_at 그대로 둠. 퇴장할 때만 left_at 갱신
-                    log.info("[MeetingRoomServiceImpl] 재입장 - 기존 행 유지, left_at 갱신 안 함 (schedule_id={})", effectiveScheduleId);
-                    return;
-                }
-            } else {
-                // schedule_id=null인 행이 있으면 재사용 (새 행 생성 안 함, left_at 갱신 안 함)
-                Optional<MeetingRoomParticipant> existingNullSchedule = participantRepository
-                        .findFirstByRoomIdAndUserEmailAndScheduleIdIsNull(roomId, userEmail);
-                if (existingNullSchedule.isPresent()) {
-                    log.info("[MeetingRoomServiceImpl] 재입장 (schedule_id=null) - 기존 행 유지, left_at 갱신 안 함");
-                    return;
-                }
+            Optional<MeetingRoomParticipant> existing = participantRepository
+                    .findByScheduleIdAndRoomIdAndUserEmail(effectiveScheduleId, roomId, userEmail);
+            if (existing.isPresent()) {
+                // 재입장 시 새 행 만들지 않고 left_at 그대로 둠. 퇴장할 때만 left_at 갱신
+                log.info("[MeetingRoomServiceImpl] 재입장 - 기존 행 유지, left_at 갱신 안 함 (schedule_id={})", effectiveScheduleId);
+                return;
             }
 
             MeetingRoomParticipant participant =

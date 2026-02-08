@@ -639,6 +639,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                         sessionStorage.setItem("lms.activeRoomId", roomId);
                         if (scheduleId != null) {
                             sessionStorage.setItem("pip.scheduleId", String(scheduleId));
+                        } else {
+                            sessionStorage.removeItem("pip.scheduleId");
                         }
 
                         window.dispatchEvent(new Event("meeting:request-pip"));

@@ -1,6 +1,7 @@
 import "./MainSideBar.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
+import { logout } from "../api/api";
 
 const MainSideBar = () => {
     const navigate = useNavigate();
@@ -22,9 +23,12 @@ const MainSideBar = () => {
 
     const go = (path) => navigate(path);
 
-    const handleLogout = () => {
-        sessionStorage.clear();
-        localStorage.clear();
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } catch (e) {
+            // ignore client-side logout failure
+        }
 
         alert("로그아웃 되었습니다.");
 
@@ -35,7 +39,6 @@ const MainSideBar = () => {
         <aside className="sample-sidebar">
             <div className="sb-scroll">
                 <ul className="menu-list">
-                    {/* 홈 */}
                     <li
                         className={`menu-item menu-single ${isExact("/") ? "active" : ""}`}
                         onClick={() => go("/")}
@@ -43,7 +46,6 @@ const MainSideBar = () => {
                         홈
                     </li>
 
-                    {/* 스터디 */}
                     <li className={`menu-group ${openKeys.includes("study") ? "open" : ""}`}>
                         <div
                             className={`menu-item menu-parent ${
@@ -53,8 +55,8 @@ const MainSideBar = () => {
                         >
                             <span className="menu-label">스터디</span>
                             <span className="arrow">
-                {openKeys.includes("study") ? "▾" : "▸"}
-              </span>
+                                {openKeys.includes("study") ? "▾" : "▸"}
+                            </span>
                         </div>
 
                         <ul className="submenu">
@@ -76,7 +78,6 @@ const MainSideBar = () => {
                         </ul>
                     </li>
 
-                    {/* 계정 */}
                     <li className={`menu-group ${openKeys.includes("account") ? "open" : ""}`}>
                         <div
                             className={`menu-item menu-parent ${
@@ -88,8 +89,8 @@ const MainSideBar = () => {
                         >
                             <span className="menu-label">계정</span>
                             <span className="arrow">
-                {openKeys.includes("account") ? "▾" : "▸"}
-              </span>
+                                {openKeys.includes("account") ? "▾" : "▸"}
+                            </span>
                         </div>
 
                         <ul className="submenu">
