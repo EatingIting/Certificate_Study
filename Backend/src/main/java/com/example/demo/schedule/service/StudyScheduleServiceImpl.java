@@ -66,11 +66,34 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
         return t;
     }
 
+    private void validateRoundDateOrder(String subjectId, Integer roundNum, LocalDate targetDate) {
+        if (subjectId == null || subjectId.isBlank() || roundNum == null || roundNum <= 1 || targetDate == null) {
+            return;
+        }
+
+        int prevRound = roundNum - 1;
+        StudyScheduleVO prevSchedule = studyScheduleMapper.selectBySubjectIdAndScheduleId(
+                subjectId.trim(),
+                (long) prevRound
+        );
+
+        if (prevSchedule == null || prevSchedule.getStudyDate() == null) {
+            throw new IllegalArgumentException(prevRound + "회차 스터디일정 이후부터 등록 가능합니다.");
+        }
+
+        LocalDate prevDate = prevSchedule.getStudyDate().toLocalDate();
+        if (targetDate.isBefore(prevDate)) {
+            throw new IllegalArgumentException(prevRound + "회차 스터디일정 이후부터 등록 가능합니다.");
+        }
+    }
+
     @Override
     @Transactional
     public Long insert(StudyScheduleCreateRequest req) {
         String subjectId = req.getRoomId();
         requireHost(subjectId);
+        LocalDate targetDate = LocalDate.parse(req.getDate());
+        validateRoundDateOrder(subjectId, req.getRound(), targetDate);
         String startTime = normalizeTime(req.getStartTime());
         String endTime = normalizeTime(req.getEndTime());
         if (startTime == null) startTime = "09:00:00";
@@ -79,7 +102,7 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
         StudyScheduleVO vo = StudyScheduleVO.builder()
                 .subjectId(subjectId)
                 .roundNum(req.getRound())
-                .studyDate(Date.valueOf(LocalDate.parse(req.getDate())))
+                .studyDate(Date.valueOf(targetDate))
                 .startTime(startTime)
                 .endTime(endTime)
                 .description(req.getDescription() != null ? req.getDescription() : "")
@@ -102,6 +125,8 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
             String roomId,
             StudyScheduleUpdateRequest req) {
         requireHost(roomId);
+        LocalDate targetDate = LocalDate.parse(req.getDate());
+        validateRoundDateOrder(roomId, req.getRound(), targetDate);
         String startTime = normalizeTime(req.getStartTime());
         String endTime = normalizeTime(req.getEndTime());
 
@@ -109,7 +134,7 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
                 .studyScheduleId(studyScheduleId)
                 .subjectId(roomId)
                 .roundNum(req.getRound())
-                .studyDate(Date.valueOf(LocalDate.parse(req.getDate())))
+                .studyDate(Date.valueOf(targetDate))
                 .startTime(startTime)
                 .endTime(endTime)
                 .description(req.getDescription() != null ? req.getDescription() : "")

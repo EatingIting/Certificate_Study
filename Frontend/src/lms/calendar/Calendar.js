@@ -757,6 +757,11 @@ function Calendar() {
         setStudyForm((prev) => ({ ...prev, [key]: value }));
     };
 
+    let normalizeStudyId = (id) => {
+        let raw = String(id ?? "");
+        return raw.startsWith("S") ? raw.slice(1) : raw;
+    };
+
     /* =========================
        서버 호출(스터디 저장/수정/삭제)
        POST /api/study-schedules
@@ -772,6 +777,20 @@ function Calendar() {
 
         if (!studyForm.date) {
             setStudyError("날짜를 선택해 주세요.");
+            return;
+        }
+
+        // 같은 날짜에는 스터디 일정을 하나만 허용
+        let editingNormalizedId = editingStudyId ? normalizeStudyId(editingStudyId) : null;
+        let hasDuplicateDate = studyEvents.some((ev) => {
+            let evDate = ymdOf(typeof ev.start === "string" ? ev.start : ev.startStr);
+            if (evDate !== studyForm.date) return false;
+            if (!editingNormalizedId) return true;
+            return normalizeStudyId(ev.id) !== editingNormalizedId;
+        });
+        if (hasDuplicateDate) {
+            const msg = "이미 해당 날짜에 등록된 스터디 일정이 있습니다. 다른 날짜를 선택해 주세요.";
+            setStudyError(msg);
             return;
         }
 
@@ -842,7 +861,11 @@ function Calendar() {
             closeStudyModal();
         } catch (e) {
             console.error(e);
-            setStudyError(e?.message || "저장 중 오류가 발생했습니다.");
+            let message = e?.message || "저장 중 오류가 발생했습니다.";
+            if (message.includes("이미") && message.includes("스터디 일정")) {
+                message = "이미 해당 날짜에 등록된 스터디 일정이 있습니다. 다른 날짜를 선택해 주세요.";
+            }
+            setStudyError(message);
         }
     };
 

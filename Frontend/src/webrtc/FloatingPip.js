@@ -21,6 +21,31 @@ const FloatingPip = ({
     // 🔥 스트림 모니터링용 ref
     const streamCheckIntervalRef = useRef(null);
     const lastValidStreamRef = useRef(null);
+    const ownedStreamsRef = useRef(new Set());
+
+    const markOwnedStream = useCallback((s) => {
+        if (!s) return s;
+        ownedStreamsRef.current.add(s);
+        return s;
+    }, []);
+
+    const detachVideoStream = useCallback((stopOwnedTracks = false) => {
+        const video = videoRef.current;
+        if (!video) return;
+        const current = video.srcObject;
+        if (current && stopOwnedTracks && ownedStreamsRef.current.has(current)) {
+            try {
+                current.getTracks().forEach((t) => {
+                    try {
+                        if (t.readyState === "live") t.stop();
+                    } catch { }
+                });
+            } catch { }
+            ownedStreamsRef.current.delete(current);
+        }
+        try { video.pause(); } catch { }
+        try { video.srcObject = null; } catch { }
+    }, []);
 
     // 초기 위치 설정 (오른쪽 하단)
     useEffect(() => {
@@ -168,7 +193,7 @@ const FloatingPip = ({
             // 🔥 스트림이 없거나 비디오 트랙이 없으면 아바타 스트림 생성 (커스텀 PiP이므로 이름 표시 안 함)
             if (!finalStream || !isStreamValid(finalStream)) {
                 console.log("[FloatingPip] 비디오 스트림이 없어서 아바타 스트림 생성");
-                finalStream = createAvatarStream(peerName, 640, 480, false);
+                finalStream = markOwnedStream(createAvatarStream(peerName, 640, 480, false));
             } else {
                 const videoTracks = finalStream.getVideoTracks();
                 console.log("[FloatingPip] 비디오 트랙:", videoTracks.map(t => ({
@@ -375,6 +400,9 @@ const FloatingPip = ({
             if (found && isStreamValid(found.stream)) {
                 console.log("[FloatingPip] ✅ 초기 스트림 자동 탐색 성공");
                 const clonedStream = found.stream.clone ? found.stream.clone() : found.stream;
+                if (clonedStream !== found.stream) {
+                    markOwnedStream(clonedStream);
+                }
                 if (videoRef.current) {
                     videoRef.current.srcObject = clonedStream;
                     lastValidStreamRef.current = found.stream;
@@ -398,10 +426,26 @@ const FloatingPip = ({
 
     // 나가기 버튼 클릭
     const handleLeave = () => {
+        if (streamCheckIntervalRef.current) {
+            clearInterval(streamCheckIntervalRef.current);
+            streamCheckIntervalRef.current = null;
+        }
+        detachVideoStream(true);
         if (onLeave) {
             onLeave();
         }
     };
+
+    useEffect(() => {
+        return () => {
+            if (streamCheckIntervalRef.current) {
+                clearInterval(streamCheckIntervalRef.current);
+                streamCheckIntervalRef.current = null;
+            }
+            detachVideoStream(true);
+            ownedStreamsRef.current.clear();
+        };
+    }, [detachVideoStream]);
 
     // 🔥 위치가 초기화되지 않았으면 렌더링 안 함 (stream 체크 제거 - 자동 탐색 지원)
     if (position.x === null) return null;

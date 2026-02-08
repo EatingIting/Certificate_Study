@@ -187,7 +187,7 @@ function LMSSubjectInner() {
 
             setPipClosing(false);
             pipLeaveTimerRef.current = null;
-        }, 600);
+        }, 120);
     }, [stopCustomPip, endMeeting]);
 
     // cleanup

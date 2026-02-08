@@ -831,6 +831,7 @@ function MeetingPage({ portalRoomId }) {
         isPipMode,
         isBrowserPipMode,
         customPipData,
+        registerLocalStream, // 🔥 getUserMedia 스트림을 MeetingContext에 등록 (언마운트 후에도 정리 가능)
         pipVideoRef, // 🔥 브라우저 PIP용 숨겨진 video element ref
     } = useMeeting();
 
@@ -1987,6 +1988,8 @@ function MeetingPage({ portalRoomId }) {
         console.log("[turnOnCamera] got camera track:", rawTrack.id, rawTrack.readyState, "audio:", needAudio ? newAudioTrack?.id : "reusing");
         if (isLikelyCameraTrack(rawTrack)) lastCameraTrackRef.current = rawTrack;
         canvasPipelineRawTrackRef.current = rawTrack;
+        // 🔥 MeetingContext에 등록 → 언마운트 후에도 endMeeting에서 확실히 stop 가능
+        if (registerLocalStream) registerLocalStream(stream);
 
         // 2) 기존 canvas 파이프라인 정리
         if (canvasPipelineRafRef.current) {
@@ -2531,6 +2534,9 @@ function MeetingPage({ portalRoomId }) {
         // ✅ 통화 종료는 PiP 유지가 목적이 아니므로, pip 세션 키 제거 (cleanup 스킵 방지)
         try { sessionStorage.removeItem("pip.roomId"); } catch { }
         try { sessionStorage.removeItem("pip.subjectId"); } catch { }
+        hardStopAllLocalMedia();
+        // 🔥 공유 AudioContext 즉시 닫기 (빨간원 즉시 제거)
+        closeSharedAudioContext();
 
         // ✅ 0) 상태 전파 (카메라/마이크 끄기)
         try {
@@ -2636,20 +2642,8 @@ function MeetingPage({ portalRoomId }) {
                 try { avatarOutTrackRef.current = null; } catch { }
                 try { canvasPipelineOutTrackRef.current = null; } catch { }
 
-                // ✅ 남아있는 video/audio 엘리먼트의 srcObject 해제 (hidden element가 stream을 잡고 있는 경우 방지)
-                try {
-                    document.querySelectorAll("video").forEach((v) => {
-                        try {
-                            if (v?.srcObject) v.srcObject = null;
-                        } catch { }
-                    });
-                    document.querySelectorAll("audio").forEach((a) => {
-                        try {
-                            if (a?.srcObject) a.srcObject = null;
-                        } catch { }
-                    });
-                } catch { }
-                setLocalStream(null);
+                // ✅ 남아있는 트랙/요소까지 강제 정리
+                hardStopAllLocalMedia();
 
                 // ✅ audioElsRef 정리 (new Audio()로 생성된 요소는 DOM에 없어 querySelectorAll로 못 잡음)
                 try {
@@ -2705,16 +2699,26 @@ function MeetingPage({ portalRoomId }) {
 
                 // 페이지 이동
                 if (subjectId) {
-                    navigate(`/lms/${subjectId}/dashboard`, { replace: true });
+                    const targetPath = `/lms/${subjectId}/dashboard`;
+                    if (hasAnyLiveLocalTrack()) {
+                        window.location.replace(targetPath);
+                    } else {
+                        navigate(targetPath, { replace: true });
+                    }
                 } else {
-                    navigate("/lmsMain", { replace: true });
+                    const targetPath = "/lmsMain";
+                    if (hasAnyLiveLocalTrack()) {
+                        window.location.replace(targetPath);
+                    } else {
+                        navigate(targetPath, { replace: true });
+                    }
                 }
             } catch (e) {
                 console.warn("[handleHangup] Cleanup failed:", e);
                 // 강제 이동
                 navigate("/lmsMain", { replace: true });
             }
-        }, 400);
+        }, 250);
 
         // alert은 사용자에게 알림을 주는 용도로만 사용 (가장 마지막에 띄우거나 생략 가능)
         // 여기서는 기존 alert 유지를 위해 배치
@@ -3339,6 +3343,7 @@ function MeetingPage({ portalRoomId }) {
                 const s = await navigator.mediaDevices.getUserMedia({ video: true });
                 rawTrack = s.getVideoTracks()[0];
                 if (isLikelyCameraTrack(rawTrack)) lastCameraTrackRef.current = rawTrack;
+                if (registerLocalStream) registerLocalStream(s);
             } catch (e) {
                 console.error("[startFaceEmojiFilter] failed to get camera track:", e);
                 return;
@@ -4190,6 +4195,8 @@ function MeetingPage({ portalRoomId }) {
 
             localStreamRef.current = stream;
             setLocalStream(stream);
+            // 🔥 MeetingContext에 등록 → 언마운트 후에도 endMeeting에서 확실히 stop 가능
+            if (registerLocalStream) registerLocalStream(stream);
 
             setMicPermission("granted");
             // 카메라를 아예 요청하지 않은 경우에도 "권한"은 granted일 수 있지만,
@@ -4322,6 +4329,124 @@ function MeetingPage({ portalRoomId }) {
             try { ws.close(); } catch { }
         }
     }, []);
+
+    // 이탈 시 DOM 엘리먼트가 물고 있는 MediaStream까지 강제 종료
+    const stopAndDetachElementStreams = useCallback(() => {
+        try {
+            document.querySelectorAll("video, audio").forEach((el) => {
+                try {
+                    const stream = el?.srcObject;
+                    if (stream && typeof stream.getTracks === "function") {
+                        stream.getTracks().forEach((t) => {
+                            try { if (t.readyState === "live") t.stop(); } catch { }
+                        });
+                    }
+                } catch { }
+                try {
+                    if (el?.srcObject) el.srcObject = null;
+                } catch { }
+            });
+        } catch { }
+    }, []);
+
+    const stopTrackIfLive = useCallback((track) => {
+        try {
+            if (track && typeof track.stop === "function" && track.readyState === "live") {
+                track.stop();
+            }
+        } catch { }
+    }, []);
+
+    // 종료 시점의 race condition으로 남는 캡처/카메라 트랙까지 강제 정리
+    const hardStopAllLocalMedia = useCallback(() => {
+        try {
+            if (localStreamRef.current) {
+                localStreamRef.current.getTracks().forEach((t) => stopTrackIfLive(t));
+                localStreamRef.current = null;
+            }
+        } catch { }
+
+        try {
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach((t) => {
+                    try { t.onended = null; } catch { }
+                    stopTrackIfLive(t);
+                });
+                screenStreamRef.current = null;
+            }
+        } catch { }
+
+        try {
+            [
+                lastCameraTrackRef?.current,
+                faceFilterRawTrackRef?.current,
+                faceFilterOutTrackRef?.current,
+                avatarRawTrackRef?.current,
+                avatarOutTrackRef?.current,
+                canvasPipelineRawTrackRef?.current,
+                canvasPipelineOutTrackRef?.current,
+            ].forEach((t) => stopTrackIfLive(t));
+        } catch { }
+
+        try {
+            producersRef.current.forEach((p) => {
+                try { stopTrackIfLive(p?.track); } catch { }
+            });
+        } catch { }
+
+        try {
+            const pipStream = pipVideoRef?.current?.srcObject;
+            if (pipStream && typeof pipStream.getTracks === "function") {
+                pipStream.getTracks().forEach((t) => stopTrackIfLive(t));
+            }
+            if (pipVideoRef?.current) {
+                pipVideoRef.current.srcObject = null;
+            }
+        } catch { }
+
+        stopAndDetachElementStreams();
+        setLocalStream(null);
+    }, [pipVideoRef, stopAndDetachElementStreams, stopTrackIfLive]);
+
+    const hasAnyLiveLocalTrack = useCallback(() => {
+        try {
+            const buckets = [
+                localStreamRef.current,
+                screenStreamRef.current,
+                pipVideoRef?.current?.srcObject || null,
+            ];
+            for (const stream of buckets) {
+                if (stream && typeof stream.getTracks === "function") {
+                    if (stream.getTracks().some((t) => t?.readyState === "live")) return true;
+                }
+            }
+        } catch { }
+
+        try {
+            const tracks = [
+                lastCameraTrackRef?.current,
+                faceFilterRawTrackRef?.current,
+                faceFilterOutTrackRef?.current,
+                avatarRawTrackRef?.current,
+                avatarOutTrackRef?.current,
+                canvasPipelineRawTrackRef?.current,
+                canvasPipelineOutTrackRef?.current,
+            ];
+            if (tracks.some((t) => t?.readyState === "live")) return true;
+        } catch { }
+
+        try {
+            const els = document.querySelectorAll("video, audio");
+            for (const el of els) {
+                const s = el?.srcObject;
+                if (s && typeof s.getTracks === "function") {
+                    if (s.getTracks().some((t) => t?.readyState === "live")) return true;
+                }
+            }
+        } catch { }
+
+        return false;
+    }, [pipVideoRef]);
 
     // 참가자 엔트리 생성 헬퍼 (기존 상태가 있으면 절대 덮어쓰지 않음)
     const ensureParticipant = (peerId) => {
@@ -5203,10 +5328,13 @@ function MeetingPage({ portalRoomId }) {
         // startMeeting은 MeetingRouteBridge / startLocalMedia에서 roomId·subjectId와 함께 호출됨
         return () => {
             // ❗ PIP 모드일 때는 endMeeting 호출하지 않음 (polling 유지)
-            const isInPipMode = !!document.pictureInPictureElement ||
-                sessionStorage.getItem("pip.roomId");
+            // 🔥 단, isLeavingRef가 true이면 통화 종료 중이므로 cleanup을 반드시 수행
+            const isInRealPipMode =
+                !!document.pictureInPictureElement ||
+                !!isPipMode ||
+                !!isBrowserPipMode;
 
-            if (isInPipMode) {
+            if (isInRealPipMode && !isLeavingRef.current) {
                 // 🔥 사이드바 자동 PiP 진입(라우트 이동) 시 여기로 들어옴
                 // 이때 필터/트랙 정리를 해버리면 producer track이 끊기면서 PiP가 마지막 프레임에서 멈출 수 있음
                 console.log("[MeetingPage] PIP 모드 - cleanup/endMeeting 모두 스킵");
@@ -5287,15 +5415,8 @@ function MeetingPage({ portalRoomId }) {
             try { avatarOutTrackRef.current = null; } catch { }
             try { canvasPipelineOutTrackRef.current = null; } catch { }
 
-            // ✅ 숨겨진 video/audio 엘리먼트가 stream을 잡고 있지 않도록 srcObject 해제
-            try {
-                document.querySelectorAll("video").forEach((v) => {
-                    try { if (v?.srcObject) v.srcObject = null; } catch { }
-                });
-                document.querySelectorAll("audio").forEach((a) => {
-                    try { if (a?.srcObject) a.srcObject = null; } catch { }
-                });
-            } catch { }
+            // ✅ 숨겨진 video/audio 엘리먼트가 stream을 잡고 있지 않도록 srcObject + 트랙 강제 정리
+            stopAndDetachElementStreams();
 
             // ✅ audioElsRef 정리 (new Audio()는 DOM에 없어서 querySelectorAll로 잡히지 않음)
             try {
@@ -5312,7 +5433,17 @@ function MeetingPage({ portalRoomId }) {
             // ❗ 통화 종료 시에만 회의 상태 종료
             endMeeting();
         };
-    }, [endMeeting, stopFaceEmojiFilter, stopAvatarFilter, roomId, userId, closeSfuWsForLeave]);
+    }, [
+        endMeeting,
+        stopFaceEmojiFilter,
+        stopAvatarFilter,
+        roomId,
+        userId,
+        closeSfuWsForLeave,
+        isPipMode,
+        isBrowserPipMode,
+        stopAndDetachElementStreams,
+    ]);
 
     useEffect(() => {
         const handler = () => {
@@ -5664,6 +5795,9 @@ function MeetingPage({ portalRoomId }) {
 
             // ✅ 카메라/필터 파이프라인 정리 (canvas pipeline + hidden video)
             try { turnOffCamera(); } catch { }
+            hardStopAllLocalMedia();
+            // 🔥 공유 AudioContext 즉시 닫기 (빨간원 즉시 제거)
+            closeSharedAudioContext();
 
             // ✅ 로컬 미디어 트랙 정리
             if (localStreamRef.current) {
@@ -5695,15 +5829,8 @@ function MeetingPage({ portalRoomId }) {
             try { avatarRawTrackRef.current = null; } catch { }
             try { avatarOutTrackRef.current = null; } catch { }
             try { canvasPipelineOutTrackRef.current = null; } catch { }
-            // ✅ 남아있는 video/audio 엘리먼트의 srcObject 해제
-            try {
-                document.querySelectorAll("video").forEach((v) => {
-                    try { if (v?.srcObject) v.srcObject = null; } catch { }
-                });
-                document.querySelectorAll("audio").forEach((a) => {
-                    try { if (a?.srcObject) a.srcObject = null; } catch { }
-                });
-            } catch { }
+            // ✅ 남아있는 video/audio 엘리먼트의 srcObject + 트랙 강제 정리
+            hardStopAllLocalMedia();
             // ✅ audioElsRef 정리 (DOM 밖 Audio 요소)
             try {
                 audioElsRef.current.forEach((a) => {
@@ -5718,12 +5845,16 @@ function MeetingPage({ portalRoomId }) {
             setParticipants([]);
             setMessages([]);
             if (endMeeting) endMeeting();
-            navigate(path);
+            if (hasAnyLiveLocalTrack()) {
+                window.location.replace(path);
+            } else {
+                navigate(path);
+            }
         };
 
         window.addEventListener("meeting:leave-and-navigate", handleLeaveAndNavigate);
         return () => window.removeEventListener("meeting:leave-and-navigate", handleLeaveAndNavigate);
-    }, [roomId, userId, navigate, endMeeting, closeSfuWsForLeave]);
+    }, [roomId, userId, navigate, endMeeting, closeSfuWsForLeave, hardStopAllLocalMedia, hasAnyLiveLocalTrack]);
 
     // 🔥 커스텀 PIP에서 나가기 이벤트 처리
     useEffect(() => {
@@ -5782,6 +5913,7 @@ function MeetingPage({ portalRoomId }) {
 
             // ✅ 4) 카메라/필터 파이프라인 즉시 정리 (빨간원 방지 - setTimeout 밖에서 즉시 실행)
             try { turnOffCamera(); } catch { }
+            hardStopAllLocalMedia();
 
             // ✅ 4-1) 필터/파이프라인에서 분리된 원본/출력 트랙 즉시 stop
             try {
@@ -5804,6 +5936,12 @@ function MeetingPage({ portalRoomId }) {
             try { avatarOutTrackRef.current = null; } catch { }
             try { canvasPipelineOutTrackRef.current = null; } catch { }
 
+            // 🔥 공유 AudioContext 즉시 닫기 + 잠금 (setTimeout 전에 실행하여 빨간원 즉시 제거)
+            closeSharedAudioContext();
+
+            // ✅ 커스텀 PiP X 종료는 "통화 완전 종료" 경로이므로 endMeeting도 즉시 보장
+            try { if (endMeeting) endMeeting(); } catch { }
+
             // ✅ 5) 충분히 기다린 뒤 소켓 close 및 미디어 중지 (send 버퍼 flush 시간 확보)
             setTimeout(() => {
                 try {
@@ -5823,15 +5961,8 @@ function MeetingPage({ portalRoomId }) {
                     }
                     setLocalStream(null);
 
-                    // 남아있는 video/audio 엘리먼트의 srcObject 해제
-                    try {
-                        document.querySelectorAll("video").forEach((v) => {
-                            try { if (v?.srcObject) v.srcObject = null; } catch { }
-                        });
-                        document.querySelectorAll("audio").forEach((a) => {
-                            try { if (a?.srcObject) a.srcObject = null; } catch { }
-                        });
-                    } catch { }
+                    // 남아있는 video/audio 엘리먼트의 srcObject + 트랙 강제 정리
+                    hardStopAllLocalMedia();
                     // ✅ audioElsRef 정리 (DOM 밖 Audio 요소)
                     try {
                         audioElsRef.current.forEach((a) => {
@@ -5861,10 +5992,15 @@ function MeetingPage({ portalRoomId }) {
 
                     setParticipants([]);
                     setMessages([]);
+
+                    // 커스텀 PiP X 종료 후에도 live track이 남으면 강제 리로드로 브라우저 캡처 해제
+                    if (hasAnyLiveLocalTrack()) {
+                        window.location.reload();
+                    }
                 } catch (e) {
                     console.warn("[MeetingPage] PIP 나가기 정리 중 오류:", e);
                 }
-            }, 300);
+            }, 120);
         };
 
         window.addEventListener("meeting:leave-from-pip", handleLeaveFromPip);
@@ -5872,7 +6008,7 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             window.removeEventListener("meeting:leave-from-pip", handleLeaveFromPip);
         };
-    }, [roomId, userId, closeSfuWsForLeave]);
+    }, [roomId, userId, endMeeting, closeSfuWsForLeave, hardStopAllLocalMedia, hasAnyLiveLocalTrack]);
 
     /* useEffect(() => {
         const video = mainVideoRef.current;

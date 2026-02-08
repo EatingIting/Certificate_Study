@@ -3,7 +3,9 @@
     "allow": [
       "Bash(tree:*)",
       "Bash(npm run build:*)",
-      "Bash(npx react-scripts build:*)"
+      "Bash(npx react-scripts build:*)",
+      "Bash(node -e:*)",
+      "Bash(node -c:*)"
     ]
   }
 }

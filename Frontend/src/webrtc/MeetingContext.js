@@ -18,6 +18,7 @@ export const MeetingProvider = ({ children }) => {
     // 커스텀 PIP 상태
     const [customPipData, setCustomPipData] = useState(null);
     // { stream: MediaStream, peerName: string }
+    const customPipDataRef = useRef(null);
 
     // 브라우저 PIP용 스트림/이름 저장
     const pendingPipDataRef = useRef(null);
@@ -26,6 +27,35 @@ export const MeetingProvider = ({ children }) => {
     const pipVideoRef = useRef(null);
     // 🔥 PiP video의 srcObject는 고정(stable)하고 track만 교체
     const pipStableStreamRef = useRef(null);
+    const ownedPipStreamsRef = useRef(new Set());
+
+    // 🔥 MeetingPage가 getUserMedia로 획득한 로컬 미디어 스트림을 등록
+    // endMeeting 시 MeetingPage가 이미 언마운트되었더라도 트랙을 확실히 stop할 수 있도록 함
+    const registeredLocalStreamsRef = useRef(new Set());
+
+    const registerLocalStream = useCallback((stream) => {
+        if (stream && typeof stream.getTracks === "function") {
+            registeredLocalStreamsRef.current.add(stream);
+        }
+    }, []);
+
+    const stopStreamTracks = useCallback((stream) => {
+        if (!stream || typeof stream.getTracks !== "function") return;
+        try {
+            stream.getTracks().forEach((t) => {
+                try {
+                    if (t.readyState === "live") t.stop();
+                } catch { }
+            });
+        } catch { }
+    }, []);
+
+    const stopOwnedStreamIfAny = useCallback((stream) => {
+        if (!stream) return;
+        if (!ownedPipStreamsRef.current.has(stream)) return;
+        stopStreamTracks(stream);
+        ownedPipStreamsRef.current.delete(stream);
+    }, [stopStreamTracks]);
 
     const startMeeting = useCallback((roomId, subjectId) => {
         setRoomId(roomId);
@@ -129,8 +159,20 @@ export const MeetingProvider = ({ children }) => {
 
         // Canvas를 MediaStream으로 변환
         const stream = canvas.captureStream(30); // 30fps
+        ownedPipStreamsRef.current.add(stream);
         return stream;
     }, []);
+
+    useEffect(() => {
+        const prev = customPipDataRef.current?.stream || null;
+        const next = customPipData?.stream || null;
+
+        if (prev && prev !== next) {
+            stopOwnedStreamIfAny(prev);
+        }
+
+        customPipDataRef.current = customPipData || null;
+    }, [customPipData, stopOwnedStreamIfAny]);
 
     // ✅ PiP UI만 닫고(영상) 회의는 유지(오디오 계속)하는 종료
     const closePipUiKeepMeeting = useCallback((reasonText) => {
@@ -144,6 +186,7 @@ export const MeetingProvider = ({ children }) => {
         customPipNoVideoSinceRef.current = null;
 
         // 커스텀 PiP UI 닫기
+        stopOwnedStreamIfAny(customPipDataRef.current?.stream);
         setCustomPipData(null);
 
         // 브라우저 PiP 닫기
@@ -206,6 +249,38 @@ export const MeetingProvider = ({ children }) => {
         try { sessionStorage.removeItem("pip.subjectId"); } catch { }
         try { sessionStorage.removeItem("pip.scheduleId"); } catch { }
 
+        stopOwnedStreamIfAny(customPipDataRef.current?.stream);
+        stopOwnedStreamIfAny(pendingPipDataRef.current?.stream);
+
+        // 🔥 MeetingPage가 등록한 getUserMedia 스트림 강제 stop
+        // MeetingPage 언마운트 후에도 트랙이 살아남는 것을 방지 (브라우저 빨간원 제거)
+        try {
+            registeredLocalStreamsRef.current.forEach((stream) => {
+                try {
+                    stream.getTracks().forEach((t) => {
+                        try { if (t.readyState === "live") t.stop(); } catch { }
+                    });
+                } catch { }
+            });
+            registeredLocalStreamsRef.current.clear();
+        } catch { }
+
+        // 🔥 안전장치: DOM에 남아있는 모든 video/audio 요소의 스트림도 정리
+        // (MeetingPage 언마운트 후에도 HiddenPipVideo 등이 남아있을 수 있음)
+        try {
+            document.querySelectorAll("video, audio").forEach((el) => {
+                try {
+                    const s = el?.srcObject;
+                    if (s && typeof s.getTracks === "function") {
+                        s.getTracks().forEach((t) => {
+                            try { if (t.readyState === "live") t.stop(); } catch { }
+                        });
+                    }
+                } catch { }
+                try { if (el?.srcObject) el.srcObject = null; } catch { }
+            });
+        } catch { }
+
         setRoomId(null);
         setIsInMeeting(false);
         setIsPipMode(false);
@@ -218,7 +293,7 @@ export const MeetingProvider = ({ children }) => {
             clearInterval(pipPollingRef.current);
             pipPollingRef.current = null;
         }
-    }, []);
+    }, [stopOwnedStreamIfAny]);
 
     // 🔥 스트림 유효성 검사 헬퍼 함수
     const isStreamValidCheck = useCallback((s) => {
@@ -973,6 +1048,8 @@ export const MeetingProvider = ({ children }) => {
     // 커스텀 PIP 종료
     const stopCustomPip = useCallback(() => {
         console.log("[MeetingContext] 커스텀 PIP 종료");
+        stopOwnedStreamIfAny(customPipDataRef.current?.stream);
+        stopOwnedStreamIfAny(pendingPipDataRef.current?.stream);
         setCustomPipData(null);
         setIsPipMode(false);
         pendingPipDataRef.current = null;
@@ -982,14 +1059,24 @@ export const MeetingProvider = ({ children }) => {
             clearInterval(pipPollingRef.current);
             pipPollingRef.current = null;
         }
-    }, []);
+    }, [stopOwnedStreamIfAny]);
 
     // 🔥 커스텀 PIP 데이터 업데이트 (FloatingPip에서 새 스트림 찾았을 때 호출)
     const updateCustomPipData = useCallback((stream, peerName, peerId) => {
         console.log("[MeetingContext] 커스텀 PIP 데이터 업데이트", { peerName, peerId });
+        stopOwnedStreamIfAny(customPipDataRef.current?.stream);
         setCustomPipData({ stream, peerName, peerId: peerId || "" });
         pendingPipDataRef.current = { stream, peerName, peerId: peerId || "" };
-    }, []);
+    }, [stopOwnedStreamIfAny]);
+
+    useEffect(() => {
+        return () => {
+            stopOwnedStreamIfAny(customPipDataRef.current?.stream);
+            stopOwnedStreamIfAny(pendingPipDataRef.current?.stream);
+            ownedPipStreamsRef.current.forEach((s) => stopStreamTracks(s));
+            ownedPipStreamsRef.current.clear();
+        };
+    }, [stopOwnedStreamIfAny, stopStreamTracks]);
 
     // 브라우저 PIP 종료
     const exitBrowserPip = useCallback(async () => {
@@ -1014,6 +1101,7 @@ export const MeetingProvider = ({ children }) => {
                 stopCustomPip,
                 exitBrowserPip,
                 updateCustomPipData,
+                registerLocalStream, // 🔥 MeetingPage의 getUserMedia 스트림 등록용
                 pipVideoRef, // 🔥 숨겨진 PIP video ref 노출
             }}
         >
