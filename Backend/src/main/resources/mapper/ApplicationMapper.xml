@@ -111,6 +111,21 @@
         WHERE join_id = #{joinId}
     </select>
 
+    <!-- joinId → 신청자 이메일 조회 -->
+    <select id="getRequestUserEmailByJoinId" resultType="String">
+        SELECT request_user_email
+        FROM room_join_request
+        WHERE join_id = #{joinId}
+    </select>
+
+    <!-- joinId → 스터디 제목 조회 -->
+    <select id="getStudyTitleByJoinId" resultType="String">
+        SELECT r.title
+        FROM room_join_request rjr
+                 JOIN room r ON rjr.room_id = r.room_id
+        WHERE rjr.join_id = #{joinId}
+    </select>
+
 
     <!-- 승인된 인원 수 count -->
     <select id="countApprovedByRoomId" resultType="int">

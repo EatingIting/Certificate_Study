@@ -8,8 +8,38 @@ const AssignmentDetail = () => {
     const { subjectId, id } = useParams();
     const navigate = useNavigate();
     const [submissions, setSubmissions] = useState([]);
+    const [assignmentMeta, setAssignmentMeta] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const myEmail = (sessionStorage.getItem("userEmail") || "").trim().toLowerCase();
+    const canDelete =
+        !!assignmentMeta &&
+        !!myEmail &&
+        String(assignmentMeta.authorEmail || "").trim().toLowerCase() === myEmail;
 
     useEffect(() => {
+        const fetchAssignmentMeta = async () => {
+            if (!subjectId || !id) return;
+            try {
+                const res = await api.get(`/rooms/${subjectId}/assignments`);
+                const found = (res.data || []).find(
+                    (item) => String(item.assignmentId) === String(id)
+                );
+                setAssignmentMeta(
+                    found
+                        ? {
+                              assignmentId: found.assignmentId,
+                              title: found.title,
+                              authorEmail: found.authorEmail,
+                          }
+                        : null
+                );
+            } catch (e) {
+                console.error("assignment meta load failed", e);
+                setAssignmentMeta(null);
+            }
+        };
+
         const fetchDetail = async () => {
             try {
                 console.log("accessToken:", sessionStorage.getItem("accessToken"));
@@ -34,8 +64,30 @@ const AssignmentDetail = () => {
             }
         };
 
-        if (id) fetchDetail();
-    }, [id]);
+        if (id) {
+            fetchDetail();
+            fetchAssignmentMeta();
+        }
+    }, [id, subjectId]);
+
+    const handleDeleteAssignment = async () => {
+        if (!canDelete || !id) return;
+
+        const ok = window.confirm("이 과제를 삭제하시겠습니까? 삭제 후 되돌릴 수 없습니다.");
+        if (!ok) return;
+
+        try {
+            setIsDeleting(true);
+            await api.delete(`/assignments/${id}`);
+            alert("과제가 삭제되었습니다.");
+            navigate(`/lms/${subjectId}/assignment`, { replace: true });
+        } catch (e) {
+            console.error("assignment delete failed", e);
+            alert("과제 삭제에 실패했습니다.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
 
 
@@ -221,6 +273,15 @@ const AssignmentDetail = () => {
                 <button className="ad-back-btn" onClick={() => navigate(-1)}>
                     ← 목록으로
                 </button>
+                {canDelete && (
+                    <button
+                        className="ad-delete-btn"
+                        onClick={handleDeleteAssignment}
+                        disabled={isDeleting}
+                    >
+                        {isDeleting ? "삭제 중..." : "과제 삭제"}
+                    </button>
+                )}
             </div>
 
             {/* 카드 */}

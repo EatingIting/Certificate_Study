@@ -7,6 +7,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,35 +37,18 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
 
         String ownerId = extractUserId(session);
-        ownerSessions.remove(ownerId);
+        ownerSessions.remove(ownerId, session);
 
         System.out.println("❌ 알림 WebSocket 종료됨: " + ownerId);
     }
 
     public void sendToOwner(String ownerId, String content) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "NOTIFICATION");
+        payload.put("notificationType", "APPLICATION");
+        payload.put("content", content);
 
-        WebSocketSession session = ownerSessions.get(ownerId);
-
-        if (session == null || !session.isOpen()) {
-            System.out.println("⚠ 접속 없음: " + ownerId);
-            return;
-        }
-
-        try {
-            String payload = objectMapper.writeValueAsString(
-                    Map.of(
-                            "type", "NOTIFICATION",
-                            "content", content
-                    )
-            );
-
-            session.sendMessage(new TextMessage(payload));
-
-            System.out.println("🔔 모집 신청 알림 전송 완료 → " + ownerId);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        sendPayload(ownerId, payload, "모집 신청");
     }
 
     public void sendToOwner(
@@ -73,34 +57,83 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
             String postTitle,
             String commentPreview
     ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "NOTIFICATION");
+        payload.put("notificationType", "COMMENT");
+        payload.put("postId", postId);
+        payload.put("postTitle", postTitle);
+        payload.put("content", commentPreview);
 
-        WebSocketSession session = ownerSessions.get(ownerId);
+        sendPayload(ownerId, payload, "댓글");
+    }
+
+    public void sendApplicationDecisionNotification(
+            String userId,
+            String status,
+            String content
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "NOTIFICATION");
+        payload.put("notificationType", "APPLICATION");
+        payload.put("status", status);
+        payload.put("content", content);
+
+        sendPayload(userId, payload, "가입신청 상태");
+    }
+
+    public void sendLmsNotification(
+            String userId,
+            String notificationType,
+            String roomId,
+            Long assignmentId,
+            Long scheduleId,
+            String title,
+            String content
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "NOTIFICATION");
+        payload.put("notificationType", notificationType);
+        payload.put("roomId", roomId);
+        payload.put("title", title);
+        payload.put("content", content);
+        if (assignmentId != null) payload.put("assignmentId", assignmentId);
+        if (scheduleId != null) payload.put("scheduleId", scheduleId);
+
+        sendPayload(userId, payload, "LMS");
+    }
+
+    private void sendPayload(
+            String userId,
+            Map<String, Object> payload,
+            String logType
+    ) {
+        WebSocketSession session = ownerSessions.get(userId);
 
         if (session == null || !session.isOpen()) {
-            System.out.println("⚠ 접속 없음: " + ownerId);
+            System.out.println("⚠ 접속 없음(" + logType + "): " + userId);
             return;
         }
 
         try {
-            String payload = objectMapper.writeValueAsString(
-                    Map.of(
-                            "type", "NOTIFICATION",
-                            "postId", postId,
-                            "postTitle", postTitle,
-                            "content", commentPreview
-                    )
-            );
-
-            session.sendMessage(new TextMessage(payload));
-
-            System.out.println("🔔 댓글 알림 전송 완료 → " + ownerId);
-
+            String message = objectMapper.writeValueAsString(payload);
+            synchronized (session) {
+                if (!session.isOpen()) {
+                    System.out.println("⚠ 세션 닫힘(" + logType + "): " + userId);
+                    return;
+                }
+                session.sendMessage(new TextMessage(message));
+            }
+            System.out.println("🔔 " + logType + " 알림 전송 완료 → " + userId);
         } catch (Exception e) {
+            ownerSessions.remove(userId, session);
             e.printStackTrace();
         }
     }
 
     private String extractUserId(WebSocketSession session) {
+        if (session.getUri() == null || session.getUri().getPath() == null) {
+            return "";
+        }
         String path = session.getUri().getPath();
         return path.substring(path.lastIndexOf("/") + 1);
     }

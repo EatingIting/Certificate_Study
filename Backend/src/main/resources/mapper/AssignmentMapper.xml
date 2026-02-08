@@ -54,6 +54,23 @@
                                  submitted_at = CURRENT_TIMESTAMP
     </insert>
 
+    <select id="selectCreatedByEmail" resultType="string">
+        SELECT created_by_email
+        FROM assignments
+        WHERE assignment_id = #{assignmentId}
+    </select>
+
+    <delete id="deleteSubmissionsByAssignmentId">
+        DELETE FROM assignment_submissions
+        WHERE assignment_id = #{assignmentId}
+    </delete>
+
+    <delete id="deleteAssignmentByIdAndAuthor">
+        DELETE FROM assignments
+        WHERE assignment_id = #{assignmentId}
+          AND created_by_email = #{authorEmail}
+    </delete>
+
 
 
     <select id="selectSubmissionDetails"

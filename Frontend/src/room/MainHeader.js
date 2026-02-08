@@ -6,6 +6,52 @@ import { FaBell } from "react-icons/fa";
 import { toWsBackendUrl } from "../utils/backendUrl";
 import { logout } from "../api/api";
 
+const getNotificationIntent = (payload) => {
+    if (!payload || typeof payload !== "object") {
+        return { shouldShowDot: false, targetTab: null };
+    }
+
+    const type = String(payload.type || "").toUpperCase();
+    const notificationType = String(payload.notificationType || "").toUpperCase();
+    const status = String(payload.status || "").toUpperCase();
+    const message = String(payload.message || payload.content || "").toUpperCase();
+
+    const isApproved =
+        type.includes("APPROV") ||
+        status.includes("APPROV") ||
+        message.includes("승인".toUpperCase()) ||
+        message.includes("APPROV");
+
+    const isRejected =
+        type.includes("REJECT") ||
+        status.includes("REJECT") ||
+        type.includes("DENY") ||
+        status.includes("DENY") ||
+        message.includes("거절".toUpperCase()) ||
+        message.includes("반려".toUpperCase()) ||
+        message.includes("REJECT") ||
+        message.includes("DENY");
+
+    const isDecision = isApproved || isRejected;
+    const isApplication =
+        notificationType.includes("APPLICATION") ||
+        message.includes("신청".toUpperCase());
+
+    const shouldShowDot =
+        type === "NOTIFICATION" ||
+        isApplication ||
+        isDecision;
+
+    let targetTab = null;
+    if (isDecision) {
+        targetTab = "sent";
+    } else if (isApplication) {
+        targetTab = "received";
+    }
+
+    return { shouldShowDot, targetTab };
+};
+
 const MainHeader = () => {
     const navigate = useNavigate();
     const { pathname } = useLocation();
@@ -17,6 +63,7 @@ const MainHeader = () => {
 
     const [hasNotification, setHasNotification] = useState(false);
     const [latestJoinId, setLatestJoinId] = useState(null);
+    const [notificationTargetTab, setNotificationTargetTab] = useState("received");
 
     useEffect(() => {
         setNickname(sessionStorage.getItem("nickname"));
@@ -44,10 +91,19 @@ const MainHeader = () => {
         );
 
         socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+            let data = null;
+            try {
+                data = JSON.parse(event.data);
+            } catch (e) {
+                data = { message: String(event.data || "") };
+            }
 
-            if (data.type === "NOTIFICATION") {
+            const { shouldShowDot, targetTab } = getNotificationIntent(data);
+            if (shouldShowDot) {
                 setHasNotification(true);
+            }
+            if (targetTab) {
+                setNotificationTargetTab(targetTab);
             }
         };
 
@@ -65,6 +121,7 @@ const MainHeader = () => {
         setNickname(null);
         setHasNotification(false);
         setLatestJoinId(null);
+        setNotificationTargetTab("received");
         window.location.replace("/");
     };
 
@@ -111,9 +168,13 @@ const MainHeader = () => {
                                     }
 
                                     setHasNotification(false);
+                                    const targetTab = notificationTargetTab || "received";
 
                                     navigate("/room/my-applications", {
-                                        state: { tab: "received" },
+                                        state: {
+                                            tab: targetTab,
+                                            refreshAt: Date.now(),
+                                        },
                                     });
                                 }}
                             >

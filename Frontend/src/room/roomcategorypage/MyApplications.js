@@ -5,7 +5,7 @@ import "./MyApplications.css";
 
 const MyApplications = () => {
   const navigate = useNavigate();
-    const location = useLocation();
+  const location = useLocation();
 
   useEffect(() => {
     const token = sessionStorage.getItem("accessToken");
@@ -16,6 +16,7 @@ const MyApplications = () => {
   }, [navigate]);
 
   const [tab, setTab] = useState(location.state?.tab || "sent");
+  const [refreshToken, setRefreshToken] = useState(0);
   const [list, setList] = useState([]);
   const [openApplicationId, setOpenApplicationId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -42,11 +43,27 @@ const MyApplications = () => {
   };
 
   useEffect(() => {
+    const nextTab = location.state?.tab;
+    const refreshAt = location.state?.refreshAt;
+
+    if (!nextTab && !refreshAt) return;
+
+    if (nextTab && nextTab !== tab) {
+      setTab(nextTab);
+      return;
+    }
+
+    if (refreshAt) {
+      setRefreshToken(refreshAt);
+    }
+  }, [location.state?.tab, location.state?.refreshAt]);
+
+  useEffect(() => {
     const controller = new AbortController();
     fetchApplications(controller.signal);
 
     return () => controller.abort();
-  }, [tab]);
+  }, [tab, refreshToken]);
 
   const toggleDetail = (joinId, requestedAt) => {
     setOpenApplicationId((prev) => (prev === joinId ? null : joinId));

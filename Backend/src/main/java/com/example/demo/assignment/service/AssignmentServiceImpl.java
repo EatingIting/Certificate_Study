@@ -5,19 +5,15 @@ import com.example.demo.assignment.dto.AssignmentListResponse;
 import com.example.demo.assignment.mapper.AssignmentMapper;
 import com.example.demo.assignment.vo.AssignmentSubmissionVO;
 import com.example.demo.assignment.vo.AssignmentVO;
+import com.example.demo.notification.LmsNotificationService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
-import java.util.UUID;
 import com.example.demo.s3.S3Uploader;
 import com.example.demo.assignment.dto.*;
 import java.util.*;
@@ -32,6 +28,7 @@ public class AssignmentServiceImpl implements AssignmentService {
 
     private final AssignmentMapper assignmentMapper;
     private final S3Uploader s3Uploader;
+    private final LmsNotificationService lmsNotificationService;
 
 
 
@@ -49,6 +46,14 @@ public class AssignmentServiceImpl implements AssignmentService {
         vo.setCreatedByEmail(createdByEmail);
 
         assignmentMapper.insertAssignment(vo);
+
+        lmsNotificationService.notifyAssignmentCreated(
+                roomId,
+                vo.getAssignmentId(),
+                vo.getTitle(),
+                createdByEmail
+        );
+
         return vo.getAssignmentId();
     }
 
@@ -124,7 +129,25 @@ public class AssignmentServiceImpl implements AssignmentService {
         return new AssignmentMatrixResponse(assignments, members);
     }
 
+    @Override
+    @Transactional
+    public void deleteAssignment(Long assignmentId, String requesterEmail) {
+        String authorEmail = assignmentMapper.selectCreatedByEmail(assignmentId);
 
+        if (authorEmail == null || authorEmail.isBlank()) {
+            throw new IllegalArgumentException("삭제할 과제를 찾을 수 없습니다.");
+        }
 
+        if (requesterEmail == null || !authorEmail.trim().equalsIgnoreCase(requesterEmail.trim())) {
+            throw new AccessDeniedException("본인이 생성한 과제만 삭제할 수 있습니다.");
+        }
+
+        assignmentMapper.deleteSubmissionsByAssignmentId(assignmentId);
+
+        int deleted = assignmentMapper.deleteAssignmentByIdAndAuthor(assignmentId, requesterEmail);
+        if (deleted == 0) {
+            throw new IllegalStateException("과제 삭제에 실패했습니다.");
+        }
+    }
 
 }

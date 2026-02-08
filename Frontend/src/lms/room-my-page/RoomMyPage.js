@@ -314,10 +314,22 @@ export default function RoomMyPage() {
 
             let updated = await updateRoomNickname(selectedRoomId, next);
 
-            setNickname(updated.nickname || next);
+            let resolvedNickname = (updated.nickname || next || "").trim();
+
+            setNickname(resolvedNickname);
             if (typeof updated.profileImageUrl === "string") {
                 setProfileImageUrl(updated.profileImageUrl);
             }
+
+            // LMSHeader 즉시 반영: LMSContext의 이벤트 리스너가 roomNickname을 갱신함
+            window.dispatchEvent(
+                new CustomEvent("lms:room-nickname-updated", {
+                    detail: {
+                        roomId: selectedRoomId,
+                        roomNickname: resolvedNickname,
+                    },
+                })
+            );
 
             setIsNicknameEditing(false);
             setSuccessMsg("닉네임이 수정되었습니다.");

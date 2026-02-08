@@ -3,6 +3,7 @@ package com.example.demo.schedule.service;
 
 import com.example.demo.dto.schedule.StudyScheduleCreateRequest;
 import com.example.demo.dto.schedule.StudyScheduleUpdateRequest;
+import com.example.demo.notification.LmsNotificationService;
 import com.example.demo.roomcontext.CurrentUserUtil;
 import com.example.demo.roomparticipant.RoomParticipantMapper;
 import com.example.demo.schedule.mapper.StudyScheduleMapper;
@@ -34,6 +35,7 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
     private final EntityManager entityManager;
     private final RoomParticipantMapper roomParticipantMapper;
     private final CurrentUserUtil currentUserUtil;
+    private final LmsNotificationService lmsNotificationService;
 
     private void requireHost(String roomId) {
         String email = currentUserUtil.getCurrentUserEmail();
@@ -91,6 +93,7 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
     @Transactional
     public Long insert(StudyScheduleCreateRequest req) {
         String subjectId = req.getRoomId();
+        String actorEmail = currentUserUtil.getCurrentUserEmail();
         requireHost(subjectId);
         LocalDate targetDate = LocalDate.parse(req.getDate());
         validateRoundDateOrder(subjectId, req.getRound(), targetDate);
@@ -110,6 +113,13 @@ public class StudyScheduleServiceImpl implements StudyScheduleService {
 
         try {
             studyScheduleMapper.insert(vo);
+            lmsNotificationService.notifyStudyScheduleCreated(
+                    subjectId,
+                    vo.getStudyScheduleId(),
+                    req.getRound(),
+                    targetDate,
+                    actorEmail
+            );
             // schedule_id = round_num 이므로 생성된 ID가 아닌 회차 번호 반환
             return Long.valueOf(req.getRound());
         } catch (DuplicateKeyException e) {

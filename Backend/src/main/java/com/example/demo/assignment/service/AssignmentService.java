@@ -17,8 +17,9 @@ public interface AssignmentService {
     void submitAssignment(Long assignmentId, String userEmail, String submitTitle, String memo, MultipartFile file);
 
     AssignmentMatrixResponse getSubmissionMatrix(String roomId);
-}
 
+    void deleteAssignment(Long assignmentId, String requesterEmail);
+}
 
 
 

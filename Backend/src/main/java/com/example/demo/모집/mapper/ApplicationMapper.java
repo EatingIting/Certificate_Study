@@ -63,6 +63,12 @@ public interface ApplicationMapper {
     // joinId → roomId 조회
     String getRoomIdByJoinId(@Param("joinId") String joinId);
 
+    // joinId → 신청자 이메일 조회
+    String getRequestUserEmailByJoinId(@Param("joinId") String joinId);
+
+    // joinId → 스터디 제목 조회
+    String getStudyTitleByJoinId(@Param("joinId") String joinId);
+
     // 승인 인원 count
     int countApprovedByRoomId(@Param("roomId") String roomId);
 

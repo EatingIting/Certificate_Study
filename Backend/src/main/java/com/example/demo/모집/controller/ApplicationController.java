@@ -107,9 +107,16 @@ public class ApplicationController {
             throw new RuntimeException("인증 정보가 없습니다.");
         }
 
-        applicationService.rejectApplication(
-                joinId,
-                authentication.getName()
-        );
+        try {
+            applicationService.rejectApplication(
+                    joinId,
+                    authentication.getName()
+            );
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    e.getMessage()
+            );
+        }
     }
 }

@@ -34,5 +34,13 @@ public interface AssignmentMapper {
     int insertAssignment(AssignmentVO vo);
 
     int upsertSubmission(AssignmentSubmissionVO vo);
-}
 
+    String selectCreatedByEmail(@Param("assignmentId") Long assignmentId);
+
+    int deleteSubmissionsByAssignmentId(@Param("assignmentId") Long assignmentId);
+
+    int deleteAssignmentByIdAndAuthor(
+            @Param("assignmentId") Long assignmentId,
+            @Param("authorEmail") String authorEmail
+    );
+}

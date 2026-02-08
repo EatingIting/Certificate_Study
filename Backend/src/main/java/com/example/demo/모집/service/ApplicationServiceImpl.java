@@ -45,7 +45,16 @@ public class ApplicationServiceImpl implements ApplicationService {
     @Transactional
     public void approveApplication(String joinId, String hostUserEmail) {
 
+        String requestUserEmail =
+                applicationMapper.getRequestUserEmailByJoinId(joinId);
+
+        String studyTitle =
+                applicationMapper.getStudyTitleByJoinId(joinId);
+
         String roomId = applicationMapper.getRoomIdByJoinId(joinId);
+        if (roomId == null || roomId.isBlank()) {
+            throw new IllegalStateException("존재하지 않는 신청입니다.");
+        }
 
         int approvedCount = applicationMapper.countApprovedByRoomId(roomId);
         int maxParticipants = applicationMapper.getMaxParticipants(roomId);
@@ -59,7 +68,10 @@ public class ApplicationServiceImpl implements ApplicationService {
         }
 
         // 승인 처리
-        applicationMapper.approveApplication(joinId, hostUserEmail);
+        int updated = applicationMapper.approveApplication(joinId, hostUserEmail);
+        if (updated == 0) {
+            throw new IllegalStateException("승인할 신청이 없습니다.");
+        }
 
         // 승인 후 다시 count
         approvedCount = applicationMapper.countApprovedByRoomId(roomId);
@@ -69,11 +81,32 @@ public class ApplicationServiceImpl implements ApplicationService {
             applicationMapper.closeRoom(roomId);
             applicationMapper.autoRejectPending(roomId);
         }
+
+        sendDecisionNotificationToApplicant(
+                requestUserEmail,
+                "APPROVED",
+                getStudyTitleText(studyTitle) + " 스터디 가입 신청이 승인되었습니다."
+        );
     }
 
     @Override
     public void rejectApplication(String joinId, String hostUserEmail) {
-        applicationMapper.rejectApplication(joinId, hostUserEmail);
+        String requestUserEmail =
+                applicationMapper.getRequestUserEmailByJoinId(joinId);
+
+        String studyTitle =
+                applicationMapper.getStudyTitleByJoinId(joinId);
+
+        int updated = applicationMapper.rejectApplication(joinId, hostUserEmail);
+        if (updated == 0) {
+            throw new IllegalStateException("거절할 신청이 없습니다.");
+        }
+
+        sendDecisionNotificationToApplicant(
+                requestUserEmail,
+                "REJECTED",
+                getStudyTitleText(studyTitle) + " 스터디 가입 신청이 거절되었습니다."
+        );
     }
 
     @Override
@@ -171,6 +204,36 @@ public class ApplicationServiceImpl implements ApplicationService {
         }
 
         throw new IllegalStateException("이미 신청 중이거나 승인된 스터디입니다.");
+    }
+
+    private void sendDecisionNotificationToApplicant(
+            String requestUserEmail,
+            String status,
+            String content
+    ) {
+        if (requestUserEmail == null || requestUserEmail.isBlank()) {
+            return;
+        }
+
+        String requestUserId =
+                userMapper.findUserIdByEmail(requestUserEmail);
+
+        if (requestUserId == null || requestUserId.isBlank()) {
+            return;
+        }
+
+        notificationHandler.sendApplicationDecisionNotification(
+                requestUserId,
+                status,
+                content
+        );
+    }
+
+    private String getStudyTitleText(String studyTitle) {
+        if (studyTitle == null || studyTitle.isBlank()) {
+            return "해당";
+        }
+        return studyTitle;
     }
 
 }

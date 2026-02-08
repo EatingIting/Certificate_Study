@@ -3,6 +3,7 @@ package com.example.demo.schedule.service;
 import com.example.demo.dto.schedule.ScheduleCreateRequest;
 import com.example.demo.dto.schedule.ScheduleEventResponse;
 import com.example.demo.dto.schedule.ScheduleUpdateRequest;
+import com.example.demo.notification.LmsNotificationService;
 import com.example.demo.roomcontext.CurrentUserUtil;
 import com.example.demo.roomparticipant.RoomParticipantMapper;
 import com.example.demo.schedule.converter.ScheduleEventConverter;
@@ -27,6 +28,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final RoomParticipantMapper roomParticipantMapper;
     private final CurrentUserUtil currentUserUtil;
     private final AuthService authService;
+    private final LmsNotificationService lmsNotificationService;
 
     private void requireHost(String roomId, String email) {
         String hostEmail = roomParticipantMapper.selectHostEmail(roomId);
@@ -90,6 +92,14 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .build();
 
         scheduleMapper.insert(vo); // mapper 그대로 :contentReference[oaicite:3]{index=3}
+
+        lmsNotificationService.notifyScheduleCreated(
+                vo.getRoomId(),
+                vo.getScheduleId(),
+                vo.getTitle(),
+                email
+        );
+
         return vo.getScheduleId();
     }
 

@@ -10,7 +10,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.demo.assignment.dto.AssignmentSubmissionDetailResponse;
-import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Map;
@@ -79,5 +78,19 @@ public class AssignmentController {
             @PathVariable String roomId
     ) {
         return ResponseEntity.ok(assignmentService.getSubmissionMatrix(roomId));
+    }
+
+    @DeleteMapping("/assignments/{assignmentId}")
+    public ResponseEntity<?> deleteAssignment(
+            @PathVariable Long assignmentId,
+            Authentication authentication
+    ) {
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        String userEmail = authentication.getName();
+        assignmentService.deleteAssignment(assignmentId, userEmail);
+        return ResponseEntity.ok(Map.of("message", "deleted"));
     }
 }
