@@ -52,10 +52,10 @@ const ClassCard = ({ data, loginUserEmail }) => {
 
     const handleExit = async () => {
         const confirmText = prompt(
-            "클래스를 나가려면 '클래스 나가기'를 입력하세요."
+            "클래스를 나가려면 '클래스 삭제'를 입력하세요."
         );
 
-        if (confirmText !== "클래스 나가기") {
+        if (confirmText !== "클래스 삭제") {
             alert("입력이 일치하지 않습니다. 취소되었습니다.");
             return;
         }
@@ -67,7 +67,7 @@ const ClassCard = ({ data, loginUserEmail }) => {
                 method: "DELETE",
             });
 
-            alert("클래스를 나갔습니다.");
+            alert("클래스가 삭제되었습니다.");
 
             sessionStorage.removeItem("lms.activeRoomId");
             sessionStorage.removeItem("lms.activeSubjectId");
@@ -75,7 +75,7 @@ const ClassCard = ({ data, loginUserEmail }) => {
             window.location.reload();
         } catch (error) {
             console.error(error);
-            alert("클래스 나가기 실패");
+            alert("클래스 삭제 실패");
         }
     };
 
@@ -116,7 +116,7 @@ const ClassCard = ({ data, loginUserEmail }) => {
                                         className="exit"
                                         onClick={handleExit}
                                     >
-                                        클래스 나가기
+                                        클래스 삭제
                                     </div>
                                 </div>
                             )}

@@ -75,7 +75,29 @@
     </update>
 
 
-    <!-- 방 삭제 -->
+    <!-- ============================= -->
+    <!-- 삭제 로직 (FK 순서 중요) -->
+    <!-- ============================= -->
+
+    <!-- 게시글 먼저 삭제 -->
+    <delete id="deleteBoardPostsByRoomId">
+        DELETE FROM board_posts
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <!-- 참가 신청 삭제 -->
+    <delete id="deleteJoinRequestsByRoomId">
+        DELETE FROM room_join_request
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <!-- 일정 삭제 -->
+    <delete id="deleteSchedulesByRoomId">
+        DELETE FROM schedules
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <!-- 마지막에 방 삭제 -->
     <delete id="deleteRoom" parameterType="String">
         DELETE FROM room
         WHERE room_id = #{roomId}

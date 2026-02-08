@@ -1,6 +1,8 @@
 package com.example.demo.마이페이지.service;
 
 import com.example.demo.s3.S3Uploader;
+import com.example.demo.로그인.mapper.AuthMapper;
+import com.example.demo.로그인.vo.AuthVO;
 import com.example.demo.마이페이지.mapper.MyPageMapper;
 import com.example.demo.마이페이지.vo.MyPageVO;
 import com.example.demo.마이페이지.vo.MyStudyVO;
@@ -19,6 +21,7 @@ public class MyPageServiceImpl implements MyPageService {
 
     private final MyPageMapper myPageMapper;
     private final S3Uploader s3Uploader;
+    private final AuthMapper authMapper;
 
     @Override
     public MyPageVO getMyPage(String userId) {
@@ -58,9 +61,42 @@ public class MyPageServiceImpl implements MyPageService {
     }
 
     @Override
+    @Transactional
     public void withdraw(String email) {
-        myPageMapper.deleteByEmail(email);
+
+        AuthVO user = authMapper.findByEmail(email);
+        if (user == null) {
+            throw new IllegalStateException("사용자를 찾을 수 없습니다.");
+        }
+
+        String userId = user.getUserId();
+
+        // 방장 여부 체크
+        int hostRoomCount = myPageMapper.countRoomsByHost(email);
+        if (hostRoomCount > 0) {
+            throw new IllegalStateException("방장을 위임하지 않은 스터디가 있어 탈퇴할 수 없습니다.");
+        }
+
+        // FK 삭제 (user_id 기준)
+
+        myPageMapper.deleteBoardCommentsByUser(userId);
+        myPageMapper.deleteBoardPostsByUser(userId);
+        myPageMapper.deleteChatParticipantsByUser(userId);
+        myPageMapper.deleteChatMessagesByUser(userId);
+
+        myPageMapper.deleteRoomParticipantsByUser(userId);
+        myPageMapper.deleteSchedulesByUser(userId);
+        myPageMapper.deleteUserInterestCategory(userId);
+
+        // FK 삭제 (email 기준)
+        myPageMapper.deleteJoinRequestByRequester(email);
+        myPageMapper.deleteJoinRequestByHost(email);
+
+        // 마지막 users 삭제
+        myPageMapper.deleteUser(userId);
     }
+
+
 
     @Override
     public String getGender(String email) {

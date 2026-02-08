@@ -12,7 +12,7 @@
         WHERE user_id = #{userId}
     </select>
 
-    <!-- 내 정보 수정 (글로벌 프로필) -->
+    <!-- 내 정보 수정 -->
     <update id="updateMyPage">
         UPDATE users
         SET name = #{name},
@@ -24,10 +24,65 @@
         WHERE user_id = #{userId}
     </update>
 
-    <!-- 회원 탈퇴 -->
-    <delete id="deleteByEmail">
+    <!-- 방장 여부 체크 -->
+    <select id="countRoomsByHost" resultType="int">
+        SELECT COUNT(*)
+        FROM room
+        WHERE host_user_email = #{email}
+    </select>
+
+    <!-- 회원탈퇴용 FK 삭제 (user_id 기준) -->
+
+    <delete id="deleteBoardCommentsByUser">
+        DELETE FROM board_comments
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteBoardPostsByUser">
+        DELETE FROM board_posts
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteChatMessagesByUser">
+        DELETE FROM chat_messages
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteChatParticipantsByUser">
+        DELETE FROM chat_participants
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteRoomParticipantsByUser">
+        DELETE FROM room_participant
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteSchedulesByUser">
+        DELETE FROM schedules
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteUserInterestCategory">
+        DELETE FROM user_interest_category
+        WHERE user_id = #{userId}
+    </delete>
+
+    <!-- 회원탈퇴용 FK 삭제 (email 기준) -->
+    <delete id="deleteJoinRequestByRequester">
+        DELETE FROM room_join_request
+        WHERE request_user_email = #{email}
+    </delete>
+
+    <delete id="deleteJoinRequestByHost">
+        DELETE FROM room_join_request
+        WHERE host_user_email = #{email}
+    </delete>
+
+    <!-- 마지막 users 삭제 -->
+    <delete id="deleteUser">
         DELETE FROM users
-        WHERE email = #{email}
+        WHERE user_id = #{userId}
     </delete>
 
     <!-- 성별 조회 -->
@@ -37,66 +92,62 @@
         WHERE email = #{email}
     </select>
 
-    <!-- 진행중 스터디 (같은 방이 방장+가입 양쪽에 있어도 room_id 기준 1개만) -->
+    <!-- 진행중 스터디 -->
     <select id="getJoinedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
-        <!-- 방장이 만든 진행중 -->
         SELECT r.room_id AS roomId,
-        r.title,
-        '진행중' AS status,
-        r.start_date AS startDate,
-        r.ended_at AS endAt,
-        r.host_user_email AS hostEmail
+               r.title,
+               '진행중' AS status,
+               r.start_date AS startDate,
+               r.ended_at AS endAt,
+               r.host_user_email AS hostEmail
         FROM room r
         WHERE r.host_user_email = #{email}
-        AND r.ended_at <![CDATA[ >= ]]> CURDATE()
+          AND r.ended_at <![CDATA[ >= ]]> CURDATE()
 
         UNION
 
-        <!-- 가입 승인된 진행중 (같은 방에 대한 요청이 여러 건이어도 room_id 기준 1개) -->
         SELECT r.room_id AS roomId,
-        r.title,
-        '진행중' AS status,
-        r.start_date AS startDate,
-        r.ended_at AS endAt,
-        r.host_user_email AS hostEmail
+               r.title,
+               '진행중' AS status,
+               r.start_date AS startDate,
+               r.ended_at AS endAt,
+               r.host_user_email AS hostEmail
         FROM room_join_request j
-        JOIN room r ON j.room_id = r.room_id
+                 JOIN room r ON j.room_id = r.room_id
         WHERE j.request_user_email = #{email}
-        AND j.status = '승인'
-        AND r.ended_at <![CDATA[ >= ]]> CURDATE()
+          AND j.status = '승인'
+          AND r.ended_at <![CDATA[ >= ]]> CURDATE()
         GROUP BY r.room_id, r.title, r.start_date, r.ended_at, r.host_user_email
 
     </select>
 
-    <!-- 완료된 스터디 (같은 방이 방장+가입 양쪽에 있어도 room_id 기준 1개만) -->
+    <!-- 완료된 스터디 -->
     <select id="getCompletedStudies" resultType="com.example.demo.마이페이지.vo.MyStudyVO">
 
-        <!-- 방장이 만든 종료 -->
         SELECT r.room_id AS roomId,
-        r.title,
-        '종료' AS status,
-        r.start_date AS startDate,
-        r.ended_at AS endAt,
-        r.host_user_email AS hostEmail
+               r.title,
+               '종료' AS status,
+               r.start_date AS startDate,
+               r.ended_at AS endAt,
+               r.host_user_email AS hostEmail
         FROM room r
         WHERE r.host_user_email = #{email}
-        AND r.ended_at <![CDATA[ < ]]> CURDATE()
+          AND r.ended_at <![CDATA[ < ]]> CURDATE()
 
         UNION
 
-        <!-- 가입 승인된 종료 (같은 방에 대한 요청이 여러 건이어도 room_id 기준 1개) -->
         SELECT r.room_id AS roomId,
-        r.title,
-        '종료' AS status,
-        r.start_date AS startDate,
-        r.ended_at AS endAt,
-        r.host_user_email AS hostEmail
+               r.title,
+               '종료' AS status,
+               r.start_date AS startDate,
+               r.ended_at AS endAt,
+               r.host_user_email AS hostEmail
         FROM room_join_request j
-        JOIN room r ON j.room_id = r.room_id
+                 JOIN room r ON j.room_id = r.room_id
         WHERE j.request_user_email = #{email}
-        AND j.status = '승인'
-        AND r.ended_at <![CDATA[ < ]]> CURDATE()
+          AND j.status = '승인'
+          AND r.ended_at <![CDATA[ < ]]> CURDATE()
         GROUP BY r.room_id, r.title, r.start_date, r.ended_at, r.host_user_email
 
     </select>

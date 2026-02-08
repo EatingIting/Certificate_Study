@@ -7,34 +7,24 @@ import defaultImg from "../../mainpage/default.jpg";
 
 const MyPage = () => {
     const [profile, setProfile] = useState(null);
-
     const [editOpen, setEditOpen] = useState(false);
-
     const [joinedStudies, setJoinedStudies] = useState([]);
-
     const [completedStudies, setCompletedStudies] = useState([]);
-
     const [draft, setDraft] = useState(null);
-
     const [previewImage, setPreviewImage] = useState("");
-
     const [allCategories, setAllCategories] = useState([]);
     const [mainCategories, setMainCategories] = useState([]);
     const [midCategories, setMidCategories] = useState([]);
     const [subCategories, setSubCategories] = useState([]);
-
     const [selectedMain, setSelectedMain] = useState(null);
     const [selectedMid, setSelectedMid] = useState(null);
     const [selectedSub, setSelectedSub] = useState(null);
-
     const [interestCategories, setInterestCategories] = useState([]);
     const [tempInterestCategories, setTempInterestCategories] = useState([]);
-
     const navigate = useNavigate();
 
     useEffect(() => {
         const token = sessionStorage.getItem("accessToken");
-
         if (!token) {
             alert("로그인이 필요한 페이지입니다.");
             navigate("/auth");
@@ -110,7 +100,6 @@ const MyPage = () => {
                 },
             });
 
-            // roomId 기준 중복 제거 (스터디장 양도 후 같은 클래스룸이 2개 보이는 현상 방지)
             const dedupeByRoomId = (list) => {
                 const seen = new Set();
                 return (list || []).filter((s) => {
@@ -129,11 +118,7 @@ const MyPage = () => {
 
     const getImageUrl = (img) => {
         if (!img) return defaultImg;
-
-        if (img.startsWith("http")) {
-            return img;
-        }
-
+        if (img.startsWith("http")) return img;
         return `${getBackendOrigin()}${img}`;
     };
 
@@ -178,22 +163,19 @@ const MyPage = () => {
 
             setInterestCategories(tempInterestCategories);
 
-            // ✅ 닉네임 수정 즉시 전역 반영 (MainHeader / LMSContext / 화상채팅 fallback)
             try {
                 const nextNick = (draft?.nickname || "").trim();
                 if (nextNick) {
                     sessionStorage.setItem("nickname", nextNick);
-                    localStorage.setItem("nickname", nextNick); // 자동로그인 복원용
-                    localStorage.setItem("userName", nextNick); // MeetingPage fallback용
+                    localStorage.setItem("nickname", nextNick);
+                    localStorage.setItem("userName", nextNick);
                     window.dispatchEvent(
                         new CustomEvent("user:nickname-updated", {
                             detail: { nickname: nextNick },
                         })
                     );
                 }
-            } catch (e) {
-                // noop
-            }
+            } catch (e) {}
 
             await fetchProfile();
             setEditOpen(false);
@@ -279,7 +261,7 @@ const MyPage = () => {
     };
 
     const withdraw = async () => {
-        const ok = window.confirm("정말 회원탈퇴 하시겠어요? (되돌릴 수 없음)");
+        const ok = window.confirm("정말 회원탈퇴 하시겠어요?");
         if (!ok) return;
 
         try {
@@ -297,7 +279,16 @@ const MyPage = () => {
             window.location.href = "/";
         } catch (err) {
             console.error("회원탈퇴 실패", err);
-            alert("탈퇴에 실패했습니다");
+
+            let msg = "탈퇴에 실패했습니다";
+
+            if (typeof err?.response?.data === "string") {
+                msg = err.response.data;
+            } else if (err?.response?.data?.message) {
+                msg = err.response.data.message;
+            }
+
+            alert(msg);
         }
     };
 

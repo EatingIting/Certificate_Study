@@ -17,6 +17,10 @@ public interface RoomListMapper {
 
     void deleteRoom(String roomId);
 
+    void deleteSchedulesByRoomId(String roomId);
+    void deleteJoinRequestsByRoomId(String roomId);
+    void deleteBoardPostsByRoomId(String roomId);
+
     List<RoomListVO> selectRoomsByCategoryIds(
             @Param("categoryIds") List<Long> categoryIds
     );

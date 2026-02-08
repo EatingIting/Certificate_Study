@@ -23,22 +23,27 @@ public interface MyPageMapper {
             @Param("profileImg") String profileImg
     );
 
-    void deleteByEmail(@Param("email") String email);
+    // 방장 여부 체크
+    int countRoomsByHost(@Param("email") String email);
+
+    // user_id FK 삭제
+    void deleteBoardCommentsByUser(@Param("userId") String userId);
+    void deleteBoardPostsByUser(@Param("userId") String userId);
+    void deleteChatMessagesByUser(@Param("userId") String userId);
+    void deleteChatParticipantsByUser(@Param("userId") String userId);
+    void deleteRoomParticipantsByUser(@Param("userId") String userId);
+    void deleteSchedulesByUser(@Param("userId") String userId);
+    void deleteUserInterestCategory(@Param("userId") String userId);
+
+    // email FK 삭제
+    void deleteJoinRequestByRequester(@Param("email") String email);
+    void deleteJoinRequestByHost(@Param("email") String email);
+
+    // 마지막 users 삭제
+    void deleteUser(@Param("userId") String userId);
 
     String getGender(@Param("email") String email);
 
-    List<MyStudyVO> getJoinedStudies(
-            @Param("email") String email,
-            @Param("today") LocalDate today
-    );
-
-    // 완료된 스터디 (종료일이 오늘 이전)
-    List<MyStudyVO> getCompletedStudies(
-            @Param("email") String email,
-            @Param("today") LocalDate today
-    );
-
     List<MyStudyVO> getJoinedStudies(String email);
-
     List<MyStudyVO> getCompletedStudies(String email);
 }

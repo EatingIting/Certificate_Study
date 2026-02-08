@@ -25,6 +25,13 @@ public class RoomListService {
 
     @Transactional
     public void deleteRoom(String roomId) {
+
+        // 자식 테이블 먼저 삭제
+        roomListMapper.deleteBoardPostsByRoomId(roomId);
+        roomListMapper.deleteJoinRequestsByRoomId(roomId);
+        roomListMapper.deleteSchedulesByRoomId(roomId);
+
+        // 마지막에 부모 삭제
         roomListMapper.deleteRoom(roomId);
     }
 
