@@ -25,38 +25,45 @@ function Main() {
         }
     }, []);
 
+    // 배열 랜덤 셔플
+    const shuffleArray = (array) => {
+        return [...array].sort(() => Math.random() - 0.5);
+    };
+
+    // 지금 모집 중 스터디 (랜덤 4개)
     const fetchRooms = async () => {
         const res = await api.get("/rooms");
 
-        setRooms(
-            [...res.data]
-                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                .slice(0, 4)
-        );
+        let data = res.data;
+
+        if (data.length > 4) {
+            data = shuffleArray(data).slice(0, 4);
+        }
+
+        setRooms(data);
     };
 
     const fetchCategories = async () => {
         const res = await api.get("/category");
-
         setCategories(res.data.filter((c) => c.level === 1));
     };
 
+    // 관심 자격증 기반 스터디
     const fetchInterestRooms = async () => {
         try {
             const token = sessionStorage.getItem("accessToken");
-
             if (!token) return;
 
             const res = await api.get("/main/interest");
 
             let data = res.data;
 
-            while (data.length > 0 && data.length < 4) {
-                data = [...data, ...data];
+            // 4개 이상이면 랜덤 4개
+            if (data.length > 4) {
+                data = shuffleArray(data).slice(0, 4);
             }
 
-            data = data.slice(0, 4);
-
+            // 4개 미만이면 그대로
             setInterestRooms(data);
         } catch (err) {
             console.error("관심 스터디 조회 실패", err);
@@ -78,14 +85,10 @@ function Main() {
     const getImageUrl = (img) => {
         if (!img) return sampleImg;
 
-        // 이미 절대 URL인 경우 (http/https)
         if (img.startsWith("http")) {
             try {
                 const url = new URL(img);
 
-                // 백엔드에서 "http://EC2-IP:8080/..." 처럼 내려오는 경우
-                // 프론트 도메인(onsil.study) 기준으로 프로토콜/호스트만 교체해서
-                // 혼합 콘텐츠(https + http) 문제를 피한다.
                 if (url.hostname === window.location.hostname) {
                     return `${window.location.protocol}//${window.location.host}${url.pathname}`;
                 }
@@ -96,7 +99,6 @@ function Main() {
             }
         }
 
-        // "/upload/xxx.png" 처럼 path만 오는 경우: 현재 도메인의 백엔드로 변환
         return toBackendUrl(img);
     };
 

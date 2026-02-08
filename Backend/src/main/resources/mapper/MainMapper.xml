@@ -5,7 +5,6 @@
 
 <mapper namespace="com.example.demo.모집.mapper.MainMapper">
 
-    <!-- 메인페이지 모집중 스터디 최신 4개 -->
     <select id="selectMainRooms"
             resultType="com.example.demo.모집.vo.MainVO">
 
@@ -22,9 +21,10 @@
                  LEFT JOIN category c2 ON c3.parent_id = c2.id
 
         WHERE r.status = 'OPEN'
-        ORDER BY r.created_at DESC
+        ORDER BY RAND()
             LIMIT 4
 
     </select>
+
 
 </mapper>
