@@ -1,7 +1,32 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import "./Assignment.css";
 import "./AssignmentDetail.css";
 import api from "../../api/api";
+
+const ASSIGNMENT_MAX_FILE_MB = 100;
+const ASSIGNMENT_MAX_FILE_BYTES = ASSIGNMENT_MAX_FILE_MB * 1024 * 1024;
+const FILE_TOO_LARGE_MESSAGE = `파일이 너무 큽니다. ${ASSIGNMENT_MAX_FILE_MB}MB이하만 넣어주세요.`;
+
+const isFileTooLarge = (file) => !!file && file.size > ASSIGNMENT_MAX_FILE_BYTES;
+const isPayloadTooLargeError = (error) => {
+    const status = error?.response?.status;
+    const data = error?.response?.data;
+    const message = String(data?.message || data || error?.message || "");
+    return status === 413 || /too\s*large|request\s*entity\s*too\s*large|max.*size/i.test(message);
+};
+
+const isSubmittedStatus = (status) => {
+    const normalized = String(status || "").trim().replace(/\s+/g, "");
+    return normalized === "제출완료" || normalized === "제출됨";
+};
+
+const toAssignmentStatusLabel = (status) => {
+    if (isSubmittedStatus(status)) {
+        return "제출완료";
+    }
+    return "미제출";
+};
 
 
 const AssignmentDetail = () => {
@@ -10,6 +35,10 @@ const AssignmentDetail = () => {
     const [submissions, setSubmissions] = useState([]);
     const [assignmentMeta, setAssignmentMeta] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+    const [submitTitle, setSubmitTitle] = useState("");
+    const [submitFile, setSubmitFile] = useState(null);
+    const [submitMemo, setSubmitMemo] = useState("");
 
     const myEmail = (sessionStorage.getItem("userEmail") || "").trim().toLowerCase();
     const canDelete =
@@ -17,58 +46,116 @@ const AssignmentDetail = () => {
         !!myEmail &&
         String(assignmentMeta.authorEmail || "").trim().toLowerCase() === myEmail;
 
-    useEffect(() => {
-        const fetchAssignmentMeta = async () => {
-            if (!subjectId || !id) return;
-            try {
-                const res = await api.get(`/rooms/${subjectId}/assignments`);
-                const found = (res.data || []).find(
-                    (item) => String(item.assignmentId) === String(id)
-                );
-                setAssignmentMeta(
-                    found
-                        ? {
-                              assignmentId: found.assignmentId,
-                              title: found.title,
-                              authorEmail: found.authorEmail,
-                          }
-                        : null
-                );
-            } catch (e) {
-                console.error("assignment meta load failed", e);
-                setAssignmentMeta(null);
-            }
-        };
+    const fetchAssignmentMeta = async () => {
+        if (!subjectId || !id) return;
+        try {
+            const res = await api.get(`/rooms/${subjectId}/assignments`);
+            const found = (res.data || []).find(
+                (item) => String(item.assignmentId) === String(id)
+            );
 
-        const fetchDetail = async () => {
-            try {
-                console.log("accessToken:", sessionStorage.getItem("accessToken"));
-                const res = await api.get(`/assignments/${id}/submissions`);
-                console.log("submissions raw res.data:", res.data);
-                console.log("first fileUrl:", res.data?.[0]?.fileUrl);
-
-                const mapped = (res.data || []).map((x) => ({
-                    submissionId: x.submissionId,
-                    name: x.memberName,
-                    submittedAt: x.submittedAt
-                        ? x.submittedAt.replace("T", " ").slice(0, 16)
-                        : "-",
-                    status: x.status,
-                    fileUrl: x.fileUrl,
-                }));
-
-                setSubmissions(mapped);
-            } catch (e) {
-                console.error(e);
-                alert("과제 상세 불러오기 실패");
-            }
-        };
-
-        if (id) {
-            fetchDetail();
-            fetchAssignmentMeta();
+            setAssignmentMeta(
+                found
+                    ? {
+                          assignmentId: found.assignmentId,
+                          title: found.title,
+                          dueDate: found.dueAt ? String(found.dueAt).slice(0, 10) : "미정",
+                          authorEmail: found.authorEmail,
+                          status: found.status,
+                          submitTitle: found.submitTitle || "",
+                          memo: found.memo || "",
+                      }
+                    : null
+            );
+        } catch (e) {
+            console.error("assignment meta load failed", e);
+            setAssignmentMeta(null);
         }
+    };
+
+    const fetchDetail = async () => {
+        if (!id) return;
+        try {
+            const res = await api.get(`/assignments/${id}/submissions`);
+
+            const mapped = (res.data || []).map((x) => ({
+                submissionId: x.submissionId,
+                name: x.memberName,
+                submittedAt: x.submittedAt
+                    ? x.submittedAt.replace("T", " ").slice(0, 16)
+                    : "-",
+                status: x.status,
+                fileUrl: x.fileUrl,
+            }));
+
+            setSubmissions(mapped);
+        } catch (e) {
+            console.error(e);
+            alert("과제 상세 불러오기 실패");
+        }
+    };
+
+    useEffect(() => {
+        if (!id) return;
+        fetchDetail();
+        fetchAssignmentMeta();
     }, [id, subjectId]);
+
+    const openSubmitModal = () => {
+        setSubmitTitle(assignmentMeta?.submitTitle || "");
+        setSubmitMemo(assignmentMeta?.memo || "");
+        setSubmitFile(null);
+        setIsSubmitModalOpen(true);
+    };
+
+    const closeSubmitModal = () => {
+        setIsSubmitModalOpen(false);
+        setSubmitFile(null);
+    };
+
+    const handleSubmitFileChange = (e) => {
+        const file = e.target.files?.[0] || null;
+        if (isFileTooLarge(file)) {
+            alert(FILE_TOO_LARGE_MESSAGE);
+            e.target.value = "";
+            setSubmitFile(null);
+            return;
+        }
+        setSubmitFile(file);
+    };
+
+    const handleSubmitAssignment = async (e) => {
+        e.preventDefault();
+        if (!id) return;
+
+        if (isFileTooLarge(submitFile)) {
+            alert(FILE_TOO_LARGE_MESSAGE);
+            return;
+        }
+
+        try {
+            const fd = new FormData();
+            fd.append("submitTitle", submitTitle);
+            if (submitMemo) fd.append("memo", submitMemo);
+            if (submitFile) fd.append("file", submitFile);
+
+            await api.post(`/assignments/${id}/submissions`, fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+
+            closeSubmitModal();
+            await fetchAssignmentMeta();
+            await fetchDetail();
+            alert("제출이 완료되었습니다!");
+        } catch (e) {
+            console.error("assignment submit failed", e);
+            if (isPayloadTooLargeError(e)) {
+                alert(FILE_TOO_LARGE_MESSAGE);
+                return;
+            }
+            alert("과제 제출에 실패했습니다.");
+        }
+    };
 
     const handleDeleteAssignment = async () => {
         if (!canDelete || !id) return;
@@ -273,15 +360,24 @@ const AssignmentDetail = () => {
                 <button className="ad-back-btn" onClick={() => navigate(-1)}>
                     ← 목록으로
                 </button>
-                {canDelete && (
+                <div className="ad-topbar-actions">
                     <button
-                        className="ad-delete-btn"
-                        onClick={handleDeleteAssignment}
-                        disabled={isDeleting}
+                        className="ad-submit-btn"
+                        onClick={openSubmitModal}
+                        disabled={!assignmentMeta}
                     >
-                        {isDeleting ? "삭제 중..." : "과제 삭제"}
+                        {isSubmittedStatus(assignmentMeta?.status) ? "제출 수정" : "과제 제출"}
                     </button>
-                )}
+                    {canDelete && (
+                        <button
+                            className="ad-delete-btn"
+                            onClick={handleDeleteAssignment}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? "삭제 중..." : "과제 삭제"}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* 카드 */}
@@ -293,9 +389,13 @@ const AssignmentDetail = () => {
                         </div>
 
                         <div>
-                            <h2 className="ad-title">과제 상세</h2>
+                            <h2 className="ad-title">{assignmentMeta?.title || "과제 상세"}</h2>
                             <p className="ad-subtitle">
                                 과제 ID: <span className="ad-mono">{id}</span>
+                                {" · "}
+                                마감: <span className="ad-mono">{assignmentMeta?.dueDate || "미정"}</span>
+                                {" · "}
+                                과제 상태: <span className="ad-mono">{toAssignmentStatusLabel(assignmentMeta?.status)}</span>
                             </p>
                         </div>
                     </div>
@@ -359,6 +459,69 @@ const AssignmentDetail = () => {
                     </div>
                 </div>
             </section>
+
+            {/* ===== 과제 제출 모달 (목록 페이지와 동일 UX) ===== */}
+            {isSubmitModalOpen && (
+                <div className="as-modal-overlay" onClick={closeSubmitModal} role="presentation">
+                    <div className="as-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+                        <div className="as-modal-header">
+                            <div>
+                                <h3 className="as-modal-title">과제 제출</h3>
+                                <p className="as-modal-sub">
+                                    과제 내용: {assignmentMeta?.title || "-"} <br />
+                                    마감: {assignmentMeta?.dueDate || "미정"}
+                                </p>
+                            </div>
+
+                            <button className="as-modal-close" type="button" onClick={closeSubmitModal}>
+                                ✕
+                            </button>
+                        </div>
+
+                        <form className="as-modal-body" onSubmit={handleSubmitAssignment}>
+                            <label className="as-field">
+                                <span className="as-label">제출 제목</span>
+                                <input
+                                    className="as-input"
+                                    value={submitTitle}
+                                    onChange={(e) => setSubmitTitle(e.target.value)}
+                                    placeholder="예) 31~60 풀이 제출합니다"
+                                    required
+                                />
+                            </label>
+
+                            <label className="as-field">
+                                <span className="as-label">파일 첨부</span>
+                                <input
+                                    className="as-file"
+                                    type="file"
+                                    onChange={handleSubmitFileChange}
+                                />
+                            </label>
+
+                            <label className="as-field">
+                                <span className="as-label">메모</span>
+                                <textarea
+                                    className="as-textarea"
+                                    value={submitMemo}
+                                    onChange={(e) => setSubmitMemo(e.target.value)}
+                                    placeholder="추가 설명이 있으면 적어주세요"
+                                    rows={4}
+                                />
+                            </label>
+
+                            <div className="as-modal-actions">
+                                <button type="button" className="as-cancel-btn" onClick={closeSubmitModal}>
+                                    취소
+                                </button>
+                                <button type="submit" className="as-primary-btn">
+                                    제출
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* ===== AI에게 묻기 모달 ===== */}
             {aiModal && (

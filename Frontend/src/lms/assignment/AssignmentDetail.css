@@ -15,6 +15,12 @@
     padding: 0 22px;
 }
 
+.ad-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .ad-back-btn {
     border: 1px solid #e7ebf0;
     background: #fff;
@@ -27,6 +33,25 @@
 
 .ad-back-btn:hover {
     background: #f6f8fb;
+}
+
+.ad-submit-btn {
+    border: 1px solid #bfe3cf;
+    background: #eaf7ee;
+    color: #1f7a41;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ad-submit-btn:hover:not(:disabled) {
+    background: #def2e6;
+}
+
+.ad-submit-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
 }
 
 .ad-delete-btn {

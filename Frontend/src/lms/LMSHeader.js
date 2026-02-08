@@ -309,12 +309,18 @@ export default function Header() {
         setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
         setOpenDropdown(false);
 
+        const targetRoomId = notif.roomId || pickId(room?.roomId);
+
+        if (notif.type === "ASSIGNMENT" && targetRoomId && notif.assignmentId) {
+            navigate(`/lms/${targetRoomId}/assignment/${notif.assignmentId}`);
+            return;
+        }
+
         if (notif.path && notif.path.startsWith("/")) {
             navigate(notif.path);
             return;
         }
 
-        const targetRoomId = notif.roomId || pickId(room?.roomId);
         if (!targetRoomId) return;
 
         if (notif.type === "COMMENT") {
@@ -327,10 +333,6 @@ export default function Header() {
         }
 
         if (notif.type === "ASSIGNMENT") {
-            if (notif.assignmentId) {
-                navigate(`/lms/${targetRoomId}/assignment/${notif.assignmentId}`);
-                return;
-            }
             navigate(`/lms/${targetRoomId}/assignment`);
             return;
         }

@@ -13,6 +13,15 @@ const MODAL_WIDTH = 360;
 const MODAL_HEIGHT = 600;
 const BUTTON_SIZE = 70;
 
+const getUnreadKey = (roomId) => `unread_${roomId}`;
+const getLastReadKey = (roomId) => `lastRead_${roomId}`;
+const getSavedUnreadCount = (roomId) => {
+    if (!roomId) return 0;
+    const raw = localStorage.getItem(getUnreadKey(roomId));
+    const parsed = Number.parseInt(raw || "0", 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
 // 출석 리스트 뷰 계산용 (AttendanceAll과 동일 로직: 참여시간 = 회차 구간과의 오버랩만 인정)
 const toMs = (iso) => (iso ? new Date(iso).getTime() : 0) || 0;
 const minutesBetween = (startIso, endIso) => {
@@ -57,9 +66,7 @@ const ChatModal = ({ roomId, roomName }) => {
     
     // 안 읽은 개수 (초기값: 로컬 스토리지에서 복구)
     const [unreadCount, setUnreadCount] = useState(() => {
-        if (!roomId) return 0;
-        const saved = localStorage.getItem(`unread_${roomId}`);
-        return saved ? parseInt(saved, 10) : 0;
+        return getSavedUnreadCount(roomId);
     });
 
     const [isAiMode, setIsAiMode] = useState(false);     // AI 모드 여부
@@ -287,13 +294,11 @@ const ChatModal = ({ roomId, roomName }) => {
         if (targetDate) {
             dateToSave = targetDate; // 메시지 시간이 있으면 그 시간으로
         } else {
-            // 메시지 시간 없이 '현재 시점'으로 저장할 때 -> +5초 여유 (서버 시간 오차 보정)
-            const now = new Date();
-            now.setSeconds(now.getSeconds() + 5); 
-            dateToSave = now.toISOString();
+            // 메시지 시간이 없으면 현재 시점을 그대로 저장
+            dateToSave = new Date().toISOString();
         }
         
-        localStorage.setItem(`lastRead_${roomId}`, dateToSave);
+        localStorage.setItem(getLastReadKey(roomId), dateToSave);
     };
 
     // 방 변경 시 초기화
@@ -302,7 +307,7 @@ const ChatModal = ({ roomId, roomName }) => {
 
         setChatMessages([]);
         setRoomNickname(null); 
-        setUnreadCount(0); // 일단 0으로 (통합 로직이 다시 계산)
+        setUnreadCount(getSavedUnreadCount(roomId));
         
         if (ws.current) {
             ws.current.close();
@@ -312,7 +317,9 @@ const ChatModal = ({ roomId, roomName }) => {
 
     // unreadCount가 변할 때마다 localStorage에 저장 (새로고침 대비)
     useEffect(() => {
-        if (roomId) localStorage.setItem(`unread_${roomId}`, unreadCount);
+        if (roomId) {
+            localStorage.setItem(getUnreadKey(roomId), String(unreadCount));
+        }
     }, [unreadCount, roomId]);
 
 
@@ -403,7 +410,7 @@ const ChatModal = ({ roomId, roomName }) => {
             }
         } else {
             // 창이 닫혀있으면: (전체 메시지) 중 (내 것이 아니고) && (마지막 읽은 시간보다 최신인 것) 카운트
-            const lastReadTimeStr = localStorage.getItem(`lastRead_${roomId}`);
+            const lastReadTimeStr = localStorage.getItem(getLastReadKey(roomId));
             if (lastReadTimeStr) {
                 const lastReadTime = new Date(lastReadTimeStr).getTime();
                 const unread = chatMessages.filter(msg => 
@@ -412,8 +419,9 @@ const ChatModal = ({ roomId, roomName }) => {
                 ).length;
                 setUnreadCount(unread);
             } else {
-                // 기록이 없으면 0으로 둠 (원하면 chatMessages.length로 해서 전체 안 읽음 처리 가능)
-                setUnreadCount(0);
+                // 읽음 기록이 없으면(처음 진입/브라우저 재설치 등) 기존 메시지를 모두 안 읽음으로 취급
+                const unread = chatMessages.filter(msg => msg.userId !== myInfo.userId).length;
+                setUnreadCount(unread);
             }
         }
     }, [isOpen, chatMessages, roomId, myInfo]); // 메시지가 추가될 때마다 재계산

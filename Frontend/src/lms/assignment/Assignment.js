@@ -3,6 +3,18 @@ import { Link, useSearchParams, useParams, useNavigate } from "react-router-dom"
 import api from "../../api/api";
 import "./Assignment.css";
 
+const ASSIGNMENT_MAX_FILE_MB = 100;
+const ASSIGNMENT_MAX_FILE_BYTES = ASSIGNMENT_MAX_FILE_MB * 1024 * 1024;
+const FILE_TOO_LARGE_MESSAGE = `파일이 너무 큽니다. ${ASSIGNMENT_MAX_FILE_MB}MB이하만 넣어주세요.`;
+
+const isFileTooLarge = (file) => !!file && file.size > ASSIGNMENT_MAX_FILE_BYTES;
+const isPayloadTooLargeError = (error) => {
+  const status = error?.response?.status;
+  const data = error?.response?.data;
+  const message = String(data?.message || data || error?.message || "");
+  return status === 413 || /too\s*large|request\s*entity\s*too\s*large|max.*size/i.test(message);
+};
+
 const Assignment = () => {
   const [assignments, setAssignments] = useState([]);
   const [matrix, setMatrix] = useState({ assignments: [], members: [] });
@@ -35,6 +47,17 @@ const openSubmitModal = (assignment) => {
   const closeSubmitModal = () => {
     setIsModalOpen(false);
     setSelected(null);
+  };
+
+  const handleSubmitFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    if (isFileTooLarge(file)) {
+      alert(FILE_TOO_LARGE_MESSAGE);
+      e.target.value = "";
+      setSubmitFile(null);
+      return;
+    }
+    setSubmitFile(file);
   };
 
   // ===== 과제 생성 모달 =====
@@ -111,6 +134,11 @@ const openSubmitModal = (assignment) => {
       return;
     }
 
+    if (isFileTooLarge(submitFile)) {
+      alert(FILE_TOO_LARGE_MESSAGE);
+      return;
+    }
+
     try {
       const fd = new FormData();
       fd.append("submitTitle", submitTitle);
@@ -127,7 +155,11 @@ const openSubmitModal = (assignment) => {
       alert("제출이 완료되었습니다!");
     } catch (err) {
       console.error("SUBMIT ERROR:", err);
-      alert(`과제 제출 실패: ${err.response?.status || ""}`);
+      if (isPayloadTooLargeError(err)) {
+        alert(FILE_TOO_LARGE_MESSAGE);
+        return;
+      }
+      alert("과제 제출에 실패했습니다.");
     }
   };
 
@@ -442,7 +474,7 @@ const openSubmitModal = (assignment) => {
 
               <label className="as-field">
                 <span className="as-label">파일 첨부</span>
-                <input className="as-file" type="file" onChange={(e) => setSubmitFile(e.target.files?.[0] || null)} />
+                <input className="as-file" type="file" onChange={handleSubmitFileChange} />
               </label>
 
               <label className="as-field">
