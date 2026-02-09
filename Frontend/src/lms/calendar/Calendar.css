@@ -59,7 +59,8 @@
 
 .calCalendarCard {
     height: 732px;
-    width: 1125px;
+    width: 1125px !important;
+    max-width: 1125px !important;
 }
 
 /* 오른쪽 리스트: 헤더 고정, 목록만 스크롤 */

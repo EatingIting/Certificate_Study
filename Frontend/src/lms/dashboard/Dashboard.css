@@ -7,12 +7,14 @@
 /* ✅ 그리드 레이아웃 */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, 512px);
     grid-template-areas:
     "study attendance calendarTop"
     "board assignment calendarBottom";
     gap: 18px;
     align-items: stretch;
+    justify-content: center;
+    grid-template-rows: 497px auto;
 }
 
 /* grid-area */
@@ -30,6 +32,9 @@
     padding: 16px 16px 14px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
     min-height: 0;
+    max-width: 512px !important;
+    width: 100%;
+    justify-self: center;
 }
 
 .card-header {
@@ -267,6 +272,16 @@
 
 .dashMiniCal .fc .fc-day-sun .fc-daygrid-day-number { color: #ef4444; }
 .dashMiniCal .fc .fc-day-sat .fc-daygrid-day-number { color: #2563eb; }
+
+.dashMiniCal .fc-scrollgrid-sync-inner {
+    height: 26px !important;
+}
+
+.dashMiniCal .fc-daygrid-day-frame {
+    height: 53px !important;
+    min-height: 53px !important;
+    max-height: 53px !important;
+}
 
 /* =========================
    ✅ 점 + 툴팁
