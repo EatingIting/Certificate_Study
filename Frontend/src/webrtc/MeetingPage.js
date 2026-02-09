@@ -1,4 +1,4 @@
-﻿import {
+import {
     ChevronDown, ChevronUp, LayoutGrid, Loader2, Maximize, Minimize, MessageSquare, Mic, MicOff,
     Monitor, MoreHorizontal, PanelRightClose, PanelRightOpen, Phone, PictureInPicture2, Send, Share, Smile, Users, Video, VideoOff, X,
 } from "lucide-react";
@@ -1075,6 +1075,59 @@ function MeetingPage({ portalRoomId }) {
     // 🔥 토스트 메시지 상태
     const [toastMessage, setToastMessage] = useState("");
     const [showToast, setShowToast] = useState(false);
+    const [joinEligibilityChecked, setJoinEligibilityChecked] = useState(false);
+    const [joinBlockedByKick, setJoinBlockedByKick] = useState(false);
+    const joinKickHandledRef = useRef(false);
+
+    useEffect(() => {
+        joinKickHandledRef.current = false;
+        setJoinEligibilityChecked(false);
+        setJoinBlockedByKick(false);
+
+        if (!roomId) return;
+
+        try { wsRef.current?.close(); } catch { }
+        wsRef.current = null;
+        try { sfuWsRef.current?.close(); } catch { }
+        sfuWsRef.current = null;
+
+        let cancelled = false;
+
+        const checkJoinEligibility = async () => {
+            try {
+                const res = await api.get(`/meeting-rooms/${encodeURIComponent(roomId)}/join-eligibility`);
+                if (cancelled) return;
+
+                const kickedToday = !!res?.data?.kickedToday;
+                setJoinBlockedByKick(kickedToday);
+                setJoinEligibilityChecked(true);
+
+                if (kickedToday && !joinKickHandledRef.current) {
+                    joinKickHandledRef.current = true;
+                    setIsLocalLoading(false);
+                    setRoomReconnecting(false);
+                    setToastMessage("오늘 이 방에서 강퇴되어 재입장할 수 없습니다.");
+                    setShowToast(true);
+                    isLeavingRef.current = true;
+                    try { wsRef.current?.close(); } catch { }
+                    try { sfuWsRef.current?.close(); } catch { }
+                    const targetPath = subjectId ? `/lms/${subjectId}` : "/lmsMain";
+                    setTimeout(() => navigate(targetPath, { replace: true }), 1200);
+                }
+            } catch (error) {
+                if (cancelled) return;
+                console.warn("[MeetingPage] join eligibility check failed:", error);
+                setJoinBlockedByKick(false);
+                setJoinEligibilityChecked(true);
+            }
+        };
+
+        checkJoinEligibility();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [roomId, subjectId, navigate]);
 
     // 👑 방장 권한 드롭다운 메뉴 상태
     const [hostMenuTargetId, setHostMenuTargetId] = useState(null);
@@ -5292,6 +5345,8 @@ function MeetingPage({ portalRoomId }) {
     // --- Hooks ---
 
     useEffect(() => {
+        if (!joinEligibilityChecked || joinBlockedByKick) return;
+
         const init = async () => {
             // 🔥 저장된 이모지/배경제거 설정 확인
             const savedEmoji = faceEmojiRef.current;
@@ -5322,7 +5377,7 @@ function MeetingPage({ portalRoomId }) {
         };
         init();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [joinEligibilityChecked, joinBlockedByKick]);
 
     useEffect(() => {
         // startMeeting은 MeetingRouteBridge / startLocalMedia에서 roomId·subjectId와 함께 호출됨
@@ -6229,6 +6284,7 @@ function MeetingPage({ portalRoomId }) {
     // 1️⃣ Signaling WebSocket (8080)
     useEffect(() => {
         // roomId·userEmail만 있으면 연결 (hostUserEmail 없어도 입장·타일 표시 가능, 방장 여부는 로딩 후 반영)
+        if (!joinEligibilityChecked || joinBlockedByKick) return;
         if (!roomId || !userEmail) {
             console.log("[WS] 대기 중 - roomId:", roomId, "userEmail:", userEmail);
             return;
@@ -7035,7 +7091,7 @@ function MeetingPage({ portalRoomId }) {
 
             wsRef.current = null;
         };
-    }, [roomId, subjectId, scheduleId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState, rememberParticipantMediaState, rememberParticipantMediaStateByKeys, getRememberedParticipantMediaState]); // subjectId/scheduleId 포함 시 DB 저장용
+    }, [roomId, subjectId, scheduleId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState, rememberParticipantMediaState, rememberParticipantMediaStateByKeys, getRememberedParticipantMediaState, joinEligibilityChecked, joinBlockedByKick]); // subjectId/scheduleId 포함 시 DB 저장용
 
     useEffect(() => {
         setParticipants((prev) =>
@@ -7054,6 +7110,7 @@ function MeetingPage({ portalRoomId }) {
     // 2️⃣ SFU WebSocket (nginx proxy → wss://onsil.study/sfu , 포트 없음)
     useEffect(() => {
         effectAliveRef.current = true;
+        if (!joinEligibilityChecked || joinBlockedByKick) return;
         if (!roomId) return;
 
         const resetSfuLocalState = () => {
@@ -7566,7 +7623,7 @@ function MeetingPage({ portalRoomId }) {
             closeSfuWsForLeave();
             sfuWsRef.current = null;
         };
-    }, [roomId, userId, sfuReconnectKey, closeSfuWsForLeave]); // sfuReconnectKey: SFU 끊김 시 재연결
+    }, [roomId, userId, sfuReconnectKey, closeSfuWsForLeave, joinEligibilityChecked, joinBlockedByKick]); // sfuReconnectKey: SFU 끊김 시 재연결
 
     useEffect(() => {
         // 로컬스토리지에 저장 (재접속/새로고침 시 복원)

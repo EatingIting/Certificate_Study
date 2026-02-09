@@ -4,22 +4,20 @@ import "./Auth.css";
 import { login } from "../api/api";
 import { getBackendOrigin } from "../utils/backendUrl";
 
-const logo = require("./메인로고 2.png");
+import logo from "./main-logo.png";
+import kakaoIcon from "./kakao-icon.png";
+import naverIcon from "./naver-icon.png";
+import googleIcon from "./google-icon.png";
 
 const Auth = () => {
     const navigate = useNavigate();
-    const kakaoIcon = require("./카카오 2.png");
-    const naverIcon = require("./네이버 2.png");
-    const googleIcon = require("./구글 2.png");
 
     const [showEmailLogin, setShowEmailLogin] = useState(false);
-
+    const [autoLogin, setAutoLogin] = useState(false);
     const [form, setForm] = useState({
         email: "",
         password: "",
     });
-
-    const [autoLogin, setAutoLogin] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -31,20 +29,17 @@ const Auth = () => {
             const res = await login(form.email, form.password, autoLogin);
 
             let token = res.data.accessToken || res.data.token;
-            if (token.startsWith("Bearer ")) {
+            if (token?.startsWith("Bearer ")) {
                 token = token.replace("Bearer ", "");
             }
 
-            // sessionStorage에 저장
             sessionStorage.setItem("userId", res.data.userId);
             sessionStorage.setItem("nickname", res.data.nickname);
             sessionStorage.setItem("accessToken", token);
             sessionStorage.setItem("userEmail", form.email);
 
-            // localStorage에 userId와 userName 저장
             localStorage.setItem("userId", res.data.userId);
-            const userName = res.data.nickname || res.data.name || "";
-            localStorage.setItem("userName", userName);
+            localStorage.setItem("userName", res.data.nickname || res.data.name || "");
 
             if (autoLogin) {
                 localStorage.setItem("rememberMe", "true");
@@ -65,7 +60,6 @@ const Auth = () => {
     const handleOAuthLogin = (provider) => {
         const backendOrigin = getBackendOrigin();
         const frontendOrigin = window.location.origin;
-
         window.location.href = `${backendOrigin}/oauth2/authorization/${provider}?redirect_origin=${encodeURIComponent(
             frontendOrigin
         )}`;
@@ -115,7 +109,7 @@ const Auth = () => {
                             className="email-login"
                             onClick={() => setShowEmailLogin(true)}
                         >
-                            이메일로 시작하기 →
+                            이메일로 시작하기
                         </button>
                     </>
                 ) : (
@@ -150,9 +144,7 @@ const Auth = () => {
                                 <input
                                     type="checkbox"
                                     checked={autoLogin}
-                                    onChange={(e) =>
-                                        setAutoLogin(e.target.checked)
-                                    }
+                                    onChange={(e) => setAutoLogin(e.target.checked)}
                                 />
                                 자동 로그인
                             </label>
@@ -173,7 +165,7 @@ const Auth = () => {
                             className="modal-close"
                             onClick={() => setShowEmailLogin(false)}
                         >
-                            ← 뒤로가기
+                            뒤로 가기
                         </button>
                     </>
                 )}

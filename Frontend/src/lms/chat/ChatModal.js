@@ -171,15 +171,83 @@ const ChatModal = ({ roomId, roomName }) => {
     const currentMessages = isAiMode ? aiMessages : chatMessages;
 
     // 시간 포맷팅 함수
-    const formatTime = (dateString) => {
-        if (!dateString) return "";
-        const date = new Date(dateString);
-        let hours = date.getHours();
-        const minutes = date.getMinutes();
-        const ampm = hours >= 12 ? '오후' : '오전';
-        hours = hours % 12;
-        hours = hours ? hours : 12;
-        return `${ampm} ${hours}:${minutes < 10 ? '0' + minutes : minutes}`;
+    const parseChatDate = (value) => {
+        if (!value) return null;
+        if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+        if (typeof value === "number") {
+            const ms = value < 1e12 ? value * 1000 : value;
+            const d = new Date(ms);
+            return Number.isNaN(d.getTime()) ? null : d;
+        }
+
+        if (Array.isArray(value)) {
+            const nums = value.map((v) => Number(v));
+            if (nums.length >= 3 && nums.every((v) => !Number.isNaN(v))) {
+                const [y, m, d, h = 0, min = 0, sec = 0, nano = 0] = nums;
+                // Backend LocalDateTime is often emitted without timezone.
+                // Treat it as UTC to avoid fixed-hour drift (e.g. always 01:xx).
+                const dt = new Date(Date.UTC(y, m - 1, d, h, min, sec, Math.floor(nano / 1_000_000)));
+                return Number.isNaN(dt.getTime()) ? null : dt;
+            }
+        }
+
+        const raw = String(value).trim();
+        if (!raw) return null;
+
+        if (/^\d{10,13}$/.test(raw)) {
+            const num = Number(raw);
+            if (!Number.isNaN(num)) {
+                const ms = raw.length === 10 ? num * 1000 : num;
+                const d = new Date(ms);
+                return Number.isNaN(d.getTime()) ? null : d;
+            }
+        }
+
+        const normalized = raw.includes(" ") ? raw.replace(" ", "T") : raw;
+        const hasExplicitOffset = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(normalized);
+        const looksLikeLocalDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?$/.test(normalized);
+
+        if (looksLikeLocalDateTime && !hasExplicitOffset) {
+            const utcParsed = new Date(`${normalized}Z`);
+            if (!Number.isNaN(utcParsed.getTime())) return utcParsed;
+        }
+
+        const parsed = new Date(normalized);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+
+        const fallback = new Date(raw);
+        return Number.isNaN(fallback.getTime()) ? null : fallback;
+    };
+
+    const toDateKey = (value) => {
+        const d = parseChatDate(value);
+        if (!d) return "";
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    };
+
+    const formatDateDivider = (value) => {
+        const d = parseChatDate(value);
+        if (!d) return "";
+        return d.toLocaleDateString("ko-KR", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            weekday: "short"
+        });
+    };
+
+    const formatTime = (dateValue) => {
+        const date = parseChatDate(dateValue);
+        if (!date) return "";
+        return date.toLocaleTimeString("ko-KR", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true
+        });
     };
 
     // AI 답변을 한 글자씩 보여주는 타자 효과
@@ -1318,21 +1386,31 @@ const ChatModal = ({ roomId, roomName }) => {
                     ) : (
                         currentMessages.map((msg, idx) => {
                             const isMe = msg.userId === myInfo.userId;
+                            const currentDateKey = toDateKey(msg.createdAt);
+                            const prevDateKey = idx > 0 ? toDateKey(currentMessages[idx - 1]?.createdAt) : "";
+                            const showDateDivider = idx === 0 || currentDateKey !== prevDateKey;
                             return (
-                                <div key={idx} className={`tc-msg-row ${isMe ? 'me' : 'other'}`}>
-                                    {!isMe && <div className="tc-profile">👤</div>}
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
-                                        {!isMe && <div className="tc-name">{msg.userName}</div>}
-                                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '5px', flexDirection: isMe ? 'row-reverse' : 'row' }}>
-                                            <div className={`tc-bubble ${isMe ? 'me' : 'other'} ${msg.isSticker ? 'sticker-bubble' : ''}`}>
-                                                {msg.isSticker ? <div className="sticker-text">{msg.message}</div> : msg.message}
+                                <React.Fragment key={idx}>
+                                    {showDateDivider && (
+                                        <div className="tc-date-divider">
+                                            <span>{formatDateDivider(msg.createdAt)}</span>
+                                        </div>
+                                    )}
+                                    <div className={`tc-msg-row ${isMe ? 'me' : 'other'}`}>
+                                        {!isMe && <div className="tc-profile">👤</div>}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                                            {!isMe && <div className="tc-name">{msg.userName}</div>}
+                                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '5px', flexDirection: isMe ? 'row-reverse' : 'row' }}>
+                                                <div className={`tc-bubble ${isMe ? 'me' : 'other'} ${msg.isSticker ? 'sticker-bubble' : ''}`}>
+                                                    {msg.isSticker ? <div className="sticker-text">{msg.message}</div> : msg.message}
+                                                </div>
+                                                <span style={{ fontSize: '10px', color: '#888', minWidth: '50px', textAlign: isMe ? 'right' : 'left', marginBottom: '5px' }}>
+                                                    {formatTime(msg.createdAt)}
+                                                </span>
                                             </div>
-                                            <span style={{ fontSize: '10px', color: '#888', minWidth: '50px', textAlign: isMe ? 'right' : 'left', marginBottom: '5px' }}>
-                                                {formatTime(msg.createdAt)}
-                                            </span>
                                         </div>
                                     </div>
-                                </div>
+                                </React.Fragment>
                             );
                         })
                     )}

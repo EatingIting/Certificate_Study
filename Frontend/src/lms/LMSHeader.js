@@ -5,6 +5,7 @@ import { useLMS } from "./LMSContext";
 import { useMeeting } from "../webrtc/MeetingContext";
 import { useEffect, useState, useRef } from "react";
 import { toWsBackendUrl } from "../utils/backendUrl";
+import { drainQueuedLmsNotifications } from "../utils/lmsNotifications";
 
 const NOTIFICATION_LIMIT = 50;
 const RECONNECT_DELAY_MS = 3000;
@@ -227,6 +228,21 @@ export default function Header() {
     const dropdownRef = useRef(null);
 
     const userId = sessionStorage.getItem("userId");
+
+    useEffect(() => {
+        const queuedPayloads = drainQueuedLmsNotifications();
+        if (!queuedPayloads.length) return;
+
+        setNotifications((prev) => {
+            let next = prev;
+            queuedPayloads.forEach((rawPayload) => {
+                const notif = parseNotification(rawPayload);
+                if (!notif) return;
+                next = appendNotification(next, notif);
+            });
+            return next;
+        });
+    }, []);
 
     useEffect(() => {
         if (!userId) return;
