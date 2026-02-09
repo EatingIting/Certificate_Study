@@ -1,0 +1,16 @@
+services:
+  backend:
+    image: eatingiting/backend
+    container_name: backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+
+  frontend:
+    image: eatingiting/frontend
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"

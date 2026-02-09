@@ -166,14 +166,32 @@ function LMSSubjectInner() {
         const savedSubjectId = sessionStorage.getItem("pip.subjectId");
         const savedScheduleId = sessionStorage.getItem("pip.scheduleId");
 
+        try {
+            window.dispatchEvent(new CustomEvent("meeting:custom-pip-return", {
+                detail: { stage: "before-navigate", roomId: savedRoomId || "" },
+            }));
+        } catch { }
+
         if (savedRoomId && savedSubjectId) {
             const targetPath = savedScheduleId
                 ? `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}?scheduleId=${encodeURIComponent(savedScheduleId)}`
                 : `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}`;
             navigate(targetPath, { replace: true });
-            setTimeout(() => stopCustomPip(), 120);
+            setTimeout(() => {
+                stopCustomPip();
+                try {
+                    window.dispatchEvent(new CustomEvent("meeting:custom-pip-return", {
+                        detail: { stage: "after-stop", roomId: savedRoomId },
+                    }));
+                } catch { }
+            }, 120);
         } else {
             stopCustomPip();
+            try {
+                window.dispatchEvent(new CustomEvent("meeting:custom-pip-return", {
+                    detail: { stage: "no-room" },
+                }));
+            } catch { }
         }
     }, [navigate, stopCustomPip]);
 

@@ -366,6 +366,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     // 🔥 stream 참조를 추적하여 변경 감지 강화
     const streamIdRef = useRef(null);
     const currentStreamId = stream?.id ?? null;
+    const lastPipRecoveryAtRef = useRef(0);
+    const pipRecoveryRunIdRef = useRef(0);
 
     // 🔥 PiP 진입/복귀 시 상대 타일 검은화면 방지: 트랙 id가 바뀔 때만 "표시용" 스트림 갱신
     // 부모가 같은 트랙의 새 MediaStream 참조를 넘겨도 srcObject/캔버스는 건드리지 않음
@@ -633,9 +635,15 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
         // 🔥 PIP 모드 종료 시 비디오 재생 보장 (검은 화면 방지) - displayStream 사용
         const handlePipLeave = () => {
+            const now = Date.now();
+            if (now - (lastPipRecoveryAtRef.current || 0) < 120) return;
+            lastPipRecoveryAtRef.current = now;
+            const runId = ++pipRecoveryRunIdRef.current;
+
             console.log("[VideoTile] PIP 모드 종료 감지, 비디오 재생 시도");
             if (v && displayStream) {
                 const forceReconnect = () => {
+                    if (runId !== pipRecoveryRunIdRef.current) return;
                     try {
                         if (!v.srcObject || v.srcObject !== displayStream) {
                             v.srcObject = displayStream;
@@ -648,7 +656,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                 };
                 forceReconnect();
                 const retryPlay = async (attempt = 0) => {
-                    if (attempt > 15) return;
+                    if (runId !== pipRecoveryRunIdRef.current) return;
+                    if (attempt > 8) return;
                     if (!v || !displayStream) return;
                     forceReconnect();
                     const hasLive = displayStream.getVideoTracks().some(t => t.readyState === "live");
@@ -667,9 +676,12 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                             return; // 재생 중이면 종료
                         }
                     } catch (err) {
-                        console.warn("[VideoTile] PIP 종료 후 비디오 재생 실패 (시도:", attempt + 1, "):", err);
+                        const isAbort = err?.name === "AbortError";
+                        if (!isAbort) {
+                            console.warn("[VideoTile] PIP 종료 후 비디오 재생 실패 (시도:", attempt + 1, "):", err);
+                        }
                         // 30ms 후 재시도 (더 빠른 재시도)
-                        setTimeout(() => retryPlay(attempt + 1), 30);
+                        setTimeout(() => retryPlay(attempt + 1), isAbort ? 80 : 30);
                     }
                 };
                 // 즉시 시작하고, 여러 번 시도
@@ -679,10 +691,19 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             }
         };
 
+        const handleGlobalPipExit = (e) => {
+            const target = e?.detail?.target || "all";
+            if (target === "self" && !safeUser.isMe) return;
+            if (target === "remote" && safeUser.isMe) return;
+            handlePipLeave();
+        };
+
         // PIP 종료 이벤트 감지
         if (v) {
             v.addEventListener("leavepictureinpicture", handlePipLeave);
         }
+        window.addEventListener("pip:exited", handleGlobalPipExit);
+        window.addEventListener("meeting:force-video-rebind", handleGlobalPipExit);
 
         return () => {
             clearInterval(playRetryInterval);
@@ -690,8 +711,10 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             if (v) {
                 v.removeEventListener("leavepictureinpicture", handlePipLeave);
             }
+            window.removeEventListener("pip:exited", handleGlobalPipExit);
+            window.removeEventListener("meeting:force-video-rebind", handleGlobalPipExit);
         };
-    }, [displayStream, shouldRenderVideo, displayStreamId]);
+    }, [displayStream, shouldRenderVideo, displayStreamId, safeUser.isMe]);
 
     const isSpeaking = !!safeUser.speaking;
     const isJoining = safeUser.isJoining;
@@ -699,8 +722,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
 
-    // 서버/복원 스냅샷에서 재접속 상태면 자기 자신 포함 스피너 표시
-    const shouldShowReconnecting = isReconnecting;
+    // 서버/복원 스냅샷에서 재접속 상태더라도 live 비디오가 있으면 스피너를 가리지 않음
+    const shouldShowReconnecting = isReconnecting && !hasLiveVideoTrack && !safeUser.cameraOff;
 
     // pip 모드 여부 확인 (렌더링 시점)
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
@@ -713,6 +736,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             className={`video-tile ${isMain ? "main" : ""} ${safeUser.isMe ? "me" : ""} ${isSpeaking ? "speaking" : ""} ${isScreen ? "screen-share" : ""}`}
             data-peer-id={peerId}
             data-peer-name={peerName}
+            data-camera-off={safeUser.cameraOff ? "true" : "false"}
+            data-has-live-video={hasLiveVideoTrack ? "true" : "false"}
         >
             {/* ✅ 핵심 원칙: 재접속 스피너는 원격 타일(remote tile)에만 표시 */}
             {/* 로컬 타일(!safeUser.isMe === false)은 절대 재접속 스피너를 보지 않음 */}
@@ -734,6 +759,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                     data-main-video={isMain ? "main" : "tile"}
                     data-peer-id={peerId}
                     data-peer-name={peerName}
+                    data-camera-off={safeUser.cameraOff ? "true" : "false"}
+                    data-has-live-video={hasLiveVideoTrack ? "true" : "false"}
                     className={`video-element ${isScreen ? "screen" : ""}`}
                     style={{
                         position: "absolute",
@@ -1088,6 +1115,12 @@ function MeetingPage({ portalRoomId }) {
         wsRef.current = null;
         try { sfuWsRef.current?.close(); } catch { }
         sfuWsRef.current = null;
+        if (sfuReconnectTimerRef.current) {
+            try { clearTimeout(sfuReconnectTimerRef.current); } catch { }
+            sfuReconnectTimerRef.current = null;
+        }
+        sfuReconnectAttemptRef.current = 0;
+        localReconnectNotifiedRef.current = false;
 
         let cancelled = false;
 
@@ -1444,6 +1477,7 @@ function MeetingPage({ portalRoomId }) {
     const lastGoodFrameAtRef = useRef(0);
     const canvasPipelineVideoKickTimerRef = useRef(null); // hidden video 재생 유지용
     const canvasPipelineDrawLoopRef = useRef(null); // visibility 복귀 시 즉시 1프레임 그리기용
+    const pipRecoveryInFlightRef = useRef(false);
 
     // 🔥 3D 아바타 필터 파이프라인 refs
     const avatarFilterActiveRef = useRef(false);
@@ -1459,12 +1493,16 @@ function MeetingPage({ portalRoomId }) {
         videoW: 0,
         videoH: 0,
     });
+    const turnOnCameraRef = useRef(null);
 
     const reconnectTimeoutRef = useRef(new Map());
 
     const reconnectHistoryRef = useRef(new Set());
 
     const reconnectCompletedTimeRef = useRef(new Map());  // ✅ 재접속 완료 시간 기록 (1초 동안 다시 추가 방지)
+    const sfuReconnectAttemptRef = useRef(0);
+    const sfuReconnectTimerRef = useRef(null);
+    const localReconnectNotifiedRef = useRef(false);
 
     // 🔥 서버 목록에서 잠깐 사라진 peer 보호용 (PIP 모드 전환 시 타일 깜빡임 방지)
     const missingSinceRef = useRef(new Map()); // peerId -> timestamp
@@ -2009,10 +2047,14 @@ function MeetingPage({ portalRoomId }) {
         // 🔥 핵심: 이미 canvas pipeline이 활성화되어 있고 track이 살아있으면 재사용
         // (이모지/배경제거 변경 시 track 교체 방지 → PiP 안정성 보장)
         const existingOutTrack = canvasPipelineOutTrackRef.current;
+        const existingLocalVideoTrack = localStreamRef.current?.getVideoTracks?.()?.[0];
         const existingProducer = producersRef.current.get("camera");
         if (
             canvasPipelineActiveRef.current &&
             existingOutTrack?.readyState === "live" &&
+            !existingOutTrack.muted &&
+            existingLocalVideoTrack?.readyState === "live" &&
+            !existingLocalVideoTrack.muted &&
             existingProducer &&
             !existingProducer.closed
         ) {
@@ -2038,14 +2080,25 @@ function MeetingPage({ portalRoomId }) {
         const newAudioTrack = stream.getAudioTracks()[0];
         console.log("[turnOnCamera] got camera track:", rawTrack.id, rawTrack.readyState, "audio:", needAudio ? newAudioTrack?.id : "reusing");
         if (isLikelyCameraTrack(rawTrack)) lastCameraTrackRef.current = rawTrack;
-        canvasPipelineRawTrackRef.current = rawTrack;
         // 🔥 MeetingContext에 등록 → 언마운트 후에도 endMeeting에서 확실히 stop 가능
         if (registerLocalStream) registerLocalStream(stream);
+
+        const prevRawTrack = canvasPipelineRawTrackRef.current;
+        const prevOutTrack = canvasPipelineOutTrackRef.current;
 
         // 2) 기존 canvas 파이프라인 정리
         if (canvasPipelineRafRef.current) {
             clearTimeout(canvasPipelineRafRef.current);
             canvasPipelineRafRef.current = null;
+        }
+        if (canvasPipelineVideoKickTimerRef.current) {
+            try {
+                document.removeEventListener("visibilitychange", canvasPipelineVideoKickTimerRef.current.kickVideo);
+            } catch { }
+            try {
+                clearInterval(canvasPipelineVideoKickTimerRef.current.kickTimer);
+            } catch { }
+            canvasPipelineVideoKickTimerRef.current = null;
         }
         if (canvasPipelineVideoElRef.current) {
             try { canvasPipelineVideoElRef.current.pause(); } catch { }
@@ -2053,6 +2106,19 @@ function MeetingPage({ portalRoomId }) {
             try { canvasPipelineVideoElRef.current.remove(); } catch { }
             canvasPipelineVideoElRef.current = null;
         }
+        try {
+            if (prevOutTrack?.readyState === "live") {
+                prevOutTrack.stop();
+            }
+        } catch { }
+        canvasPipelineOutTrackRef.current = null;
+        try {
+            if (prevRawTrack?.readyState === "live") {
+                prevRawTrack.stop();
+            }
+        } catch { }
+        canvasPipelineRawTrackRef.current = null;
+        canvasPipelineRawTrackRef.current = rawTrack;
 
         // 3) Hidden video element 생성 (raw 카메라 재생용)
         const v = document.createElement("video");
@@ -2514,6 +2580,135 @@ function MeetingPage({ portalRoomId }) {
 
         console.log("[turnOnCamera] canvas pipeline started immediately, emoji mode:", faceModeRef.current, "emoji:", faceEmojiRef.current);
     };
+    turnOnCameraRef.current = turnOnCamera;
+
+    const dispatchForceVideoRebind = useCallback((reason = "pip-recovery", target = "self") => {
+        try {
+            window.dispatchEvent(new CustomEvent("meeting:force-video-rebind", { detail: { reason, target } }));
+        } catch { }
+    }, []);
+
+    useEffect(() => {
+        let alive = true;
+        let t1 = null;
+        let t2 = null;
+        let t3 = null;
+
+        const clearTimers = () => {
+            if (t1) clearTimeout(t1);
+            if (t2) clearTimeout(t2);
+            if (t3) clearTimeout(t3);
+            t1 = null;
+            t2 = null;
+            t3 = null;
+        };
+
+        const recoverLocalVideo = (reason) => {
+            if (!alive) return;
+
+            // 숨겨진 브라우저 PiP video가 pause된 상태면 재생 재시도
+            try {
+                const hiddenPipVideo = pipVideoRef?.current;
+                if (hiddenPipVideo?.srcObject && hiddenPipVideo.paused) {
+                    hiddenPipVideo.play().catch(() => { });
+                }
+            } catch { }
+
+            // 로컬 canvas 파이프라인 입력 video 복구
+            try {
+                const hiddenCameraVideo = canvasPipelineVideoElRef.current;
+                const rawTrack = canvasPipelineRawTrackRef.current;
+                if (hiddenCameraVideo && rawTrack?.readyState === "live") {
+                    const currentTrack = hiddenCameraVideo.srcObject?.getVideoTracks?.()?.[0];
+                    if (!currentTrack || currentTrack.readyState !== "live" || currentTrack.id !== rawTrack.id) {
+                        hiddenCameraVideo.srcObject = new MediaStream([rawTrack]);
+                    }
+                    if (hiddenCameraVideo.paused || hiddenCameraVideo.readyState < 2) {
+                        hiddenCameraVideo.play().catch(() => { });
+                    }
+                }
+            } catch { }
+
+            // draw loop를 즉시 한 번 실행해 로컬 캔버스 프레임 복구를 앞당김
+            try {
+                if (canvasPipelineActiveRef.current && typeof canvasPipelineDrawLoopRef.current === "function") {
+                    canvasPipelineDrawLoopRef.current();
+                }
+            } catch { }
+
+            dispatchForceVideoRebind(reason, "self");
+
+            // 카메라 ON 상태인데 로컬 비디오 트랙이 사라졌거나 muted면 파이프라인 재시작
+            if (!camOnRef.current) {
+                pipRecoveryInFlightRef.current = false;
+                return;
+            }
+
+            const localVideoTrack = localStreamRef.current
+                ?.getVideoTracks?.()
+                ?.find((t) => t.readyState === "live");
+            const needsPipelineRebuild = !localVideoTrack || localVideoTrack.muted;
+            if (!needsPipelineRebuild) {
+                pipRecoveryInFlightRef.current = false;
+                return;
+            }
+            if (pipRecoveryInFlightRef.current) return;
+
+            pipRecoveryInFlightRef.current = true;
+            const recoverFn = turnOnCameraRef.current;
+            if (typeof recoverFn === "function") {
+                Promise.resolve(recoverFn())
+                    .catch(() => { })
+                    .finally(() => {
+                        dispatchForceVideoRebind(`${reason}:camera-recovered`, "self");
+                        setTimeout(() => {
+                            pipRecoveryInFlightRef.current = false;
+                        }, 300);
+                    });
+            } else {
+                pipRecoveryInFlightRef.current = false;
+            }
+        };
+
+        const scheduleRecoveryBurst = (reason) => {
+            clearTimers();
+            recoverLocalVideo(`${reason}:immediate`);
+            t1 = setTimeout(() => recoverLocalVideo(`${reason}:retry-1`), 120);
+            t2 = setTimeout(() => recoverLocalVideo(`${reason}:retry-2`), 420);
+            t3 = setTimeout(() => recoverLocalVideo(`${reason}:retry-3`), 900);
+        };
+
+        const handlePipExited = () => {
+            scheduleRecoveryBurst("pip-exited");
+        };
+
+        const handleCustomPipReturn = (e) => {
+            const stage = e?.detail?.stage || "";
+            if (stage === "before-navigate") return;
+            scheduleRecoveryBurst("custom-pip-return");
+            setTimeout(() => {
+                dispatchForceVideoRebind("custom-pip-return:remote", "remote");
+            }, 140);
+        };
+
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                scheduleRecoveryBurst("visibility-visible");
+            }
+        };
+
+        window.addEventListener("pip:exited", handlePipExited);
+        window.addEventListener("meeting:custom-pip-return", handleCustomPipReturn);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            alive = false;
+            clearTimers();
+            window.removeEventListener("pip:exited", handlePipExited);
+            window.removeEventListener("meeting:custom-pip-return", handleCustomPipReturn);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [dispatchForceVideoRebind, pipVideoRef]);
 
     // ✅ 전체화면 상태 감지(원본 유지). 그리드 전체화면에서 Esc로 나올 때도 그리드 복원
     useEffect(() => {
@@ -4381,6 +4576,54 @@ function MeetingPage({ portalRoomId }) {
         }
     }, []);
 
+    const clearSfuReconnectTimer = useCallback(() => {
+        if (!sfuReconnectTimerRef.current) return;
+        try { clearTimeout(sfuReconnectTimerRef.current); } catch { }
+        sfuReconnectTimerRef.current = null;
+    }, []);
+
+    const notifyUserReconnecting = useCallback((reconnecting, reason = "") => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false;
+        try {
+            wsRef.current.send(JSON.stringify({
+                type: "USER_RECONNECTING",
+                userId: userIdRef.current ?? userId,
+                reconnecting: !!reconnecting,
+            }));
+            console.log(`[MeetingPage] 재접속 ${reconnecting ? "시작" : "완료"} 알림 전송${reason ? ` (${reason})` : ""}`);
+            return true;
+        } catch {
+            return false;
+        }
+    }, [userId]);
+
+    const scheduleSfuReconnect = useCallback((reason = "unknown", options = {}) => {
+        if (isLeavingRef.current) return;
+        if (sfuReconnectTimerRef.current) return;
+
+        const attempt = Math.min((sfuReconnectAttemptRef.current || 0) + 1, 8);
+        sfuReconnectAttemptRef.current = attempt;
+
+        const baseDelay = Math.min(500 * (2 ** (attempt - 1)), 15000);
+        const jitter = Math.floor(Math.random() * 350);
+        const delay = baseDelay + jitter;
+        const shouldNotify = options?.notifyOthers !== false;
+
+        setRoomReconnecting(true);
+
+        if (shouldNotify && !localReconnectNotifiedRef.current) {
+            const sent = notifyUserReconnecting(true, reason);
+            if (sent) localReconnectNotifiedRef.current = true;
+        }
+
+        console.warn(`[SFU] reconnect scheduled in ${delay}ms (attempt ${attempt}, reason=${reason})`);
+        sfuReconnectTimerRef.current = setTimeout(() => {
+            sfuReconnectTimerRef.current = null;
+            if (isLeavingRef.current) return;
+            setSfuReconnectKey((prev) => prev + 1);
+        }, delay);
+    }, [notifyUserReconnecting]);
+
     // 이탈 시 DOM 엘리먼트가 물고 있는 MediaStream까지 강제 종료
     const stopAndDetachElementStreams = useCallback(() => {
         try {
@@ -5659,15 +5902,12 @@ function MeetingPage({ portalRoomId }) {
                 // 항상 roomReconnecting을 false로 설정 (peers가 없어도)
                 hasFinishedInitialSyncRef.current = true;
                 setRoomReconnecting(false);
+                sfuReconnectAttemptRef.current = 0;
 
                 // ✅ 재접속 완료: 다른 참가자들에게 알림
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(JSON.stringify({
-                        type: "USER_RECONNECTING",
-                        userId: userId,
-                        reconnecting: false,
-                    }));
-                    console.log("[MeetingPage] 재접속 완료 알림 전송");
+                if (localReconnectNotifiedRef.current) {
+                    notifyUserReconnecting(false, "room-sync");
+                    localReconnectNotifiedRef.current = false;
                 }
 
                 // ✅ room:sync 완료 후 모든 참가자의 isReconnecting 강제 해제
@@ -5717,7 +5957,7 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             clearTimeout(timeoutId);
         };
-    }, [roomReconnecting, recvTransportReady, rememberParticipantMediaState]);
+    }, [roomReconnecting, recvTransportReady, rememberParticipantMediaState, notifyUserReconnecting]);
 
     // 이전에 화면공유 중이었던 사람 추적 (화면공유 종료 감지용)
     const prevScreenSharersRef = useRef(new Set());
@@ -6552,10 +6792,12 @@ function MeetingPage({ portalRoomId }) {
                                 }
                             }
 
-                            // 🔥 새로고침 시: 서버가 online=false로 보내면 타일 유지 + "재접속 중" 스피너 표시
-                            // 서버 online=false면 무조건 재접속 스피너 (everOnlineRef 보조), live 스트림이어도 표시
+                            // 🔥 서버 online=false가 와도 live 비디오가 유지되면 스피너를 띄우지 않는다.
+                            // PiP 진입/복귀 중 잠깐 오프라인 플래그가 튀어도 타일이 끊기지 않게 유지.
                             const hasLiveStream = currentStream && currentStream.getVideoTracks().some(t => t.readyState === "live");
-                            const shouldShowReconnecting = !isMe && !!old && !recentlyCompleted && (isOfflineFromServer || (isOffline && !hasLiveStream));
+                            const hasLiveOldStream = old?.stream && old.stream.getVideoTracks().some(t => t.readyState === "live");
+                            const hasAnyLiveStream = !!hasLiveStream || !!hasLiveOldStream;
+                            const shouldShowReconnecting = !isMe && !!old && !recentlyCompleted && !hasAnyLiveStream && (isOfflineFromServer || isOffline);
 
                             // ✅ 서버 online 플래그가 일시적으로 false로 튀더라도,
                             // SFU/브라우저 쪽 미디어 스트림이 살아있으면 stream을 null로 만들지 않는다.
@@ -7109,18 +7351,32 @@ function MeetingPage({ portalRoomId }) {
         effectAliveRef.current = true;
         if (!joinEligibilityChecked || joinBlockedByKick) return;
         if (!roomId) return;
+        let closedByCleanup = false;
+        let reconnectScheduled = false;
+        let openedOnce = false;
 
-        const resetSfuLocalState = () => {
+        clearSfuReconnectTimer();
+
+        const resetSfuLocalState = (options = {}) => {
+            const preservePeerStreams = options?.preservePeerStreams === true;
+            consumersRef.current.forEach((c) => safeClose(c));
             consumersRef.current.clear();
+            producersRef.current.forEach((p) => safeClose(p));
             producersRef.current.clear();
-            peerStreamsRef.current.clear();
+            if (!preservePeerStreams) {
+                peerStreamsRef.current.clear();
+            }
             pendingProducersRef.current = [];
 
             audioElsRef.current.forEach((a) => {
+                try { a.pause(); } catch { }
                 try { a.srcObject = null; } catch { }
             });
             audioElsRef.current.clear();
 
+            try { sendTransportRef.current?.close(); } catch { }
+            try { recvTransportRef.current?.close(); } catch { }
+            try { sfuDeviceRef.current?.close?.(); } catch { }
             sendTransportRef.current = null;
             recvTransportRef.current = null;
             restartSendIceRef.current = async () => false;
@@ -7133,29 +7389,14 @@ function MeetingPage({ portalRoomId }) {
             sfuDeviceRef.current = null;
         };
 
-        resetSfuLocalState();
+        resetSfuLocalState({ preservePeerStreams: true });
 
         hasFinishedInitialSyncRef.current = false;
         setRoomReconnecting(true);
 
-        // ✅ 재접속 시작: 다른 참가자들에게 알림 (로컬 타일에는 스피너 표시 안 함)
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-                type: "USER_RECONNECTING",
-                userId: userId,
-                reconnecting: true,
-            }));
-            console.log("[MeetingPage] 재접속 시작 알림 전송");
-        }
-
         // 재연결 시 이전 transport/device 정리 (끊김 후 재연결)
         if (sfuWsRef.current != null) {
-            try { sendTransportRef.current?.close(); } catch { }
-            try { recvTransportRef.current?.close(); } catch { }
-            try { sfuDeviceRef.current?.close?.(); } catch { }
-            sendTransportRef.current = null;
-            recvTransportRef.current = null;
-            sfuDeviceRef.current = null;
+            try { sfuWsRef.current.close(); } catch { }
         }
         const sfuWsUrl = getSfuWsUrl();
         if (process.env.NODE_ENV !== "test") {
@@ -7163,6 +7404,15 @@ function MeetingPage({ portalRoomId }) {
         }
         const sfuWs = new WebSocket(sfuWsUrl);
         sfuWsRef.current = sfuWs;
+
+        const scheduleReconnectFromCurrentWs = (reason, options = {}) => {
+            if (closedByCleanup || reconnectScheduled || isLeavingRef.current) return;
+            if (sfuWsRef.current !== sfuWs) return;
+            reconnectScheduled = true;
+            scheduleSfuReconnect(reason, {
+                notifyOthers: options?.notifyOthers ?? openedOnce,
+            });
+        };
 
         const drainPending = async () => {
             if (!recvTransportRef.current || !sfuDeviceRef.current) return;
@@ -7283,6 +7533,9 @@ function MeetingPage({ portalRoomId }) {
         };
 
         sfuWs.onopen = () => {
+            if (closedByCleanup || sfuWsRef.current !== sfuWs) return;
+            openedOnce = true;
+            sfuReconnectAttemptRef.current = 0;
             // ✅ 같은 URL이면 같은 방: SFU roomId도 URL의 roomId를 그대로 사용
             const sfuRoomId = roomId;
             safeSfuSend({
@@ -7294,6 +7547,7 @@ function MeetingPage({ portalRoomId }) {
 
         sfuWs.onmessage = async (event) => {
             if (!effectAliveRef.current) return;
+            if (sfuWsRef.current !== sfuWs) return;
             const msg = JSON.parse(event.data);
 
             if (msg.action === "peerCount") {
@@ -7560,6 +7814,8 @@ function MeetingPage({ portalRoomId }) {
         };
 
         sfuWs.onerror = (error) => {
+            if (closedByCleanup) return;
+            if (sfuWsRef.current !== sfuWs) return;
             const urlUsed = getSfuWsUrl();
             console.error("❌ SFU WS ERROR", {
                 error,
@@ -7568,59 +7824,86 @@ function MeetingPage({ portalRoomId }) {
                 readyState: sfuWs.readyState,
                 hint: "1) nginx location /sfu/ 프록시 확인 2) SFU 서버(4000) 실행 확인 3) 빌드 후 재배포 확인",
             });
-            setRoomReconnecting(false);
+            setRoomReconnecting(true);
+            scheduleReconnectFromCurrentWs("ws-error", { notifyOthers: openedOnce });
         };
 
         sfuWs.onclose = () => {
+            if (closedByCleanup) return;
+            if (sfuWsRef.current !== sfuWs) return;
             consumersRef.current.forEach((c) => safeClose(c));
             consumersRef.current.clear();
             producersRef.current.forEach((p) => safeClose(p));
             producersRef.current.clear();
-            peerStreamsRef.current.clear();
             pendingProducersRef.current = [];
             audioElsRef.current.forEach((a) => {
                 try { a.srcObject = null; } catch { }
             });
             audioElsRef.current.clear();
+            try { sendTransportRef.current?.close(); } catch { }
+            try { recvTransportRef.current?.close(); } catch { }
+            try { sfuDeviceRef.current?.close?.(); } catch { }
+            sendTransportRef.current = null;
+            recvTransportRef.current = null;
+            sfuDeviceRef.current = null;
             restartSendIceRef.current = async () => false;
             restartRecvIceRef.current = async () => false;
             transportIceRestartInFlightRef.current = { send: false, recv: false };
             localSendStallSinceRef.current = 0;
+            setRecvTransportReady(false);
             // 통화 중 끊김(프록시/네트워크) 시 재연결 시도 → 검은화면 복구
             if (!isLeavingRef.current) {
                 setRoomReconnecting(true);
-                setSfuReconnectKey((prev) => prev + 1);
+                scheduleReconnectFromCurrentWs("ws-close", { notifyOthers: openedOnce });
             }
         };
 
         return () => {
-            // ❗ 통화 종료 버튼이 아닌 경우에는 절대 leave하지 않는다
-            if (!isLeavingRef.current) {
-                console.log("[SFU] unmount ignored (PiP / LMS 이동)");
-                return;
+            effectAliveRef.current = false;
+            closedByCleanup = true;
+            clearSfuReconnectTimer();
+
+            if (roomSyncHandlerRef.current) {
+                try { sfuWs.removeEventListener("message", roomSyncHandlerRef.current); } catch { }
+                roomSyncHandlerRef.current = null;
             }
 
-            effectAliveRef.current = false;
+            if (isLeavingRef.current) {
+                try {
+                    if (sfuWs.readyState === WebSocket.OPEN) {
+                        sfuWs.send(JSON.stringify({
+                            action: "leave",
+                            requestId: safeUUID(),
+                            data: { roomId, peerId: userId },
+                        }));
+                    }
+                } catch { }
+                try { sendSfuLeaveBeacon(roomId, userId); } catch { }
+                localReconnectNotifiedRef.current = false;
+                sfuReconnectAttemptRef.current = 0;
+
+                producersRef.current.forEach((p) => safeClose(p));
+                consumersRef.current.forEach((c) => safeClose(c));
+                producersRef.current.clear();
+                consumersRef.current.clear();
+                peerStreamsRef.current.clear();
+            }
 
             try {
-                safeSfuSend({
-                    action: "leave",
-                    requestId: safeUUID(),
-                    data: { roomId, peerId: userId },
-                });
+                if (sfuWs.readyState === WebSocket.OPEN || sfuWs.readyState === WebSocket.CONNECTING) {
+                    sfuWs.close();
+                }
             } catch { }
-            try { sendSfuLeaveBeacon(roomId, userId); } catch { }
+            if (sfuWsRef.current === sfuWs) {
+                sfuWsRef.current = null;
+            }
 
-            producersRef.current.forEach((p) => safeClose(p));
-            consumersRef.current.forEach((c) => safeClose(c));
-
-            producersRef.current.clear();
-            consumersRef.current.clear();
-
-            closeSfuWsForLeave();
-            sfuWsRef.current = null;
+            if (!isLeavingRef.current) {
+                console.log("[SFU] effect cleanup (reconnect / navigation)");
+                return;
+            }
         };
-    }, [roomId, userId, sfuReconnectKey, closeSfuWsForLeave, joinEligibilityChecked, joinBlockedByKick]); // sfuReconnectKey: SFU 끊김 시 재연결
+    }, [roomId, userId, sfuReconnectKey, clearSfuReconnectTimer, scheduleSfuReconnect, joinEligibilityChecked, joinBlockedByKick]); // sfuReconnectKey: SFU 끊김 시 재연결
 
     useEffect(() => {
         // 로컬스토리지에 저장 (재접속/새로고침 시 복원)

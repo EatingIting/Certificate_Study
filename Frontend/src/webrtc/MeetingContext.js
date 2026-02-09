@@ -312,29 +312,30 @@ export const MeetingProvider = ({ children }) => {
 
     // 🔥 clone된 트랙 관리용 ref (메모리 누수 방지)
     const clonedTracksRef = useRef([]);
+    // 일부 브라우저는 MediaStreamTrack에 임의 필드를 붙이면 무시/실패할 수 있어 WeakMap으로 원본 ID 추적
+    const clonedTrackOriginRef = useRef(new WeakMap());
 
     const syncPipStableStreamFrom = useCallback((srcStream) => {
         if (!srcStream) return null;
         const dst = ensurePipStableStream();
 
         // 🔥 소스 스트림의 트랙 ID들 수집
-        const srcTrackIds = new Set(srcStream.getTracks().map(t => t.id));
+        const srcTrackIds = new Set(srcStream.getTracks().map((t) => t.id));
 
         // 🔥 이미 동일한 원본 트랙 ID에서 clone된 트랙이 있는지 확인
         // (clone된 트랙은 다른 ID를 가지므로, 원본 ID를 기준으로 비교)
         const dstOriginalIds = new Set();
-        dst.getTracks().forEach(t => {
-            // clone된 트랙의 원본 ID는 label 또는 별도 추적 필요
-            // 여기서는 트랙이 live 상태인지만 확인
+        dst.getTracks().forEach((t) => {
             if (t.readyState === "live") {
-                dstOriginalIds.add(t._originalId || t.id);
+                dstOriginalIds.add(clonedTrackOriginRef.current.get(t) || t.id);
             }
         });
 
         // 🔥 이미 동일한 원본 트랙에서 clone된 트랙이 있고 live 상태면 교체 불필요
-        const sameSource = [...srcTrackIds].every(id => dstOriginalIds.has(id)) &&
-                          dst.getTracks().length > 0 &&
-                          dst.getTracks().every(t => t.readyState === "live");
+        const sameSource = srcTrackIds.size === dstOriginalIds.size &&
+            [...srcTrackIds].every((id) => dstOriginalIds.has(id)) &&
+            dst.getTracks().length > 0 &&
+            dst.getTracks().every((t) => t.readyState === "live");
         if (sameSource) {
             return dst;
         }
@@ -347,7 +348,7 @@ export const MeetingProvider = ({ children }) => {
         srcStream.getTracks().forEach((t) => {
             try {
                 const clonedTrack = t.clone();
-                clonedTrack._originalId = t.id;
+                clonedTrackOriginRef.current.set(clonedTrack, t.id);
                 newClonedTracks.push(clonedTrack);
             } catch { }
         });
@@ -372,11 +373,14 @@ export const MeetingProvider = ({ children }) => {
 
         // 약간의 딜레이 후 기존 트랙 stop (안전하게)
         setTimeout(() => {
-            oldClonedTracks.forEach(t => {
+            oldClonedTracks.forEach((t) => {
                 try {
                     if (t.readyState === "live") {
                         t.stop();
                     }
+                } catch { }
+                try {
+                    clonedTrackOriginRef.current.delete(t);
                 } catch { }
             });
         }, 100);
@@ -607,8 +611,14 @@ export const MeetingProvider = ({ children }) => {
                     console.log("[MeetingContext] 해당 peerId의 Portal 스트림 발견:", peerId);
                 }
             }
+
+            // 2) Portal 스트림이 없으면, 브라우저 PiP에서 방금 사용하던 stable 스트림을 그대로 재사용
+            if (!finalStream && pending.stream && isStreamValidCheck(pending.stream)) {
+                finalStream = pending.stream;
+                console.log("[MeetingContext] pending stable 스트림 재사용");
+            }
             
-            // 2) 스트림이 없거나 유효하지 않으면 아바타 스트림 생성 (커스텀 PiP이므로 이름 표시 안 함)
+            // 3) 스트림이 없거나 유효하지 않으면 아바타 스트림 생성 (커스텀 PiP이므로 이름 표시 안 함)
             // 브라우저 PiP에서 사용하던 아바타 스트림은 재사용하지 않고 항상 새로 생성
             if (!finalStream || !isStreamValidCheck(finalStream)) {
                 console.log("[MeetingContext] 브라우저 PiP에서 보고 있던 대상의 스트림이 없어서 아바타 스트림 생성 (커스텀 PiP용, 이름 없음)", { peerId, peerName });
@@ -644,18 +654,10 @@ export const MeetingProvider = ({ children }) => {
                     }
                 }
                 
-                // Portal 스트림을 찾지 못했고, 숨겨진 스트림이 실제 비디오인 경우에만 재사용
+                // Portal 스트림을 찾지 못했으면 숨겨진 stable 스트림을 재사용
+                // (640x480 해상도는 실제 카메라도 충분히 가능하므로 아바타 추정 기준으로 쓰지 않음)
                 if (!finalStream) {
-                    const videoTracks = hiddenVideoStream.getVideoTracks();
-                    // Canvas에서 생성된 아바타 스트림은 보통 특정 크기를 가짐
-                    // 하지만 확실하지 않으므로, 아바타 스트림일 가능성이 있으면 재생성
-                    const mightBeAvatarStream = videoTracks.length === 1 && 
-                        videoTracks[0].getSettings().width === 640 && 
-                        videoTracks[0].getSettings().height === 480;
-                    
-                    if (!mightBeAvatarStream) {
-                        finalStream = hiddenVideoStream;
-                    }
+                    finalStream = hiddenVideoStream;
                 }
             }
             
@@ -812,11 +814,22 @@ export const MeetingProvider = ({ children }) => {
     }, [findPortalMainStream, findValidStreamFromDOM, isStreamValidCheck, createAvatarStream]);
 
     // 브라우저 PIP 요청 (🔥 숨겨진 video 사용하여 페이지 이동 시에도 PIP 유지)
-    const requestBrowserPip = useCallback(async (videoEl, stream, peerName, peerId) => {
+    const requestBrowserPip = useCallback(async (videoEl, stream, peerName, peerId, options = {}) => {
+        const allowAvatarFallback = options?.allowAvatarFallback !== false;
         const safePeerName = peerName || getPeerMetaFromVideo(videoEl).peerName || "참가자";
+
+        if ((!stream || !stream.getVideoTracks().some((t) => t.readyState === "live")) &&
+            videoEl?.srcObject &&
+            videoEl.srcObject.getVideoTracks().some((t) => t.readyState === "live")) {
+            stream = videoEl.srcObject;
+        }
         
         // 🔥 스트림이 없거나 비디오 트랙이 없으면 아바타 스트림 생성
         if (!stream || !stream.getVideoTracks().some(t => t.readyState === "live")) {
+            if (!allowAvatarFallback) {
+                console.log("[MeetingContext] live 비디오 스트림 없음 - 아바타 fallback 비활성화로 PiP 요청 보류");
+                return false;
+            }
             console.log("[MeetingContext] 비디오 스트림이 없어서 아바타 스트림 생성");
             stream = createAvatarStream(safePeerName, 640, 480, true);
         }

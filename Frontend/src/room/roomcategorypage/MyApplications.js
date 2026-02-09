@@ -76,6 +76,11 @@ const MyApplications = () => {
       await api.post(`/applications/${joinId}/approve`);
       alert("승인 되었습니다.");
       fetchApplications();
+      try {
+        window.dispatchEvent(new CustomEvent("room:applications-changed"));
+      } catch (e) {
+        // ignore dispatch failure
+      }
       setOpenApplicationId(null);
     } catch (e) {
       alert(e.response?.data?.message || "승인 실패");
@@ -87,6 +92,11 @@ const MyApplications = () => {
       await api.post(`/applications/${joinId}/reject`);
       alert("거절 되었습니다.");
       fetchApplications();
+      try {
+        window.dispatchEvent(new CustomEvent("room:applications-changed"));
+      } catch (e) {
+        // ignore dispatch failure
+      }
       setOpenApplicationId(null);
     } catch (e) {
       alert("거절 실패");

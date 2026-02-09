@@ -59,6 +59,39 @@ const parseObjectLike = (value) => {
     return null;
 };
 
+const extractNotificationId = (payload) => {
+    if (!payload || typeof payload !== "object") return "";
+
+    const candidates = [
+        payload.notificationId,
+        payload?.data?.notificationId,
+        payload?.payload?.notificationId,
+        payload?.notification?.notificationId,
+    ];
+
+    for (const candidate of candidates) {
+        const id = asText(candidate);
+        if (id) return id;
+    }
+    return "";
+};
+
+const sendNotificationAck = (socket, notificationId) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!notificationId) return;
+
+    try {
+        socket.send(
+            JSON.stringify({
+                type: "ACK",
+                notificationId,
+            })
+        );
+    } catch (e) {
+        // ignore ack failure
+    }
+};
+
 const expandPayloadCandidates = (rawPayload) => {
     const roots = [];
     const visited = new Set();
@@ -146,6 +179,12 @@ const parseNotificationFromSource = (source) => {
     const assignmentId = pickId(source.assignmentId, source.taskId, source.homeworkId);
     const scheduleId = pickId(source.scheduleId, source.calendarId, source.studyScheduleId);
     const path = pickText(source.path, source.url, source.link, source.targetPath);
+    const notificationId = pickId(
+        source.notificationId,
+        source.noticeId,
+        source.alarmId,
+        source.id
+    );
 
     let title = "";
     let message = "";
@@ -164,7 +203,7 @@ const parseNotificationFromSource = (source) => {
     const dedupeKey = buildLmsNotificationDedupeKey(source);
 
     return {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: notificationId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         dedupeKey,
         type,
         roomId,
@@ -265,7 +304,7 @@ export default function Header() {
     useEffect(() => {
         if (!userId) return;
 
-        const wsPaths = [`/ws/comment/${userId}`, `/ws/notification/${userId}`];
+        const wsPaths = [`/ws/notification/${userId}`];
         const reconnectTimers = [];
         const sockets = new Set();
         let isActive = true;
@@ -285,6 +324,11 @@ export default function Header() {
                     payload = JSON.parse(event.data);
                 } catch (e) {
                     payload = { message: String(event.data || "") };
+                }
+
+                const notificationId = extractNotificationId(payload);
+                if (notificationId) {
+                    sendNotificationAck(socket, notificationId);
                 }
 
                 const notif = parseNotification(payload);

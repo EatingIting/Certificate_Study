@@ -115,7 +115,30 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
         }
 
         // 🔥 메인 발표자 찾기 (비디오 트랙이 없어도 찾기)
+        const hasLiveVideoTrack = (s) => {
+            try {
+                const tracks = s?.getVideoTracks?.() ?? [];
+                return tracks.length > 0 && tracks.some((t) => t.readyState === "live");
+            } catch {
+                return false;
+            }
+        };
+
         const findMainPresenter = () => {
+            const readCameraState = (tile, videoNode) => {
+                const tileCameraOff = tile?.dataset?.cameraOff;
+                const videoCameraOff = videoNode?.dataset?.cameraOff;
+                const tileHasLive = tile?.dataset?.hasLiveVideo;
+                const videoHasLive = videoNode?.dataset?.hasLiveVideo;
+
+                const cameraOff =
+                    tileCameraOff === "true" || videoCameraOff === "true";
+                const hasLiveHint =
+                    tileHasLive === "true" || videoHasLive === "true";
+
+                return { cameraOffHint: cameraOff, hasLiveHint };
+            };
+
             // 1) 메인 비디오 타일 찾기 (비디오 트랙 유무와 관계없이)
             const mainVideo = document.querySelector('video[data-main-video="main"]');
             if (mainVideo) {
@@ -126,7 +149,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                     mainVideo?.dataset?.peerName ||
                     tile?.querySelector(".stream-label")?.textContent ||
                     "참가자";
-                return { video: mainVideo, stream: mainVideo.srcObject, peerName, peerId };
+                const { cameraOffHint, hasLiveHint } = readCameraState(tile, mainVideo);
+                return { video: mainVideo, stream: mainVideo.srcObject, peerName, peerId, cameraOffHint, hasLiveHint };
             }
 
             // 2) 메인 스테이지의 비디오 타일 찾기
@@ -138,7 +162,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                     mainTile?.dataset?.peerName ||
                     mainTile?.querySelector(".stream-label")?.textContent ||
                     "참가자";
-                return { video, stream: video?.srcObject, peerName, peerId };
+                const { cameraOffHint, hasLiveHint } = readCameraState(mainTile, video);
+                return { video, stream: video?.srcObject, peerName, peerId, cameraOffHint, hasLiveHint };
             }
 
             // 3) 화면공유 우선 찾기 (비디오 트랙 있는 것만)
@@ -153,7 +178,8 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
                         screenVideo?.dataset?.peerName ||
                         tile?.querySelector(".stream-label")?.textContent ||
                         "참가자";
-                    return { video: screenVideo, stream: screenVideo.srcObject, peerName, peerId };
+                    const { cameraOffHint, hasLiveHint } = readCameraState(tile, screenVideo);
+                    return { video: screenVideo, stream: screenVideo.srcObject, peerName, peerId, cameraOffHint, hasLiveHint };
                 }
             }
 
@@ -166,7 +192,7 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             return;
         }
 
-        const { video, stream, peerName, peerId } = mainPresenter;
+        const { video, stream, peerName, peerId, cameraOffHint, hasLiveHint } = mainPresenter;
 
         // 🔥 video 요소가 없어도 메인 발표자 정보는 있으므로 PiP 실행 가능
         // requestBrowserPip에서 스트림이 없으면 아바타 스트림을 생성함
@@ -180,7 +206,47 @@ const LMSSidebar = ({ activeMenu: activeMenuProp, setActiveMenu: setActiveMenuPr
             document.body.appendChild(videoEl);
         }
 
-        await requestBrowserPip(videoEl, stream, peerName, peerId);
+        const waitForLiveStream = async (el, timeoutMs = 1200) => {
+            const start = Date.now();
+            while (Date.now() - start < timeoutMs) {
+                const s = el?.srcObject || null;
+                if (hasLiveVideoTrack(s)) return s;
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+            return null;
+        };
+
+        const allowAvatarFallback = cameraOffHint === true;
+        let streamToUse = hasLiveVideoTrack(stream) ? stream : null;
+        if (!allowAvatarFallback && !streamToUse && hasLiveHint && videoEl?.srcObject) {
+            streamToUse = videoEl.srcObject;
+        }
+        if (!allowAvatarFallback && !streamToUse) {
+            streamToUse = await waitForLiveStream(videoEl, 2200);
+        }
+
+        let ok = await requestBrowserPip(
+            videoEl,
+            streamToUse,
+            peerName,
+            peerId,
+            { allowAvatarFallback }
+        );
+
+        if (!ok && !allowAvatarFallback) {
+            const retryStream = await waitForLiveStream(videoEl, 1000);
+            ok = await requestBrowserPip(
+                videoEl,
+                retryStream,
+                peerName,
+                peerId,
+                { allowAvatarFallback: false }
+            );
+        }
+
+        if (!ok && !allowAvatarFallback) {
+            console.warn("[LMSSidebar] 카메라 ON 상태에서 live 비디오 확보 실패 - 아바타 fallback 없이 PiP 보류");
+        }
     }, [isInMeeting, isPipMode, roomId, requestBrowserPip]);
 
     const toggleParent = (key) => {

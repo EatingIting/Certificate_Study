@@ -10,6 +10,7 @@ import { enqueueLmsNotification, isLmsNotificationPayload } from "../utils/lmsNo
 const MAIN_NOTIF_PENDING_KEY_PREFIX = "main.notification.pending.v1.";
 const MAIN_NOTIF_SEEN_RECEIVED_KEY_PREFIX = "main.notification.seen.received.v1.";
 const MAIN_NOTIF_SEEN_SENT_KEY_PREFIX = "main.notification.seen.sent.v1.";
+const RECONNECT_DELAY_MS = 3000;
 
 const hasText = (value) => value != null && String(value).trim() !== "";
 
@@ -19,6 +20,17 @@ const toJoinId = (item) => {
 };
 
 const normalizeStatus = (status) => String(status || "").trim().toUpperCase();
+
+const normalizeDateToken = (value) => {
+    if (!hasText(value)) return "";
+
+    const raw = String(value).trim();
+    const parsedDate = new Date(raw);
+    if (Number.isNaN(parsedDate.getTime())) {
+        return raw;
+    }
+    return parsedDate.toISOString();
+};
 
 const isDecisionStatus = (status) => {
     const token = normalizeStatus(status);
@@ -31,6 +43,52 @@ const isDecisionStatus = (status) => {
         return true;
     }
     return false;
+};
+
+const buildReceivedSeenToken = (item) => {
+    const joinId = toJoinId(item);
+    if (!joinId) return "";
+
+    const requestedAt = normalizeDateToken(
+        item?.requestedAt || item?.updatedAt || item?.createdAt
+    );
+    return `RECEIVED|${joinId}|${requestedAt}`;
+};
+
+const buildSentDecisionSeenToken = (item) => {
+    const joinId = toJoinId(item);
+    if (!joinId) return "";
+
+    const status = normalizeStatus(item?.status);
+    const requestedAt = normalizeDateToken(
+        item?.requestedAt || item?.updatedAt || item?.createdAt
+    );
+    return `SENT|${joinId}|${status}|${requestedAt}`;
+};
+
+const extractJoinIdFromSeenToken = (token) => {
+    const text = String(token || "").trim();
+    if (!text) return "";
+
+    const parts = text.split("|");
+    if (
+        parts.length >= 2 &&
+        (parts[0] === "RECEIVED" || parts[0] === "SENT")
+    ) {
+        return String(parts[1] || "").trim();
+    }
+
+    // 구버전(단순 joinId 저장) 호환
+    return text;
+};
+
+const hasSeenToken = (seenSet, token) => {
+    if (!token) return true;
+    if (seenSet.has(token)) return true;
+
+    const joinId = extractJoinIdFromSeenToken(token);
+    if (!joinId) return false;
+    return seenSet.has(joinId);
 };
 
 const getPendingKey = (userId) => `${MAIN_NOTIF_PENDING_KEY_PREFIX}${userId}`;
@@ -137,6 +195,39 @@ const getNotificationIntent = (payload) => {
     return { shouldShowDot, targetTab };
 };
 
+const extractNotificationId = (payload) => {
+    if (!payload || typeof payload !== "object") return "";
+
+    const candidates = [
+        payload.notificationId,
+        payload?.data?.notificationId,
+        payload?.payload?.notificationId,
+        payload?.notification?.notificationId,
+    ];
+
+    for (const candidate of candidates) {
+        if (!hasText(candidate)) continue;
+        return String(candidate).trim();
+    }
+    return "";
+};
+
+const sendNotificationAck = (socket, notificationId) => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!hasText(notificationId)) return;
+
+    try {
+        socket.send(
+            JSON.stringify({
+                type: "ACK",
+                notificationId: String(notificationId).trim(),
+            })
+        );
+    } catch (e) {
+        // ignore ack failure
+    }
+};
+
 const MainHeader = () => {
     const navigate = useNavigate();
     const { pathname } = useLocation();
@@ -149,19 +240,15 @@ const MainHeader = () => {
     const [hasNotification, setHasNotification] = useState(false);
     const [latestJoinId, setLatestJoinId] = useState(null);
     const [notificationTargetTab, setNotificationTargetTab] = useState("received");
-    const [knownReceivedJoinIds, setKnownReceivedJoinIds] = useState([]);
-    const [knownSentDecisionJoinIds, setKnownSentDecisionJoinIds] = useState([]);
-    const notificationTargetTabRef = useRef("received");
+    const [knownReceivedSeenTokens, setKnownReceivedSeenTokens] = useState([]);
+    const [knownSentDecisionSeenTokens, setKnownSentDecisionSeenTokens] = useState([]);
+    const evaluationVersionRef = useRef(0);
 
     const userId = sessionStorage.getItem("userId");
 
     useEffect(() => {
         setNickname(sessionStorage.getItem("nickname"));
     }, [pathname]);
-
-    useEffect(() => {
-        notificationTargetTabRef.current = notificationTargetTab || "received";
-    }, [notificationTargetTab]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -183,30 +270,50 @@ const MainHeader = () => {
         const received = Array.isArray(receivedRes?.data) ? receivedRes.data : [];
         const sent = Array.isArray(sentRes?.data) ? sentRes.data : [];
 
-        const receivedIds = received.map(toJoinId).filter(Boolean);
-        const sentDecisionIds = sent
-            .filter((item) => isDecisionStatus(item?.status))
-            .map(toJoinId)
+        const sentDecisionItems = sent.filter((item) =>
+            isDecisionStatus(item?.status)
+        );
+
+        const receivedSeenTokens = received
+            .map(buildReceivedSeenToken)
+            .filter(Boolean);
+        const sentDecisionSeenTokens = sentDecisionItems
+            .map(buildSentDecisionSeenToken)
             .filter(Boolean);
 
-        return { receivedIds, sentDecisionIds };
+        const latestJoinId =
+            toJoinId(received[0]) || toJoinId(sentDecisionItems[0]) || null;
+
+        return { receivedSeenTokens, sentDecisionSeenTokens, latestJoinId };
     };
 
     const evaluateNotificationState = useRef(async () => { });
     evaluateNotificationState.current = async () => {
         if (!userId) return;
-        try {
-            const { receivedIds, sentDecisionIds } = await fetchApplicationSnapshot();
+        const version = ++evaluationVersionRef.current;
 
-            setKnownReceivedJoinIds(receivedIds);
-            setKnownSentDecisionJoinIds(sentDecisionIds);
-            setLatestJoinId(receivedIds[0] || sentDecisionIds[0] || null);
+        try {
+            const {
+                receivedSeenTokens,
+                sentDecisionSeenTokens,
+                latestJoinId: snapshotLatestJoinId,
+            } = await fetchApplicationSnapshot();
+
+            if (version !== evaluationVersionRef.current) return;
+
+            setKnownReceivedSeenTokens(receivedSeenTokens);
+            setKnownSentDecisionSeenTokens(sentDecisionSeenTokens);
+            setLatestJoinId(snapshotLatestJoinId);
 
             const seenReceived = new Set(readSeenIds(getSeenReceivedKey(userId)));
             const seenSent = new Set(readSeenIds(getSeenSentKey(userId)));
 
-            const hasUnseenSentDecision = sentDecisionIds.some((id) => !seenSent.has(id));
-            const hasUnseenReceived = receivedIds.some((id) => !seenReceived.has(id));
+            const hasUnseenSentDecision = sentDecisionSeenTokens.some(
+                (token) => !hasSeenToken(seenSent, token)
+            );
+            const hasUnseenReceived = receivedSeenTokens.some(
+                (token) => !hasSeenToken(seenReceived, token)
+            );
 
             if (hasUnseenSentDecision || hasUnseenReceived) {
                 const targetTab = hasUnseenSentDecision ? "sent" : "received";
@@ -236,46 +343,66 @@ const MainHeader = () => {
 
     useEffect(() => {
         if (!nickname || !userId) return;
+        let socket = null;
+        let reconnectTimer = null;
+        let isActive = true;
 
-        const socket = new WebSocket(
-            toWsBackendUrl(`/ws/notification/${userId}`)
-        );
+        const connect = () => {
+            if (!isActive) return;
 
-        socket.onmessage = (event) => {
-            let data = null;
-            try {
-                data = JSON.parse(event.data);
-            } catch (e) {
-                data = { message: String(event.data || "") };
-            }
+            socket = new WebSocket(toWsBackendUrl(`/ws/notification/${userId}`));
 
-            if (
-                isLmsNotificationPayload(data) ||
-                isLmsNotificationPayload(event.data) ||
-                isLmsNotificationPayload(data?.data) ||
-                isLmsNotificationPayload(data?.payload)
-            ) {
-                enqueueLmsNotification(data);
-                return;
-            }
+            socket.onmessage = (event) => {
+                let data = null;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (e) {
+                    data = { message: String(event.data || "") };
+                }
 
-            const { shouldShowDot, targetTab } = getNotificationIntent(data);
-            if (shouldShowDot) {
-                setHasNotification(true);
-                writePendingNotification(userId, {
-                    hasNotification: true,
-                    targetTab: targetTab || notificationTargetTabRef.current || "received",
-                });
-            }
-            if (targetTab) {
-                setNotificationTargetTab(targetTab);
-            }
+                const notificationId = extractNotificationId(data);
+                if (notificationId) {
+                    sendNotificationAck(socket, notificationId);
+                }
 
-            // 서버 payload 형태가 달라도 API 스냅샷으로 최종 상태를 맞춘다.
-            evaluateNotificationState.current();
+                if (
+                    isLmsNotificationPayload(data) ||
+                    isLmsNotificationPayload(event.data) ||
+                    isLmsNotificationPayload(data?.data) ||
+                    isLmsNotificationPayload(data?.payload)
+                ) {
+                    enqueueLmsNotification(data);
+                    return;
+                }
+
+                const { shouldShowDot, targetTab } = getNotificationIntent(data);
+                if (targetTab) {
+                    setNotificationTargetTab(targetTab);
+                }
+
+                if (shouldShowDot || targetTab) {
+                    // 점 표시는 스냅샷 결과만 신뢰해 false positive(봤는데 다시 뜨는 현상)를 줄인다.
+                    evaluateNotificationState.current();
+                }
+            };
+
+            socket.onclose = () => {
+                if (!isActive) return;
+                reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
+            };
         };
 
-        return () => socket.close();
+        connect();
+
+        return () => {
+            isActive = false;
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            try {
+                if (socket) socket.close();
+            } catch (e) {
+                // ignore socket close failure
+            }
+        };
     }, [nickname, userId]);
 
     useEffect(() => {
@@ -297,6 +424,39 @@ const MainHeader = () => {
         return () => clearInterval(timer);
     }, [nickname, userId]);
 
+    useEffect(() => {
+        if (!nickname || !userId) return;
+        if (pathname !== "/room/my-applications") return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const {
+                    receivedSeenTokens,
+                    sentDecisionSeenTokens,
+                    latestJoinId: snapshotLatestJoinId,
+                } = await fetchApplicationSnapshot();
+
+                if (cancelled) return;
+
+                setKnownReceivedSeenTokens(receivedSeenTokens);
+                setKnownSentDecisionSeenTokens(sentDecisionSeenTokens);
+                setLatestJoinId(snapshotLatestJoinId);
+
+                writeSeenIds(getSeenReceivedKey(userId), receivedSeenTokens);
+                writeSeenIds(getSeenSentKey(userId), sentDecisionSeenTokens);
+                clearPendingNotification(userId);
+                setHasNotification(false);
+            } catch (e) {
+                // ignore auto-seen failure
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [nickname, pathname, userId]);
+
     const handleLogout = async () => {
         try {
             await logout();
@@ -309,8 +469,8 @@ const MainHeader = () => {
         setHasNotification(false);
         setLatestJoinId(null);
         setNotificationTargetTab("received");
-        setKnownReceivedJoinIds([]);
-        setKnownSentDecisionJoinIds([]);
+        setKnownReceivedSeenTokens([]);
+        setKnownSentDecisionSeenTokens([]);
         window.location.replace("/");
     };
 
@@ -351,23 +511,23 @@ const MainHeader = () => {
                                 onClick={async () => {
                                     let latestId = latestJoinId;
                                     if (userId) {
-                                        let receivedIds = knownReceivedJoinIds;
-                                        let sentDecisionIds = knownSentDecisionJoinIds;
+                                        let receivedSeenTokens = knownReceivedSeenTokens;
+                                        let sentDecisionSeenTokens = knownSentDecisionSeenTokens;
 
                                         try {
                                             const snapshot = await fetchApplicationSnapshot();
-                                            receivedIds = snapshot.receivedIds;
-                                            sentDecisionIds = snapshot.sentDecisionIds;
-                                            setKnownReceivedJoinIds(receivedIds);
-                                            setKnownSentDecisionJoinIds(sentDecisionIds);
-                                            latestId = receivedIds[0] || sentDecisionIds[0] || null;
+                                            receivedSeenTokens = snapshot.receivedSeenTokens;
+                                            sentDecisionSeenTokens = snapshot.sentDecisionSeenTokens;
+                                            setKnownReceivedSeenTokens(receivedSeenTokens);
+                                            setKnownSentDecisionSeenTokens(sentDecisionSeenTokens);
+                                            latestId = snapshot.latestJoinId || null;
                                             setLatestJoinId(latestId);
                                         } catch (e) {
-                                            // fallback to cached ids
+                                            // fallback to cached tokens
                                         }
 
-                                        writeSeenIds(getSeenReceivedKey(userId), receivedIds);
-                                        writeSeenIds(getSeenSentKey(userId), sentDecisionIds);
+                                        writeSeenIds(getSeenReceivedKey(userId), receivedSeenTokens);
+                                        writeSeenIds(getSeenSentKey(userId), sentDecisionSeenTokens);
                                         clearPendingNotification(userId);
                                     }
 
@@ -380,6 +540,7 @@ const MainHeader = () => {
 
                                     setHasNotification(false);
                                     const targetTab = notificationTargetTab || "received";
+                                    evaluateNotificationState.current();
 
                                     navigate("/room/my-applications", {
                                         state: {
