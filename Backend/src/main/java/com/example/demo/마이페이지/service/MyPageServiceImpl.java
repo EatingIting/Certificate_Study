@@ -86,7 +86,6 @@ public class MyPageServiceImpl implements MyPageService {
         myPageMapper.deleteBoardPostsByUser(userId);
         myPageMapper.deleteChatParticipantsByUser(userId);
         myPageMapper.deleteChatMessagesByUser(userId);
-        myPageMapper.deleteRoomParticipantsByUser(userId);
         myPageMapper.deleteSchedulesByUser(userId);
         myPageMapper.deleteUserInterestCategory(userId);
 

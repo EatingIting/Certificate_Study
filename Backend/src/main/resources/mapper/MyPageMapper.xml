@@ -53,11 +53,6 @@
         WHERE user_id = #{userId}
     </delete>
 
-    <delete id="deleteRoomParticipantsByUser">
-        DELETE FROM room_participant
-        WHERE user_id = #{userId}
-    </delete>
-
     <delete id="deleteSchedulesByUser">
         DELETE FROM schedules
         WHERE user_id = #{userId}

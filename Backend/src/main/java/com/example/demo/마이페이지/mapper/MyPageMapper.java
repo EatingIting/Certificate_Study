@@ -31,7 +31,6 @@ public interface MyPageMapper {
     void deleteBoardPostsByUser(@Param("userId") String userId);
     void deleteChatMessagesByUser(@Param("userId") String userId);
     void deleteChatParticipantsByUser(@Param("userId") String userId);
-    void deleteRoomParticipantsByUser(@Param("userId") String userId);
     void deleteSchedulesByUser(@Param("userId") String userId);
     void deleteUserInterestCategory(@Param("userId") String userId);
 
