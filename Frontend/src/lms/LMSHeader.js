@@ -6,6 +6,8 @@ import { useMeeting } from "../webrtc/MeetingContext";
 import { useEffect, useState, useRef } from "react";
 import { toWsBackendUrl } from "../utils/backendUrl";
 import {
+    buildLmsNotificationDedupeKey,
+    clearQueuedLmsNotifications,
     enqueueLmsNotification,
     readQueuedLmsNotifications,
     removeQueuedLmsNotification,
@@ -143,8 +145,6 @@ const parseNotificationFromSource = (source) => {
     const postId = pickId(source.postId, source.boardPostId, source.articleId);
     const assignmentId = pickId(source.assignmentId, source.taskId, source.homeworkId);
     const scheduleId = pickId(source.scheduleId, source.calendarId, source.studyScheduleId);
-    const externalId = pickId(source.notificationId, source.id, source.noticeId, source.alarmId);
-    const createdAt = pickText(source.createdAt, source.timestamp, source.sentAt, source.createdDate);
     const path = pickText(source.path, source.url, source.link, source.targetPath);
 
     let title = "";
@@ -161,18 +161,7 @@ const parseNotificationFromSource = (source) => {
         message = pickText(source.content, source.message, source.description, source.notificationMessage, "새 일정이 등록되었습니다.");
     }
 
-    const dedupeKey =
-        externalId ||
-        [
-            type,
-            roomId,
-            postId,
-            assignmentId,
-            scheduleId,
-            title,
-            message,
-            createdAt,
-        ].join("|");
+    const dedupeKey = buildLmsNotificationDedupeKey(source);
 
     return {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -415,10 +404,18 @@ export default function Header() {
         }
     };
 
+    const handleClearNotifications = (e) => {
+        e.stopPropagation();
+        setNotifications([]);
+        clearQueuedLmsNotifications();
+    };
+
     return (
         <header className="lms-header">
             <div className="lms-header-left">
-                <div className="logo-box" />
+                <div className="logo-box">
+                    <img src="/favicon.ico" alt="ONSIL" className="logo-icon" />
+                </div>
 
                 <div className="lms-header-text">
                     <span className="title">
@@ -468,7 +465,18 @@ export default function Header() {
 
                     {openNotifDropdown && (
                         <div className="notif-dropdown">
-                            <h4 className="notif-title">알림</h4>
+                            <div className="notif-title-row">
+                                <h4 className="notif-title">알림</h4>
+                                {notifications.length > 0 && (
+                                    <button
+                                        type="button"
+                                        className="notif-clear-btn"
+                                        onClick={handleClearNotifications}
+                                    >
+                                        모두 지우기
+                                    </button>
+                                )}
+                            </div>
 
                             {notifications.length === 0 ? (
                                 <p className="notif-empty">새로운 알림이 없습니다.</p>

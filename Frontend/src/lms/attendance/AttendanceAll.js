@@ -54,6 +54,23 @@ const minutesOverlapInSession = (log) => {
   return Math.floor((overlapEnd - overlapStart) / 60000);
 };
 
+const getSessionBounds = (log) => {
+  if (!log?.studyDate || !log?.startTime || !log?.endTime) return { start: 0, end: 0 };
+  const pad = (t) => (String(t).length >= 8 ? t : `${t}:00`);
+  const start = new Date(`${log.studyDate}T${pad(log.startTime)}`).getTime();
+  const end = new Date(`${log.studyDate}T${pad(log.endTime)}`).getTime();
+  return { start, end };
+};
+
+const isJoinLeaveInsideSession = (log) => {
+  if (!log?.joinAt || !log?.leaveAt) return false;
+  const { start, end } = getSessionBounds(log);
+  const joinMs = toMs(log.joinAt);
+  const leaveMs = toMs(log.leaveAt);
+  if (!start || !end || !joinMs || !leaveMs || leaveMs <= joinMs) return false;
+  return joinMs >= start && leaveMs <= end;
+};
+
 const calcTotalMinutes = (startHHMM, endHHMM) => {
   if (!startHHMM || !endHHMM) return 0;
   const [sh, sm] = startHHMM.split(":").map(Number);
@@ -76,7 +93,11 @@ const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
       : minutesBetween(log?.joinAt, log?.leaveAt);
 
   const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
-  return { attendedMin, ratio, isPresent: ratio >= requiredRatio };
+  return {
+    attendedMin,
+    ratio,
+    isPresent: isJoinLeaveInsideSession(log) || ratio >= requiredRatio,
+  };
 };
 
 const AttendanceAll = () => {

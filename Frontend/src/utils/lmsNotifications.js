@@ -120,15 +120,34 @@ const writeQueue = (queue) => {
     }
 };
 
-const buildDedupeKey = (payload) => {
-    const type = asText(payload?.notificationType || payload?.type).toUpperCase();
-    const roomId = asText(payload?.roomId || payload?.subjectId);
-    const postId = asText(payload?.postId || payload?.boardPostId);
-    const assignmentId = asText(payload?.assignmentId);
-    const scheduleId = asText(payload?.scheduleId || payload?.studyScheduleId);
-    const title = asText(payload?.title || payload?.postTitle || payload?.assignmentTitle || payload?.scheduleTitle);
-    const content = asText(payload?.content || payload?.message);
-    return [type, roomId, postId, assignmentId, scheduleId, title, content].join("|");
+export const buildLmsNotificationDedupeKey = (rawPayload) => {
+    const candidates = expandPayloadCandidates(rawPayload);
+    const source = candidates[0] || rawPayload || {};
+
+    const externalId = asText(
+        source?.notificationId ||
+            source?.noticeId ||
+            source?.alarmId ||
+            source?.id
+    );
+    if (externalId) return `ID|${externalId}`;
+
+    const type = asText(source?.notificationType || source?.type).toUpperCase();
+    const roomId = asText(source?.roomId || source?.subjectId);
+    const postId = asText(source?.postId || source?.boardPostId || source?.articleId);
+    const assignmentId = asText(source?.assignmentId || source?.taskId || source?.homeworkId);
+    const scheduleId = asText(source?.scheduleId || source?.studyScheduleId || source?.calendarId);
+    const title = asText(
+        source?.title ||
+            source?.postTitle ||
+            source?.assignmentTitle ||
+            source?.scheduleTitle ||
+            source?.subject
+    );
+    const content = asText(source?.content || source?.message || source?.description || source?.comment);
+    const createdAt = asText(source?.createdAt || source?.timestamp || source?.sentAt || source?.createdDate);
+
+    return [type, roomId, postId, assignmentId, scheduleId, title, content, createdAt].join("|");
 };
 
 export const isLmsNotificationPayload = (rawPayload) => {
@@ -140,7 +159,7 @@ export const enqueueLmsNotification = (rawPayload) => {
     if (!rawPayload || !isLmsNotificationPayload(rawPayload)) return;
 
     const queue = readQueue();
-    const dedupeKey = buildDedupeKey(rawPayload);
+    const dedupeKey = buildLmsNotificationDedupeKey(rawPayload);
 
     if (dedupeKey && queue.some((item) => item?.dedupeKey === dedupeKey)) return;
 
@@ -171,11 +190,20 @@ export const removeQueuedLmsNotification = (rawPayloadOrDedupeKey) => {
     const targetKey =
         typeof rawPayloadOrDedupeKey === "string"
             ? rawPayloadOrDedupeKey.trim()
-            : buildDedupeKey(rawPayloadOrDedupeKey);
+            : buildLmsNotificationDedupeKey(rawPayloadOrDedupeKey);
     if (!targetKey) return;
 
     const queue = readQueue();
     const nextQueue = queue.filter((item) => item?.dedupeKey !== targetKey);
     writeQueue(nextQueue);
+};
+
+export const clearQueuedLmsNotifications = () => {
+    if (typeof window === "undefined") return;
+    try {
+        localStorage.removeItem(LMS_NOTIFICATION_QUEUE_KEY);
+    } catch (e) {
+        // ignore storage failure
+    }
 };
 

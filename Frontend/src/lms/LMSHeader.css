@@ -19,13 +19,24 @@
 }
 
 .logo-box {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
-    background-color: #97c793;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logo-icon {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    display: block;
 }
 
 .lms-header-text {
@@ -179,14 +190,38 @@
     /* 알림 많으면 스크롤 */
     max-height: 320px;
     overflow-y: auto;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 /* 제목 */
+.notif-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
 .notif-title {
     font-size: 14px;
     font-weight: bold;
-    margin-bottom: 12px;
+    margin: 0;
     color: #111827;
+}
+
+.notif-clear-btn {
+    border: 0;
+    background: transparent;
+    color: #ef4444;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+}
+
+.notif-clear-btn:hover {
+    text-decoration: underline;
 }
 
 /* 알림 없음 */
@@ -210,6 +245,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    -webkit-user-drag: none;
 }
 
 /* hover */

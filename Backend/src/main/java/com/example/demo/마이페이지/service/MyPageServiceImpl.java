@@ -77,20 +77,18 @@ public class MyPageServiceImpl implements MyPageService {
             throw new IllegalStateException("방장을 위임하지 않은 스터디가 있어 탈퇴할 수 없습니다.");
         }
 
-        // FK 삭제 (user_id 기준)
+        // FK 삭제 (email 기준) - 요청하신 순서대로 room_join_request 먼저 삭제
+        myPageMapper.deleteJoinRequestByRequester(email);
+        myPageMapper.deleteJoinRequestByHost(email);
 
+        // FK 삭제 (user_id 기준)
         myPageMapper.deleteBoardCommentsByUser(userId);
         myPageMapper.deleteBoardPostsByUser(userId);
         myPageMapper.deleteChatParticipantsByUser(userId);
         myPageMapper.deleteChatMessagesByUser(userId);
-
         myPageMapper.deleteRoomParticipantsByUser(userId);
         myPageMapper.deleteSchedulesByUser(userId);
         myPageMapper.deleteUserInterestCategory(userId);
-
-        // FK 삭제 (email 기준)
-        myPageMapper.deleteJoinRequestByRequester(email);
-        myPageMapper.deleteJoinRequestByHost(email);
 
         // 마지막 users 삭제
         myPageMapper.deleteUser(userId);
