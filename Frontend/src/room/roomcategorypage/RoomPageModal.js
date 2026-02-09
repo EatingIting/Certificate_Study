@@ -60,10 +60,11 @@ const RoomPageModal = ({ open, onClose, study }) => {
 
     if (!open || !study) return null;
 
-  const myEmail = getEmailFromToken();
+  const myEmail = (getEmailFromToken() || "").trim().toLowerCase();
   const isLoggedIn = !!myEmail;
 
-  const isMyStudy = study.hostUserEmail?.trim() === myEmail?.trim();
+  const hostEmail = String(study.hostUserEmail || study.hostEmail || "").trim().toLowerCase();
+  const isMyStudy = !!hostEmail && hostEmail === myEmail;
 
   const isGenderAllowed =
       study.gender === "ALL" || (myGender && study.gender === myGender);
@@ -95,6 +96,12 @@ const RoomPageModal = ({ open, onClose, study }) => {
         requestUserNickname,
         applyMessage,
       });
+
+      try {
+        window.dispatchEvent(new CustomEvent("room:applications-changed"));
+      } catch (e) {
+        // ignore event dispatch failure
+      }
 
       alert("신청이 완료되었습니다.");
       onClose();

@@ -1,18 +1,18 @@
-/* 전체 컨테이너 */
+/* ?�체 컨테?�너 */
 .answer-note-container {
     max-width: 1000px;
     margin: 0 auto;
     padding: 40px 20px;
-    background-color: #fcfcfc; /* 아주 연한 회색 배경 */
+    background-color: #fcfcfc; /* ?�주 ?�한 ?�색 배경 */
     min-height: 100vh;
 }
 
-/* 제목 스타일 */
+/* ?�목 ?��???*/
 .note-header {
     margin-bottom: 30px;
     border-bottom: 2px solid #333;
     padding-bottom: 15px;
-    font-size: 24px;
+    font-size: 18px;
     font-weight: 700;
     color: #333;
     display: flex;
@@ -20,29 +20,28 @@
     gap: 10px;
 }
 
-/* 목록 컨테이너 */
+/* 목록 컨테?�너 */
 .note-list {
     display: flex;
     flex-direction: column;
     gap: 20px;
 }
 
-/* 개별 오답노트 카드 */
+/* 개별 ?�답?�트 카드 */
 .note-card {
     background-color: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 12px;
     padding: 25px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); /* 은은한 그림자 */
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); /* ?�?�??그림??*/
+    transition: box-shadow 0.2s ease;
 }
 
 .note-card:hover {
-    transform: translateY(-3px); /* 마우스 올리면 살짝 뜸 */
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
-/* 카드 제목: 사용자 입력 프롬프트 */
+/* 카드 ?�목: ?�용???�력 ?�롬?�트 */
 .note-card-title {
     font-size: 17px;
     font-weight: 600;
@@ -55,14 +54,14 @@
     word-break: break-word;
 }
 
-/* 질문 영역 */
+/* 질문 ?�역 */
 .question-section {
     margin-bottom: 20px;
 }
 
 .badge-question {
     display: inline-block;
-    background-color: #FF6B6B; /* 붉은 계열 (질문/오답 강조) */
+    background-color: #FF6B6B; /* 붉�? 계열 (질문/?�답 강조) */
     color: white;
     padding: 4px 10px;
     border-radius: 6px;
@@ -80,12 +79,12 @@
     line-height: 1.5;
 }
 
-/* 답변(AI 해설) 영역 */
+/* ?��?(AI ?�설) ?�역 */
 .answer-section {
-    background-color: #F8F9FA; /* 회색 박스 */
+    background-color: #F8F9FA; /* ?�색 박스 */
     padding: 20px;
     border-radius: 8px;
-    border-left: 4px solid #4CAF50; /* 녹색 라인 포인트 */
+    border-left: 4px solid #4CAF50; /* ?�색 ?�인 ?�인??*/
 }
 
 .answer-label {
@@ -101,18 +100,18 @@
 
 .answer-text {
     margin: 0;
-    white-space: pre-wrap; /* 줄바꿈 유지 */
+    white-space: pre-wrap; /* 줄바�??��? */
     line-height: 1.6;
     color: #444;
     font-size: 15px;
 }
 
-/* 상단 작성자/작성시간 메타 영역 */
+/* ?�단 ?�성???�성?�간 메�? ?�역 */
 .note-meta {
     display: flex;
     align-items: center;
-    justify-content: space-between; /* 왼쪽 닉네임, 오른쪽 날짜 */
-    margin-bottom: 24px; /* 닉네임과 본문 사이 여백 조금 더 넓게 */
+    justify-content: space-between; /* ?�쪽 ?�네?? ?�른�??�짜 */
+    margin-bottom: 24px; /* ?�네?�과 본문 ?�이 ?�백 조금 ???�게 */
     font-size: 13px;
     color: #666;
 }
@@ -121,7 +120,7 @@
     font-weight: 600;
 }
 
-/* 좌측/우측 정렬 보조 */
+/* 좌측/?�측 ?�렬 보조 */
 .note-meta-left {
     display: flex;
     align-items: center;
@@ -179,7 +178,7 @@
     cursor: not-allowed;
 }
 
-/* 수정 모달 */
+/* ?�정 모달 */
 .note-modal-overlay {
     position: fixed;
     inset: 0;
@@ -253,13 +252,13 @@
     background: #43A047;
 }
 
-/* 날짜 텍스트 */
+/* ?�짜 ?�스??*/
 .note-date {
     font-size: 12px;
     color: #999;
 }
 
-/* 데이터 없음 상태 */
+/* ?�이???�음 ?�태 */
 .empty-state {
     text-align: center;
     margin-top: 80px;

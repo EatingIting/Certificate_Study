@@ -1,11 +1,12 @@
 import "./LMSHeader.css";
-import { Bell, MessageCircle, User, Users, Star } from "lucide-react";
+import { Bell, User, Users, Star } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useLMS } from "./LMSContext";
 import { useMeeting } from "../webrtc/MeetingContext";
 import { useEffect, useState, useRef } from "react";
 import { toWsBackendUrl } from "../utils/backendUrl";
 import { drainQueuedLmsNotifications } from "../utils/lmsNotifications";
+import { logout } from "../api/api";
 
 const NOTIFICATION_LIMIT = 50;
 const RECONNECT_DELAY_MS = 3000;
@@ -224,8 +225,10 @@ export default function Header() {
         );
 
     const [notifications, setNotifications] = useState([]);
-    const [openDropdown, setOpenDropdown] = useState(false);
-    const dropdownRef = useRef(null);
+    const [openNotifDropdown, setOpenNotifDropdown] = useState(false);
+    const [openProfileDropdown, setOpenProfileDropdown] = useState(false);
+    const notifDropdownRef = useRef(null);
+    const profileDropdownRef = useRef(null);
 
     const userId = sessionStorage.getItem("userId");
 
@@ -313,8 +316,11 @@ export default function Header() {
 
     useEffect(() => {
         const handleOutside = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-                setOpenDropdown(false);
+            if (notifDropdownRef.current && !notifDropdownRef.current.contains(e.target)) {
+                setOpenNotifDropdown(false);
+            }
+            if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target)) {
+                setOpenProfileDropdown(false);
             }
         };
 
@@ -324,7 +330,7 @@ export default function Header() {
 
     const handleClickNotification = (notif) => {
         setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
-        setOpenDropdown(false);
+        setOpenNotifDropdown(false);
 
         const targetRoomId = notif.roomId || pickId(room?.roomId);
         const commentPostId = pickId(notif.postId);
@@ -370,6 +376,17 @@ export default function Header() {
         }
     };
 
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } catch (e) {
+            // ignore client-side logout failure
+        } finally {
+            setOpenProfileDropdown(false);
+            window.location.replace("/auth");
+        }
+    };
+
     return (
         <header className="lms-header">
             <div className="lms-header-left">
@@ -410,12 +427,10 @@ export default function Header() {
                     }}
                 />
 
-                <MessageCircle size={18} />
-
                 <div
                     className="notif-wrapper"
-                    ref={dropdownRef}
-                    onClick={() => setOpenDropdown((prev) => !prev)}
+                    ref={notifDropdownRef}
+                    onClick={() => setOpenNotifDropdown((prev) => !prev)}
                 >
                     <Bell size={18} />
 
@@ -423,7 +438,7 @@ export default function Header() {
                         <span className="notif-badge">{notifications.length}</span>
                     )}
 
-                    {openDropdown && (
+                    {openNotifDropdown && (
                         <div className="notif-dropdown">
                             <h4 className="notif-title">알림</h4>
 
@@ -452,8 +467,25 @@ export default function Header() {
                     )}
                 </div>
 
-                <div className="profile">
-                    <User size={18} />
+                <div className="profile-wrapper" ref={profileDropdownRef}>
+                    <div
+                        className="profile"
+                        onClick={() => setOpenProfileDropdown((prev) => !prev)}
+                    >
+                        <User size={18} />
+                    </div>
+
+                    {openProfileDropdown && (
+                        <div className="profile-dropdown">
+                            <button
+                                type="button"
+                                className="profile-dropdown-item"
+                                onClick={handleLogout}
+                            >
+                                로그아웃
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </header>

@@ -4,6 +4,7 @@ import "./Auth.css";
 import { login } from "../api/api";
 import { getBackendOrigin } from "../utils/backendUrl";
 
+<<<<<<< HEAD
 import logo from "./main-logo.png";
 import kakaoIcon from "./kakao-icon.png";
 import naverIcon from "./naver-icon.png";
@@ -11,6 +12,15 @@ import googleIcon from "./google-icon.png";
 
 const Auth = () => {
     const navigate = useNavigate();
+=======
+const logo = require("./메인로고 2.png");
+
+const Auth = () => {
+    const navigate = useNavigate();
+    const kakaoIcon = require("./카카오 2.png");
+    const naverIcon = require("./네이버 2.png");
+    const googleIcon = require("./구글 2.png");
+>>>>>>> 8d18f89cb1a03d77d42ece5129a9bbe1f3ada719
 
     const [showEmailLogin, setShowEmailLogin] = useState(false);
     const [autoLogin, setAutoLogin] = useState(false);

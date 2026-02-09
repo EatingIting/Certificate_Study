@@ -6,6 +6,19 @@ import {useNavigate} from "react-router-dom";
 
 const ITEMS_PER_PAGE = 8;
 
+const getEmailFromToken = () => {
+    const token = sessionStorage.getItem("accessToken");
+    if (!token) return "";
+
+    try {
+        const payload = token.split(".")[1];
+        const decoded = JSON.parse(atob(payload));
+        return String(decoded?.sub || "").trim().toLowerCase();
+    } catch {
+        return "";
+    }
+};
+
 const RoomPage = () => {
     const navigate = useNavigate();
     const [rooms, setRooms] = useState([]);
@@ -20,6 +33,7 @@ const RoomPage = () => {
     const [page, setPage] = useState(1);
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [openModal, setOpenModal] = useState(false);
+    const myEmail = useMemo(() => getEmailFromToken(), []);
 
     useEffect(() => {
         fetchRooms();
@@ -134,10 +148,16 @@ const RoomPage = () => {
 
     const filtered = useMemo(() => {
         let list = [...rooms];
+        const isMyStudy = (room) => {
+            const hostEmail = String(room?.hostUserEmail || room?.hostEmail || "")
+                .trim()
+                .toLowerCase();
+            return !!myEmail && !!hostEmail && hostEmail === myEmail;
+        };
 
         if (joinedRoomIds.length > 0) {
             const joinedSet = new Set(joinedRoomIds);
-            list = list.filter((r) => !joinedSet.has(r.roomId));
+            list = list.filter((r) => !joinedSet.has(r.roomId) || isMyStudy(r));
         }
 
         if (keyword.trim()) {
@@ -191,7 +211,7 @@ const RoomPage = () => {
         }
 
         return list;
-    }, [rooms, keyword, cat, mid, sub, categories, joinedRoomIds]);
+    }, [rooms, keyword, cat, mid, sub, categories, joinedRoomIds, myEmail]);
 
     const pageSize = 8;
     const totalPage = Math.max(1, Math.ceil(filtered.length / pageSize));

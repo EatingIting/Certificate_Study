@@ -93,6 +93,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+}
+
+.profile-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.profile-dropdown {
+    position: absolute;
+    top: 40px;
+    right: 0;
+    min-width: 120px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+    padding: 6px;
+    z-index: 9999;
+}
+
+.profile-dropdown-item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #111827;
+    cursor: pointer;
+}
+
+.profile-dropdown-item:hover {
+    background: #f3f4f6;
 }
 
 /* Bell 전체 wrapper — 옆 아이콘과 같은 줄에 맞춤 */

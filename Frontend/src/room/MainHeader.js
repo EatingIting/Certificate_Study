@@ -184,32 +184,34 @@ const MainHeader = () => {
         const sent = Array.isArray(sentRes?.data) ? sentRes.data : [];
 
         const receivedIds = received.map(toJoinId).filter(Boolean);
+        const sentIds = sent.map(toJoinId).filter(Boolean);
         const sentDecisionIds = sent
             .filter((item) => isDecisionStatus(item?.status))
             .map(toJoinId)
             .filter(Boolean);
 
-        return { receivedIds, sentDecisionIds };
+        return { receivedIds, sentIds, sentDecisionIds };
     };
 
     const evaluateNotificationState = useRef(async () => { });
     evaluateNotificationState.current = async () => {
         if (!userId) return;
         try {
-            const { receivedIds, sentDecisionIds } = await fetchApplicationSnapshot();
+            const { receivedIds, sentIds, sentDecisionIds } = await fetchApplicationSnapshot();
 
             setKnownReceivedJoinIds(receivedIds);
-            setKnownSentDecisionJoinIds(sentDecisionIds);
-            setLatestJoinId(receivedIds[0] || sentDecisionIds[0] || null);
+            setKnownSentDecisionJoinIds(sentIds);
+            setLatestJoinId(receivedIds[0] || sentIds[0] || null);
 
             const seenReceived = new Set(readSeenIds(getSeenReceivedKey(userId)));
             const seenSent = new Set(readSeenIds(getSeenSentKey(userId)));
 
             const hasUnseenSentDecision = sentDecisionIds.some((id) => !seenSent.has(id));
+            const hasUnseenSent = sentIds.some((id) => !seenSent.has(id));
             const hasUnseenReceived = receivedIds.some((id) => !seenReceived.has(id));
 
-            if (hasUnseenSentDecision || hasUnseenReceived) {
-                const targetTab = hasUnseenSentDecision ? "sent" : "received";
+            if (hasUnseenSent || hasUnseenReceived) {
+                const targetTab = (hasUnseenSentDecision || hasUnseenSent) ? "sent" : "received";
                 setHasNotification(true);
                 setNotificationTargetTab(targetTab);
                 writePendingNotification(userId, { hasNotification: true, targetTab });
@@ -265,9 +267,31 @@ const MainHeader = () => {
             if (targetTab) {
                 setNotificationTargetTab(targetTab);
             }
+
+            // 서버 payload 형태가 달라도 API 스냅샷으로 최종 상태를 맞춘다.
+            evaluateNotificationState.current();
         };
 
         return () => socket.close();
+    }, [nickname, userId]);
+
+    useEffect(() => {
+        if (!nickname || !userId) return;
+
+        const handleApplicationsChanged = () => {
+            evaluateNotificationState.current();
+        };
+
+        window.addEventListener("room:applications-changed", handleApplicationsChanged);
+        return () => window.removeEventListener("room:applications-changed", handleApplicationsChanged);
+    }, [nickname, userId]);
+
+    useEffect(() => {
+        if (!nickname || !userId) return;
+        const timer = setInterval(() => {
+            evaluateNotificationState.current();
+        }, 10000);
+        return () => clearInterval(timer);
     }, [nickname, userId]);
 
     const handleLogout = async () => {
@@ -330,7 +354,7 @@ const MainHeader = () => {
                                         try {
                                             const snapshot = await fetchApplicationSnapshot();
                                             receivedIds = snapshot.receivedIds;
-                                            sentDecisionIds = snapshot.sentDecisionIds;
+                                            sentDecisionIds = snapshot.sentIds;
                                             setKnownReceivedJoinIds(receivedIds);
                                             setKnownSentDecisionJoinIds(sentDecisionIds);
                                             latestId = receivedIds[0] || sentDecisionIds[0] || null;

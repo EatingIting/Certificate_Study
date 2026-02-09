@@ -175,9 +175,7 @@ function getParticipantMediaEmailKey(email) {
 function resolveRemoteMutedState(incomingMuted, prevMuted, rememberedMuted) {
     if (incomingMuted === true) return true;
     if (incomingMuted === false) {
-        // 새로고침 직후 USERS_UPDATE가 false로 흔들려도
-        // 기존에 OFF(true)였던 상태는 보존하고, 실제 오디오 consumer/명시 이벤트에서만 false로 전환
-        if (prevMuted === true || rememberedMuted === true) return true;
+        // 서버가 명시적으로 false를 보냈으면 실제 ON 상태로 신뢰한다.
         return false;
     }
     if (typeof prevMuted === "boolean") return prevMuted;
@@ -6433,11 +6431,10 @@ function MeetingPage({ portalRoomId }) {
                         peerIdToNameRef.current.set(String(u.userId), name);
                         if (u.connectionId != null) peerIdToNameRef.current.set(String(u.connectionId), name);
                         const mediaEmailKey = getParticipantMediaEmailKey(u.userEmail || u.email || "");
-                        // USERS_UPDATE는 초기 접속 구간에서 muted=false가 흔들릴 수 있어,
-                        // muted=true(OFF)만 강하게 저장하고 false는 명시 이벤트/오디오 consumer에서 확정한다.
-                        if (u.muted === true || typeof u.cameraOff === "boolean") {
+                        // USERS_UPDATE에 muted/cameraOff가 명시되면 캐시를 해당 값으로 갱신한다.
+                        if (typeof u.muted === "boolean" || typeof u.cameraOff === "boolean") {
                             const knownState = {
-                                ...(u.muted === true ? { muted: true } : {}),
+                                ...(typeof u.muted === "boolean" ? { muted: u.muted } : {}),
                                 ...(typeof u.cameraOff === "boolean" ? { cameraOff: u.cameraOff } : {}),
                             };
                             rememberParticipantMediaStateByKeys(
