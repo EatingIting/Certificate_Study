@@ -111,17 +111,16 @@ function StudyLeave() {
         } catch (err) {
             let status = err?.response?.status;
 
-            if (status === 401) setError("로그인이 필요합니다.");
+            if (status === 401) setError("로그  인이 필요합니다.");
             else if (status === 403) setError("권한이 없습니다.");
             else if (status === 400) {
-                let msg = err?.response?.data?.message || "요청을 처리할 수 없습니다.";
+                // ✅ 400은 전부 "비밀번호 틀림"으로 통일
+                let msg = "비밀번호가 일치하지 않습니다.";
                 setError(msg);
                 window.alert(msg);
             } else {
                 setError("탈퇴 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.");
             }
-        } finally {
-            setIsSubmitting(false);
         }
     };
 

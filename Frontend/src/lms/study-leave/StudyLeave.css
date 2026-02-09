@@ -15,7 +15,7 @@
 /* 큰 흰 박스(폭 제한) */
 .slCard {
     width: 100%;
-    max-width: 900px;
+    max-width: 900px !important;
     min-height: auto;
 
     border-radius: 5px;

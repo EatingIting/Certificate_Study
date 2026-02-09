@@ -176,6 +176,7 @@ function BoardDetail() {
 
         try {
             await BoardApi.deletePost(postId);
+            alert("게시글이 삭제되었습니다.");
             navigate(`/lms/${subjectId}/board`, { replace: true });
         } catch (e) {
             if (e?.status === 403) {
@@ -252,6 +253,7 @@ function BoardDetail() {
         try {
             await BoardApi.deleteComment(commentId);
             await reloadComments();
+            alert("댓글이 삭제되었습니다.")
         } catch (e) {
             alert(e?.message || "댓글 삭제 실패");
         }
