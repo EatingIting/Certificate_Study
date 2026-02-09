@@ -4,13 +4,13 @@ import "./Auth.css";
 import { login } from "../api/api";
 import { getBackendOrigin } from "../utils/backendUrl";
 
-const logo = require("./메인로고.png");
+const logo = require("./메인로고 2.png");
 
 const Auth = () => {
     const navigate = useNavigate();
-    const kakaoIcon = require("./카카오.png");
-    const naverIcon = require("./네이버.png");
-    const googleIcon = require("./구글.png");
+    const kakaoIcon = require("./카카오 2.png");
+    const naverIcon = require("./네이버 2.png");
+    const googleIcon = require("./구글 2.png");
 
     const [showEmailLogin, setShowEmailLogin] = useState(false);
 

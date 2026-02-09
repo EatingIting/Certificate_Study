@@ -941,9 +941,11 @@ function Calendar() {
                         plugins={[dayGridPlugin, interactionPlugin]}
                         initialView="dayGridMonth"
                         locale={koLocale}
-                        height="100%"
-                        expandRows={true}
                         fixedWeekCount={true}
+                        expandRows={true}
+                        height={660}
+                        contentHeight={600}
+                        aspectRatio={0}
                         showNonCurrentDates={true}
                         dayMaxEvents={1}
                         dayMaxEventRows={2}

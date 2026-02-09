@@ -1,3 +1,6 @@
+/* =========================================================
+   Base
+========================================================= */
 .calPage {
     --primary: #97c793;
     --primary-light: #e9fadc;
@@ -6,20 +9,25 @@
     --border: #e6eee1;
     --muted: #6b7280;
     --text: #1f2937;
+
+    width: fit-content;
+    margin: 0 auto;
 }
 
 .calHead {
     margin-bottom: 14px;
 }
 
+/* =========================================================
+   Layout Grid
+========================================================= */
 .calGrid {
     display: grid;
-    grid-template-columns: 1.4fr 0.6fr;
+    grid-template-columns: 1125px 480px;  /* fr -> 고정폭 */
+    justify-content: start;
     gap: 16px;
     align-items: stretch;
-    height: 720px;
-    min-height: 720px;
-    max-height: 720px;
+    height: 732px;
 }
 
 @media (max-width: 980px) {
@@ -31,6 +39,9 @@
     }
 }
 
+/* =========================================================
+   Cards
+========================================================= */
 .calPage .card {
     border-color: var(--border);
     border-radius: 8px;
@@ -46,11 +57,17 @@
     overflow: hidden;
 }
 
+.calCalendarCard {
+    height: 732px;
+    width: 1125px;
+}
+
 /* 오른쪽 리스트: 헤더 고정, 목록만 스크롤 */
 .calListCard {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    width: 480px;
 }
 .calListCard .calListBody {
     flex: 1;
@@ -94,10 +111,9 @@
     color: #2f6a2f;
 }
 
-/* =========================
-   FullCalendar 레이아웃/툴바
-========================= */
-
+/* =========================================================
+   FullCalendar: Layout / Toolbar
+========================================================= */
 .calCard .fc {
     flex: 1;
     min-height: 0;
@@ -166,9 +182,12 @@
     margin-left: 8px;
 }
 
-/* =========================
-   날짜 숫자(왼쪽 위) + 스터디 회차(오른쪽)
-========================= */
+/* =========================================================
+   FullCalendar: Day Header (Top row)
+========================================================= */
+.fc .fc-daygrid-day-top {
+    flex-direction: row;
+}
 
 /* FullCalendar 기본 row-reverse/float 제거 + 왼쪽 고정 */
 .calCalendarCard .fc .fc-daygrid-day-top {
@@ -247,17 +266,47 @@
     color: #2563eb;
 }
 
-/* =========================
-   이벤트 영역: 모든 날짜 셀에서 일정 바 같은 높이(같은 top)로 정렬
-========================= */
+/* 주말 헤더/기본 숫자 색 */
+.fc .fc-day-sun .fc-daygrid-day-number,
+.fc .fc-col-header-cell.fc-day-sun {
+    color: #ef4444;
+}
+
+.fc .fc-day-sat .fc-daygrid-day-number,
+.fc .fc-col-header-cell.fc-day-sat {
+    color: #2563eb;
+}
+
+/* =========================================================
+   FullCalendar: Cell / Selection
+========================================================= */
+/* 이벤트 영역 기준을 잡기 위해 frame relative */
 .calCalendarCard .fc .fc-daygrid-day-frame {
     position: relative !important;
 }
 
-/* ✅ 스터디 회차 pill이 있는 주(week) 줄은 "이벤트 바(harness)"만 아래로 내려 겹침 방지
-   - margin-top은 인라인 top/left를 건드리지 않아서
-     기간(멀티데이) 바가 끊기지 않고 그대로 내려감
-*/
+/* 클릭해서 선택한 날짜 셀 강조 - 크기 변하지 않도록 outline/border 대신 배경만 */
+.calPage .fc-daygrid-day.calDaySelected {
+    background: rgba(151, 199, 147, 0.15);
+}
+.calPage .fc-daygrid-day.calDaySelected .fc-daygrid-day-frame {
+    border-radius: 8px;
+}
+/* 날짜 클릭 시 포커스 아웃라인 제거(그리드 크기 유지) */
+.calCalendarCard .fc .fc-daygrid-day:focus,
+.calCalendarCard .fc .fc-daygrid-day:focus-visible {
+    outline: none !important;
+}
+/* 셀/프레임 box-sizing으로 선택 시에도 크기 동일 유지 */
+.calCalendarCard .fc .fc-daygrid-day,
+.calCalendarCard .fc .fc-daygrid-day-frame {
+    box-sizing: border-box !important;
+}
+
+/* =========================================================
+   FullCalendar: Event Placement / Styles
+========================================================= */
+/* ✅ 스터디 회차 pill이 있는 주(week) 줄은 "이벤트 바(harness)"만 아래로 내려 겹침 방지 */
 .calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness,
 .calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
     margin-top: 0 !important;
@@ -265,10 +314,6 @@
 .calCalendarCard .fc .fc-daygrid-week.calWeekHasStudy .fc-daygrid-event-harness-abs {
     top: var(--cal-events-pad-top, 8px) !important;
 }
-
-/* =========================
-   이벤트 스타일
-========================= */
 
 .calEvent {
     border-radius: 8px !important;
@@ -309,38 +354,9 @@
     display: none !important;
 }
 
-/* 주말 헤더/기본 숫자 색 */
-.fc .fc-day-sun .fc-daygrid-day-number,
-.fc .fc-col-header-cell.fc-day-sun {
-    color: #ef4444;
-}
-
-.fc .fc-day-sat .fc-daygrid-day-number,
-.fc .fc-col-header-cell.fc-day-sat {
-    color: #2563eb;
-}
-
-/* 클릭해서 선택한 날짜 셀 강조 - 크기 변하지 않도록 outline/border 대신 배경만 */
-.calPage .fc-daygrid-day.calDaySelected {
-    background: rgba(151, 199, 147, 0.15);
-}
-.calPage .fc-daygrid-day.calDaySelected .fc-daygrid-day-frame {
-    border-radius: 8px;
-}
-/* 날짜 클릭 시 포커스 아웃라인 제거(그리드 크기 유지) */
-.calCalendarCard .fc .fc-daygrid-day:focus,
-.calCalendarCard .fc .fc-daygrid-day:focus-visible {
-    outline: none !important;
-}
-/* 셀/프레임 box-sizing으로 선택 시에도 크기 동일 유지 */
-.calCalendarCard .fc .fc-daygrid-day,
-.calCalendarCard .fc .fc-daygrid-day-frame {
-    box-sizing: border-box !important;
-}
-
-/* =========================
-   +N more 클릭 시 팝오버 (더 예쁘게)
-========================= */
+/* =========================================================
+   FullCalendar: Popover / More
+========================================================= */
 .calPage .fc-popover,
 .calPage .fc .fc-popover,
 .calPage .fc-more-popover {
@@ -475,10 +491,9 @@
     color: #2f6a2f;
 }
 
-/* =========================
-   오른쪽 리스트
-========================= */
-
+/* =========================================================
+   Right List
+========================================================= */
 .calEmpty {
     font-size: 13px;
     color: var(--muted);
@@ -495,7 +510,7 @@
     min-height: 72px;
 }
 
-.calItem+.calItem {
+.calItem + .calItem {
     margin-top: 10px;
 }
 
@@ -676,10 +691,63 @@
     }
 }
 
-/* =========================
-   리스트 ⋮ 메뉴
-========================= */
+/* =========================================================
+   List Filter UI
+========================================================= */
+/* 리스트 필터 줄 */
+.calListFilterRow {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid #dfe9df; /* 기존보다 살짝 회색 기 */
+}
 
+.calListFilter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 기본 버튼 */
+.calFilterBtn {
+  font-size: 12px;
+  font-weight: 700;
+
+  color: #3f5f4c;              /* ⬅ 더 부드러운 그린 */
+  background: #f2f7f3;         /* ⬅ 거의 화이트에 가까운 세이지 */
+  border: 1px solid #d5e4da;   /* ⬅ 연한 경계 */
+
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+/* Active (선택됨) */
+.calFilterBtn.isActive {
+  background: #6fa98c;         /* ⬅ 진한 초록 ❌ → muted green */
+  border-color: #6fa98c;
+  color: #ffffff;
+}
+
+/* Active + Hover */
+.calFilterBtn.isActive:hover {
+  background: #639d81;
+  border-color: #639d81;
+}
+
+.calListFilterRow {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px 12px;
+    border-bottom: 1px solid var(--primary-light);
+}
+
+/* 🔥 이게 핵심 */
+.calListShowAllWrap {
+    margin-left: auto;
+}
+
+/* =========================================================
+   Kebab Menu
+========================================================= */
 .calItemRight {
     display: flex;
     align-items: center;
@@ -751,10 +819,9 @@
     background: rgba(239, 68, 68, 0.10);
 }
 
-/* =========================
-   모달
-========================= */
-
+/* =========================================================
+   Modal
+========================================================= */
 .calModalOverlay {
     position: fixed;
     inset: 0;
@@ -844,10 +911,9 @@
     color: var(--muted);
 }
 
-/* =========================
-   입력 요소
-========================= */
-
+/* =========================================================
+   Form Inputs
+========================================================= */
 .calInput,
 .calSelect,
 .calTextarea,
@@ -927,10 +993,9 @@
     box-shadow: 0 0 0 3px rgba(165, 222, 160, 0.35);
 }
 
-/* =========================
-   색상 선택 UI (팔레트 버튼 방식)
-========================= */
-
+/* =========================================================
+   Color Picker UI
+========================================================= */
 .calColorRow {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1031,10 +1096,9 @@
     border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-/* =========================
-   에러/하단 버튼
-========================= */
-
+/* =========================================================
+   Errors / Buttons
+========================================================= */
 .calError {
     font-size: 13px;
     font-weight: 800;
@@ -1088,10 +1152,9 @@
     background: #fff;
 }
 
-.fc .fc-daygrid-day-top {
-    flex-direction: row;
-}
-
+/* =========================================================
+   FullCalendar: Fixed Heights / Scrollbar / Table Width
+========================================================= */
 /* 날짜 row 고정 높이 - 클릭해도 그리드 크기 변하지 않음 */
 .calCalendarCard .fc .fc-daygrid-body [role="row"] {
     height: 100px !important;
@@ -1158,11 +1221,9 @@
   background: transparent !important;
 }
 
-/* =========================
-   달력 이벤트 배치(단일/연속 일정 동일 높이)
-   - 아래(bottom) 기준 배치로 인해 단일/연속이 어긋나던 문제를 제거하고
-     단일(일반) + 연속(멀티데이) 모두 같은 기준값을 공유하도록 통일
-========================= */
+/* =========================================================
+   FullCalendar: Event area (top/bottom + harness)
+========================================================= */
 .calCalendarCard .fc {
   --cal-events-top: 60px;        /* 셀 상단(날짜/회차) 아래에서 이벤트 영역 시작 */
   --cal-more-top: -24px;         /* +n 개를 이벤트 영역 위로 올리는 값 */
@@ -1212,53 +1273,70 @@
   top: var(--cal-events-pad-top) !important;
 }
 
-/* 리스트 필터 줄 */
-.calListFilterRow {
-  padding: 10px 16px 12px;
-  border-bottom: 1px solid #dfe9df; /* 기존보다 살짝 회색 기 */
+/* =========================================================
+   FullCalendar: Exact height locking (Body/Header)
+========================================================= */
+/* ✅ 바디(6주) = 600px */
+.calCalendarCard .fc .fc-daygrid-body,
+.calCalendarCard .fc .fc-daygrid-body-unbalanced,
+.calCalendarCard .fc .fc-scrollgrid-sync-table,
+.calCalendarCard .fc .fc-scroller-liquid-absolute {
+    height: 600px !important;
+    min-height: 600px !important;
+    max-height: 600px !important;
 }
 
-.calListFilter {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+/* ✅ 헤더(28) + 바디(600) = 628px */
+.calCalendarCard .fc .fc-scrollgrid,
+.calCalendarCard .fc .fc-view-harness,
+.calCalendarCard .fc .fc-view-harness-active,
+.calCalendarCard .fc .fc-view.fc-dayGridMonth-view {
+    height: 628px !important;
+    min-height: 628px !important;
+    max-height: 628px !important;
 }
 
-/* 기본 버튼 */
-.calFilterBtn {
-  font-size: 12px;
-  font-weight: 700;
-
-  color: #3f5f4c;              /* ⬅ 더 부드러운 그린 */
-  background: #f2f7f3;         /* ⬅ 거의 화이트에 가까운 세이지 */
-  border: 1px solid #d5e4da;   /* ⬅ 연한 경계 */
-
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
+/* ✅ 스크롤은 없애도 되는데, "height 고정"이 우선 */
+.calCalendarCard .fc .fc-scroller,
+.calCalendarCard .fc .fc-scroller-liquid-absolute {
+    overflow: hidden !important;
 }
 
-/* Active (선택됨) */
-.calFilterBtn.isActive {
-  background: #6fa98c;         /* ⬅ 진한 초록 ❌ → muted green */
-  border-color: #6fa98c;
-  color: #ffffff;
+/* ✅ 각 주(week) 100px 고정 */
+.calCalendarCard .fc .fc-daygrid-body tr[role="row"] {
+    height: 100px !important;
+    min-height: 100px !important;
+    max-height: 100px !important;
 }
 
-/* Active + Hover */
-.calFilterBtn.isActive:hover {
-  background: #639d81;
-  border-color: #639d81;
+/* ✅ 날짜 칸(셀) 100px 고정 */
+.calCalendarCard .fc .fc-daygrid-day.calAddBtn {
+    height: 100px !important;
+    max-height: 100px !important;
 }
 
-.calListFilterRow {
-    display: flex;
-    align-items: center;
-    padding: 10px 16px 12px;
-    border-bottom: 1px solid var(--primary-light);
+.calCalendarCard .fc .fc-daygrid-day-frame {
+    height: 100px !important;
+    min-height: 100px !important;
+    max-height: 100px !important;
 }
 
-/* 🔥 이게 핵심 */
-.calListShowAllWrap {
-    margin-left: auto;
+/* ✅ 헤더 rowgroup은 28px */
+.calCalendarCard .fc thead[role="rowgroup"] {
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+}
+
+/* ✅ 헤더 row(요일 줄)도 28px */
+.calCalendarCard .fc thead[role="rowgroup"] tr[role="row"] {
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+}
+
+.fc-scrollgrid-sync-inner {
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
 }
