@@ -201,5 +201,21 @@
         WHERE room_id = #{roomId}
     </select>
 
+    <select id="existsLeaveHistory" resultType="int">
+        SELECT COUNT(*)
+        FROM room_leave_history
+        WHERE room_id = #{roomId}
+          AND user_email = #{requestUserEmail}
+    </select>
+
+    <select id="getLeaveReason" resultType="String">
+        SELECT reason
+        FROM room_leave_history
+        WHERE room_id = #{roomId}
+          AND user_email = #{requestUserEmail}
+        ORDER BY left_at DESC
+        LIMIT 1
+    </select>
+
 
 </mapper>

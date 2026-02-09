@@ -184,34 +184,32 @@ const MainHeader = () => {
         const sent = Array.isArray(sentRes?.data) ? sentRes.data : [];
 
         const receivedIds = received.map(toJoinId).filter(Boolean);
-        const sentIds = sent.map(toJoinId).filter(Boolean);
         const sentDecisionIds = sent
             .filter((item) => isDecisionStatus(item?.status))
             .map(toJoinId)
             .filter(Boolean);
 
-        return { receivedIds, sentIds, sentDecisionIds };
+        return { receivedIds, sentDecisionIds };
     };
 
     const evaluateNotificationState = useRef(async () => { });
     evaluateNotificationState.current = async () => {
         if (!userId) return;
         try {
-            const { receivedIds, sentIds, sentDecisionIds } = await fetchApplicationSnapshot();
+            const { receivedIds, sentDecisionIds } = await fetchApplicationSnapshot();
 
             setKnownReceivedJoinIds(receivedIds);
-            setKnownSentDecisionJoinIds(sentIds);
-            setLatestJoinId(receivedIds[0] || sentIds[0] || null);
+            setKnownSentDecisionJoinIds(sentDecisionIds);
+            setLatestJoinId(receivedIds[0] || sentDecisionIds[0] || null);
 
             const seenReceived = new Set(readSeenIds(getSeenReceivedKey(userId)));
             const seenSent = new Set(readSeenIds(getSeenSentKey(userId)));
 
             const hasUnseenSentDecision = sentDecisionIds.some((id) => !seenSent.has(id));
-            const hasUnseenSent = sentIds.some((id) => !seenSent.has(id));
             const hasUnseenReceived = receivedIds.some((id) => !seenReceived.has(id));
 
-            if (hasUnseenSent || hasUnseenReceived) {
-                const targetTab = (hasUnseenSentDecision || hasUnseenSent) ? "sent" : "received";
+            if (hasUnseenSentDecision || hasUnseenReceived) {
+                const targetTab = hasUnseenSentDecision ? "sent" : "received";
                 setHasNotification(true);
                 setNotificationTargetTab(targetTab);
                 writePendingNotification(userId, { hasNotification: true, targetTab });
@@ -251,7 +249,12 @@ const MainHeader = () => {
                 data = { message: String(event.data || "") };
             }
 
-            if (isLmsNotificationPayload(data)) {
+            if (
+                isLmsNotificationPayload(data) ||
+                isLmsNotificationPayload(event.data) ||
+                isLmsNotificationPayload(data?.data) ||
+                isLmsNotificationPayload(data?.payload)
+            ) {
                 enqueueLmsNotification(data);
                 return;
             }
@@ -354,7 +357,7 @@ const MainHeader = () => {
                                         try {
                                             const snapshot = await fetchApplicationSnapshot();
                                             receivedIds = snapshot.receivedIds;
-                                            sentDecisionIds = snapshot.sentIds;
+                                            sentDecisionIds = snapshot.sentDecisionIds;
                                             setKnownReceivedJoinIds(receivedIds);
                                             setKnownSentDecisionJoinIds(sentDecisionIds);
                                             latestId = receivedIds[0] || sentDecisionIds[0] || null;

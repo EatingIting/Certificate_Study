@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
@@ -18,7 +18,6 @@
             u.user_id      AS userId,
             u.email        AS email,
             u.name         AS name,
-            /* ✅ 방별 닉네임이 있으면 그 값을 우선 사용 */
             COALESCE(rjr.request_user_nickname, u.nickname) AS nickname,
             u.profile_img  AS profileImg,
             rjr.requested_at AS joinedAt
@@ -89,6 +88,23 @@
           AND request_user_email = #{email}
           AND status = '승인'
     </delete>
+
+    <insert id="upsertLeaveHistory">
+        INSERT INTO room_leave_history (
+            room_id,
+            user_email,
+            left_at,
+            reason
+        ) VALUES (
+            #{roomId},
+            #{email},
+            NOW(),
+            #{reason}
+        )
+        ON DUPLICATE KEY UPDATE
+            left_at = VALUES(left_at),
+            reason = VALUES(reason)
+    </insert>
 
     <!-- 방장 위임 -->
     <update id="updateHostEmail">

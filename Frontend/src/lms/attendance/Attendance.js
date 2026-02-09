@@ -4,24 +4,6 @@ import api from "../../api/api";
 
 import "./Attendance.css";
 
-/**
- * ✅ 백엔드에서 이런 형태로 내려주면 제일 편함(추천)
- *
- * {
- *   studySchedule: { start, end, requiredRatio, totalSessions },
- *   attendanceLogs: [
- *     {
- *       memberId: "user@email.com",
- *       name: "닉네임(김***)",
- *       sessions: [
- *         { sessionNo: 1, studyDate: "2026-01-19", joinAt: "...", leaveAt: "..." },
- *         ...
- *       ]
- *     }
- *   ]
- * }
- */
-
 // ------- utils -------
 const toMs = (iso) => {
   if (!iso) return 0;
@@ -116,8 +98,8 @@ const Attendance = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjectId, scope]);
 
-  // ✅ 회차(세로형) rows 만들기 (백엔드가 회차를 시간 순으로 내려줌 → 1회차=첫 시간, 2회차=두번째 시간)
-  // ✅ 비율은 회차별 수업 시간(startTime~endTime) 기준으로 계산 (2시~2시5분 = 5분 기준)
+  // 회차(세로형) rows 만들기 (백엔드가 회차를 시간 순으로 내려줌 → 1회차=첫 시간, 2회차=두번째 시간)
+  // 비율은 회차별 수업 시간(startTime~endTime) 기준으로 계산 (2시~2시5분 = 5분 기준)
   const sessionRows = useMemo(() => {
     const totalSessions = studySchedule.totalSessions || 0;
     const fallbackTotalMin = calcTotalMinutes(studySchedule.start, studySchedule.end);
@@ -146,7 +128,7 @@ const Attendance = () => {
         ? judgeAttendance(log, totalMinForSession, studySchedule.requiredRatio)
         : { attendedMin: 0, ratio: 0, isPresent: false };
 
-      // ✅ 백엔드에서 studyDate 내려주면 그걸 우선 사용
+      // 백엔드에서 studyDate 내려주면 그걸 우선 사용
       const studyDate = log?.studyDate
         ? log.studyDate
         : log?.joinAt

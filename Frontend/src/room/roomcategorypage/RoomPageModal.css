@@ -126,6 +126,13 @@
   text-align: right;
 }
 
+.sr2-error {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #d32f2f;
+}
+
 /* Actions (bottom) */
 .sr2-actions {
   display: flex;

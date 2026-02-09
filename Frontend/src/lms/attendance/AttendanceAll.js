@@ -1,10 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import api from "../../api/api";
-
 import "./AttendanceAll.css";
 
-// ------- utils -------
+// ------- 유틸 -------
+const toKey = (value) => String(value || "").trim().toLowerCase();
+
+const pushKeys = (set, ...values) => {
+  values.forEach((value) => {
+    const key = toKey(value);
+    if (key) set.add(key);
+  });
+};
+
+const getAttendanceKeys = (row) => {
+  const keys = new Set();
+  if (!row || typeof row !== "object") return keys;
+  pushKeys(keys, row.memberId, row.userId, row.id, row.email, row.name, row.nickname);
+  return keys;
+};
+
+const getParticipantKeys = (row) => {
+  const keys = new Set();
+  if (!row || typeof row !== "object") return keys;
+  pushKeys(keys, row.id, row.userId, row.memberId, row.email, row.name, row.nickname);
+  return keys;
+};
+
 const toMs = (iso) => {
   if (!iso) return 0;
   const t = new Date(iso).getTime();
@@ -18,12 +40,12 @@ const minutesBetween = (startIso, endIso) => {
   return Math.floor((e - s) / 60000);
 };
 
-/** 회차 시간(studyDate+startTime~endTime)과 참여(joinAt~leaveAt)이 겹치는 분. 스케줄 밖 참여는 인정하지 않음 */
+/** 회차 시간(studyDate+startTime~endTime)과 참여(joinAt~leaveAt)가 겹치는 분만 인정 */
 const minutesOverlapInSession = (log) => {
   if (!log?.studyDate || !log?.startTime || !log?.endTime || !log?.joinAt || !log?.leaveAt) return 0;
-  const pad = (t) => (String(t).length >= 8 ? t : t + ":00");
-  const sessionStart = new Date(log.studyDate + "T" + pad(log.startTime)).getTime();
-  const sessionEnd = new Date(log.studyDate + "T" + pad(log.endTime)).getTime();
+  const pad = (t) => (String(t).length >= 8 ? t : `${t}:00`);
+  const sessionStart = new Date(`${log.studyDate}T${pad(log.startTime)}`).getTime();
+  const sessionEnd = new Date(`${log.studyDate}T${pad(log.endTime)}`).getTime();
   const joinMs = toMs(log.joinAt);
   const leaveMs = toMs(log.leaveAt);
   const overlapStart = Math.max(joinMs, sessionStart);
@@ -41,25 +63,25 @@ const calcTotalMinutes = (startHHMM, endHHMM) => {
   return Math.max(0, end - start);
 };
 
-/** 회차별 totalMin 우선: 참여시간은 회차 구간과의 오버랩으로만 인정 (스케줄 밖 입장은 결석) */
+/** 출석 판정: 참석시간/회차시간 >= requiredRatio */
 const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
   const totalMin =
     log?.startTime && log?.endTime
       ? calcTotalMinutes(log.startTime, log.endTime)
       : fallbackTotalMin;
+
   const attendedMin =
     log?.studyDate && log?.startTime && log?.endTime
       ? minutesOverlapInSession(log)
       : minutesBetween(log?.joinAt, log?.leaveAt);
+
   const ratio = totalMin === 0 ? 0 : attendedMin / totalMin;
-  const isPresent = ratio >= requiredRatio;
-  return { attendedMin, ratio, isPresent };
+  return { attendedMin, ratio, isPresent: ratio >= requiredRatio };
 };
 
 const AttendanceAll = () => {
   const { subjectId } = useParams();
   const [sp] = useSearchParams();
-  // scope는 그냥 all로 고정해도 되지만, URL에 scope가 있으면 그걸도 반영
   const scope = sp.get("scope") || "all";
 
   const [studySchedule, setStudySchedule] = useState({
@@ -69,24 +91,86 @@ const AttendanceAll = () => {
     totalSessions: 0,
   });
 
-  const [members, setMembers] = useState([]); // attendanceLogs
+  const [members, setMembers] = useState([]);
 
   useEffect(() => {
     if (!subjectId) return;
 
     const fetchAll = async () => {
       try {
-        const res = await api.get(`/subjects/${subjectId}/attendance`, {
-          params: { scope: "all" },
+        const [attendanceRes, participantsRes] = await Promise.allSettled([
+          api.get(`/subjects/${subjectId}/attendance`, { params: { scope: "all" } }),
+          api.get(`/rooms/${subjectId}/participants`),
+        ]);
+
+        const attendanceData =
+          attendanceRes.status === "fulfilled" ? attendanceRes.value?.data : null;
+        const attendanceLogs = Array.isArray(attendanceData?.attendanceLogs)
+          ? attendanceData.attendanceLogs
+          : [];
+        const participants = Array.isArray(participantsRes.value?.data?.participants)
+          ? participantsRes.value.data.participants
+          : [];
+
+        setStudySchedule(
+          attendanceData?.studySchedule || {
+            start: "00:00",
+            end: "00:00",
+            requiredRatio: 0.9,
+            totalSessions: 0,
+          }
+        );
+
+        // 출석 로그가 없어도 참여자 이름은 표에 보이도록 병합
+        const merged = [];
+        const usedAttendanceIdx = new Set();
+
+        participants.forEach((p, idx) => {
+          const participantKeys = getParticipantKeys(p);
+          let matchedIdx = -1;
+
+          for (let i = 0; i < attendanceLogs.length; i += 1) {
+            if (usedAttendanceIdx.has(i)) continue;
+            const logKeys = getAttendanceKeys(attendanceLogs[i]);
+            const isMatched = [...participantKeys].some((key) => logKeys.has(key));
+            if (isMatched) {
+              matchedIdx = i;
+              break;
+            }
+          }
+
+          if (matchedIdx >= 0) {
+            usedAttendanceIdx.add(matchedIdx);
+            const log = attendanceLogs[matchedIdx];
+            merged.push({
+              ...log,
+              memberId:
+                log?.memberId ?? p?.id ?? p?.userId ?? p?.email ?? `participant-${idx}`,
+              name: log?.name || p?.nickname || p?.name || p?.email || `멤버 ${idx + 1}`,
+              sessions: Array.isArray(log?.sessions) ? log.sessions : [],
+            });
+            return;
+          }
+
+          merged.push({
+            memberId: p?.id ?? p?.userId ?? p?.email ?? `participant-${idx}`,
+            name: p?.nickname || p?.name || p?.email || `멤버 ${idx + 1}`,
+            sessions: [],
+          });
         });
 
-        setStudySchedule(res.data?.studySchedule || {
-          start: "00:00",
-          end: "00:00",
-          requiredRatio: 0.9,
-          totalSessions: 0,
+        // 참여자 API에는 없지만 출석 로그에만 있는 경우도 보존
+        attendanceLogs.forEach((log, idx) => {
+          if (usedAttendanceIdx.has(idx)) return;
+          merged.push({
+            ...log,
+            memberId: log?.memberId ?? log?.userId ?? log?.email ?? `attendance-${idx}`,
+            name: log?.name || log?.nickname || log?.email || `멤버 ${idx + 1}`,
+            sessions: Array.isArray(log?.sessions) ? log.sessions : [],
+          });
         });
-        setMembers(res.data?.attendanceLogs || []);
+
+        setMembers(merged);
       } catch (e) {
         console.error("ATTENDANCE ALL FETCH ERROR:", {
           message: e.message,
@@ -101,24 +185,30 @@ const AttendanceAll = () => {
     fetchAll();
   }, [subjectId, scope]);
 
-  // ✅ 화면용으로 가공 (백엔드가 회차를 시간 순 study_date+start_time 으로 정렬해서 내려줌 → 1회차=첫 시간, 2회차=두번째 시간)
-  // ✅ 비율은 회차별 수업 시간(startTime~endTime) 기준으로 계산
+  // 로그가 단 한 건도 없으면 회차를 숨긴다.
+  const hasAnyAttendance = useMemo(
+    () => (members || []).some((m) => Array.isArray(m?.sessions) && m.sessions.length > 0),
+    [members]
+  );
+  const visibleTotalSessions = hasAnyAttendance ? (studySchedule.totalSessions || 0) : 0;
+
+  // 표 렌더링용 데이터 가공
   const viewRows = useMemo(() => {
-    const totalSessions = studySchedule.totalSessions || 0;
+    const totalSessions = visibleTotalSessions;
     const fallbackTotalMin = calcTotalMinutes(studySchedule.start, studySchedule.end);
 
     return (members || []).map((m) => {
-      const sessionsOrdered = m.sessions || [];
+      const sessionsOrdered = Array.isArray(m.sessions) ? m.sessions : [];
 
       const sessionsView = Array.from({ length: totalSessions }).map((_, idx) => {
         const sessionNo = idx + 1;
         const log = sessionsOrdered[idx];
 
-        const totalMinForSession = log?.startTime && log?.endTime
-          ? calcTotalMinutes(log.startTime, log.endTime)
-          : fallbackTotalMin;
+        const totalMinForSession =
+          log?.startTime && log?.endTime
+            ? calcTotalMinutes(log.startTime, log.endTime)
+            : fallbackTotalMin;
 
-        // 로그 없으면 결석 처리. 있으면 회차별 일정 시간(startTime/endTime)으로 totalMin 계산 후 판정
         const judged = log
           ? judgeAttendance(log, totalMinForSession, studySchedule.requiredRatio)
           : { attendedMin: 0, ratio: 0, isPresent: false };
@@ -128,8 +218,7 @@ const AttendanceAll = () => {
 
       const presentCount = sessionsView.filter((s) => s.isPresent).length;
       const absentCount = totalSessions - presentCount;
-      const ratioOverall =
-        totalSessions === 0 ? 0 : Math.round((presentCount / totalSessions) * 100);
+      const ratioOverall = totalSessions === 0 ? 0 : Math.round((presentCount / totalSessions) * 100);
 
       return {
         memberId: m.memberId,
@@ -140,7 +229,13 @@ const AttendanceAll = () => {
         ratioOverall,
       };
     });
-  }, [members, studySchedule.totalSessions, studySchedule.requiredRatio, studySchedule.start, studySchedule.end]);
+  }, [
+    members,
+    visibleTotalSessions,
+    studySchedule.requiredRatio,
+    studySchedule.start,
+    studySchedule.end,
+  ]);
 
   return (
     <div className="at-page">
@@ -154,13 +249,12 @@ const AttendanceAll = () => {
             <div>
               <h2 className="at-title">출석</h2>
               <p className="at-subtitle">
-                기준: 스터디 시간 중 {(studySchedule.requiredRatio * 100).toFixed(0)}% 이상 참여 시
-                출석 인정
+                기준: 스터디 시간 중 {(studySchedule.requiredRatio * 100).toFixed(0)}% 이상 참여 시 출석 인정
               </p>
             </div>
           </div>
 
-          <div className="at-header-actions">{/* 필요하면 버튼 */}</div>
+          <div className="at-header-actions" />
         </div>
 
         <div className="at-card-body">
@@ -178,7 +272,7 @@ const AttendanceAll = () => {
                 <tr>
                   <th className="at-th-name">이름</th>
                   <th className="at-th-att">출석률</th>
-                  {Array.from({ length: studySchedule.totalSessions || 0 }).map((_, i) => (
+                  {Array.from({ length: visibleTotalSessions }).map((_, i) => (
                     <th key={i} className="at-th-session">
                       {i + 1}
                     </th>
@@ -196,14 +290,18 @@ const AttendanceAll = () => {
                     </td>
 
                     <td className="at-td-att">
-                      <div className="at-progress">
-                        <div className="at-bar">
-                          <div className="at-bar-fill" style={{ width: `${r.ratioOverall}%` }} />
+                      {visibleTotalSessions > 0 ? (
+                        <div className="at-progress">
+                          <div className="at-bar">
+                            <div className="at-bar-fill" style={{ width: `${r.ratioOverall}%` }} />
+                          </div>
+                          <span className="at-progress-text">
+                            ({r.presentCount}/{visibleTotalSessions})
+                          </span>
                         </div>
-                        <span className="at-progress-text">
-                          ({r.presentCount}/{studySchedule.totalSessions || 0})
-                        </span>
-                      </div>
+                      ) : (
+                        <span className="at-progress-text">-</span>
+                      )}
                     </td>
 
                     {r.sessionsView.map((s) => (
@@ -221,7 +319,7 @@ const AttendanceAll = () => {
 
                 {viewRows.length === 0 && (
                   <tr>
-                    <td className="at-empty" colSpan={2 + (studySchedule.totalSessions || 0)}>
+                    <td className="at-empty" colSpan={2 + visibleTotalSessions}>
                       출석 데이터가 없습니다.
                     </td>
                   </tr>
@@ -229,9 +327,6 @@ const AttendanceAll = () => {
               </tbody>
             </table>
           </div>
-
-          {/* 디버그용: 원하면 삭제 */}
-          {/* <pre style={{ marginTop: 12 }}>{JSON.stringify({ studySchedule, members }, null, 2)}</pre> */}
         </div>
       </section>
     </div>

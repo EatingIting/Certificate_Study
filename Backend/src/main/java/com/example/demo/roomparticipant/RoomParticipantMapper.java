@@ -28,6 +28,13 @@ public interface RoomParticipantMapper {
     // 강퇴/탈퇴: 승인행 삭제
     int deleteApprovedByEmail(@Param("roomId") String roomId, @Param("email") String email);
 
+    // 탈퇴/강퇴 이력 기록(재가입 차단 용도)
+    int upsertLeaveHistory(
+            @Param("roomId") String roomId,
+            @Param("email") String email,
+            @Param("reason") String reason
+    );
+
     // 방장 위임: room.host_user_email 변경
     int updateHostEmail(@Param("roomId") String roomId, @Param("newHostEmail") String newHostEmail);
 

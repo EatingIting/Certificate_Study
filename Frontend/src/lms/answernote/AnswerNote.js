@@ -105,7 +105,7 @@ const AnswerNote = ({ mode = "all" }) => {
     return (
         <div className="answer-note-container">
             <div className="note-header">
-                📒 나의 노트 — {pageTitle}
+                나의 노트 — {pageTitle}
             </div>
 
             {filteredNotes.length === 0 ? (

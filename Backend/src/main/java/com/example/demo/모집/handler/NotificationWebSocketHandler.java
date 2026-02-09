@@ -9,13 +9,14 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
-    // userId → session 저장
-    private final Map<String, WebSocketSession> ownerSessions =
+    // userId -> sessions (멀티 탭/멀티 화면 동시 수신)
+    private final Map<String, Set<WebSocketSession>> ownerSessions =
             new ConcurrentHashMap<>();
 
     private final ObjectMapper objectMapper;
@@ -26,19 +27,23 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-
         String ownerId = extractUserId(session);
-        ownerSessions.put(ownerId, session);
-
+        ownerSessions
+                .computeIfAbsent(ownerId, key -> ConcurrentHashMap.newKeySet())
+                .add(session);
         System.out.println("✅ 알림 WebSocket 연결됨: " + ownerId);
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-
         String ownerId = extractUserId(session);
-        ownerSessions.remove(ownerId, session);
-
+        Set<WebSocketSession> sessions = ownerSessions.get(ownerId);
+        if (sessions != null) {
+            sessions.remove(session);
+            if (sessions.isEmpty()) {
+                ownerSessions.remove(ownerId);
+            }
+        }
         System.out.println("❌ 알림 WebSocket 종료됨: " + ownerId);
     }
 
@@ -47,7 +52,6 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         payload.put("type", "NOTIFICATION");
         payload.put("notificationType", "APPLICATION");
         payload.put("content", content);
-
         sendPayload(ownerId, payload, "모집 신청");
     }
 
@@ -63,7 +67,6 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         payload.put("postId", postId);
         payload.put("postTitle", postTitle);
         payload.put("content", commentPreview);
-
         sendPayload(ownerId, payload, "댓글");
     }
 
@@ -81,7 +84,6 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         payload.put("postId", postId);
         payload.put("postTitle", postTitle);
         payload.put("content", commentPreview);
-
         sendPayload(userId, payload, "댓글");
     }
 
@@ -95,7 +97,6 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         payload.put("notificationType", "APPLICATION");
         payload.put("status", status);
         payload.put("content", content);
-
         sendPayload(userId, payload, "가입신청 상태");
     }
 
@@ -116,7 +117,6 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         payload.put("content", content);
         if (assignmentId != null) payload.put("assignmentId", assignmentId);
         if (scheduleId != null) payload.put("scheduleId", scheduleId);
-
         sendPayload(userId, payload, "LMS");
     }
 
@@ -125,25 +125,34 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
             Map<String, Object> payload,
             String logType
     ) {
-        WebSocketSession session = ownerSessions.get(userId);
-
-        if (session == null || !session.isOpen()) {
-            System.out.println("⚠ 접속 없음(" + logType + "): " + userId);
+        Set<WebSocketSession> sessions = ownerSessions.get(userId);
+        if (sessions == null || sessions.isEmpty()) {
+            System.out.println("❌ 접속 없음(" + logType + "): " + userId);
             return;
         }
 
         try {
             String message = objectMapper.writeValueAsString(payload);
-            synchronized (session) {
-                if (!session.isOpen()) {
-                    System.out.println("⚠ 세션 닫힘(" + logType + "): " + userId);
-                    return;
+            boolean sent = false;
+
+            for (WebSocketSession session : sessions) {
+                if (session == null) continue;
+                synchronized (session) {
+                    if (!session.isOpen()) continue;
+                    session.sendMessage(new TextMessage(message));
+                    sent = true;
                 }
-                session.sendMessage(new TextMessage(message));
             }
-            System.out.println("🔔 " + logType + " 알림 전송 완료 → " + userId);
+
+            if (!sent) {
+                System.out.println("❌ 세션 닫힘(" + logType + "): " + userId);
+                ownerSessions.remove(userId);
+                return;
+            }
+
+            System.out.println("📢 " + logType + " 알림 전송 완료 → " + userId);
         } catch (Exception e) {
-            ownerSessions.remove(userId, session);
+            ownerSessions.remove(userId);
             e.printStackTrace();
         }
     }

@@ -155,17 +155,27 @@ export const enqueueLmsNotification = (rawPayload) => {
 
 export const drainQueuedLmsNotifications = () => {
     const queue = readQueue();
-
-    if (typeof window !== "undefined") {
-        try {
-            localStorage.removeItem(LMS_NOTIFICATION_QUEUE_KEY);
-        } catch (e) {
-            // ignore storage failure
-        }
-    }
-
     return queue
         .map((item) => item?.payload || null)
         .filter(Boolean);
+};
+
+export const readQueuedLmsNotifications = () => {
+    return readQueue()
+        .map((item) => item?.payload || null)
+        .filter(Boolean);
+};
+
+export const removeQueuedLmsNotification = (rawPayloadOrDedupeKey) => {
+    if (!rawPayloadOrDedupeKey) return;
+    const targetKey =
+        typeof rawPayloadOrDedupeKey === "string"
+            ? rawPayloadOrDedupeKey.trim()
+            : buildDedupeKey(rawPayloadOrDedupeKey);
+    if (!targetKey) return;
+
+    const queue = readQueue();
+    const nextQueue = queue.filter((item) => item?.dedupeKey !== targetKey);
+    writeQueue(nextQueue);
 };
 

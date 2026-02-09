@@ -5,7 +5,11 @@ import { useLMS } from "./LMSContext";
 import { useMeeting } from "../webrtc/MeetingContext";
 import { useEffect, useState, useRef } from "react";
 import { toWsBackendUrl } from "../utils/backendUrl";
-import { drainQueuedLmsNotifications } from "../utils/lmsNotifications";
+import {
+    enqueueLmsNotification,
+    readQueuedLmsNotifications,
+    removeQueuedLmsNotification,
+} from "../utils/lmsNotifications";
 import { logout } from "../api/api";
 
 const NOTIFICATION_LIMIT = 50;
@@ -232,8 +236,8 @@ export default function Header() {
 
     const userId = sessionStorage.getItem("userId");
 
-    useEffect(() => {
-        const queuedPayloads = drainQueuedLmsNotifications();
+    const syncQueuedNotifications = () => {
+        const queuedPayloads = readQueuedLmsNotifications();
         if (!queuedPayloads.length) return;
 
         setNotifications((prev) => {
@@ -245,6 +249,28 @@ export default function Header() {
             });
             return next;
         });
+    };
+
+    useEffect(() => {
+        syncQueuedNotifications();
+    }, []);
+
+    useEffect(() => {
+        const handleStorage = (e) => {
+            if (e.key !== "lms.notification.queue.v1") return;
+            syncQueuedNotifications();
+        };
+        const handleVisibility = () => {
+            if (document.visibilityState !== "visible") return;
+            syncQueuedNotifications();
+        };
+
+        window.addEventListener("storage", handleStorage);
+        document.addEventListener("visibilitychange", handleVisibility);
+        return () => {
+            window.removeEventListener("storage", handleStorage);
+            document.removeEventListener("visibilitychange", handleVisibility);
+        };
     }, []);
 
     useEffect(() => {
@@ -278,6 +304,7 @@ export default function Header() {
                     return;
                 }
 
+                enqueueLmsNotification(payload);
                 setNotifications((prev) => appendNotification(prev, notif));
             };
 
@@ -330,6 +357,7 @@ export default function Header() {
 
     const handleClickNotification = (notif) => {
         setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+        removeQueuedLmsNotification(notif.dedupeKey);
         setOpenNotifDropdown(false);
 
         const targetRoomId = notif.roomId || pickId(room?.roomId);

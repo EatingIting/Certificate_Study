@@ -21,10 +21,10 @@ import BoardDetail from "./board/BoardDetail";
 import BoardEdit from "./board/BoardEdit";
 
 import Calendar from "./calendar/Calendar";
-import StudyMembers from "./study-members/StudyMembers"
-import StudyLeave from "./study-leave/StudyLeave"
+import StudyMembers from "./study-members/StudyMembers";
+import StudyLeave from "./study-leave/StudyLeave";
 
-import RoomMyPage from "./room-my-page/RoomMyPage"
+import RoomMyPage from "./room-my-page/RoomMyPage";
 
 import MeetingPage from "../webrtc/MeetingPage";
 import { MeetingProvider, useMeeting } from "../webrtc/MeetingContext";
@@ -34,19 +34,19 @@ import ProtectedRoute from "./ProtectedRoute";
 
 import "./LMSSubject.css";
 
-// 브라우저 PIP용 숨겨진 비디오 컴포넌트 (페이지 이동해도 스트림 유지)
+// 브라우저 PiP용 숨김 비디오
 const HiddenPipVideo = ({ videoRef }) => {
     return (
         <video
             ref={videoRef}
             style={{
-                position: 'fixed',
-                top: '-9999px',
-                left: '-9999px',
-                width: '1px',
-                height: '1px',
+                position: "fixed",
+                top: "-9999px",
+                left: "-9999px",
+                width: "1px",
+                height: "1px",
                 opacity: 0,
-                pointerEvents: 'none',
+                pointerEvents: "none",
             }}
             autoPlay
             playsInline
@@ -59,25 +59,40 @@ function LMSSubjectInner() {
     let [activeMenu, setActiveMenu] = useState("dashboard");
     let [toastMessage, setToastMessage] = useState("");
     let [toastVisible, setToastVisible] = useState(false);
-    // 커스텀 PiP에서 "나가기" 클릭 시, UI는 즉시 숨김
+    const [forcedKickModalOpen, setForcedKickModalOpen] = useState(false);
+    const accessDeniedHandledRef = useRef(false);
+
     const [pipClosing, setPipClosing] = useState(false);
     const pipLeaveTimerRef = useRef(null);
 
     let location = useLocation();
     let navigate = useNavigate();
     let { subjectId } = useParams();
-    const { roomLoading, accessDenied, roomTitle } = useLMS();
+    const { roomLoading, accessDenied, accessDeniedReason, roomTitle } = useLMS();
 
-    // 스터디원이 아닌 사용자가 방 주소로 직접 접근한 경우 리다이렉트
+    // 비멤버 접근 차단 처리
     useEffect(() => {
         if (!subjectId || roomLoading) return;
-        if (accessDenied) {
-            alert("스터디원만 접근할 수 있습니다.");
-            navigate("/", { replace: true });
-        }
-    }, [subjectId, roomLoading, accessDenied, navigate]);
 
-    // 🔥 URL pathname에서 MeetingRoom roomId 추출 (createPortal로 렌더링된 MeetingPage에 전달용)
+        if (!accessDenied) {
+            accessDeniedHandledRef.current = false;
+            setForcedKickModalOpen(false);
+            return;
+        }
+
+        if (accessDeniedHandledRef.current) return;
+        accessDeniedHandledRef.current = true;
+
+        if (String(accessDeniedReason || "").toUpperCase() === "KICK") {
+            setForcedKickModalOpen(true);
+            return;
+        }
+
+        alert("스터디원만 접근할 수 있습니다.");
+        navigate("/", { replace: true });
+    }, [subjectId, roomLoading, accessDenied, accessDeniedReason, navigate]);
+
+    // URL에서 MeetingRoom roomId 추출
     const meetingRoomIdFromPath = useMemo(() => {
         const match = location.pathname.match(/\/MeetingRoom\/([^/]+)/);
         return match ? match[1] : null;
@@ -96,7 +111,6 @@ function LMSSubjectInner() {
         else setActiveMenu("dashboard");
     }, [location.pathname]);
 
-    // pip ux
     const {
         isInMeeting,
         isPipMode,
@@ -106,22 +120,22 @@ function LMSSubjectInner() {
         stopCustomPip,
         endMeeting,
         updateCustomPipData,
-        pipVideoRef, // 숨겨진 PIP video ref
+        pipVideoRef,
     } = useMeeting();
 
-    // 🔥 PiP 진입/복귀 시 상대 타일 검은화면 방지: MeetingPage 단일 인스턴스 유지
-    // 라우트와 무관하게 "회의 중"이면 같은 컨테이너에 한 번만 마운트 → WebSocket/프로듀서 유지
+    // MeetingPage를 단일 인스턴스로 유지
     const showMeeting = location.pathname.includes("MeetingRoom") || ((isPipMode || isBrowserPipMode) && !!roomId);
     const meetingContainerRef = useRef(null);
     const [meetingContainerReady, setMeetingContainerReady] = useState(false);
+
     useEffect(() => {
         if (!showMeeting) setMeetingContainerReady(false);
     }, [showMeeting]);
 
-    // 🔥 커스텀 PiP 복귀 시 검은화면 방지: MeetingRoom 진입 후 2프레임 지연 후 컨테이너 노출
     const isOnMeetingRoom = location.pathname.includes("MeetingRoom");
     const prevPathRef = useRef(location.pathname);
     const [meetingRevealReady, setMeetingRevealReady] = useState(true);
+
     useEffect(() => {
         const prevPath = prevPathRef.current;
         const justEnteredMeetingRoom = isOnMeetingRoom && !prevPath.includes("MeetingRoom");
@@ -129,7 +143,8 @@ function LMSSubjectInner() {
 
         if (justEnteredMeetingRoom) {
             setMeetingRevealReady(false);
-            let raf1, raf2;
+            let raf1;
+            let raf2;
             raf1 = requestAnimationFrame(() => {
                 raf2 = requestAnimationFrame(() => {
                     setMeetingRevealReady(true);
@@ -140,10 +155,11 @@ function LMSSubjectInner() {
                 if (raf2) cancelAnimationFrame(raf2);
             };
         }
+
         if (isOnMeetingRoom) setMeetingRevealReady(true);
     }, [location.pathname, isOnMeetingRoom]);
 
-    // 커스텀 PIP에서 회의방 복귀 (검은화면 방지: 먼저 이동 → 회의 화면 그려질 시간 뒤 PiP 숨김)
+    // 커스텀 PiP -> 회의 복귀
     const handlePipReturn = useCallback(() => {
         console.log("[CustomPiP] 회의방 복귀");
         const savedRoomId = sessionStorage.getItem("pip.roomId");
@@ -155,32 +171,27 @@ function LMSSubjectInner() {
                 ? `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}?scheduleId=${encodeURIComponent(savedScheduleId)}`
                 : `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}`;
             navigate(targetPath, { replace: true });
-            // 🔥 먼저 이동 후 120ms 뒤 PiP 숨김 → 회의 컨테이너가 그려진 뒤 전환되어 검은화면 방지
             setTimeout(() => stopCustomPip(), 120);
         } else {
             stopCustomPip();
         }
     }, [navigate, stopCustomPip]);
 
-    // 커스텀 PIP에서 회의 나가기
+    // 커스텀 PiP -> 회의 종료
     const handlePipLeave = useCallback(() => {
-        console.log("[CustomPiP] 회의 나가기");
+        console.log("[CustomPiP] leave meeting");
 
-        // LEAVE 이벤트 발생 (MeetingPage에서 처리)
         window.dispatchEvent(new CustomEvent("meeting:leave-from-pip"));
-
-        // UI는 즉시 숨김 (사용자 체감 즉시 반응)
         setPipClosing(true);
 
-        // 소켓으로 LEAVE가 전달될 시간을 조금 준 뒤 정리/언마운트
         if (pipLeaveTimerRef.current) {
             clearTimeout(pipLeaveTimerRef.current);
         }
+
         pipLeaveTimerRef.current = setTimeout(() => {
             stopCustomPip();
             endMeeting();
 
-            // 세션 정리
             sessionStorage.removeItem("pip.roomId");
             sessionStorage.removeItem("pip.subjectId");
             sessionStorage.removeItem("pip.scheduleId");
@@ -190,7 +201,6 @@ function LMSSubjectInner() {
         }, 120);
     }, [stopCustomPip, endMeeting]);
 
-    // cleanup
     useEffect(() => {
         return () => {
             if (pipLeaveTimerRef.current) {
@@ -200,12 +210,10 @@ function LMSSubjectInner() {
         };
     }, []);
 
-    // Sidebar 이동 시
     const handleSidebarNavigate = (path) => {
         navigate(`/lms/${subjectId}/${path}`);
     };
 
-    //Toast 이벤트
     useEffect(() => {
         const handler = (e) => {
             if (!e.detail) return;
@@ -217,14 +225,34 @@ function LMSSubjectInner() {
         return () => window.removeEventListener("ui:toast", handler);
     }, []);
 
-    // 접근 거부 시 훅 호출 후에만 early return (Rules of Hooks 준수)
     if (accessDenied && subjectId) {
-        return <div className="lms-subject-layout" style={{ padding: 20 }}>접근 권한이 없습니다. 메인으로 이동합니다...</div>;
+        return (
+            <div className="lms-access-denied-wrap">
+                <div className="lms-access-denied-text">접근 권한이 없습니다. 메인으로 이동합니다...</div>
+                {forcedKickModalOpen && (
+                    <div className="lms-kick-modal-overlay" role="dialog" aria-modal="true">
+                        <div className="lms-kick-modal">
+                            <p className="lms-kick-modal-title">안내</p>
+                            <p className="lms-kick-modal-message">스터디장에 의하여 LMS에서 강제퇴장 되었습니다.</p>
+                            <button
+                                type="button"
+                                className="lms-kick-modal-confirm"
+                                onClick={() => {
+                                    setForcedKickModalOpen(false);
+                                    navigate("/", { replace: true });
+                                }}
+                            >
+                                확인
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     return (
         <>
-            {/* Toast */}
             <Toast
                 message={toastMessage}
                 visible={toastVisible}
@@ -237,8 +265,6 @@ function LMSSubjectInner() {
                 <LMSSidebar onNavigate={handleSidebarNavigate} />
 
                 <main className="subject-content">
-                    {/* 🔥 PiP 진입/복귀 시 상대 타일 검은화면 방지: MeetingPage 단일 인스턴스 유지
-                        회의 중이면 같은 컨테이너에 한 번만 마운트 → 라우트 이동해도 WebSocket/프로듀서 유지 */}
                     {showMeeting && (
                         <div
                             ref={(el) => {
@@ -257,16 +283,17 @@ function LMSSubjectInner() {
                                 visibility: isOnMeetingRoom ? "visible" : "hidden",
                                 zIndex: isOnMeetingRoom ? 1 : -1,
                                 pointerEvents: isOnMeetingRoom ? "auto" : "none",
-                                // 🔥 커스텀 PiP 복귀 시 검은화면 방지: 2프레임 지연 후 노출
                                 opacity: isOnMeetingRoom ? (meetingRevealReady ? 1 : 0) : 0,
                                 transition: meetingRevealReady ? "opacity 0.08s ease-out" : "none",
                             }}
                         />
                     )}
-                    {showMeeting && meetingContainerReady && meetingContainerRef.current &&
+
+                    {showMeeting &&
+                        meetingContainerReady &&
+                        meetingContainerRef.current &&
                         createPortal(<MeetingPage portalRoomId={meetingRoomIdFromPath} />, meetingContainerRef.current)}
 
-                    {/* MeetingRoom 경로가 아닐 때만 Routes 표시 (회의 중이면 위 컨테이너에 MeetingPage 표시) */}
                     <div style={{ display: isOnMeetingRoom ? "none" : "block", width: "100%" }}>
                         <Routes>
                             <Route index element={<Navigate to="dashboard" replace />} />
@@ -294,7 +321,6 @@ function LMSSubjectInner() {
 
                             <Route path="mypage" element={<RoomMyPage />} />
 
-                            {/* MeetingPage는 위 persistent container에만 렌더 (단일 인스턴스) */}
                             <Route path="MeetingRoom/:roomId" element={null} />
 
                             <Route path="*" element={<Navigate to="dashboard" replace />} />
@@ -303,21 +329,18 @@ function LMSSubjectInner() {
                 </main>
             </div>
 
-            {/* 브라우저 PIP용 숨겨진 video */}
             <HiddenPipVideo videoRef={pipVideoRef} />
 
-            {/* 커스텀 PIP (브라우저 PIP가 아닐 때만 표시) */}
             {customPipData && !isBrowserPipMode && !pipClosing && (
                 <FloatingPip
                     stream={customPipData.stream}
                     peerName={customPipData.peerName}
                     onReturn={handlePipReturn}
                     onLeave={handlePipLeave}
-                    onStreamInvalid={updateCustomPipData} // 스트림 무효 시 업데이트
+                    onStreamInvalid={updateCustomPipData}
                 />
             )}
 
-            {/* 현재 경로가 'MeetingRoom/' 을 포함하지 않을 때만 렌더링 */}
             {!location.pathname.includes("/MeetingRoom/") && (
                 <ChatModal roomId={subjectId} roomName={roomTitle} />
             )}
@@ -327,7 +350,7 @@ function LMSSubjectInner() {
 
 const LMSSubject = () => {
     const { subjectId } = useParams();
-    
+
     return (
         <LMSProvider roomId={subjectId}>
             <ProtectedRoute>

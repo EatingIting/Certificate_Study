@@ -14,14 +14,14 @@ export const LMSProvider = ({ children, roomId }) => {
     const [room, setRoom] = useState(null);
     const [roomLoading, setRoomLoading] = useState(false);
     const [accessDenied, setAccessDenied] = useState(false);
+    const [accessDeniedReason, setAccessDeniedReason] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [roomNickname, setRoomNickname] = useState("");
     const [roomProfileImg, setRoomProfileImg] = useState("");
 
-    // 사용자 정보 가져오기
+    // 사용자 정보 조회
     const fetchUserInfo = useCallback(async () => {
-        // 토큰 체크
         const token = sessionStorage.getItem("accessToken");
         if (!token) {
             setLoading(false);
@@ -36,8 +36,7 @@ export const LMSProvider = ({ children, roomId }) => {
             const res = await api.get("/users/me");
             setUser(res.data);
         } catch (err) {
-            console.error("사용자 정보 가져오기 실패", err);
-            // 401 Unauthorized인 경우 토큰 제거
+            console.error("사용자 정보 조회 실패", err);
             if (err.response?.status === 401) {
                 sessionStorage.removeItem("accessToken");
                 sessionStorage.removeItem("userEmail");
@@ -49,7 +48,7 @@ export const LMSProvider = ({ children, roomId }) => {
         }
     }, []);
 
-    // 방별 마이페이지(닉네임) 가져오기
+    // 방 마이페이지(닉네임/프로필) 조회
     const fetchRoomMyPage = useCallback(
         async (id) => {
             if (!id) {
@@ -58,7 +57,6 @@ export const LMSProvider = ({ children, roomId }) => {
                 return;
             }
 
-            // 토큰 체크 (인증 없으면 호출하지 않음)
             const token = sessionStorage.getItem("accessToken");
             if (!token) {
                 setRoomNickname("");
@@ -73,8 +71,8 @@ export const LMSProvider = ({ children, roomId }) => {
                 setRoomNickname(nextNick);
                 setRoomProfileImg(nextImg);
             } catch (err) {
-                // 방별 닉네임은 옵션 값이므로 실패해도 전체 로딩을 막지 않음
-                console.warn("방별 마이페이지 가져오기 실패", err);
+                // 선택적 정보이므로 실패해도 전체 흐름은 유지
+                console.warn("방 마이페이지 조회 실패", err);
                 setRoomNickname("");
                 setRoomProfileImg("");
             }
@@ -82,39 +80,45 @@ export const LMSProvider = ({ children, roomId }) => {
         []
     );
 
-    // Room 정보 가져오기 (context: 스터디원 여부 포함, 비스터디원이면 접근 거부)
+    // 방 컨텍스트 조회 (접근 권한/역할 포함)
     const fetchRoomInfo = useCallback(async (id) => {
         if (!id) {
             setRoom(null);
             setAccessDenied(false);
+            setAccessDeniedReason("");
             return;
         }
+
         try {
             setRoomLoading(true);
             setAccessDenied(false);
+
             const res = await api.get(`/rooms/${id}/context`);
             const data = res.data || {};
-            // snake_case/camelCase 둘 다 허용
             const hostEmail = data.hostUserEmail ?? data.host_user_email ?? "";
+
             if (data.myRole === "NONE") {
                 setRoom(null);
                 setAccessDenied(true);
+                setAccessDeniedReason((data.deniedReason || "").trim());
             } else {
-                // OWNER인데 hostUserEmail이 비어 있으면 현재 사용자 이메일로 채움 (스터디장 권한 유지)
                 const userEmail = user?.email ?? "";
-                const resolvedHostEmail = hostEmail || (data.myRole === "OWNER" ? userEmail : "");
+                const resolvedHostEmail =
+                    hostEmail || (data.myRole === "OWNER" ? userEmail : "");
+
                 setRoom({
                     roomId: data.roomId,
                     title: data.title,
                     hostUserEmail: resolvedHostEmail,
                 });
                 setAccessDenied(false);
+                setAccessDeniedReason("");
             }
         } catch (err) {
-            console.error("방 정보 가져오기 실패", err);
+            console.error("방 정보 조회 실패", err);
             setRoom(null);
-            // 403(권한 없음)일 때만 접근 거부, 그 외(네트워크/500 등)는 거부 플래그 안 함
             setAccessDenied(err.response?.status === 403);
+            setAccessDeniedReason("");
         } finally {
             setRoomLoading(false);
         }
@@ -131,34 +135,30 @@ export const LMSProvider = ({ children, roomId }) => {
         }
     }, [roomId, fetchRoomInfo, fetchRoomMyPage]);
 
-    // 사용자 정보 새로고침
     const refreshUser = useCallback(() => {
         fetchUserInfo();
     }, [fetchUserInfo]);
 
-    // 방별 마이페이지 새로고침
     const refreshRoom = useCallback(() => {
         fetchRoomMyPage(roomId);
     }, [fetchRoomMyPage, roomId]);
 
-    // 닉네임 변경 이벤트 수신 (RoomMyPage 저장 후 LMSHeader 즉시 반영용)
+    // 닉네임 변경 이벤트 반영
     useEffect(() => {
         const onRoomNickUpdated = (e) => {
             const detail = e?.detail || {};
             const targetRoomId = (detail.roomId ?? "").toString().trim();
             const nextNick = (detail.roomNickname || "").trim();
             const current = (roomId ?? "").toString().trim();
-            // roomId 비교 (대소문자/공백 무시)
+
             if (!targetRoomId || !current) return;
             if (targetRoomId.toLowerCase() !== current.toLowerCase()) return;
+
             setRoomNickname(nextNick);
-            // 서버에서 최신 방별 닉네임 재조회 (이중 적용 보장)
             fetchRoomMyPage(roomId);
         };
 
         const onUserNickUpdated = (e) => {
-            // 전역 닉네임 변경 시, 즉시 user.nickname을 패치하고
-            // 이후 백엔드 상태와 동기화를 위해 /users/me 재조회
             const next = (
                 e?.detail?.nickname ||
                 sessionStorage.getItem("nickname") ||
@@ -167,45 +167,36 @@ export const LMSProvider = ({ children, roomId }) => {
             ).trim();
 
             if (next) {
-                setUser((prev) =>
-                    prev ? { ...prev, nickname: next } : prev
-                );
+                setUser((prev) => (prev ? { ...prev, nickname: next } : prev));
             }
             refreshUser();
         };
 
         window.addEventListener("lms:room-nickname-updated", onRoomNickUpdated);
         window.addEventListener("user:nickname-updated", onUserNickUpdated);
+
         return () => {
             window.removeEventListener("lms:room-nickname-updated", onRoomNickUpdated);
             window.removeEventListener("user:nickname-updated", onUserNickUpdated);
         };
     }, [roomId, refreshUser, fetchRoomMyPage]);
 
-    // 표시용 이름 (헤더용: nickname(name) 형식)
+    // 헤더 표시명: roomNickname(name) 우선
     const displayName = user
         ? (() => {
               const roomNick = (roomNickname && roomNickname.trim()) || "";
               const nickname = (user.nickname && user.nickname.trim()) || "";
               const name = (user.name && user.name.trim()) || "";
-              // ✅ 방별 닉네임이 있으면 최우선
-              if (roomNick.length > 0 && name.length > 0) {
-                  return `${roomNick}(${name})`;
-              } else if (roomNick.length > 0) {
-                  return roomNick;
-              } else if (nickname.length > 0 && name.length > 0) {
-                  return `${nickname}(${name})`;
-              } else if (nickname.length > 0) {
-                  return nickname;
-              } else if (name.length > 0) {
-                  return name;
-              } else {
-                  return "사용자";
-              }
+
+              if (roomNick.length > 0 && name.length > 0) return `${roomNick}(${name})`;
+              if (roomNick.length > 0) return roomNick;
+              if (nickname.length > 0 && name.length > 0) return `${nickname}(${name})`;
+              if (nickname.length > 0) return nickname;
+              if (name.length > 0) return name;
+              return "사용자";
           })()
         : "";
 
-    // isHost 계산: user.email === room.hostUserEmail
     const isHost = !!(
         user &&
         room &&
@@ -221,12 +212,12 @@ export const LMSProvider = ({ children, roomId }) => {
         loading,
         roomLoading,
         accessDenied,
+        accessDeniedReason,
         error,
         refreshUser,
         refreshRoom,
         displayName,
         isHost,
-        // 편의 메서드들
         userId: user?.userId || null,
         email: user?.email || null,
         name: user?.name || null,

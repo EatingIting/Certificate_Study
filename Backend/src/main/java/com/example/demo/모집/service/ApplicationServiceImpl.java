@@ -122,6 +122,15 @@ public class ApplicationServiceImpl implements ApplicationService {
         System.out.println("신청자 닉네임: " + requestUserNickname);
         System.out.println("스터디 roomId: " + roomId);
 
+        int leaveHistoryCount = applicationMapper.existsLeaveHistory(roomId, requestUserEmail);
+        if (leaveHistoryCount > 0) {
+            String leaveReason = applicationMapper.getLeaveReason(roomId, requestUserEmail);
+            if ("KICK".equalsIgnoreCase(leaveReason)) {
+                throw new IllegalStateException("스터디장에 의하여 재가입 불가능 합니다.");
+            }
+            throw new IllegalStateException("탈퇴한 스터디방은 재가입 할 수 없습니다.");
+        }
+
         String userGender =
                 applicationMapper.getUserGender(requestUserEmail);
 

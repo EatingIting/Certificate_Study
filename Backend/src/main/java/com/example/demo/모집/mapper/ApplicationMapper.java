@@ -90,4 +90,15 @@ public interface ApplicationMapper {
     //방장 이메일 조회
     String getHostEmailByRoomId(@Param("roomId") String roomId);
 
+    // 탈퇴 이력 존재 여부(존재 시 재가입 차단)
+    int existsLeaveHistory(
+            @Param("roomId") String roomId,
+            @Param("requestUserEmail") String requestUserEmail
+    );
+
+    String getLeaveReason(
+            @Param("roomId") String roomId,
+            @Param("requestUserEmail") String requestUserEmail
+    );
+
 }

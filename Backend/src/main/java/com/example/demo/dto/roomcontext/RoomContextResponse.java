@@ -10,4 +10,5 @@ public class RoomContextResponse {
     private String title;
     private String hostUserEmail;
     private String myRole; // "OWNER" | "MEMBER" | "NONE"
+    private String deniedReason; // e.g. "KICK" | "LEAVE" | null
 }
