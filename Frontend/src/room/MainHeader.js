@@ -18,6 +18,28 @@ const toJoinId = (item) => {
     return hasText(id) ? String(id).trim() : "";
 };
 
+const pickJoinIdFromPayload = (payload) => {
+    if (!payload || typeof payload !== "object") return "";
+    const direct = [
+        payload.joinId,
+        payload.id,
+        payload.applicationId,
+        payload.requestId,
+        payload.targetId,
+        payload.data?.joinId,
+        payload.data?.id,
+        payload.payload?.joinId,
+        payload.payload?.id,
+        payload.notification?.joinId,
+        payload.notification?.id,
+    ];
+    for (const value of direct) {
+        if (!hasText(value)) continue;
+        return String(value).trim();
+    }
+    return "";
+};
+
 const normalizeStatus = (status) => String(status || "").trim().toUpperCase();
 
 const isDecisionStatus = (status) => {
@@ -260,7 +282,19 @@ const MainHeader = () => {
             }
 
             const { shouldShowDot, targetTab } = getNotificationIntent(data);
-            if (shouldShowDot) {
+            const joinId = pickJoinIdFromPayload(data);
+            let canShowImmediateDot = false;
+            if (shouldShowDot && joinId && userId) {
+                const target = targetTab || notificationTargetTabRef.current || "received";
+                const seenKey = target === "sent" ? getSeenSentKey(userId) : getSeenReceivedKey(userId);
+                const seenSet = new Set(readSeenIds(seenKey));
+                canShowImmediateDot = !seenSet.has(joinId);
+            }
+
+            // joinId가 확인되는 알림만 즉시 점등하고,
+            // 나머지는 evaluateNotificationState 결과를 따르도록 하여
+            // 이미 읽은 알림이 반복 점등되는 현상을 방지
+            if (canShowImmediateDot) {
                 setHasNotification(true);
                 writePendingNotification(userId, {
                     hasNotification: true,

@@ -1,10 +1,18 @@
 const LMS_NOTIFICATION_QUEUE_KEY = "lms.notification.queue.v1";
 const MAX_QUEUED_LMS_NOTIFICATIONS = 100;
+const LMS_NOTIFICATION_DISMISSED_KEY = "lms.notification.dismissed.v1";
+const MAX_DISMISSED_LMS_NOTIFICATIONS = 500;
 
 const asText = (value) => {
     if (value == null) return "";
     return String(value).trim();
 };
+
+const normalizeToken = (value) =>
+    asText(value)
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
 
 const parseObjectLike = (value) => {
     if (value == null) return null;
@@ -120,34 +128,77 @@ const writeQueue = (queue) => {
     }
 };
 
+const readDismissedKeys = () => {
+    if (typeof window === "undefined") return [];
+    try {
+        const raw = localStorage.getItem(LMS_NOTIFICATION_DISMISSED_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((v) => asText(v)).filter(Boolean);
+    } catch (e) {
+        return [];
+    }
+};
+
+const writeDismissedKeys = (keys) => {
+    if (typeof window === "undefined") return;
+    try {
+        const unique = [...new Set((keys || []).map((v) => asText(v)).filter(Boolean))];
+        localStorage.setItem(
+            LMS_NOTIFICATION_DISMISSED_KEY,
+            JSON.stringify(unique.slice(0, MAX_DISMISSED_LMS_NOTIFICATIONS))
+        );
+    } catch (e) {
+        // ignore storage failure
+    }
+};
+
 export const buildLmsNotificationDedupeKey = (rawPayload) => {
     const candidates = expandPayloadCandidates(rawPayload);
-    const source = candidates[0] || rawPayload || {};
+    const sources = candidates.length > 0 ? candidates : [rawPayload || {}];
 
-    const externalId = asText(
-        source?.notificationId ||
-            source?.noticeId ||
-            source?.alarmId ||
-            source?.id
-    );
-    if (externalId) return `ID|${externalId}`;
+    // 1) 구조적 타깃 ID 기반 키 (시간값 제외: 재전송/지연 수신에도 동일 키 유지)
+    for (const source of sources) {
+        const type = asText(source?.notificationType || source?.type).toUpperCase();
+        const roomId = asText(source?.roomId || source?.subjectId || source?.classId);
+        const postId = asText(source?.postId || source?.boardPostId || source?.articleId);
+        const commentId = asText(source?.commentId || source?.replyId || source?.targetCommentId);
+        const assignmentId = asText(source?.assignmentId || source?.taskId || source?.homeworkId);
+        const scheduleId = asText(source?.scheduleId || source?.studyScheduleId || source?.calendarId);
+        if (postId || commentId || assignmentId || scheduleId) {
+            return ["STRUCT", type, roomId, postId, commentId, assignmentId, scheduleId].join("|");
+        }
+    }
 
+    // 2) 서버가 준 고유 알림 ID
+    for (const source of sources) {
+        const externalId = asText(
+            source?.notificationId ||
+                source?.noticeId ||
+                source?.alarmId ||
+                source?.id
+        );
+        if (externalId) return `ID|${externalId}`;
+    }
+
+    // 3) 텍스트 기반 폴백 키
+    const source = sources[0] || {};
     const type = asText(source?.notificationType || source?.type).toUpperCase();
-    const roomId = asText(source?.roomId || source?.subjectId);
-    const postId = asText(source?.postId || source?.boardPostId || source?.articleId);
-    const assignmentId = asText(source?.assignmentId || source?.taskId || source?.homeworkId);
-    const scheduleId = asText(source?.scheduleId || source?.studyScheduleId || source?.calendarId);
-    const title = asText(
+    const roomId = asText(source?.roomId || source?.subjectId || source?.classId);
+    const title = normalizeToken(
         source?.title ||
             source?.postTitle ||
             source?.assignmentTitle ||
             source?.scheduleTitle ||
             source?.subject
     );
-    const content = asText(source?.content || source?.message || source?.description || source?.comment);
-    const createdAt = asText(source?.createdAt || source?.timestamp || source?.sentAt || source?.createdDate);
+    const content = normalizeToken(
+        source?.content || source?.message || source?.description || source?.comment || source?.notificationMessage
+    );
+    const path = normalizeToken(source?.path || source?.url || source?.link || source?.targetPath);
 
-    return [type, roomId, postId, assignmentId, scheduleId, title, content, createdAt].join("|");
+    return ["TEXT", type, roomId, title, content, path].join("|");
 };
 
 export const isLmsNotificationPayload = (rawPayload) => {
@@ -155,11 +206,53 @@ export const isLmsNotificationPayload = (rawPayload) => {
     return candidates.some((candidate) => looksLikeLmsNotification(candidate));
 };
 
+export const isDismissedLmsNotification = (rawPayloadOrDedupeKey) => {
+    if (!rawPayloadOrDedupeKey) return false;
+    const targetKey =
+        typeof rawPayloadOrDedupeKey === "string"
+            ? asText(rawPayloadOrDedupeKey)
+            : buildLmsNotificationDedupeKey(rawPayloadOrDedupeKey);
+    if (!targetKey) return false;
+    const dismissedSet = new Set(readDismissedKeys());
+    return dismissedSet.has(targetKey);
+};
+
+export const markLmsNotificationDismissed = (rawPayloadOrDedupeKey) => {
+    if (!rawPayloadOrDedupeKey) return;
+    const targetKey =
+        typeof rawPayloadOrDedupeKey === "string"
+            ? asText(rawPayloadOrDedupeKey)
+            : buildLmsNotificationDedupeKey(rawPayloadOrDedupeKey);
+    if (!targetKey) return;
+    const dismissed = readDismissedKeys();
+    dismissed.unshift(targetKey);
+    writeDismissedKeys(dismissed);
+};
+
+export const markLmsNotificationsDismissedByDedupeKeys = (dedupeKeys) => {
+    if (!Array.isArray(dedupeKeys) || dedupeKeys.length === 0) return;
+    const dismissed = readDismissedKeys();
+    dedupeKeys.forEach((key) => {
+        const normalized = asText(key);
+        if (!normalized) return;
+        dismissed.unshift(normalized);
+    });
+    writeDismissedKeys(dismissed);
+};
+
+export const markAllQueuedLmsNotificationsDismissed = () => {
+    const queue = readQueue();
+    const keys = queue.map((item) => asText(item?.dedupeKey)).filter(Boolean);
+    markLmsNotificationsDismissedByDedupeKeys(keys);
+};
+
 export const enqueueLmsNotification = (rawPayload) => {
     if (!rawPayload || !isLmsNotificationPayload(rawPayload)) return;
 
     const queue = readQueue();
     const dedupeKey = buildLmsNotificationDedupeKey(rawPayload);
+
+    if (dedupeKey && isDismissedLmsNotification(dedupeKey)) return;
 
     if (dedupeKey && queue.some((item) => item?.dedupeKey === dedupeKey)) return;
 
@@ -180,9 +273,19 @@ export const drainQueuedLmsNotifications = () => {
 };
 
 export const readQueuedLmsNotifications = () => {
-    return readQueue()
-        .map((item) => item?.payload || null)
-        .filter(Boolean);
+    const dismissedSet = new Set(readDismissedKeys());
+    const queue = readQueue();
+    const filtered = queue.filter((item) => {
+        const key = asText(item?.dedupeKey);
+        if (!key) return true;
+        return !dismissedSet.has(key);
+    });
+
+    if (filtered.length !== queue.length) {
+        writeQueue(filtered);
+    }
+
+    return filtered.map((item) => item?.payload || null).filter(Boolean);
 };
 
 export const removeQueuedLmsNotification = (rawPayloadOrDedupeKey) => {

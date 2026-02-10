@@ -283,6 +283,9 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const lastCanvasSizeRef = useRef({ width: 0, height: 0 }); // canvas 크기 추적
     const hasRenderedFirstFrameRef = useRef(false);
     const [hasRenderedFirstFrame, setHasRenderedFirstFrame] = useState(false);
+    const lastValidFrameAtRef = useRef(0);
+    const [isFrameStalled, setIsFrameStalled] = useState(false);
+    const isFrameStalledRef = useRef(false);
 
     const safeUser = user ?? {
         id: "",
@@ -355,10 +358,10 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
         // 🔥 카메라가 꺼져 있으면(본인 선택 또는 방장 강제) 항상 아바타 타일로 표시
         // — 방장 강제 끄기 시 타일이 검은 화면으로 바뀌는 문제 방지
-        if (safeUser.cameraOff) return false;
-
         const hasLiveTrack = stream.getVideoTracks().some(t => t.readyState === "live");
         if (hasLiveTrack) return true;
+
+        if (safeUser.cameraOff) return false;
 
         // 스트림에 video track이 있으면 일단 렌더링 (곧 live가 될 수 있음)
         if (stream.getVideoTracks().length > 0) return true;
@@ -394,11 +397,19 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     // 🔥 Canvas/비디오는 displayStream 기준 (트랙이 같으면 effect 재실행 안 함)
     const displayStreamId = displayStream?.id ?? null;
+    const displayVideoTrackId = displayStream?.getVideoTracks?.()?.[0]?.id ?? null;
 
     useEffect(() => {
         hasRenderedFirstFrameRef.current = false;
         setHasRenderedFirstFrame(false);
-    }, [displayStreamId, safeUser.id, isScreen]);
+        lastValidFrameAtRef.current = 0;
+        setIsFrameStalled(false);
+        isFrameStalledRef.current = false;
+    }, [displayVideoTrackId, safeUser.id, isScreen]);
+
+    useEffect(() => {
+        isFrameStalledRef.current = isFrameStalled;
+    }, [isFrameStalled]);
 
     // 🔥 Canvas 기반 렌더링 useLayoutEffect (PiP 복귀 시 검은화면 방지: 페인트 전에 캐시 복원)
     useLayoutEffect(() => {
@@ -487,6 +498,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                     hasRenderedFirstFrameRef.current = true;
                     setHasRenderedFirstFrame(true);
                 }
+                lastValidFrameAtRef.current = Date.now();
+                if (isFrameStalledRef.current) setIsFrameStalled(false);
                 const needsResize = canvas.width !== v.videoWidth || canvas.height !== v.videoHeight;
 
                 if (needsResize) {
@@ -518,7 +531,12 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                 }
             } else {
                 // 🔥 hasValidFrame이 false일 때 캐시에서 복원
-                restoreFromCache();
+                const restored = restoreFromCache();
+                const lastOk = lastValidFrameAtRef.current || 0;
+                const stalledFor = lastOk > 0 ? (Date.now() - lastOk) : 0;
+                if (!restored && hasRenderedFirstFrameRef.current && stalledFor >= 6000) {
+                    if (!isFrameStalledRef.current) setIsFrameStalled(true);
+                }
             }
 
             rafIdRef.current = requestAnimationFrame(drawFrame);
@@ -717,7 +735,8 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
 
     // 서버/복원 스냅샷에서 재접속 상태면 자기 자신 포함 스피너 표시
-    const shouldShowReconnecting = isReconnecting && !hasLiveVideoTrack;
+    const shouldShowReconnecting = (isReconnecting || (isFrameStalled && !safeUser.cameraOff && !isScreen)) && !hasLiveVideoTrack;
+    const shouldHideVideoByStall = isFrameStalled && !safeUser.cameraOff && !isScreen;
     const shouldHoldRemoteUntilFirstFrame =
         !safeUser.isMe &&
         !isScreen &&
@@ -778,14 +797,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                         display: "block",
                         // 🔥 shouldRenderVideo가 false여도 canvas를 DOM에 유지 (마지막 프레임 보존)
                         // opacity로 숨기면 canvas 내용이 유지됨
-                        opacity: ((shouldRenderVideo && !shouldHoldRemoteUntilFirstFrame) || shouldShowReconnecting) ? 1 : 0,
-                        position: ((shouldRenderVideo && !shouldHoldRemoteUntilFirstFrame) || shouldShowReconnecting) ? "relative" : "absolute",
+                        opacity: ((shouldRenderVideo && !shouldHoldRemoteUntilFirstFrame && !shouldHideVideoByStall) || shouldShowReconnecting) ? 1 : 0,
+                        position: ((shouldRenderVideo && !shouldHoldRemoteUntilFirstFrame && !shouldHideVideoByStall) || shouldShowReconnecting) ? "relative" : "absolute",
                         pointerEvents: shouldRenderVideo ? "auto" : "none",
                     }}
                 />
 
                 {/* 카메라 꺼짐 또는 스트림 없음 - canvas 위에 겹쳐서 표시 */}
-                {(!shouldRenderVideo || shouldHoldRemoteUntilFirstFrame) && !shouldShowReconnecting && (
+                {(!shouldRenderVideo || shouldHoldRemoteUntilFirstFrame || shouldHideVideoByStall) && !shouldShowReconnecting && (
                     <div
                         className="camera-off-placeholder"
                         style={isMain ? { position: "absolute", zIndex: 1, top: "50%", left: "50%", transform: "translate(-50%, -50%)" } : { position: "relative", zIndex: 1 }}

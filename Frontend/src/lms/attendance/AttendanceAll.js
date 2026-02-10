@@ -80,6 +80,33 @@ const calcTotalMinutes = (startHHMM, endHHMM) => {
   return Math.max(0, end - start);
 };
 
+const maskName = (value) => {
+  if (!value || typeof value !== "string") return "";
+  const s = value.trim();
+  if (!s) return "";
+  if (s.length <= 1) return "*";
+  if (s.length === 2) return `${s[0]}*`;
+  return `${s[0]}*${s[s.length - 1]}`;
+};
+
+const normalizeMaskedSource = (value) => {
+  if (!value || typeof value !== "string") return "";
+  let s = value.trim();
+  if (!s) return "";
+  // 서버/기존 데이터가 "(김*재)" 또는 "김*재)" 형태로 들어와도
+  // UI 포맷팅 시 괄호가 중복되지 않도록 정규화
+  s = s.replace(/^\(+/, "").replace(/\)+$/, "");
+  return s.trim();
+};
+
+const formatDisplayName = (nickname, name) => {
+  const nick = (nickname || "").trim();
+  const real = normalizeMaskedSource(name);
+  const masked = maskName(real || nick);
+  if (nick && masked) return `${nick}(${masked})`;
+  return nick || masked || "-";
+};
+
 /** 출석 판정: 참석시간/회차시간 >= requiredRatio */
 const judgeAttendance = (log, fallbackTotalMin, requiredRatio) => {
   const totalMin =
@@ -167,7 +194,8 @@ const AttendanceAll = () => {
               ...log,
               memberId:
                 log?.memberId ?? p?.id ?? p?.userId ?? p?.email ?? `participant-${idx}`,
-              name: log?.name || p?.nickname || p?.name || p?.email || `멤버 ${idx + 1}`,
+              name: log?.name || p?.name || p?.email || `멤버 ${idx + 1}`,
+              nickname: log?.nickname || p?.nickname || "",
               sessions: Array.isArray(log?.sessions) ? log.sessions : [],
             });
             return;
@@ -175,7 +203,8 @@ const AttendanceAll = () => {
 
           merged.push({
             memberId: p?.id ?? p?.userId ?? p?.email ?? `participant-${idx}`,
-            name: p?.nickname || p?.name || p?.email || `멤버 ${idx + 1}`,
+            name: p?.name || p?.email || `멤버 ${idx + 1}`,
+            nickname: p?.nickname || "",
             sessions: [],
           });
         });
@@ -186,7 +215,8 @@ const AttendanceAll = () => {
           merged.push({
             ...log,
             memberId: log?.memberId ?? log?.userId ?? log?.email ?? `attendance-${idx}`,
-            name: log?.name || log?.nickname || log?.email || `멤버 ${idx + 1}`,
+            name: log?.name || log?.email || `멤버 ${idx + 1}`,
+            nickname: log?.nickname || "",
             sessions: Array.isArray(log?.sessions) ? log.sessions : [],
           });
         });
@@ -243,7 +273,7 @@ const AttendanceAll = () => {
 
       return {
         memberId: m.memberId,
-        name: m.name,
+        displayName: formatDisplayName(m.nickname, m.name),
         sessionsView,
         presentCount,
         absentCount,
@@ -291,7 +321,7 @@ const AttendanceAll = () => {
             <table className="at-table">
               <thead>
                 <tr>
-                  <th className="at-th-name">이름</th>
+                  <th className="at-th-name">닉네임(이름)</th>
                   <th className="at-th-att">출석률</th>
                   {Array.from({ length: visibleTotalSessions }).map((_, i) => (
                     <th key={i} className="at-th-session">
@@ -306,7 +336,7 @@ const AttendanceAll = () => {
                   <tr key={r.memberId}>
                     <td className="at-td-name">
                       <div className="at-person">
-                        <span className="at-name">{r.name}</span>
+                        <span className="at-name">{r.displayName}</span>
                       </div>
                     </td>
 

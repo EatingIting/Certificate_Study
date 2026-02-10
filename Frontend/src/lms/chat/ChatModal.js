@@ -136,6 +136,7 @@ const ChatModal = ({ roomId, roomName }) => {
     });
 
     const ws = useRef(null);        // 웹소켓 객체
+    const reconnectTimerRef = useRef(null);
     const scrollRef = useRef(null); // 스크롤 자동 이동용
     const modalRef = useRef(null);  // 모달 DOM
     const streamingTimers = useRef(new Map()); // AI 타자 효과용 타이머
@@ -503,8 +504,13 @@ const ChatModal = ({ roomId, roomName }) => {
                 setUnreadCount(unread);
             } else {
                 // 읽음 기록이 없으면(처음 진입/브라우저 재설치 등) 기존 메시지를 모두 안 읽음으로 취급
-                const unread = chatMessages.filter(msg => msg.userId !== myInfo.userId).length;
-                setUnreadCount(unread);
+                if (chatMessages.length > 0) {
+                    const lastMsg = chatMessages[chatMessages.length - 1];
+                    updateLastReadTime(lastMsg?.createdAt);
+                } else {
+                    updateLastReadTime();
+                }
+                setUnreadCount(0);
             }
         }
     }, [isOpen, chatMessages, roomId, myInfo]); // 메시지가 추가될 때마다 재계산
@@ -767,57 +773,113 @@ const ChatModal = ({ roomId, roomName }) => {
     // 4. WebSocket 연결 및 핸들링
     // =================================================================
     useEffect(() => {
-        if (!roomId || !myInfo || !roomNickname) return;
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) return;
+        if (!roomId || !myInfo?.userId) return;
 
-        const wsUrlStr = `${wsUrl}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(roomNickname)}`;
-        
-        console.log("📡 웹소켓 연결 시도:", roomNickname);
-        const socket = new WebSocket(wsUrlStr);
-        ws.current = socket;
+        let active = true;
+        let retryDelay = 1000;
+        const maxRetryDelay = 10000;
 
-        socket.onopen = () => { console.log("✅ 웹소켓 연결 성공!"); };
-
-        socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-
-            if (data.type === "TALK") {
-                setChatMessages(prev => {
-                    const lastMsg = prev[prev.length - 1];
-                    if (lastMsg && lastMsg.message === data.message && lastMsg.userId === data.userId && 
-                        (new Date().getTime() - new Date(lastMsg.createdAt).getTime() < 500)) return prev;
-                    
-                    return [...prev, {
-                        userId: data.userId,
-                        userName: data.userName,
-                        message: data.message,
-                        isSticker: STICKER_LIST.includes(data.message),
-                        createdAt: data.createdAt || new Date().toISOString()
-                    }];
-                });
-
-            } else if (data.type === "USERS_UPDATE") {
-                const uniqueUsers = data.users.filter((v, i, a) => a.findIndex(t => (t.userId === v.userId)) === i);
-                setUserList(uniqueUsers);
-            }
+        const clearReconnectTimer = () => {
+            if (!reconnectTimerRef.current) return;
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
         };
 
-        socket.onclose = () => {
-            console.log("🔌 웹소켓 연결 종료");
-            if (ws.current === socket) {
-                ws.current = null;
-            }
+        const connect = () => {
+            if (!active) return;
+            if (ws.current && (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)) return;
+
+            const effectiveName = (roomNickname || myInfo.userName || "익명").trim();
+            const wsUrlStr = `${wsUrl}/ws/chat/${roomId}?userId=${encodeURIComponent(myInfo.userId)}&userName=${encodeURIComponent(effectiveName)}`;
+            console.log("📡 웹소켓 연결 시도:", effectiveName);
+
+            const socket = new WebSocket(wsUrlStr);
+            ws.current = socket;
+
+            socket.onopen = () => {
+                retryDelay = 1000;
+                clearReconnectTimer();
+                console.log("✅ 웹소켓 연결 성공!");
+            };
+
+            socket.onmessage = (event) => {
+                let data = null;
+                try {
+                    data = JSON.parse(event.data);
+                } catch {
+                    return;
+                }
+
+                if (data.type === "TALK") {
+                    setChatMessages(prev => {
+                        const createdAt = data.createdAt || new Date().toISOString();
+                        const exists = prev.some((msg) =>
+                            String(msg.userId) === String(data.userId) &&
+                            String(msg.message) === String(data.message) &&
+                            String(msg.createdAt) === String(createdAt)
+                        );
+                        if (exists) return prev;
+
+                        return [...prev, {
+                            userId: data.userId,
+                            userName: data.userName,
+                            message: data.message,
+                            isSticker: STICKER_LIST.includes(data.message),
+                            createdAt,
+                            messageType: data.messageType || "TALK"
+                        }];
+                    });
+                } else if (data.type === "USERS_UPDATE") {
+                    const users = Array.isArray(data.users) ? data.users : [];
+                    const uniqueUsers = users.filter((v, i, a) => a.findIndex(t => (t.userId === v.userId)) === i);
+                    setUserList(uniqueUsers);
+                }
+            };
+
+            socket.onclose = () => {
+                console.log("🔌 웹소켓 연결 종료");
+                if (ws.current === socket) {
+                    ws.current = null;
+                }
+                if (!active) return;
+                if (reconnectTimerRef.current) return;
+                reconnectTimerRef.current = setTimeout(() => {
+                    reconnectTimerRef.current = null;
+                    connect();
+                    retryDelay = Math.min(maxRetryDelay, retryDelay * 2);
+                }, retryDelay);
+            };
         };
+
+        const handleOnline = () => {
+            clearReconnectTimer();
+            connect();
+        };
+
+        const handleVisibility = () => {
+            if (document.visibilityState !== "visible") return;
+            handleOnline();
+        };
+
+        connect();
+        window.addEventListener("online", handleOnline);
+        document.addEventListener("visibilitychange", handleVisibility);
 
         return () => {
-            if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            active = false;
+            window.removeEventListener("online", handleOnline);
+            document.removeEventListener("visibilitychange", handleVisibility);
+            clearReconnectTimer();
+
+            const socket = ws.current;
+            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
                 socket.close();
             }
             if (ws.current === socket) {
                 ws.current = null;
             }
         };
-    }, [roomId, myInfo, wsUrl, roomNickname]); 
+    }, [roomId, myInfo?.userId, myInfo?.userName, wsUrl, roomNickname]); 
 
     // AI 로딩 및 스크롤 처리
     useEffect(() => {
