@@ -296,8 +296,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const [trackVersion, setTrackVersion] = useState(0);
 
     const hasLiveVideoTrack = useMemo(() => {
-        return stream?.getVideoTracks().some((t) => t.readyState === "live" && !t.muted) ?? false;
-    }, [stream, trackVersion]);
+        // 로컬 트랙은 전환 중 muted가 일시적으로 true가 될 수 있으므로 live만 본다.
+        // 원격 트랙은 muted를 함께 보아 "live지만 실제 프레임 없음" 상태의 검은화면 오탐을 줄인다.
+        return stream?.getVideoTracks().some((t) => {
+            if (t.readyState !== "live") return false;
+            if (safeUser.isMe) return true;
+            return !t.muted;
+        }) ?? false;
+    }, [stream, trackVersion, safeUser.isMe]);
 
     useEffect(() => {
         const track = stream?.getVideoTracks()[0];
@@ -700,7 +706,7 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
 
     // 서버/복원 스냅샷에서 재접속 상태면 자기 자신 포함 스피너 표시
-    const shouldShowReconnecting = isReconnecting;
+    const shouldShowReconnecting = isReconnecting && !hasLiveVideoTrack;
 
     // pip 모드 여부 확인 (렌더링 시점)
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
@@ -832,6 +838,28 @@ function MeetingPage({ portalRoomId }) {
         registerLocalStream, // 🔥 getUserMedia 스트림을 MeetingContext에 등록 (언마운트 후에도 정리 가능)
         pipVideoRef, // 🔥 브라우저 PIP용 숨겨진 video element ref
     } = useMeeting();
+    const isPipModeRef = useRef(!!isPipMode);
+    const isBrowserPipModeRef = useRef(!!isBrowserPipMode);
+    const sidebarPipTransitionRef = useRef(false);
+    useEffect(() => {
+        isPipModeRef.current = !!isPipMode;
+    }, [isPipMode]);
+    useEffect(() => {
+        isBrowserPipModeRef.current = !!isBrowserPipMode;
+    }, [isBrowserPipMode]);
+    useEffect(() => {
+        const markTransition = () => {
+            sidebarPipTransitionRef.current = true;
+            try { sessionStorage.setItem("sidebarNavigation", "true"); } catch { }
+        };
+        window.addEventListener("sidebar:navigation", markTransition);
+        return () => window.removeEventListener("sidebar:navigation", markTransition);
+    }, []);
+    useEffect(() => {
+        if (!location.pathname.includes("/MeetingRoom/")) return;
+        sidebarPipTransitionRef.current = false;
+        try { sessionStorage.removeItem("sidebarNavigation"); } catch { }
+    }, [location.pathname]);
 
     // roomTitle, email, room 정보 (LMSContext에서)
     const { roomTitle, email, user, room, roomNickname } = useLMS();
@@ -914,6 +942,23 @@ function MeetingPage({ portalRoomId }) {
         // cleanup: 컴포넌트 언마운트 시 제거
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
+            const isSidebarPipTransition =
+                !!sidebarPipTransitionRef.current ||
+                (() => {
+                    try { return sessionStorage.getItem("sidebarNavigation") === "true"; } catch { return false; }
+                })();
+            const preserveForPipTransition =
+                !isLeavingRef.current &&
+                (
+                    !!document.pictureInPictureElement ||
+                    !!isPipModeRef.current ||
+                    !!isBrowserPipModeRef.current ||
+                    isSidebarPipTransition
+                );
+            if (preserveForPipTransition) {
+                console.log("[MeetingPage] PIP/사이드바 전환 중 - hidden PIP video cleanup 스킵");
+                return;
+            }
             if (pipVideoRef.current) {
                 try {
                     pipVideoRef.current.pause();
@@ -1076,6 +1121,7 @@ function MeetingPage({ portalRoomId }) {
     const [joinEligibilityChecked, setJoinEligibilityChecked] = useState(false);
     const [joinBlockedByKick, setJoinBlockedByKick] = useState(false);
     const joinKickHandledRef = useRef(false);
+    const springWsRoomIdRef = useRef(null);
 
     useEffect(() => {
         joinKickHandledRef.current = false;
@@ -1083,11 +1129,6 @@ function MeetingPage({ portalRoomId }) {
         setJoinBlockedByKick(false);
 
         if (!roomId) return;
-
-        try { wsRef.current?.close(); } catch { }
-        wsRef.current = null;
-        try { sfuWsRef.current?.close(); } catch { }
-        sfuWsRef.current = null;
 
         let cancelled = false;
 
@@ -1511,8 +1552,31 @@ function MeetingPage({ portalRoomId }) {
     useEffect(() => { isFilterPreparingRef.current = isFilterPreparing; }, [isFilterPreparing]);
 
     const computeOutboundMediaState = useCallback(() => {
-        const muted = micPermissionRef.current !== "granted" || !micOnRef.current;
-        const cameraOff = camPermissionRef.current !== "granted" || !camOnRef.current;
+        const localAudioTracks = [
+            ...(localStreamRef.current?.getAudioTracks?.() ?? []),
+        ];
+        const localVideoTracks = [
+            ...(localStreamRef.current?.getVideoTracks?.() ?? []),
+            ...(canvasPipelineOutTrackRef.current ? [canvasPipelineOutTrackRef.current] : []),
+            ...(faceFilterOutTrackRef.current ? [faceFilterOutTrackRef.current] : []),
+            ...(avatarOutTrackRef.current ? [avatarOutTrackRef.current] : []),
+            ...(lastCameraTrackRef.current ? [lastCameraTrackRef.current] : []),
+        ];
+
+        const hasLiveEnabledAudio = localAudioTracks.some(
+            (t) => t && t.readyState === "live" && t.enabled !== false
+        );
+        const hasLiveEnabledVideo = localVideoTracks.some(
+            (t) => t && t.readyState === "live" && t.enabled !== false
+        );
+
+        // 권한 상태가 일시적으로 흔들려도 실제 live 트랙이 있으면 OFF로 전파하지 않는다.
+        const muted =
+            !micOnRef.current ||
+            (!hasLiveEnabledAudio && micPermissionRef.current !== "granted");
+        const cameraOff =
+            !camOnRef.current ||
+            (!hasLiveEnabledVideo && camPermissionRef.current !== "granted");
         return { muted, cameraOff };
     }, []);
 
@@ -4171,6 +4235,8 @@ function MeetingPage({ portalRoomId }) {
 
             // 🔥 MeetingContext의 requestBrowserPip 사용 (polling 포함)
             console.log("[PiP] MeetingContext requestBrowserPip 호출");
+            sidebarPipTransitionRef.current = true;
+            try { sessionStorage.setItem("sidebarNavigation", "true"); } catch { }
             const success = await requestBrowserPip(video, stream, peerName, peerId);
 
             if (!success) {
@@ -5382,10 +5448,16 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             // ❗ PIP 모드일 때는 endMeeting 호출하지 않음 (polling 유지)
             // 🔥 단, isLeavingRef가 true이면 통화 종료 중이므로 cleanup을 반드시 수행
+            const isSidebarPipTransition =
+                !!sidebarPipTransitionRef.current ||
+                (() => {
+                    try { return sessionStorage.getItem("sidebarNavigation") === "true"; } catch { return false; }
+                })();
             const isInRealPipMode =
                 !!document.pictureInPictureElement ||
                 !!isPipMode ||
-                !!isBrowserPipMode;
+                !!isBrowserPipMode ||
+                isSidebarPipTransition;
 
             if (isInRealPipMode && !isLeavingRef.current) {
                 // 🔥 사이드바 자동 PiP 진입(라우트 이동) 시 여기로 들어옴
@@ -5401,7 +5473,10 @@ function MeetingPage({ portalRoomId }) {
             }
 
             // 🔥 모집페이지 등으로 나갈 때 유예 없이 즉시 퇴장 — producer 먼저 끊어 상대 타일 즉시 제거
-            isLeavingRef.current = true;
+            if (!isLeavingRef.current) {
+                console.log("[MeetingPage] unmount without explicit leave - destructive cleanup skipped");
+                return;
+            }
             try {
                 producersRef.current.forEach((p) => {
                     try { p.close(); } catch { }
@@ -5502,6 +5577,8 @@ function MeetingPage({ portalRoomId }) {
         const handler = () => {
             const video = document.querySelector('video[data-main-video="main"]');
             if (video) {
+                sidebarPipTransitionRef.current = true;
+                try { sessionStorage.setItem("sidebarNavigation", "true"); } catch { }
                 requestBrowserPip(video).catch(() => { });
             }
         };
@@ -6292,8 +6369,17 @@ function MeetingPage({ portalRoomId }) {
         let pingInterval = null; // 💓 핑 타이머 변수
 
         const connect = () => {
-            if (wsRef.current) {
-                wsRef.current.close();
+            const existingWs = wsRef.current;
+            const existingState = existingWs?.readyState;
+            const sameRoomAlive =
+                existingWs &&
+                springWsRoomIdRef.current === String(roomId) &&
+                (existingState === WebSocket.OPEN || existingState === WebSocket.CONNECTING);
+            if (sameRoomAlive) {
+                return;
+            }
+            if (existingWs) {
+                try { existingWs.close(); } catch { }
                 wsRef.current = null;
             }
 
@@ -6327,6 +6413,7 @@ function MeetingPage({ portalRoomId }) {
             }
             ws = new WebSocket(wsUrl);
             wsRef.current = ws;
+            springWsRoomIdRef.current = String(roomId);
 
             ws.onopen = () => {
                 console.log("✅ SPRING WS CONNECTED");
@@ -6359,6 +6446,7 @@ function MeetingPage({ portalRoomId }) {
             ws.onclose = () => {
                 console.log("❌ WS CLOSED");
                 setChatConnected(false);
+                if (wsRef.current === ws) springWsRoomIdRef.current = null;
                 if (pingInterval) clearInterval(pingInterval); // 타이머 정리
             };
 
@@ -7087,6 +7175,7 @@ function MeetingPage({ portalRoomId }) {
             } catch { }
 
             wsRef.current = null;
+            springWsRoomIdRef.current = null;
         };
     }, [roomId, subjectId, scheduleId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState, rememberParticipantMediaState, rememberParticipantMediaStateByKeys, getRememberedParticipantMediaState, joinEligibilityChecked, joinBlockedByKick]); // subjectId/scheduleId 포함 시 DB 저장용
 

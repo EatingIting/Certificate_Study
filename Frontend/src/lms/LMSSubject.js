@@ -64,6 +64,7 @@ function LMSSubjectInner() {
 
     const [pipClosing, setPipClosing] = useState(false);
     const pipLeaveTimerRef = useRef(null);
+    const pendingPipReturnRef = useRef(false);
 
     let location = useLocation();
     let navigate = useNavigate();
@@ -124,7 +125,12 @@ function LMSSubjectInner() {
     } = useMeeting();
 
     // MeetingPage를 단일 인스턴스로 유지
-    const showMeeting = location.pathname.includes("MeetingRoom") || ((isPipMode || isBrowserPipMode) && !!roomId);
+    const isOnMeetingRoom = location.pathname.includes("MeetingRoom");
+    const showMeeting =
+        isOnMeetingRoom ||
+        !!isInMeeting ||
+        ((isPipMode || isBrowserPipMode) && !!roomId) ||
+        (!!customPipData && !!roomId);
     const meetingContainerRef = useRef(null);
     const [meetingContainerReady, setMeetingContainerReady] = useState(false);
 
@@ -132,7 +138,6 @@ function LMSSubjectInner() {
         if (!showMeeting) setMeetingContainerReady(false);
     }, [showMeeting]);
 
-    const isOnMeetingRoom = location.pathname.includes("MeetingRoom");
     const prevPathRef = useRef(location.pathname);
     const [meetingRevealReady, setMeetingRevealReady] = useState(true);
 
@@ -170,12 +175,24 @@ function LMSSubjectInner() {
             const targetPath = savedScheduleId
                 ? `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}?scheduleId=${encodeURIComponent(savedScheduleId)}`
                 : `/lms/${savedSubjectId}/MeetingRoom/${savedRoomId}`;
+            pendingPipReturnRef.current = true;
             navigate(targetPath, { replace: true });
-            setTimeout(() => stopCustomPip(), 120);
         } else {
             stopCustomPip();
         }
     }, [navigate, stopCustomPip]);
+
+    useEffect(() => {
+        if (!pendingPipReturnRef.current) return;
+        if (!location.pathname.includes("MeetingRoom")) return;
+
+        const timer = setTimeout(() => {
+            stopCustomPip();
+            pendingPipReturnRef.current = false;
+        }, 180);
+
+        return () => clearTimeout(timer);
+    }, [location.pathname, stopCustomPip]);
 
     // 커스텀 PiP -> 회의 종료
     const handlePipLeave = useCallback(() => {
