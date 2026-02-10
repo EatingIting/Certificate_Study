@@ -761,14 +761,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                         display: "block",
                         // 🔥 shouldRenderVideo가 false여도 canvas를 DOM에 유지 (마지막 프레임 보존)
                         // opacity로 숨기면 canvas 내용이 유지됨
-                        opacity: shouldRenderVideo ? 1 : 0,
-                        position: shouldRenderVideo ? "relative" : "absolute",
+                        opacity: (shouldRenderVideo || shouldShowReconnecting) ? 1 : 0,
+                        position: (shouldRenderVideo || shouldShowReconnecting) ? "relative" : "absolute",
                         pointerEvents: shouldRenderVideo ? "auto" : "none",
                     }}
                 />
 
                 {/* 카메라 꺼짐 또는 스트림 없음 - canvas 위에 겹쳐서 표시 */}
-                {!shouldRenderVideo && (
+                {!shouldRenderVideo && !shouldShowReconnecting && (
                     <div
                         className="camera-off-placeholder"
                         style={isMain ? { position: "absolute", zIndex: 1, top: "50%", left: "50%", transform: "translate(-50%, -50%)" } : { position: "relative", zIndex: 1 }}
