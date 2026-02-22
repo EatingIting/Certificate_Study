@@ -39,95 +39,95 @@
 로그인 전 메인 페이지입니다. 서비스 소개, 주요 기능, 진입 동선을 한 화면에서 확인할 수 있습니다.
 
 ### 2.
-<img src="README_assets/cropped/2.png" width="760" alt="screen-2" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/2.png" width="760" alt="screen-2" />
 OAuth2 로그인 선택 페이지입니다. 소셜 계정 기반으로 빠르게 인증하고 서비스에 접근할 수 있습니다.
 
 ### 3.
-<img src="README_assets/cropped/3.png" width="760" alt="screen-3" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/3.png" width="760" alt="screen-3" />
 일반 로그인 페이지입니다. 이메일/비밀번호 인증으로 기존 계정 사용자가 바로 로그인할 수 있습니다.
 
 ### 4.
-<img src="README_assets/cropped/4.png" width="760" alt="screen-4" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/4.png" width="760" alt="screen-4" />
 일반 회원가입 페이지입니다. 신규 사용자 정보 입력과 계정 생성 절차를 제공합니다.
 
 ### 5.
-<img src="README_assets/cropped/5.png" width="760" alt="screen-5" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/5.png" width="760" alt="screen-5" />
 로그인 후 메인 페이지입니다. 사용자 맞춤 상태에서 스터디 탐색, 클래스룸 이동, 알림 확인이 가능합니다.
 
 ### 6.
-<img src="README_assets/cropped/6.png" width="760" alt="screen-6" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/6.png" width="760" alt="screen-6" />
 스터디 모집 페이지입니다. 개설된 스터디 목록을 확인하고 조건에 맞는 스터디를 찾아 신청할 수 있습니다.
 
 ### 7.
-<img src="README_assets/cropped/7.png" width="760" alt="screen-7" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/7.png" width="760" alt="screen-7" />
 스터디 그룹 만들기 페이지입니다. 스터디명, 카테고리, 모집 조건 등 기본 정보를 설정합니다.
 
 ### 8.
-<img src="README_assets/cropped/8.png" width="760" alt="screen-8" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/8.png" width="760" alt="screen-8" />
 스터디 그룹 만들기 페이지(상동)입니다. 생성 폼의 추가 옵션과 상세 입력 항목을 확인할 수 있습니다.
 
 ### 9.
-<img src="README_assets/cropped/9.png" width="760" alt="screen-9" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/9.png" width="760" alt="screen-9" />
 가입한 클래스룸 확인 페이지입니다. 내가 참여 중인 클래스룸 목록과 진입 상태를 한눈에 볼 수 있습니다.
 
 ### 10.
-<img src="README_assets/cropped/10.png" width="760" alt="screen-10" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/10.png" width="760" alt="screen-10" />
 스터디 모집 페이지 내 마이페이지 화면입니다. 내 신청 내역, 활동 정보, 개인 설정 동선을 제공합니다.
 
 ### 11.
-<img src="README_assets/cropped/11.png" width="760" alt="screen-11" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/11.png" width="760" alt="screen-11" />
 클래스룸 진입 후 첫 LMS 화면입니다. 과목 대시보드 성격으로 출석, 과제, 게시판, 일정 메뉴로 이동합니다.
 
 ### 12.
-<img src="README_assets/cropped/12.png" width="760" alt="screen-12" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/12.png" width="760" alt="screen-12" />
 내 출석조회 페이지입니다. 개인 출석 이력과 상태를 날짜 기준으로 확인할 수 있습니다.
 
 ### 13.
-<img src="README_assets/cropped/13.png" width="760" alt="screen-13" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/13.png" width="760" alt="screen-13" />
 전체 출석조회 페이지입니다. 스터디원 전체 출석 현황을 집계 형태로 확인할 수 있습니다.
 
 ### 14.
-<img src="README_assets/cropped/14.png" width="760" alt="screen-14" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/14.png" width="760" alt="screen-14" />
 과제목록 페이지입니다. 등록된 과제를 목록으로 조회하고 제출/상세 이동을 수행할 수 있습니다.
 
 ### 15.
-<img src="README_assets/cropped/15.png" width="760" alt="screen-15" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/15.png" width="760" alt="screen-15" />
 과제생성 모달입니다. 제목, 설명, 마감일, 첨부자료 등 과제 생성에 필요한 항목을 입력합니다.
 
 ### 16.
-<img src="README_assets/cropped/16.png" width="760" alt="screen-16" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/16.png" width="760" alt="screen-16" />
 게시판 목록 페이지입니다. 공지/일반 글 목록을 확인하고 게시글 작성 또는 상세로 이동할 수 있습니다.
 
 ### 17.
-<img src="README_assets/cropped/17.png" width="760" alt="screen-17" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/17.png" width="760" alt="screen-17" />
 게시판 상세 페이지입니다. 본문, 댓글, 첨부파일 등 게시글 단위의 상세 상호작용을 제공합니다.
 
 ### 18.
-<img src="README_assets/cropped/18.png" width="760" alt="screen-18" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/18.png" width="760" alt="screen-18" />
 AI 기반 예상문제/요약노트 페이지입니다. 학습 자료를 바탕으로 문제 생성과 핵심 요약을 지원합니다.
 
 ### 19.
-<img src="README_assets/cropped/19.png" width="760" alt="screen-19" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/19.png" width="760" alt="screen-19" />
 일정관리 페이지입니다. 학습 일정과 중요한 날짜를 캘린더 형태로 확인하고 관리할 수 있습니다.
 
 ### 20.
-<img src="README_assets/cropped/20.png" width="760" alt="screen-20" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/20.png" width="760" alt="screen-20" />
 일정추가 모달(방장 전용)입니다. 일정 제목, 시간, 메모를 등록해 공용 캘린더에 반영합니다.
 
 ### 21.
-<img src="README_assets/cropped/21.png" width="760" alt="screen-21" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/21.png" width="760" alt="screen-21" />
 스터디원 관리 페이지(방장 전용)입니다. 구성원 상태 확인, 역할 관리, 운영 관련 액션을 수행합니다.
 
 ### 22.
-<img src="README_assets/cropped/22.png" width="760" alt="screen-22" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/22.png" width="760" alt="screen-22" />
 LMS 마이페이지입니다. 과목 단위 개인 정보와 학습 활동 내역을 관리할 수 있습니다.
 
 ### 23.
-<img src="README_assets/cropped/23.png" width="760" alt="screen-23" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/23.png" width="760" alt="screen-23" />
 화상수업의 얼굴 아바타 및 배경 제거 기능 화면입니다. 카메라 입력을 실시간으로 가공해 표시합니다.
 
 ### 26.
-<img src="README_assets/cropped/26.png" width="760" alt="screen-26" />
+<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/26.png" width="760" alt="screen-26" />
 화상채팅방 화면공유 기능입니다. 참가자가 자신의 화면을 공유해 발표/협업을 진행할 수 있습니다.
 
 ## 아키텍처 구조
@@ -137,55 +137,75 @@ flowchart LR
     USER[사용자 브라우저]
     GITHUB[GitHub]
 
-    subgraph DOMAIN[onsil.study]
-        NGINX[Nginx Reverse Proxy]
+    subgraph EDGE[도메인/엣지 계층]
+        DNS[onsil.study DNS]
         CERT[Let's Encrypt TLS]
-        FE[React Frontend]
-        BE[Spring Boot API]
-        SEC[Spring Security + JWT]
-        ORM[Spring Data JPA + MyBatis]
+        NGINX[Nginx Reverse Proxy]
     end
 
-    subgraph AWS[AWS]
-        EC2WEB[EC2 Web/API 서버]
-        EC2SFU[EC2 SFU 서버]
+    subgraph APP[애플리케이션 계층]
+        FE[React SPA]
+        API[Spring Boot API]
+        AUTH[Spring Security + JWT/OAuth2]
+        LMS[LMS/모집/알림 도메인 로직]
+        SFU_SIG[Node.js SFU Signaling]
+        SFU_MEDIA[mediasoup Router/Transport]
+    end
+
+    subgraph DATA[데이터/스토리지 계층]
         RDS[(Amazon RDS MySQL)]
-        S3[(Amazon S3 Bucket)]
+        S3[(Amazon S3 Object Storage)]
     end
 
-    SFU[Node.js + mediasoup SFU]
+    subgraph AWS[AWS 배포 인프라]
+        EC2_WEB[EC2 Web/API]
+        EC2_SFU[EC2 SFU]
+        DOCKER[Docker Compose]
+    end
 
-    USER -->|HTTPS 443| NGINX
+    DNS --> USER
     CERT --> NGINX
-    NGINX --> FE
-    NGINX -->|/api| BE
-    BE --> SEC
-    SEC --> ORM
-    ORM --> RDS
-    BE -->|파일 업로드/조회| S3
+    USER -->|HTTPS 443| NGINX
+    NGINX -->|정적 리소스| FE
+    NGINX -->|/api/*| API
+    NGINX -->|/ws/notification| API
+    NGINX -->|/sfu (WSS)| SFU_SIG
 
-    USER -->|WSS /sfu 시그널링| NGINX
-    NGINX --> SFU
-    USER <-->|WebRTC 미디어 송수신| SFU
-    SFU --> EC2SFU
+    FE -->|로그인 요청| AUTH
+    FE -->|LMS/모집/과제 REST| API
+    FE -->|알림 WebSocket 구독| API
+    API --> AUTH
+    API --> LMS
+    LMS -->|JPA/MyBatis 쿼리| RDS
+    API -->|파일 업로드/다운로드 URL| S3
 
-    BE --> EC2WEB
-    NGINX --> EC2WEB
-    FE --> EC2WEB
+    FE -->|join/createTransport/produce/consume| SFU_SIG
+    SFU_SIG --> SFU_MEDIA
+    USER <-->|WebRTC Audio/Video/Screen| SFU_MEDIA
 
-    GITHUB -->|웹서버 배포| EC2WEB
-    GITHUB -->|SFU 배포| EC2SFU
+    FE --> EC2_WEB
+    API --> EC2_WEB
+    NGINX --> EC2_WEB
+    SFU_SIG --> EC2_SFU
+    SFU_MEDIA --> EC2_SFU
+    DOCKER --> EC2_WEB
+    DOCKER --> EC2_SFU
+
+    GITHUB -->|Web/API 배포| EC2_WEB
+    GITHUB -->|SFU 배포| EC2_SFU
 ```
 
 ### 아키텍처 설명
-- 사용자 요청은 `https://onsil.study`로 진입하며 `Nginx`가 정적 리소스와 API 라우팅을 분리합니다.
-- `Let's Encrypt` 인증서를 사용해 `HTTPS/WSS` 트래픽을 TLS로 종단합니다.
-- API는 `Spring Boot`에서 처리하며 인증/인가는 `Spring Security + JWT`로 관리합니다.
-- 데이터 접근은 `JPA + MyBatis`를 병행해 `Amazon RDS(MySQL)`에 저장합니다.
-- 과제/첨부파일 등 객체 파일은 `Amazon S3`에 업로드하고 URL 기반으로 조회합니다.
-- 화상수업은 `Node.js + mediasoup SFU` 서버에서 시그널링/미디어 릴레이를 담당합니다.
-- 프론트는 `WSS /sfu`로 SFU에 연결하고, 실제 음성/영상은 WebRTC로 송수신합니다.
-- 코드 변경은 `GitHub` 기준으로 Web/API 서버와 SFU 서버에 각각 배포됩니다.
+- 사용자는 `onsil.study` 도메인으로 접속하고, TLS는 `Let's Encrypt` + `Nginx`에서 처리합니다.
+- `Nginx`는 `정적 파일(React)`, `REST API(/api/*)`, `알림 WS`, `SFU WSS(/sfu)`를 경로 기반으로 분기합니다.
+- 프론트엔드(React)는 로그인/권한 검증 후 LMS, 스터디 모집, 과제, 게시판 기능을 REST로 호출합니다.
+- 인증/인가는 `Spring Security + JWT/OAuth2`로 처리하며 사용자 세션 상태를 보호합니다.
+- 도메인 로직은 `Spring Boot` 내부 서비스 계층에서 수행되고, 데이터는 `JPA + MyBatis`로 조회/저장합니다.
+- 정형 데이터는 `Amazon RDS(MySQL)`, 파일 데이터는 `Amazon S3`에 저장합니다.
+- 화상수업은 `Node.js SFU Signaling`이 세션 제어를, `mediasoup`가 실제 미디어 라우팅을 담당합니다.
+- 브라우저는 SFU에 `join/createTransport/produce/consume` 시그널링을 보내고, 오디오/비디오/화면공유는 WebRTC로 송수신합니다.
+- Web/API와 SFU는 각각 `EC2`에 배포되며, 실행 오케스트레이션은 `Docker Compose`를 사용합니다.
+- 코드 변경은 `GitHub` 기준으로 Web/API 서버와 SFU 서버에 분리 배포됩니다.
 
 ### 디렉터리 구조
 ```text
@@ -251,6 +271,7 @@ Certificate_Study/
 ## 환경 변수
 - 민감 정보는 `.env`로 관리하고 저장소에 커밋하지 않습니다.
 - DB, JWT, OAuth, AWS S3 설정값을 실행 환경에 맞게 입력해야 합니다.
+
 
 
 
