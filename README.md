@@ -167,9 +167,9 @@ flowchart LR
     CERT --> NGINX
     USER -->|HTTPS 443| NGINX
     NGINX -->|정적 리소스| FE
-    NGINX -->|/api/*| API
-    NGINX -->|/ws/notification| API
-    NGINX -->|/sfu (WSS)| SFU_SIG
+    NGINX -->|api path| API
+    NGINX -->|notification ws path| API
+    NGINX -->|sfu wss path| SFU_SIG
 
     FE -->|로그인 요청| AUTH
     FE -->|LMS/모집/과제 REST| API
