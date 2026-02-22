@@ -262,6 +262,7 @@ const MainHeader = () => {
     const [hasNotification, setHasNotification] = useState(false);
     const [latestJoinId, setLatestJoinId] = useState(null);
     const [notificationTargetTab, setNotificationTargetTab] = useState("received");
+    const notificationTargetTabRef = useRef("received");
     const [knownReceivedSeenTokens, setKnownReceivedSeenTokens] = useState([]);
     const [knownSentDecisionSeenTokens, setKnownSentDecisionSeenTokens] = useState([]);
     const evaluationVersionRef = useRef(0);
@@ -362,6 +363,10 @@ const MainHeader = () => {
 
         evaluateNotificationState.current();
     }, [nickname, userId]);
+
+    useEffect(() => {
+        notificationTargetTabRef.current = notificationTargetTab || "received";
+    }, [notificationTargetTab]);
 
     useEffect(() => {
         if (!nickname || !userId) return;

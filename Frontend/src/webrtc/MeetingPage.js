@@ -8029,6 +8029,7 @@ function MeetingPage({ portalRoomId }) {
                 try { sendSfuLeaveBeacon(roomId, userId); } catch { }
                 localReconnectNotifiedRef.current = false;
                 sfuReconnectAttemptRef.current = 0;
+            }
 
             producersRef.current.forEach((p) => safeClose(p));
             consumersRef.current.forEach((c) => safeClose(c));
