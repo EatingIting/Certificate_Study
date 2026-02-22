@@ -1,7 +1,9 @@
 ﻿<div align="center">
+  <a href="https://onsil.study">onsil.study 둘러보기</a>
+
   <img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/1.png" alt="Certificate Study 대표 화면" width="100%" />
 
-  # Certificate_Study
+  # ONSIL
 
   스터디룸 모집, LMS 관리, WebRTC 화상수업을 통합한 학습 플랫폼
 
