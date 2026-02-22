@@ -9,6 +9,10 @@ import {
     buildLmsNotificationDedupeKey,
     clearQueuedLmsNotifications,
     enqueueLmsNotification,
+    isDismissedLmsNotification,
+    markAllQueuedLmsNotificationsDismissed,
+    markLmsNotificationDismissed,
+    markLmsNotificationsDismissedByDedupeKeys,
     readQueuedLmsNotifications,
     removeQueuedLmsNotification,
 } from "../utils/lmsNotifications";
@@ -16,6 +20,9 @@ import { logout } from "../api/api";
 
 const NOTIFICATION_LIMIT = 50;
 const RECONNECT_DELAY_MS = 3000;
+const LMS_NOTIFICATION_DISMISSED_UI_KEY = "lms.notification.dismissed.ui.v1";
+const LMS_NOTIFICATION_QUEUE_KEY = "lms.notification.queue.v1";
+const LMS_NOTIFICATION_DISMISSED_KEY = "lms.notification.dismissed.v1";
 
 const asText = (value) => {
     if (value == null) return "";
@@ -40,6 +47,92 @@ const pickId = (...values) => {
 };
 
 const includesAny = (text, keywords) => keywords.some((keyword) => text.includes(keyword));
+
+const normalizeTextToken = (value) =>
+    asText(value)
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+const buildUiFingerprint = (value) => {
+    if (!value || typeof value !== "object") return "";
+    const type = asText(value.type).toUpperCase();
+    const roomId = pickId(value.roomId);
+    const postId = pickId(value.postId);
+    const commentId = pickId(value.commentId);
+    const assignmentId = pickId(value.assignmentId);
+    const scheduleId = pickId(value.scheduleId);
+
+    // 타입별 구조 키를 우선 사용해서 문구 차이로 인한 중복 표시 방지
+    if (type === "ASSIGNMENT" && assignmentId) {
+        return ["ASSIGNMENT", roomId, assignmentId].join("|");
+    }
+    if (type === "SCHEDULE" && scheduleId) {
+        return ["SCHEDULE", roomId, scheduleId].join("|");
+    }
+    if (type === "COMMENT" && (commentId || postId)) {
+        return ["COMMENT", roomId, postId, commentId].join("|");
+    }
+
+    return [
+        type,
+        roomId,
+        postId,
+        commentId,
+        assignmentId,
+        scheduleId,
+        normalizeTextToken(value.title),
+        normalizeTextToken(value.message),
+        normalizeTextToken(value.path),
+    ].join("|");
+};
+
+const readDismissedUiFingerprints = () => {
+    try {
+        const raw = localStorage.getItem(LMS_NOTIFICATION_DISMISSED_UI_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((v) => asText(v)).filter(Boolean);
+    } catch {
+        return [];
+    }
+};
+
+const writeDismissedUiFingerprints = (keys) => {
+    try {
+        const unique = [...new Set((keys || []).map((v) => asText(v)).filter(Boolean))];
+        localStorage.setItem(LMS_NOTIFICATION_DISMISSED_UI_KEY, JSON.stringify(unique.slice(0, 1000)));
+    } catch {
+        // ignore storage failure
+    }
+};
+
+const isDismissedUiFingerprint = (fingerprint) => {
+    const key = asText(fingerprint);
+    if (!key) return false;
+    const set = new Set(readDismissedUiFingerprints());
+    return set.has(key);
+};
+
+const markDismissedUiFingerprint = (fingerprint) => {
+    const key = asText(fingerprint);
+    if (!key) return;
+    const keys = readDismissedUiFingerprints();
+    keys.unshift(key);
+    writeDismissedUiFingerprints(keys);
+};
+
+const markDismissedUiFingerprints = (fingerprints) => {
+    if (!Array.isArray(fingerprints) || fingerprints.length === 0) return;
+    const keys = readDismissedUiFingerprints();
+    fingerprints.forEach((fp) => {
+        const key = asText(fp);
+        if (!key) return;
+        keys.unshift(key);
+    });
+    writeDismissedUiFingerprints(keys);
+};
 
 const parseObjectLike = (value) => {
     if (value == null) return null;
@@ -176,6 +269,7 @@ const parseNotificationFromSource = (source) => {
         source.room?.id
     );
     const postId = pickId(source.postId, source.boardPostId, source.articleId);
+    const commentId = pickId(source.commentId, source.replyId, source.targetCommentId);
     const assignmentId = pickId(source.assignmentId, source.taskId, source.homeworkId);
     const scheduleId = pickId(source.scheduleId, source.calendarId, source.studyScheduleId);
     const path = pickText(source.path, source.url, source.link, source.targetPath);
@@ -201,13 +295,26 @@ const parseNotificationFromSource = (source) => {
     }
 
     const dedupeKey = buildLmsNotificationDedupeKey(source);
+    const uiFingerprint = buildUiFingerprint({
+        type,
+        roomId,
+        postId,
+        commentId,
+        assignmentId,
+        scheduleId,
+        title,
+        message,
+        path,
+    });
 
     return {
         id: notificationId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         dedupeKey,
+        uiFingerprint,
         type,
         roomId,
         postId,
+        commentId,
         assignmentId,
         scheduleId,
         title,
@@ -229,7 +336,15 @@ const parseNotification = (rawPayload) => {
 };
 
 const appendNotification = (prev, next) => {
-    if (prev.some((item) => item.dedupeKey === next.dedupeKey)) return prev;
+    if (next.dedupeKey && isDismissedLmsNotification(next.dedupeKey)) return prev;
+    if (next.uiFingerprint && isDismissedUiFingerprint(next.uiFingerprint)) return prev;
+
+    const hasSameItem = prev.some((item) => {
+        if (item.dedupeKey && next.dedupeKey && item.dedupeKey === next.dedupeKey) return true;
+        if (item.uiFingerprint && next.uiFingerprint && item.uiFingerprint === next.uiFingerprint) return true;
+        return false;
+    });
+    if (hasSameItem) return prev;
     return [next, ...prev].slice(0, NOTIFICATION_LIMIT);
 };
 
@@ -285,8 +400,19 @@ export default function Header() {
 
     useEffect(() => {
         const handleStorage = (e) => {
-            if (e.key !== "lms.notification.queue.v1") return;
-            syncQueuedNotifications();
+            if (e.key === LMS_NOTIFICATION_QUEUE_KEY) {
+                syncQueuedNotifications();
+                return;
+            }
+            if (e.key === LMS_NOTIFICATION_DISMISSED_KEY || e.key === LMS_NOTIFICATION_DISMISSED_UI_KEY) {
+                setNotifications((prev) =>
+                    prev.filter((n) => {
+                        if (n?.dedupeKey && isDismissedLmsNotification(n.dedupeKey)) return false;
+                        if (n?.uiFingerprint && isDismissedUiFingerprint(n.uiFingerprint)) return false;
+                        return true;
+                    })
+                );
+            }
         };
         const handleVisibility = () => {
             if (document.visibilityState !== "visible") return;
@@ -334,6 +460,13 @@ export default function Header() {
                 const notif = parseNotification(payload);
                 if (!notif) {
                     console.log("알림 파싱 스킵:", payload);
+                    return;
+                }
+
+                if (
+                    (notif.dedupeKey && isDismissedLmsNotification(notif.dedupeKey)) ||
+                    (notif.uiFingerprint && isDismissedUiFingerprint(notif.uiFingerprint))
+                ) {
                     return;
                 }
 
@@ -390,6 +523,8 @@ export default function Header() {
 
     const handleClickNotification = (notif) => {
         setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+        markLmsNotificationDismissed(notif.dedupeKey);
+        markDismissedUiFingerprint(notif.uiFingerprint);
         removeQueuedLmsNotification(notif.dedupeKey);
         setOpenNotifDropdown(false);
 
@@ -450,6 +585,9 @@ export default function Header() {
 
     const handleClearNotifications = (e) => {
         e.stopPropagation();
+        markLmsNotificationsDismissedByDedupeKeys(notifications.map((n) => n.dedupeKey));
+        markDismissedUiFingerprints(notifications.map((n) => n.uiFingerprint));
+        markAllQueuedLmsNotificationsDismissed();
         setNotifications([]);
         clearQueuedLmsNotifications();
     };

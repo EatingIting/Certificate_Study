@@ -1,4 +1,4 @@
-import {
+﻿import {
     ChevronDown, ChevronUp, LayoutGrid, Loader2, Maximize, Minimize, MessageSquare, Mic, MicOff,
     Monitor, MoreHorizontal, PanelRightClose, PanelRightOpen, Phone, PictureInPicture2, Send, Share, Smile, Users, Video, VideoOff, X,
 } from "lucide-react";
@@ -281,6 +281,11 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const lastValidFrameRef = useRef(false); // 마지막으로 유효한 프레임이 있었는지
     const lastFrameImageDataRef = useRef(null); // 마지막 유효 프레임 ImageData 저장
     const lastCanvasSizeRef = useRef({ width: 0, height: 0 }); // canvas 크기 추적
+    const hasRenderedFirstFrameRef = useRef(false);
+    const [hasRenderedFirstFrame, setHasRenderedFirstFrame] = useState(false);
+    const lastValidFrameAtRef = useRef(0);
+    const [isFrameStalled, setIsFrameStalled] = useState(false);
+    const isFrameStalledRef = useRef(false);
 
     const safeUser = user ?? {
         id: "",
@@ -296,8 +301,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
     const [trackVersion, setTrackVersion] = useState(0);
 
     const hasLiveVideoTrack = useMemo(() => {
-        return stream?.getVideoTracks().some((t) => t.readyState === "live" && !t.muted) ?? false;
-    }, [stream, trackVersion]);
+        // 로컬 트랙은 전환 중 muted가 일시적으로 true가 될 수 있으므로 live만 본다.
+        // 원격 트랙은 muted를 함께 보아 "live지만 실제 프레임 없음" 상태의 검은화면 오탐을 줄인다.
+        return stream?.getVideoTracks().some((t) => {
+            if (t.readyState !== "live") return false;
+            if (safeUser.isMe) return true;
+            return !t.muted;
+        }) ?? false;
+    }, [stream, trackVersion, safeUser.isMe]);
 
     useEffect(() => {
         const track = stream?.getVideoTracks()[0];
@@ -347,10 +358,10 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
         // 🔥 카메라가 꺼져 있으면(본인 선택 또는 방장 강제) 항상 아바타 타일로 표시
         // — 방장 강제 끄기 시 타일이 검은 화면으로 바뀌는 문제 방지
-        if (safeUser.cameraOff) return false;
-
         const hasLiveTrack = stream.getVideoTracks().some(t => t.readyState === "live");
         if (hasLiveTrack) return true;
+
+        if (safeUser.cameraOff) return false;
 
         // 스트림에 video track이 있으면 일단 렌더링 (곧 live가 될 수 있음)
         if (stream.getVideoTracks().length > 0) return true;
@@ -388,6 +399,19 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     // 🔥 Canvas/비디오는 displayStream 기준 (트랙이 같으면 effect 재실행 안 함)
     const displayStreamId = displayStream?.id ?? null;
+    const displayVideoTrackId = displayStream?.getVideoTracks?.()?.[0]?.id ?? null;
+
+    useEffect(() => {
+        hasRenderedFirstFrameRef.current = false;
+        setHasRenderedFirstFrame(false);
+        lastValidFrameAtRef.current = 0;
+        setIsFrameStalled(false);
+        isFrameStalledRef.current = false;
+    }, [displayVideoTrackId, safeUser.id, isScreen]);
+
+    useEffect(() => {
+        isFrameStalledRef.current = isFrameStalled;
+    }, [isFrameStalled]);
 
     // 🔥 Canvas 기반 렌더링 useLayoutEffect (PiP 복귀 시 검은화면 방지: 페인트 전에 캐시 복원)
     useLayoutEffect(() => {
@@ -472,6 +496,12 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
             const hasValidFrame = v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0 && !v.paused;
 
             if (hasValidFrame) {
+                if (!hasRenderedFirstFrameRef.current) {
+                    hasRenderedFirstFrameRef.current = true;
+                    setHasRenderedFirstFrame(true);
+                }
+                lastValidFrameAtRef.current = Date.now();
+                if (isFrameStalledRef.current) setIsFrameStalled(false);
                 const needsResize = canvas.width !== v.videoWidth || canvas.height !== v.videoHeight;
 
                 if (needsResize) {
@@ -503,7 +533,12 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                 }
             } else {
                 // 🔥 hasValidFrame이 false일 때 캐시에서 복원
-                restoreFromCache();
+                const restored = restoreFromCache();
+                const lastOk = lastValidFrameAtRef.current || 0;
+                const stalledFor = lastOk > 0 ? (Date.now() - lastOk) : 0;
+                if (!restored && hasRenderedFirstFrameRef.current && stalledFor >= 6000) {
+                    if (!isFrameStalledRef.current) setIsFrameStalled(true);
+                }
             }
 
             rafIdRef.current = requestAnimationFrame(drawFrame);
@@ -722,8 +757,15 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
 
     const showRoomReconnecting = roomReconnecting && !safeUser.isMe;
 
-    // 서버/복원 스냅샷에서 재접속 상태더라도 live 비디오가 있으면 스피너를 가리지 않음
-    const shouldShowReconnecting = isReconnecting && !hasLiveVideoTrack && !safeUser.cameraOff;
+    // 서버/복원 스냅샷에서 재접속 상태면 자기 자신 포함 스피너 표시
+    const shouldShowReconnecting = (isReconnecting || (isFrameStalled && !safeUser.cameraOff && !isScreen)) && !hasLiveVideoTrack;
+    const shouldHideVideoByStall = isFrameStalled && !safeUser.cameraOff && !isScreen;
+    const shouldHoldRemoteUntilFirstFrame =
+        !safeUser.isMe &&
+        !isScreen &&
+        shouldRenderVideo &&
+        !shouldShowReconnecting &&
+        !hasRenderedFirstFrame;
 
     // pip 모드 여부 확인 (렌더링 시점)
     // const isCurrentlyInPip = document.pictureInPictureElement === videoEl.current;
@@ -782,14 +824,14 @@ const VideoTile = ({ user, isMain = false, stream, isScreen, reaction, roomRecon
                         display: "block",
                         // 🔥 shouldRenderVideo가 false여도 canvas를 DOM에 유지 (마지막 프레임 보존)
                         // opacity로 숨기면 canvas 내용이 유지됨
-                        opacity: shouldRenderVideo ? 1 : 0,
-                        position: shouldRenderVideo ? "relative" : "absolute",
+                        opacity: ((shouldRenderVideo && !shouldHoldRemoteUntilFirstFrame && !shouldHideVideoByStall) || shouldShowReconnecting) ? 1 : 0,
+                        position: ((shouldRenderVideo && !shouldHoldRemoteUntilFirstFrame && !shouldHideVideoByStall) || shouldShowReconnecting) ? "relative" : "absolute",
                         pointerEvents: shouldRenderVideo ? "auto" : "none",
                     }}
                 />
 
                 {/* 카메라 꺼짐 또는 스트림 없음 - canvas 위에 겹쳐서 표시 */}
-                {!shouldRenderVideo && (
+                {(!shouldRenderVideo || shouldHoldRemoteUntilFirstFrame || shouldHideVideoByStall) && !shouldShowReconnecting && (
                     <div
                         className="camera-off-placeholder"
                         style={isMain ? { position: "absolute", zIndex: 1, top: "50%", left: "50%", transform: "translate(-50%, -50%)" } : { position: "relative", zIndex: 1 }}
@@ -859,6 +901,28 @@ function MeetingPage({ portalRoomId }) {
         registerLocalStream, // 🔥 getUserMedia 스트림을 MeetingContext에 등록 (언마운트 후에도 정리 가능)
         pipVideoRef, // 🔥 브라우저 PIP용 숨겨진 video element ref
     } = useMeeting();
+    const isPipModeRef = useRef(!!isPipMode);
+    const isBrowserPipModeRef = useRef(!!isBrowserPipMode);
+    const sidebarPipTransitionRef = useRef(false);
+    useEffect(() => {
+        isPipModeRef.current = !!isPipMode;
+    }, [isPipMode]);
+    useEffect(() => {
+        isBrowserPipModeRef.current = !!isBrowserPipMode;
+    }, [isBrowserPipMode]);
+    useEffect(() => {
+        const markTransition = () => {
+            sidebarPipTransitionRef.current = true;
+            try { sessionStorage.setItem("sidebarNavigation", "true"); } catch { }
+        };
+        window.addEventListener("sidebar:navigation", markTransition);
+        return () => window.removeEventListener("sidebar:navigation", markTransition);
+    }, []);
+    useEffect(() => {
+        if (!location.pathname.includes("/MeetingRoom/")) return;
+        sidebarPipTransitionRef.current = false;
+        try { sessionStorage.removeItem("sidebarNavigation"); } catch { }
+    }, [location.pathname]);
 
     // roomTitle, email, room 정보 (LMSContext에서)
     const { roomTitle, email, user, room, roomNickname } = useLMS();
@@ -941,6 +1005,23 @@ function MeetingPage({ portalRoomId }) {
         // cleanup: 컴포넌트 언마운트 시 제거
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
+            const isSidebarPipTransition =
+                !!sidebarPipTransitionRef.current ||
+                (() => {
+                    try { return sessionStorage.getItem("sidebarNavigation") === "true"; } catch { return false; }
+                })();
+            const preserveForPipTransition =
+                !isLeavingRef.current &&
+                (
+                    !!document.pictureInPictureElement ||
+                    !!isPipModeRef.current ||
+                    !!isBrowserPipModeRef.current ||
+                    isSidebarPipTransition
+                );
+            if (preserveForPipTransition) {
+                console.log("[MeetingPage] PIP/사이드바 전환 중 - hidden PIP video cleanup 스킵");
+                return;
+            }
             if (pipVideoRef.current) {
                 try {
                     pipVideoRef.current.pause();
@@ -1103,6 +1184,7 @@ function MeetingPage({ portalRoomId }) {
     const [joinEligibilityChecked, setJoinEligibilityChecked] = useState(false);
     const [joinBlockedByKick, setJoinBlockedByKick] = useState(false);
     const joinKickHandledRef = useRef(false);
+    const springWsRoomIdRef = useRef(null);
 
     useEffect(() => {
         joinKickHandledRef.current = false;
@@ -1110,17 +1192,6 @@ function MeetingPage({ portalRoomId }) {
         setJoinBlockedByKick(false);
 
         if (!roomId) return;
-
-        try { wsRef.current?.close(); } catch { }
-        wsRef.current = null;
-        try { sfuWsRef.current?.close(); } catch { }
-        sfuWsRef.current = null;
-        if (sfuReconnectTimerRef.current) {
-            try { clearTimeout(sfuReconnectTimerRef.current); } catch { }
-            sfuReconnectTimerRef.current = null;
-        }
-        sfuReconnectAttemptRef.current = 0;
-        localReconnectNotifiedRef.current = false;
 
         let cancelled = false;
 
@@ -1226,6 +1297,7 @@ function MeetingPage({ portalRoomId }) {
     const pendingProducersRef = useRef([]);
 
     const consumersRef = useRef(new Map());
+    const consumingProducerIdsRef = useRef(new Set());
     const peerStreamsRef = useRef(new Map());
     const producersRef = useRef(new Map());
     const audioElsRef = useRef(new Map());
@@ -1549,8 +1621,31 @@ function MeetingPage({ portalRoomId }) {
     useEffect(() => { isFilterPreparingRef.current = isFilterPreparing; }, [isFilterPreparing]);
 
     const computeOutboundMediaState = useCallback(() => {
-        const muted = micPermissionRef.current !== "granted" || !micOnRef.current;
-        const cameraOff = camPermissionRef.current !== "granted" || !camOnRef.current;
+        const localAudioTracks = [
+            ...(localStreamRef.current?.getAudioTracks?.() ?? []),
+        ];
+        const localVideoTracks = [
+            ...(localStreamRef.current?.getVideoTracks?.() ?? []),
+            ...(canvasPipelineOutTrackRef.current ? [canvasPipelineOutTrackRef.current] : []),
+            ...(faceFilterOutTrackRef.current ? [faceFilterOutTrackRef.current] : []),
+            ...(avatarOutTrackRef.current ? [avatarOutTrackRef.current] : []),
+            ...(lastCameraTrackRef.current ? [lastCameraTrackRef.current] : []),
+        ];
+
+        const hasLiveEnabledAudio = localAudioTracks.some(
+            (t) => t && t.readyState === "live" && t.enabled !== false
+        );
+        const hasLiveEnabledVideo = localVideoTracks.some(
+            (t) => t && t.readyState === "live" && t.enabled !== false
+        );
+
+        // 권한 상태가 일시적으로 흔들려도 실제 live 트랙이 있으면 OFF로 전파하지 않는다.
+        const muted =
+            !micOnRef.current ||
+            (!hasLiveEnabledAudio && micPermissionRef.current !== "granted");
+        const cameraOff =
+            !camOnRef.current ||
+            (!hasLiveEnabledVideo && camPermissionRef.current !== "granted");
         return { muted, cameraOff };
     }, []);
 
@@ -4366,6 +4461,8 @@ function MeetingPage({ portalRoomId }) {
 
             // 🔥 MeetingContext의 requestBrowserPip 사용 (polling 포함)
             console.log("[PiP] MeetingContext requestBrowserPip 호출");
+            sidebarPipTransitionRef.current = true;
+            try { sessionStorage.setItem("sidebarNavigation", "true"); } catch { }
             const success = await requestBrowserPip(video, stream, peerName, peerId);
 
             if (!success) {
@@ -5143,39 +5240,43 @@ function MeetingPage({ portalRoomId }) {
         // 본인 producer는 consume하지 않음 (유령 유저 방지). 서버가 짧은 id(예: f472)를 보낸 경우도 처리
         if (peerIdStr === myId || (peerIdStr.length >= 4 && myId.startsWith(peerIdStr))) return;
         if (consumersRef.current.has(producerId)) return;
+        if (consumingProducerIdsRef.current.has(producerId)) return;
 
         const device = sfuDeviceRef.current;
         const recvTransport = recvTransportRef.current;
 
         // 아직 준비 안 됐으면 대기열로
         if (!device || !recvTransport) {
-            pendingProducersRef.current.push({
-                producerId,
-                peerId: fallbackPeerId,
-                appData: targetAppData,
-            });
+            if (!pendingProducersRef.current.some((p) => p.producerId === producerId)) {
+                pendingProducersRef.current.push({
+                    producerId,
+                    peerId: fallbackPeerId,
+                    appData: targetAppData,
+                });
+            }
             return;
         }
 
+        consumingProducerIdsRef.current.add(producerId);
         const requestId = safeUUID();
-
-        safeSfuSend({
-            action: "consume",
-            requestId,
-            data: {
-                transportId: recvTransport.id,
-                producerId,
-                rtpCapabilities: device.rtpCapabilities,
-            },
-        });
+        let responseTimeoutId = null;
 
         const handler = async (event) => {
-            const msg = JSON.parse(event.data);
+            let msg = null;
+            try {
+                msg = JSON.parse(event.data);
+            } catch {
+                return;
+            }
             if (msg.action !== "consume:response") return;
             if (msg.requestId !== requestId) return;
 
             // ✅ 이 요청에 대한 핸들러는 여기서부터 1회성
             sfuWsRef.current?.removeEventListener("message", handler);
+            if (responseTimeoutId != null) {
+                clearTimeout(responseTimeoutId);
+                responseTimeoutId = null;
+            }
 
             let consumer = null;
 
@@ -5438,10 +5539,27 @@ function MeetingPage({ portalRoomId }) {
                     if (consumer) consumer.close();
                 } catch { }
                 consumersRef.current.delete(producerId);
+            } finally {
+                consumingProducerIdsRef.current.delete(producerId);
             }
         };
 
         sfuWsRef.current.addEventListener("message", handler);
+        responseTimeoutId = setTimeout(() => {
+            sfuWsRef.current?.removeEventListener("message", handler);
+            consumingProducerIdsRef.current.delete(producerId);
+            console.warn(`[consume] consume:response timeout for producer ${producerId}`);
+        }, 12000);
+
+        safeSfuSend({
+            action: "consume",
+            requestId,
+            data: {
+                transportId: recvTransport.id,
+                producerId,
+                rtpCapabilities: device.rtpCapabilities,
+            },
+        });
     };
 
     const hasCameraConsumer = (peerId) => {
@@ -5625,10 +5743,16 @@ function MeetingPage({ portalRoomId }) {
         return () => {
             // ❗ PIP 모드일 때는 endMeeting 호출하지 않음 (polling 유지)
             // 🔥 단, isLeavingRef가 true이면 통화 종료 중이므로 cleanup을 반드시 수행
+            const isSidebarPipTransition =
+                !!sidebarPipTransitionRef.current ||
+                (() => {
+                    try { return sessionStorage.getItem("sidebarNavigation") === "true"; } catch { return false; }
+                })();
             const isInRealPipMode =
                 !!document.pictureInPictureElement ||
                 !!isPipMode ||
-                !!isBrowserPipMode;
+                !!isBrowserPipMode ||
+                isSidebarPipTransition;
 
             if (isInRealPipMode && !isLeavingRef.current) {
                 // 🔥 사이드바 자동 PiP 진입(라우트 이동) 시 여기로 들어옴
@@ -5644,7 +5768,10 @@ function MeetingPage({ portalRoomId }) {
             }
 
             // 🔥 모집페이지 등으로 나갈 때 유예 없이 즉시 퇴장 — producer 먼저 끊어 상대 타일 즉시 제거
-            isLeavingRef.current = true;
+            if (!isLeavingRef.current) {
+                console.log("[MeetingPage] unmount without explicit leave - destructive cleanup skipped");
+                return;
+            }
             try {
                 producersRef.current.forEach((p) => {
                     try { p.close(); } catch { }
@@ -5745,6 +5872,8 @@ function MeetingPage({ portalRoomId }) {
         const handler = () => {
             const video = document.querySelector('video[data-main-video="main"]');
             if (video) {
+                sidebarPipTransitionRef.current = true;
+                try { sessionStorage.setItem("sidebarNavigation", "true"); } catch { }
                 requestBrowserPip(video).catch(() => { });
             }
         };
@@ -5887,7 +6016,10 @@ function MeetingPage({ portalRoomId }) {
                     console.log(`[room:sync] Re-consuming ${existingProducers.length} producers`);
                     for (const producer of existingProducers) {
                         // 이미 consume 중인 producer는 스킵
-                        if (consumersRef.current.has(producer.producerId)) {
+                        if (
+                            consumersRef.current.has(producer.producerId) ||
+                            consumingProducerIdsRef.current.has(producer.producerId)
+                        ) {
                             console.log(`[room:sync] Producer ${producer.producerId} already consumed, skipping`);
                             continue;
                         }
@@ -6532,8 +6664,17 @@ function MeetingPage({ portalRoomId }) {
         let pingInterval = null; // 💓 핑 타이머 변수
 
         const connect = () => {
-            if (wsRef.current) {
-                wsRef.current.close();
+            const existingWs = wsRef.current;
+            const existingState = existingWs?.readyState;
+            const sameRoomAlive =
+                existingWs &&
+                springWsRoomIdRef.current === String(roomId) &&
+                (existingState === WebSocket.OPEN || existingState === WebSocket.CONNECTING);
+            if (sameRoomAlive) {
+                return;
+            }
+            if (existingWs) {
+                try { existingWs.close(); } catch { }
                 wsRef.current = null;
             }
 
@@ -6567,6 +6708,7 @@ function MeetingPage({ portalRoomId }) {
             }
             ws = new WebSocket(wsUrl);
             wsRef.current = ws;
+            springWsRoomIdRef.current = String(roomId);
 
             ws.onopen = () => {
                 console.log("✅ SPRING WS CONNECTED");
@@ -6599,6 +6741,7 @@ function MeetingPage({ portalRoomId }) {
             ws.onclose = () => {
                 console.log("❌ WS CLOSED");
                 setChatConnected(false);
+                if (wsRef.current === ws) springWsRoomIdRef.current = null;
                 if (pingInterval) clearInterval(pingInterval); // 타이머 정리
             };
 
@@ -7329,6 +7472,7 @@ function MeetingPage({ portalRoomId }) {
             } catch { }
 
             wsRef.current = null;
+            springWsRoomIdRef.current = null;
         };
     }, [roomId, subjectId, scheduleId, userId, userName, userEmail, isHostLocal, roomTitle, computeOutboundMediaState, rememberParticipantMediaState, rememberParticipantMediaStateByKeys, getRememberedParticipantMediaState, joinEligibilityChecked, joinBlockedByKick]); // subjectId/scheduleId 포함 시 DB 저장용
 
@@ -7367,6 +7511,7 @@ function MeetingPage({ portalRoomId }) {
                 peerStreamsRef.current.clear();
             }
             pendingProducersRef.current = [];
+            consumingProducerIdsRef.current.clear();
 
             audioElsRef.current.forEach((a) => {
                 try { a.pause(); } catch { }
@@ -7732,7 +7877,9 @@ function MeetingPage({ portalRoomId }) {
 
                 if (!recvTransportRef.current || !sfuDeviceRef.current) {
                     // 준비 안 됐으면 appData까지 같이 저장
-                    pendingProducersRef.current.push({ producerId, peerId, appData });
+                    if (!pendingProducersRef.current.some((p) => p.producerId === producerId)) {
+                        pendingProducersRef.current.push({ producerId, peerId, appData });
+                    }
                     return;
                 }
                 // 준비 됐으면 appData와 함께 소비 시작
@@ -7836,6 +7983,7 @@ function MeetingPage({ portalRoomId }) {
             producersRef.current.forEach((p) => safeClose(p));
             producersRef.current.clear();
             pendingProducersRef.current = [];
+            consumingProducerIdsRef.current.clear();
             audioElsRef.current.forEach((a) => {
                 try { a.srcObject = null; } catch { }
             });
@@ -7882,26 +8030,15 @@ function MeetingPage({ portalRoomId }) {
                 localReconnectNotifiedRef.current = false;
                 sfuReconnectAttemptRef.current = 0;
 
-                producersRef.current.forEach((p) => safeClose(p));
-                consumersRef.current.forEach((c) => safeClose(c));
-                producersRef.current.clear();
-                consumersRef.current.clear();
-                peerStreamsRef.current.clear();
-            }
+            producersRef.current.forEach((p) => safeClose(p));
+            consumersRef.current.forEach((c) => safeClose(c));
 
-            try {
-                if (sfuWs.readyState === WebSocket.OPEN || sfuWs.readyState === WebSocket.CONNECTING) {
-                    sfuWs.close();
-                }
-            } catch { }
-            if (sfuWsRef.current === sfuWs) {
-                sfuWsRef.current = null;
-            }
+            producersRef.current.clear();
+            consumersRef.current.clear();
+            consumingProducerIdsRef.current.clear();
 
-            if (!isLeavingRef.current) {
-                console.log("[SFU] effect cleanup (reconnect / navigation)");
-                return;
-            }
+            closeSfuWsForLeave();
+            sfuWsRef.current = null;
         };
     }, [roomId, userId, sfuReconnectKey, clearSfuReconnectTimer, scheduleSfuReconnect, joinEligibilityChecked, joinBlockedByKick]); // sfuReconnectKey: SFU 끊김 시 재연결
 
