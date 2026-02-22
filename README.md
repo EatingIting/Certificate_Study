@@ -1,6 +1,8 @@
 ﻿<div align="center">
   <a href="https://onsil.study">onsil.study 둘러보기</a>
 
+  <br/><br/>
+
   <img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/1.png" alt="Certificate Study 대표 화면" width="100%" />
 
   # ONSIL
