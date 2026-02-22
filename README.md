@@ -39,95 +39,95 @@
 로그인 전 메인 페이지입니다. 서비스 소개, 주요 기능, 진입 동선을 한 화면에서 확인할 수 있습니다.
 
 ### 2.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/2.png" width="760" alt="screen-2" />
+<img src="README_assets/cropped/2.png" width="760" alt="screen-2" />
 OAuth2 로그인 선택 페이지입니다. 소셜 계정 기반으로 빠르게 인증하고 서비스에 접근할 수 있습니다.
 
 ### 3.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/3.png" width="760" alt="screen-3" />
+<img src="README_assets/cropped/3.png" width="760" alt="screen-3" />
 일반 로그인 페이지입니다. 이메일/비밀번호 인증으로 기존 계정 사용자가 바로 로그인할 수 있습니다.
 
 ### 4.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/4.png" width="760" alt="screen-4" />
+<img src="README_assets/cropped/4.png" width="760" alt="screen-4" />
 일반 회원가입 페이지입니다. 신규 사용자 정보 입력과 계정 생성 절차를 제공합니다.
 
 ### 5.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/5.png" width="760" alt="screen-5" />
+<img src="README_assets/cropped/5.png" width="760" alt="screen-5" />
 로그인 후 메인 페이지입니다. 사용자 맞춤 상태에서 스터디 탐색, 클래스룸 이동, 알림 확인이 가능합니다.
 
 ### 6.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/6.png" width="760" alt="screen-6" />
+<img src="README_assets/cropped/6.png" width="760" alt="screen-6" />
 스터디 모집 페이지입니다. 개설된 스터디 목록을 확인하고 조건에 맞는 스터디를 찾아 신청할 수 있습니다.
 
 ### 7.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/7.png" width="760" alt="screen-7" />
+<img src="README_assets/cropped/7.png" width="760" alt="screen-7" />
 스터디 그룹 만들기 페이지입니다. 스터디명, 카테고리, 모집 조건 등 기본 정보를 설정합니다.
 
 ### 8.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/8.png" width="760" alt="screen-8" />
+<img src="README_assets/cropped/8.png" width="760" alt="screen-8" />
 스터디 그룹 만들기 페이지(상동)입니다. 생성 폼의 추가 옵션과 상세 입력 항목을 확인할 수 있습니다.
 
 ### 9.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/9.png" width="760" alt="screen-9" />
+<img src="README_assets/cropped/9.png" width="760" alt="screen-9" />
 가입한 클래스룸 확인 페이지입니다. 내가 참여 중인 클래스룸 목록과 진입 상태를 한눈에 볼 수 있습니다.
 
 ### 10.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/10.png" width="760" alt="screen-10" />
+<img src="README_assets/cropped/10.png" width="760" alt="screen-10" />
 스터디 모집 페이지 내 마이페이지 화면입니다. 내 신청 내역, 활동 정보, 개인 설정 동선을 제공합니다.
 
 ### 11.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/11.png" width="760" alt="screen-11" />
+<img src="README_assets/cropped/11.png" width="760" alt="screen-11" />
 클래스룸 진입 후 첫 LMS 화면입니다. 과목 대시보드 성격으로 출석, 과제, 게시판, 일정 메뉴로 이동합니다.
 
 ### 12.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/12.png" width="760" alt="screen-12" />
+<img src="README_assets/cropped/12.png" width="760" alt="screen-12" />
 내 출석조회 페이지입니다. 개인 출석 이력과 상태를 날짜 기준으로 확인할 수 있습니다.
 
 ### 13.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/13.png" width="760" alt="screen-13" />
+<img src="README_assets/cropped/13.png" width="760" alt="screen-13" />
 전체 출석조회 페이지입니다. 스터디원 전체 출석 현황을 집계 형태로 확인할 수 있습니다.
 
 ### 14.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/14.png" width="760" alt="screen-14" />
+<img src="README_assets/cropped/14.png" width="760" alt="screen-14" />
 과제목록 페이지입니다. 등록된 과제를 목록으로 조회하고 제출/상세 이동을 수행할 수 있습니다.
 
 ### 15.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/15.png" width="760" alt="screen-15" />
+<img src="README_assets/cropped/15.png" width="760" alt="screen-15" />
 과제생성 모달입니다. 제목, 설명, 마감일, 첨부자료 등 과제 생성에 필요한 항목을 입력합니다.
 
 ### 16.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/16.png" width="760" alt="screen-16" />
+<img src="README_assets/cropped/16.png" width="760" alt="screen-16" />
 게시판 목록 페이지입니다. 공지/일반 글 목록을 확인하고 게시글 작성 또는 상세로 이동할 수 있습니다.
 
 ### 17.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/17.png" width="760" alt="screen-17" />
+<img src="README_assets/cropped/17.png" width="760" alt="screen-17" />
 게시판 상세 페이지입니다. 본문, 댓글, 첨부파일 등 게시글 단위의 상세 상호작용을 제공합니다.
 
 ### 18.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/18.png" width="760" alt="screen-18" />
+<img src="README_assets/cropped/18.png" width="760" alt="screen-18" />
 AI 기반 예상문제/요약노트 페이지입니다. 학습 자료를 바탕으로 문제 생성과 핵심 요약을 지원합니다.
 
 ### 19.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/19.png" width="760" alt="screen-19" />
+<img src="README_assets/cropped/19.png" width="760" alt="screen-19" />
 일정관리 페이지입니다. 학습 일정과 중요한 날짜를 캘린더 형태로 확인하고 관리할 수 있습니다.
 
 ### 20.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/20.png" width="760" alt="screen-20" />
+<img src="README_assets/cropped/20.png" width="760" alt="screen-20" />
 일정추가 모달(방장 전용)입니다. 일정 제목, 시간, 메모를 등록해 공용 캘린더에 반영합니다.
 
 ### 21.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/21.png" width="760" alt="screen-21" />
+<img src="README_assets/cropped/21.png" width="760" alt="screen-21" />
 스터디원 관리 페이지(방장 전용)입니다. 구성원 상태 확인, 역할 관리, 운영 관련 액션을 수행합니다.
 
 ### 22.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/22.png" width="760" alt="screen-22" />
+<img src="README_assets/cropped/22.png" width="760" alt="screen-22" />
 LMS 마이페이지입니다. 과목 단위 개인 정보와 학습 활동 내역을 관리할 수 있습니다.
 
 ### 23.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/23.png" width="760" alt="screen-23" />
+<img src="README_assets/cropped/23.png" width="760" alt="screen-23" />
 화상수업의 얼굴 아바타 및 배경 제거 기능 화면입니다. 카메라 입력을 실시간으로 가공해 표시합니다.
 
 ### 26.
-<img src="https://onsil-study-room-bucket.s3.ap-northeast-2.amazonaws.com/github/26.png" width="760" alt="screen-26" />
+<img src="README_assets/cropped/26.png" width="760" alt="screen-26" />
 화상채팅방 화면공유 기능입니다. 참가자가 자신의 화면을 공유해 발표/협업을 진행할 수 있습니다.
 
 ## 아키텍처 구조
@@ -251,4 +251,6 @@ Certificate_Study/
 ## 환경 변수
 - 민감 정보는 `.env`로 관리하고 저장소에 커밋하지 않습니다.
 - DB, JWT, OAuth, AWS S3 설정값을 실행 환경에 맞게 입력해야 합니다.
+
+
 
